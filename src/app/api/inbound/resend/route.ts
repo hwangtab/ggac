@@ -4,13 +4,24 @@
  * `defineApiRoute` 밖에서 POST를 직접 export하는 이유: Svix 검증이 **원문 body**를
  * 요구해 `request.text()`로 받아야 한다. 서명 검증 자체가 이 라우트의 게이트다.
  *
- * **어떤 경우에도 500을 내지 않는다**(서명 실패의 401만 예외). 500을 주면
- * Resend가 재시도하고, 그 재시도가 다시 쿼터를 먹는다.
+ * **응답 코드는 "Resend가 이 메일을 다시 보내야 하는가"만 답한다.**
+ *
+ * - 서명 실패·비밀 미설정 → 401. 재시도해도 같은 답이므로 거절이 맞다.
+ * - 우리가 다루지 않는 이벤트, 화이트리스트 밖 수신자, 파싱 불가한 본문,
+ *   이미 저장한 메일 → 200. 다시 받아도 결과가 같아서 재시도가 쿼터만 먹는다.
+ * - 저장에 실패한 경우 → **500**. 여기서 200을 주면 Resend는 배달에 성공한
+ *   것으로 알고 다시 보내지 않으며, 그 메일은 어디에도 남지 않은 채 사라진다.
+ *   쿼터 한 통보다 유실된 메일이 비싸다.
+ *
+ * 본문·첨부를 당겨 오는 단계(`ingestInboundEmail`)는 스스로 던지지 않는다 —
+ * 실패하면 행이 `pending`으로 남고 백필 크론이 다시 가져간다. 그래서 그 단계
+ * 때문에 재시도를 부를 일은 없다.
  */
 import type { NextRequest } from 'next/server'
 
 import { ApiError, ApiSuccess } from '@/utils/apiWrapper'
 import { rateLimit } from '@/lib/server/rateLimit'
+import { createLogger } from '@/utils/logger'
 import { logSecurityEvent } from '@/utils/security'
 import { verifySvixSignature } from '@/lib/mail/svixSignature'
 import { parseAllowedRecipients, isAllowedRecipient } from '@/lib/mail/inboundRecipients'
@@ -26,6 +37,8 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
 const DAILY_ALERT_DEFAULT = 60
+
+const log = createLogger('api/inbound/resend')
 
 export async function POST(request: NextRequest) {
   try {
@@ -54,9 +67,15 @@ export async function POST(request: NextRequest) {
       return ApiError.unauthorized('서명을 확인할 수 없습니다.').toNextResponse()
     }
 
-    const event = JSON.parse(rawBody) as {
-      type?: string
-      data?: Record<string, unknown>
+    // 파싱 불가는 재시도해도 같은 바이트가 다시 온다 — 200으로 닫는다.
+    // 서명은 이미 통과했으므로 남의 요청은 아니고, 우리가 모르는 모양의
+    // 이벤트일 뿐이다.
+    let event: { type?: string; data?: Record<string, unknown> }
+    try {
+      event = JSON.parse(rawBody) as { type?: string; data?: Record<string, unknown> }
+    } catch {
+      logSecurityEvent('MAILBOX_WEBHOOK_UNEXPECTED_ERROR', { reason: 'body not json' }, 'medium')
+      return ApiSuccess.ok({ ignored: true, reason: 'body not json' }).toNextResponse()
     }
     if (event.type !== 'email.received' || !event.data) {
       return ApiSuccess.ok({ ignored: true }).toNextResponse()
@@ -112,20 +131,31 @@ export async function POST(request: NextRequest) {
 
     return ApiSuccess.ok({ id: row.id }).toNextResponse()
   } catch (error) {
-    // 여기서 500을 내면 Resend가 재시도하고 그 재시도가 쿼터를 먹는다.
+    // 여기까지 오는 예외는 "받은 메일을 저장하지 못했다"는 뜻이다(본문·첨부
+    // 당겨오기는 스스로 삼키고, 파싱 실패는 위에서 걸러진다). 옛 코드는 이
+    // 자리에서 200을 줬는데, 그러면 Resend는 배달 성공으로 알고 다시 보내지
+    // 않는다 — Turso가 잠깐 흔들린 사이에 들어온 메일이 영구히 사라졌다.
+    // 500을 줘서 재시도를 받는다. 재시도가 쿼터를 한 통 더 먹지만, 이미
+    // 저장된 메일은 `insertInboundEmail`이 중복으로 걸러 200을 주므로 같은
+    // 메일이 두 번 쌓이지는 않는다.
+    //
     // logSecurityEvent 자체가 던지면(예: SECURITY_WEBHOOK_URL 관련 코드가
-    // 동기적으로 실패하는 경우) 그 예외가 여기서 새 나가 파일 헤더가 금지한
-    // 500을 만들 수 있다 — 그래서 로그를 자체 try/catch로 한 번 더 감싼다.
+    // 동기적으로 실패하는 경우) 그 예외가 여기서 새 나가 응답을 만들지 못한다
+    // — 그래서 로그를 자체 try/catch로 한 번 더 감싼다.
     try {
+      // 크론·웹훅 로그는 Vercel 런타임 로그가 유일하게 확실히 닿는 통로다.
+      log.error('받은 메일 저장 실패 — Resend 재시도를 받는다', error)
       logSecurityEvent(
         'MAILBOX_WEBHOOK_UNEXPECTED_ERROR',
         { error: error instanceof Error ? error.message : 'unknown' },
         'high'
       )
     } catch {
-      // 로그 실패는 무시한다 — 응답은 반드시 200으로 나가야 한다.
+      // 로그 실패가 응답을 막지 않는다.
     }
-    return ApiSuccess.ok({ accepted: true }).toNextResponse()
+    return ApiError.internalServerError(
+      '메일을 저장하지 못했습니다. 다시 보내 주세요.'
+    ).toNextResponse()
   }
 }
 

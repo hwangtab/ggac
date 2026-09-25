@@ -28,10 +28,10 @@ const intlMiddleware = createIntlMiddleware(routing)
  * `/api/inbound/`와 `/api/internal/`도 같은 이유로 면제한다 — **유지보수
  * 우회가 아니다.** 이 두 접두사는 세션과 무관한 자체 게이트를 이미 갖고
  * 있다: 웹훅(`/api/inbound/resend`)은 Svix 서명이, 크론(`/api/internal/*`)은
- * `timingSafeEqual` 토큰이 각각 판정한다. 막으면 Resend가 재시도를 포기해
- * 그 메일이 영영 도착하지 않고(백필도 못 본다), 크론도 유지보수 중 멈춘다 —
- * 둘 다 "웹훅은 어떤 경우에도 500을 내지 않는다"는 계약이 미들웨어 단계의
- * 503으로 깨지는 사례다.
+ * `timingSafeEqual` 토큰이 각각 판정한다. 막으면 웹훅이 유지보수 시간만큼
+ * 재시도를 태우다 결국 포기하고, 크론도 그동안 멈춘다 — 응답 코드로 "다시
+ * 보내라"를 말하는 두 경로가, 정작 우리가 아무것도 처리할 생각이 없는 동안
+ * 그 신호를 내보내는 셈이다.
  */
 const MAINTENANCE_EXEMPT_EXACT = ['/api/health']
 const MAINTENANCE_EXEMPT_PREFIXES = ['/api/auth/', '/api/inbound/', '/api/internal/']
