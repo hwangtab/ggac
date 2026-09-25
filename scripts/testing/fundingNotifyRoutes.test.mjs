@@ -165,3 +165,35 @@ for (const file of routeFiles) {
     )
   })
 }
+
+// ------------------------------------------------- 크론이 대신 확정한 후원
+
+/**
+ * 만료 정리 크론은 "승인은 났는데 confirm이 유실된" 후원을 대신 확정한다
+ * (`promote`). 확정 라우트(`/api/funding/pledges/confirm`)는 확정 직후
+ * `notifyPledgePaid`를 부르는데, 크론 쪽은 한동안 그 통지를 보내지 않았다 —
+ * 그래서 이 경로로 확정된 사람은 **아무 소식도 못 받았다.** 돈이 빠져나간 것만
+ * 통장에 남고 후원번호도 모르며, 개설자는 후원이 들어온 줄 모른다.
+ *
+ * 위 루프가 "부르면 응답 뒤로 미뤄졌는가"를 보는 것과 달리, 여기서는 **부르기는
+ * 하는가**를 본다. 빠져 있어도 문법은 멀쩡하므로 위 검사로는 잡히지 않는다.
+ */
+const EXPIRE_ROUTE = path.resolve('src/app/api/internal/funding/expire/route.ts')
+
+test('만료 크론이 대신 확정한 후원에도 완료 통지를 보낸다', () => {
+  const src = blankCommentsAndStrings(readFileSync(EXPIRE_ROUTE, 'utf8'))
+  const at = src.search(/\bnotifyPledgePaid\s*\(/)
+  assert.ok(at > 0, '크론이 승격만 하고 후원자·개설자에게 아무 말도 하지 않는다')
+  assert.ok(isDeferred(src, at), 'notifyPledgePaid가 맨 promise로 떠 있다')
+})
+
+test('완료 통지는 승격에 성공한 건에만 붙는다', () => {
+  const src = blankCommentsAndStrings(readFileSync(EXPIRE_ROUTE, 'utf8'))
+  // `finalizePledgePayment`가 null을 돌려주면 확정된 것이 없다 — 그때 통지를
+  // 보내면 "후원이 완료됐습니다"가 거짓말이 된다. 확정 결과를 검사하는
+  // `if (confirmed)` 블록 안에 들어 있어야 한다.
+  const guard = src.indexOf('if (confirmed)')
+  const notifyAt = src.search(/\bnotifyPledgePaid\s*\(/)
+  assert.ok(guard > 0, '확정 성공 여부를 가르는 분기가 없다')
+  assert.ok(notifyAt > guard, '확정 여부를 보기도 전에 통지를 예약한다')
+})

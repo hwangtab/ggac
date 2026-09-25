@@ -26,7 +26,7 @@ import {
 } from '@/lib/payments/toss/client'
 import { getServerPaymentConfig, isPaymentEnabled } from '@/lib/payments/toss/config'
 import { runExpiryGuard } from '@/lib/funding/expiryGuard'
-import { notifyPledgeRefunded, notifyStuckHolds } from '@/lib/funding/notify'
+import { notifyPledgeRefunded, notifyPledgePaid, notifyStuckHolds } from '@/lib/funding/notify'
 import { sendNoticesPaced } from '@/lib/funding/pacedNotices'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
@@ -66,6 +66,13 @@ async function handle(request: NextRequest) {
   // (`maxDuration`)을 넘길 수 있다. 모아 두었다가 응답 뒤에 **간격을 두고**
   // 하나씩 보낸다 — 메일 제공자가 초당 두 통만 받는다.
   const refundNotices: (() => Promise<void>)[] = []
+  // 유실된 승인을 크론이 대신 확정한 건의 "후원이 완료됐습니다" 통지. 확정
+  // 라우트(`/api/funding/pledges/confirm`)는 확정 직후 `notifyPledgePaid`를
+  // 부르는데, 그 요청이 죽어서 여기까지 온 건은 **아무 통지도 받지 못했다** —
+  // 후원자는 돈이 빠져나간 것만 보고 후원번호도 모른 채 남고, 개설자는 후원이
+  // 들어온 줄 모른다. 같은 통지를 여기서도 보낸다. 환불 통지와 같은 이유로
+  // 스윕 루프 안에서 기다리지 않고 모아 두었다가 응답 뒤에 간격을 두고 낸다.
+  const paidNotices: (() => Promise<void>)[] = []
   // 하루 넘게 풀리지 않은 선점이 있으면 `reportStuck`이 채운다. 응답 뒤에
   // 관리자에게 알린다(아래 `after()`).
   let stuckToReport: { count: number; orderIds: string[] } | null = null
@@ -197,7 +204,13 @@ async function handle(request: NextRequest) {
         }
         throw error
       }
-      if (confirmed) log.warn('유실된 승인을 크론이 확정', { orderId: pledge.order_id })
+      if (confirmed) {
+        log.warn('유실된 승인을 크론이 확정', { orderId: pledge.order_id })
+        const paid = confirmed
+        paidNotices.push(() =>
+          notifyPledgePaid(paid).catch(e => log.error('후원 완료 알림 실패', { orderId, e }))
+        )
+      }
       return Boolean(confirmed)
     },
     expire: expirePledge,
@@ -228,6 +241,11 @@ async function handle(request: NextRequest) {
     // 없으므로 한 번 더 잡는다.
     const stuck = stuckToReport
     after(() => notifyStuckHolds(stuck).catch(e => log.error('정체 선점 알림 실패', e)))
+  }
+
+  if (paidNotices.length > 0) {
+    // 환불 통지와 같은 속도 제한(초당 2통)을 탄다.
+    after(() => sendNoticesPaced(paidNotices, { log }).then(r => log.info('확정 통지 발송', r)))
   }
 
   if (refundNotices.length > 0) {
