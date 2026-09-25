@@ -447,6 +447,52 @@ test('정리한 뒤 환불이 들어오면 낡은 정산서가 되고, 그대로
   assert.ok(paid.settlement.paid_out_at)
 })
 
+test('결말이 나지 않은 환불이 있으면 지급을 기록하지 않는다', async () => {
+  const { campaign, reward } = await openCampaign()
+  await paidPledge(campaign, reward)
+  const inflight = await paidPledge(campaign, reward)
+  await close(campaign)
+  const prepared = await sq.prepareSettlement({
+    campaign_id: campaign.id,
+    platform_fee_rate_bp: 0,
+    pg_fee_amount: 0,
+  })
+  assert.equal(prepared.ok, true)
+
+  // 토스 취소를 부르기 직전 — 후원은 `canceled`인데 돈은 아직 움직이지
+  // 않았다. 근거는 이 건을 이미 환불로 세므로 `stale`로는 걸리지 않는다.
+  await pq.claimPledgeForCancel(String(inflight.id), {})
+  const again = await sq.prepareSettlement({
+    campaign_id: campaign.id,
+    platform_fee_rate_bp: 0,
+    pg_fee_amount: 0,
+  })
+  assert.equal(again.ok, true)
+  assert.equal(again.settlement.refund_amount, 10_000)
+
+  const blocked = await sq.markSettlementPaid(campaign.id)
+  assert.equal(blocked.ok, false)
+  assert.equal(blocked.reason, 'refund_in_flight')
+  assert.deepEqual(blocked.pledge_codes, [inflight.pledge_code])
+  assert.equal((await sq.getSettlementByCampaign(campaign.id)).status, 'pending')
+
+  // 토스가 거절해 되돌아오면 근거가 다시 움직인다 — 그때는 기존 `stale`이 잡는다.
+  await pq.revertPledgeCancel(String(inflight.id))
+  const stale = await sq.markSettlementPaid(campaign.id)
+  assert.equal(stale.ok, false)
+  assert.equal(stale.reason, 'stale')
+
+  // 결말이 난 뒤에야 도장을 찍을 수 있다.
+  await refund(inflight)
+  const fresh = await sq.prepareSettlement({
+    campaign_id: campaign.id,
+    platform_fee_rate_bp: 0,
+    pg_fee_amount: 0,
+  })
+  assert.equal(fresh.ok, true)
+  assert.equal((await sq.markSettlementPaid(campaign.id)).ok, true)
+})
+
 // ---------------------------------------------------------------- 지급 뒤
 
 test('지급을 기록한 정산서는 어떤 경로로도 움직이지 않는다', async () => {

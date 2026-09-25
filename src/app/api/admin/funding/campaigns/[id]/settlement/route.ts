@@ -425,6 +425,18 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
         ).toNextResponse()
       if (result.reason === 'already_paid')
         return ApiError.conflict('이미 지급으로 기록된 정산 내역입니다.').toNextResponse()
+      if (result.reason === 'refund_in_flight') {
+        // 토스에 취소를 요청해 놓고 답을 못 받은 건이 있다. 환불로 끝날지
+        // 되돌아올지 모르는 상태에서 도장을 찍으면 어느 쪽으로 끝나든 기록이
+        // 틀릴 수 있고, 굳은 뒤에는 아무도 눈치채지 못한다.
+        log.warn('결말이 나지 않은 환불이 있어 지급 기록을 멈춤', {
+          campaignId: id,
+          pledgeCodes: result.pledge_codes,
+        })
+        return ApiError.conflict(
+          `환불 결과가 확정되지 않은 후원이 있습니다(${result.pledge_codes.join(', ')}). 해당 후원의 환불 버튼을 다시 눌러 결과를 확정한 뒤, 정산을 다시 정리하고 지급을 기록해 주세요. 지금 기록하면 그 건이 환불되지 않은 것으로 판명됐을 때 지급액이 틀린 채로 굳습니다.`
+        ).toNextResponse()
+      }
       // 정산서를 만든 뒤 환불이 들어왔다. 낡은 금액으로 도장을 찍게 두지 않는다.
       return ApiError.conflict(
         `정산 내역을 만든 뒤 후원 환불이 있었습니다. 지금 기준으로 총 모금액 ${result.current.gross_amount.toLocaleString('ko-KR')}원, 환불 ${result.current.refund_amount.toLocaleString('ko-KR')}원입니다. 다시 정리한 뒤 지급을 기록해 주세요.`

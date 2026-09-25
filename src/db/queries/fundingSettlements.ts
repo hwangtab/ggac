@@ -289,6 +289,41 @@ export type SettlementPayResult =
   | { ok: false; reason: 'not_found' }
   | { ok: false; reason: 'already_paid' }
   | { ok: false; reason: 'stale'; current: SettlementBasis }
+  /**
+   * 결말이 나지 않은 환불이 이 캠페인에 남아 있다. 어느 후원인지 함께 준다 —
+   * 그 건을 끝내야 지급을 기록할 수 있고, 사무국은 후원번호로 그것을 찾는다.
+   */
+  | { ok: false; reason: 'refund_in_flight'; pledge_codes: string[] }
+
+/**
+ * 토스 응답을 아직 못 받은 환불 — 후원이 `canceled`인데 결제가 붙어 있는 건.
+ *
+ * `claimPledgeForCancel`이 만들고 `finalizePledgeRefund`(→ `refunded`) 또는
+ * `revertPledgeCancel`(→ `paid`)이 없앤다. 그 사이에서는 **이 건이 환불로
+ * 끝날지 되돌아올지 아무도 모른다.**
+ *
+ * 그 상태로 도장을 찍으면 기록이 틀릴 수 있다. 근거(`computeSettlementBasis`)는
+ * 이 건을 환불로 세는데, 토스가 거절하면 후원은 `paid`로 돌아오고 정산서는
+ * 이미 `paid`로 굳어 `isSettlementStale`이 다시 보지 않는다 — 조합이 얼마를
+ * 줬어야 했는지에 대한 기록이 한 건만큼 적은 채로 영영 남는다.
+ *
+ * 그래서 **결말이 날 때까지 지급을 기록하지 않는다.** 정리
+ * (`prepareSettlement`)는 막지 않는다 — 그 숫자는 언제든 다시 셀 수 있고,
+ * 굳는 자리는 여기 하나다.
+ */
+async function unresolvedRefundClaims(campaignId: string, executor: Executor): Promise<string[]> {
+  const rows = await executor
+    .select({ code: fundingPledges.pledgeCode })
+    .from(fundingPledges)
+    .where(
+      and(
+        eq(fundingPledges.campaignId, campaignId),
+        eq(fundingPledges.status, 'canceled'),
+        isNotNull(fundingPledges.paymentId)
+      )
+    )
+  return rows.map(r => String(r.code))
+}
 
 /**
  * 지급을 기록한다 — 조합이 돈을 실제로 보냈다는 뜻이고, 그 순간부터 숫자는
@@ -337,6 +372,17 @@ export async function markSettlementPaid(campaignId: string): Promise<Settlement
           throw new SettlementPayAbort({
             ok: false,
             reason: existing[0] ? 'already_paid' : 'not_found',
+          })
+        }
+
+        // 결말이 나지 않은 환불이 있으면 여기서 멈춘다. 잠금을 잡은 뒤에
+        // 보므로, 이 검사를 지난 뒤 커밋까지는 새 선점이 끼어들지 못한다.
+        const inFlight = await unresolvedRefundClaims(campaignId, tx)
+        if (inFlight.length > 0) {
+          throw new SettlementPayAbort({
+            ok: false,
+            reason: 'refund_in_flight',
+            pledge_codes: inFlight,
           })
         }
 
