@@ -21,6 +21,12 @@ import {
   type PayoutAccount,
 } from '@/lib/funding/payoutAccount'
 import { cooperativeLossFor } from '@/lib/funding/settlement'
+import {
+  FEE_RATE_VAT_NOTE,
+  formatFeeRatePercent,
+  MEMBER_FEE_RATE_BP,
+  NONMEMBER_FEE_RATE_BP,
+} from '@/lib/funding/feeRate'
 
 interface Settlement {
   status: 'pending' | 'paid'
@@ -42,6 +48,11 @@ interface Payload {
     backer_count: number
     net_amount: number
   }
+  /**
+   * 이 캠페인에 **승인 시점에 새겨진** 요율. 지금 설정값이 아니다 — 승인 뒤에
+   * 사무국이 설정을 바꿔도 이 값은 움직이지 않는다. 조합원 3.3% / 비조합원
+   * 5.5%이며 둘 다 부가세를 포함한 전액 요율이다.
+   */
   platform_fee_rate_bp: number
   is_stale: boolean
   /** 개설자 프로필에 은행·계좌번호가 둘 다 있는가. 정리·지급 응답에도 실린다. */
@@ -271,7 +282,9 @@ export default function SettlementPanel({
               <dd className="font-semibold text-gray-900">{won(settlement.pg_fee_amount)}</dd>
             </div>
             <div>
-              <dt className="text-xs text-gray-500">플랫폼 수수료({rate / 100}%)</dt>
+              <dt className="text-xs text-gray-500">
+                플랫폼 수수료({formatFeeRatePercent(rate)}% · {FEE_RATE_VAT_NOTE})
+              </dt>
               <dd className="font-semibold text-gray-900">{won(settlement.platform_fee_amount)}</dd>
             </div>
             {loss > 0 ? (
@@ -287,6 +300,17 @@ export default function SettlementPanel({
           </>
         ) : null}
       </dl>
+
+      {/* 요율이 어디서 왔는지 한 줄로 말한다 — 지금 설정이 아니라 승인할 때
+          새긴 값이다. 그리고 부가세가 이미 들어 있다. */}
+      {settlement ? (
+        <p className="mt-2 text-xs text-gray-500">
+          플랫폼 수수료율 {formatFeeRatePercent(rate)}%는 이 캠페인을 승인할 때 새긴 값입니다
+          (조합원 {formatFeeRatePercent(MEMBER_FEE_RATE_BP)}% / 비조합원{' '}
+          {formatFeeRatePercent(NONMEMBER_FEE_RATE_BP)}%, 둘 다 {FEE_RATE_VAT_NOTE}이라 여기에
+          부가세를 따로 더하지 않습니다). 지금 설정을 바꿔도 이 캠페인에는 적용되지 않습니다.
+        </p>
+      ) : null}
 
       {/*
         어디로 보내는가. 이체는 사람이 손으로 하므로 은행·계좌번호·예금주

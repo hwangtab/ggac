@@ -28,6 +28,7 @@ import { computePercent, formatAmount, hasBackers } from '@/app/[locale]/funding
 // 공개 링크를 걸어도 되는 상태 — 목록 화면과 같은 기준을 사본이 아니라
 // 전이 표의 정본으로 쓴다.
 import { PUBLIC_CAMPAIGN_STATUSES } from '@/lib/funding/transitions'
+import { formatFeeRatePercent } from '@/lib/funding/feeRate'
 // 이행 전이 규칙의 정본. 화면은 물어보고만 움직인다 — 라우트가 다시 판정한다.
 import {
   canTransitionFulfillment,
@@ -90,6 +91,8 @@ interface Settlement {
   net_amount: number
   pg_fee_amount: number
   platform_fee_amount: number
+  /** 승인할 때 이 프로젝트에 새긴 수수료율(만분율). 부가세가 포함된 값이다. */
+  platform_fee_rate_bp: number
   payout_amount: number
   backer_count: number
   paid_out_at: string | null
@@ -587,6 +590,13 @@ export default function ManageCampaignPage() {
                       ) : null}
                     </dl>
                     <p className="mt-4 text-sm text-gray-600">{t('creator.settlementFormula')}</p>
+                    {/* 수수료 금액만으로는 얼마를 뗀 것인지 되짚을 수 없다.
+                        요율은 승인할 때 정해져 그 뒤로 움직이지 않는다. */}
+                    <p className="mt-1 text-sm text-gray-600">
+                      {t('creator.settlementPlatformFeeNote', {
+                        rate: formatFeeRatePercent(data.settlement.platform_fee_rate_bp),
+                      })}
+                    </p>
                     {data.settlement.cooperative_loss_amount > 0 ? (
                       <p className="mt-1 text-sm text-gray-600">
                         {t('creator.settlementLossNote')}
