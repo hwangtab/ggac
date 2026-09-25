@@ -37,6 +37,49 @@ const MAINTENANCE_EXEMPT_EXACT = ['/api/health']
 const MAINTENANCE_EXEMPT_PREFIXES = ['/api/auth/', '/api/inbound/', '/api/internal/']
 
 /**
+ * 정본 호스트. 검색엔진에 색인시킬 주소이고, `getSiteUrl()`이 canonical과
+ * hreflang에 박는 주소이기도 하다(`src/utils/site.ts`).
+ */
+const CANONICAL_HOST = 'ggac.kr'
+
+/**
+ * 정본으로 모을 별칭 호스트. **정확히 일치할 때만** 넘긴다.
+ *
+ * `.vercel.app`을 접미사로 잡으면 프리뷰 배포(`ggac-git-….vercel.app`)까지
+ * 전부 프로덕션으로 튕겨 나가 리뷰가 불가능해진다. 별칭은 손으로 적는다.
+ */
+const CANONICAL_HOST_ALIASES = new Set(['www.ggac.kr', 'ggac.vercel.app'])
+
+/**
+ * 별칭 호스트로 들어온 요청을 정본으로 308 넘긴다. 아니면 `null`.
+ *
+ * 두 별칭이 같은 사이트를 200으로 그대로 내주고 있었다. 검색엔진 입장에서는
+ * 같은 내용이 세 주소에 있고, 정작 페이지가 스스로 적는 canonical·hreflang은
+ * `ggac.kr`만 가리킨다 — 주소와 선언이 어긋나면 색인 신호가 갈린다.
+ *
+ * **`/api/*`에는 걸지 않는다**(호출부가 그 앞에서 갈린다). 그쪽을 두드리는
+ * 것은 사람이 아니라 GitHub Actions 크론과 외부 웹훅이고, 그들 다수는
+ * 리다이렉트를 따라가지 않아 여기서 같이 넘기면 조용히 끊긴다 — 실제로
+ * 지원사업·회비 워크플로 둘이 `https://www.ggac.kr/api/internal/...`로
+ * POST한다. 색인과도 무관한 경로다.
+ *
+ * next.config의 `redirects()`가 아니라 미들웨어에 두는 이유도 그 예외다.
+ * `redirects()`에서 `/api`만 빼려면 source에 부정 전방탐색 정규식을 써야 하고,
+ * 그 패턴이 루트(`/`)까지 무는지는 빌드를 돌려야 알 수 있다. 여기서는 이미
+ * `/api/` 분기가 위에서 끝나 있어 아무 패턴도 필요 없다.
+ */
+function canonicalHostRedirect(request: NextRequest): NextResponse | null {
+  const host = (request.headers.get('host') ?? '').toLowerCase().split(':')[0]
+  if (!CANONICAL_HOST_ALIASES.has(host)) return null
+
+  const url = new URL(request.url)
+  url.protocol = 'https:'
+  url.hostname = CANONICAL_HOST
+  url.port = ''
+  return NextResponse.redirect(url, 308)
+}
+
+/**
  * **이미 움직인 돈을 마저 세우는 경로.** 유지보수는 새 행동을 멈추는
  * 스위치이지, 진행 중인 결제를 버리는 스위치가 아니다.
  *
@@ -144,6 +187,11 @@ export async function middleware(request: NextRequest) {
 
     return res
   }
+
+  // 별칭 호스트(www·vercel.app)를 정본으로 모은다. 정적 파일 통과보다 **앞에**
+  // 둔다 — sitemap.xml·robots.txt도 정본 주소에서 나와야 한다.
+  const hostRedirect = canonicalHostRedirect(request)
+  if (hostRedirect) return hostRedirect
 
   // 정적 파일 및 Next.js 내부 경로 패스
   if (pathname.startsWith('/_next') || pathname.includes('.')) {
