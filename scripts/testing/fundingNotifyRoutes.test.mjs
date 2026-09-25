@@ -179,12 +179,28 @@ for (const file of routeFiles) {
  * 하는가**를 본다. 빠져 있어도 문법은 멀쩡하므로 위 검사로는 잡히지 않는다.
  */
 const EXPIRE_ROUTE = path.resolve('src/app/api/internal/funding/expire/route.ts')
+const CONFIRM_ROUTE = path.resolve('src/app/api/funding/pledges/confirm/route.ts')
 
 test('만료 크론이 대신 확정한 후원에도 완료 통지를 보낸다', () => {
   const src = blankCommentsAndStrings(readFileSync(EXPIRE_ROUTE, 'utf8'))
   const at = src.search(/\bnotifyPledgePaid\s*\(/)
   assert.ok(at > 0, '크론이 승격만 하고 후원자·개설자에게 아무 말도 하지 않는다')
   assert.ok(isDeferred(src, at), 'notifyPledgePaid가 맨 promise로 떠 있다')
+})
+
+/**
+ * 확정 라우트와 만료 크론이 같은 건을 동시에 확정하면, **둘 다** `paid` 행을
+ * 성공으로 돌려받는다. 상태만 보고 알리면 후원자는 같은 영수증을 두 번,
+ * 개설자는 같은 소식을 두 번 받는다 — 옮긴 쪽만 알린다.
+ */
+test('완료 통지는 이 호출이 실제로 옮긴 건에만 붙는다', () => {
+  for (const route of [CONFIRM_ROUTE, EXPIRE_ROUTE]) {
+    const src = blankCommentsAndStrings(readFileSync(route, 'utf8'))
+    const guard = src.indexOf('just_paid === true')
+    const notifyAt = src.search(/\bnotifyPledgePaid\s*\(/)
+    assert.ok(guard > 0, `${route}: 방금 옮겼는지를 보지 않는다`)
+    assert.ok(notifyAt > guard, `${route}: 옮겼는지 보기도 전에 통지를 예약한다`)
+  }
 })
 
 test('완료 통지는 승격에 성공한 건에만 붙는다', () => {

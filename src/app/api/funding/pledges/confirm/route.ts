@@ -344,7 +344,15 @@ export async function POST(request: NextRequest) {
       ).toNextResponse()
     }
 
-    after(() => notifyPledgePaid(confirmed).catch(e => log.error('후원 알림 실패', { orderId, e })))
+    // **이 요청이 실제로 옮겼을 때만 알린다.** 확정 함수는 "이미 `paid`였다"와
+    // "내가 방금 `paid`로 옮겼다"를 `just_paid`로 갈라 준다 — 새로고침이나
+    // 만료 크론과의 겹침에서 돌아오는 행도 `paid`라, 상태만 보고 알리면
+    // 후원자는 같은 영수증을, 개설자는 같은 소식을 두 번 받는다.
+    if (confirmed.just_paid === true) {
+      after(() =>
+        notifyPledgePaid(confirmed).catch(e => log.error('후원 알림 실패', { orderId, e }))
+      )
+    }
 
     log.info('후원 확정', { orderId, pledgeCode: confirmed.pledge_code })
     return ApiSuccess.ok({

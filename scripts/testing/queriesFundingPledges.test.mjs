@@ -164,6 +164,8 @@ test('확정은 주문·후원 짝이 맞을 때만, 결제와 리워드 잠금�
     raw: { a: 1 },
   })
   assert.equal(ok.status, 'paid')
+  // 이 호출이 실제로 옮겼다 — 통지를 내도 되는 유일한 경우다.
+  assert.equal(ok.just_paid, true)
   assert.equal(typeof ok.paid_at, 'string')
   const payment = await payq.getPaymentByOrderId('funding_c')
   assert.equal(payment.status, 'done')
@@ -179,6 +181,9 @@ test('확정은 주문·후원 짝이 맞을 때만, 결제와 리워드 잠금�
     raw: {},
   })
   assert.equal(again.id, p.id)
+  // 새로고침·더블클릭·크론과의 겹침에서 돌아오는 행도 `paid`다. 상태만 보고
+  // 알리면 같은 영수증이 두 번 간다 — 옮긴 쪽만 참이어야 한다.
+  assert.equal(again.just_paid, false)
 })
 
 test('취소 선점 → 환불 기록, 되돌리기', async () => {

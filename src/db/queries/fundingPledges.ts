@@ -436,6 +436,22 @@ export interface FinalizePledgeInput {
 }
 
 /**
+ * 확정 결과에 붙는 **표 아닌 한 칸**: 이 호출이 후원을 `pending`에서 `paid`로
+ * 실제로 옮겼는가.
+ *
+ * 없으면 부르는 쪽이 "돌려받은 행이 `paid`다"만 보게 되는데, 그 사실은 세
+ * 경우에 모두 참이다 — 내가 방금 확정했을 때, 새로고침·더블클릭으로 다시
+ * 불렀을 때, 그리고 **만료 크론과 확정 라우트가 같은 건을 동시에 확정할 때**.
+ * 뒤의 둘에서도 알림을 내면 후원자는 같은 영수증을 두 번, 개설자는 같은
+ * 후원 소식을 두 번 받는다.
+ *
+ * 돌려주는 값의 모양(컬럼 이름의 snake_case 한 벌)을 바꾸지 않으려고 칸
+ * 하나로 얹는다 — 이 값을 읽는 곳은 확정 라우트와 만료 크론 둘뿐이고,
+ * 둘 다 "내가 옮겼을 때만 알린다"에 쓴다.
+ */
+export const JUST_PAID_KEY = 'just_paid'
+
+/**
  * 락 경합만 재시도한다(`holdPledge`와 같은 규칙). 확정은 선점·다른 확정과
  * 같은 행들을 두고 겨루므로 경합 자체는 일상이다 — 여기서 물러나면 이미
  * 승인된 결제가 "확인 중"으로 밀려나 사람 손을 부른다. 자리가 없다는 판정
@@ -468,7 +484,7 @@ async function finalizePledgePaymentOnce(input: FinalizePledgeInput): Promise<Ro
     // 더블클릭·재시도. 같은 주문으로 이미 확정됐으면 성공으로 답한다 —
     // 아래 재고·마감 검사보다 **먼저** 본다. 이미 확정된 후원을 나중에
     // 마감됐다는 이유로 실패로 답하면, 멀쩡히 끝난 결제를 환불하게 된다.
-    if (target.status === 'paid') return rowToPledge(target as Row)
+    if (target.status === 'paid') return { ...rowToPledge(target as Row), just_paid: false }
     if (target.status !== 'pending') return null
 
     // 캠페인이 마감·정산됐으면 재고 계산의 전제 자체가 없다. 크론의 승격
@@ -521,7 +537,7 @@ async function finalizePledgePaymentOnce(input: FinalizePledgeInput): Promise<Ro
           )
         )
         .limit(1)
-      return already ? rowToPledge(already as Row) : null
+      return already ? { ...rowToPledge(already as Row), just_paid: false } : null
     }
 
     await tx
@@ -545,7 +561,8 @@ async function finalizePledgePaymentOnce(input: FinalizePledgeInput): Promise<Ro
       .set({ lockedAt: input.approvedAt })
       .where(and(eq(fundingRewards.id, confirmed.rewardId), isNull(fundingRewards.lockedAt)))
 
-    return rowToPledge(confirmed as Row)
+    // 이 호출이 실제로 옮겼다 — 여기서만 참이다(`JUST_PAID_KEY` 주석 참고).
+    return { ...rowToPledge(confirmed as Row), just_paid: true }
   })
 }
 

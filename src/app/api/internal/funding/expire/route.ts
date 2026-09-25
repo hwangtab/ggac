@@ -256,9 +256,14 @@ async function handle(request: NextRequest) {
       if (confirmed) {
         log.warn('유실된 승인을 크론이 확정', { orderId: pledge.order_id })
         const paid = confirmed
-        paidNotices.push(() =>
-          notifyPledgePaid(paid).catch(e => log.error('후원 완료 알림 실패', { orderId, e }))
-        )
+        // **이 스윕이 실제로 옮겼을 때만 알린다.** 확정 라우트가 간발의 차로
+        // 먼저 확정했으면 그쪽이 이미 통지를 보냈고, 여기 돌아온 행도 `paid`다
+        // — 상태만 보고 알리면 같은 영수증이 두 번 간다(`just_paid`).
+        if (paid.just_paid === true) {
+          paidNotices.push(() =>
+            notifyPledgePaid(paid).catch(e => log.error('후원 완료 알림 실패', { orderId, e }))
+          )
+        }
         return true
       }
 
