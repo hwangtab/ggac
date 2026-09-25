@@ -28,6 +28,7 @@ import type {
 } from '../../constants/memberProfile.ts'
 
 import type { PayoutAccount } from '../../lib/funding/payoutAccount.ts'
+import { normalizeLoginEmail } from '../../lib/auth/loginEmail.ts'
 
 import { likeContains, toCamelCase, toIso } from './_helpers.ts'
 import { profileCompletenessExpression } from './profileCompleteness.ts'
@@ -985,11 +986,20 @@ export interface LoginVerificationSubject {
  * 프로필이 없는 계정(유령 회원)도 `user` 행은 있으므로 결과가 나온다. 그때
  * `is_admin`은 `false`다 — 관문은 "관리자임이 확인된 경우에만" 비켜 준다.
  *
+ * **주소는 여기서 접는다.** 호출부가 접어 오기를 기다리지 않는다 — 예전에는
+ * 받은 값을 그대로 `eq(user.email, email)`에 넣었고, 저장된 주소가
+ * 소문자라서 `User@Example.com`으로 들어온 로그인은 0행을 받았다. 관문은 그
+ * 0행을 "계정 없음"으로 읽고 비켜 줬고, Better Auth는 같은 요청으로 로그인을
+ * 성립시켰다. 접는 방법은 `normalizeLoginEmail`에 이유와 함께 있다.
+ *
  * @returns 그 주소의 계정이 없으면 `null`.
  */
 export async function getLoginVerificationSubject(
   email: string
 ): Promise<LoginVerificationSubject | null> {
+  const normalized = normalizeLoginEmail(email)
+  if (normalized === '') return null
+
   const rows = await db
     .select({
       id: user.id,
@@ -998,7 +1008,7 @@ export async function getLoginVerificationSubject(
     })
     .from(user)
     .leftJoin(memberProfiles, eq(memberProfiles.id, user.id))
-    .where(eq(user.email, email))
+    .where(eq(user.email, normalized))
     .limit(1)
 
   const row = rows[0]

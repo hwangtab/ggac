@@ -47,6 +47,10 @@ export type SecurityEventType =
   | 'RATE_LIMIT_AUTO_BLOCK'
   | 'RATE_LIMIT_MEMORY_FALLBACK'
   | 'RATE_LIMIT_DEGRADED_FAIL_OPEN'
+  // 개인정보를 내보내는 읽기(`failClosedOnOutage`)에서 리미터가 없어
+  // **열지 않고 막은** 경우. 사무국의 정상 업무가 멈추는 쪽이므로 눈에
+  // 띄어야 한다 — Upstash를 고치라는 신호다.
+  | 'RATE_LIMIT_DEGRADED_FAIL_CLOSED'
 
   // Admin API 보안 이벤트
   | 'ADMIN_ACTIVITY_API_ERROR'
@@ -173,6 +177,10 @@ export type SecurityEventType =
   // 계좌를 뺀 이유가 "누가 언제 남의 계좌를 봤는지 답할 수 있게"였으므로,
   // 기록이 빠지면 그 이유가 통째로 사라진다. 조회 자체는 막지 않는다.
   | 'MEMBER_ACCOUNT_VIEW_AUDIT_FAILED'
+  // 이메일 인증 관문이 계정을 **판정하지 못해** 통과시킨 경우(설정·프로필
+  // 조회 실패). 막지 않는 것은 의도이지만(Turso가 흔들린다고 전 조합원이 문
+  // 앞에 서면 안 된다), 관문이 열려 있던 시간은 셀 수 있어야 한다.
+  | 'EMAIL_VERIFICATION_GATE_FAILED_OPEN'
 
 export type SecurityEventSeverity = 'low' | 'medium' | 'high'
 

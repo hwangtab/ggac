@@ -26,7 +26,7 @@
  *
  * ## 그럼 인가는 무엇이 지키는가 — **E2E다**
  *
- * `npm run test:e2e:authz`(기준선 130 passed). 같은 감사에서 **E2E는 관리자 게이트
+ * `npm run test:e2e:authz`(기준선 141 passed). 같은 감사에서 **E2E는 관리자 게이트
  * 무력화를 실제로 잡았다.** 인가를 바꿨으면 그걸 돌려라. 이 파일이 초록불인 것은
  * 인가가 지켜진다는 증거가 아니다.
  *
@@ -1778,6 +1778,10 @@ const rateLimiterPath = join(root, 'src/utils/distributedRateLimiter.ts')
 const rateLimiterSource = readSourceAt(rateLimiterPath)
 const rateLimiterCompatPath = join(root, 'src/utils/rateLimiter.ts')
 const rateLimiterCompatSource = readSourceAt(rateLimiterCompatPath)
+const accountRevealLimitPath = join(root, 'src/lib/server/accountRevealLimit.ts')
+const accountRevealLimitSource = existsSync(accountRevealLimitPath)
+  ? readSourceAt(accountRevealLimitPath)
+  : ''
 const rateLimitWrapperPath = join(root, 'src/utils/rateLimit.ts')
 const rateLimitWrapperSource = readSourceAt(rateLimitWrapperPath)
 const verifyEnvPath = join(root, 'scripts/verify-env.js')
@@ -1818,7 +1822,7 @@ const supportsVercelMarketplaceUpstashEnv =
 // 등급 분기 존재를 함께 검증한다.
 const productionRateLimiterFailsClosed =
   /private isProduction\(\): boolean/.test(rateLimiterSource) &&
-  /private rateLimitUnavailable\(windowMs: number,\s*maxRequests: number\): RateLimitResult/.test(
+  /private rateLimitUnavailable\(\s*windowMs: number,\s*maxRequests: number,/.test(
     rateLimiterSource
   ) &&
   /Rate limiting is not configured for production/.test(rateLimiterSource) &&
@@ -1830,9 +1834,18 @@ const productionRateLimiterFailsClosed =
   /method === ['"]GET['"] \|\| method === ['"]HEAD['"]/.test(rateLimiterSource) &&
   /RATE_LIMIT_DEGRADED_FAIL_OPEN/.test(rateLimiterSource) &&
   /return this\.rateLimitUnavailable\(windowMs,\s*maxRequests\)/.test(rateLimiterSource) &&
-  /if \(this\.isProduction\(\)\) \{\s*return this\.degradeByMethod\(req,\s*windowMs,\s*maxRequests,\s*['"]redis_error['"]\)\s*\}/.test(
+  /if \(this\.isProduction\(\)\) \{\s*return this\.degradeByMethod\(req,\s*windowMs,\s*maxRequests,\s*['"]redis_error['"],\s*failClosedOnOutage\)\s*\}/.test(
     rateLimiterSource
-  )
+  ) &&
+  // 감사(2026-09-25): GET·HEAD 완화는 평범한 읽기에는 옳지만 **계좌를
+  // 내보내는 GET**에는 옳지 않았다. 개인정보를 내보내는 읽기가 스스로 그
+  // 완화에서 빠질 수 있어야 하고(`failClosedOnOutage`), 실제로 계좌 열람
+  // 설정이 그렇게 선언해야 한다.
+  /failClosedOnOutage\?: boolean/.test(rateLimiterSource) &&
+  /if \(failClosedOnOutage === true\)/.test(rateLimiterSource) &&
+  /RATE_LIMIT_DEGRADED_FAIL_CLOSED/.test(rateLimiterSource) &&
+  /failClosedOnOutage/.test(serverRateLimitSource) &&
+  /failClosedOnOutage:\s*true/.test(accountRevealLimitSource)
 // 아래 세 검사는 **주석 문구 자체**가 계약이다(운영에서 503 fail-closed임을
 // 코드 옆에 설명해 두는 것). 주석을 걷어낸 판본에는 검사할 문구가 남지 않으므로
 // 이 검사에 한해 원본을 읽는다 — 로직 검사는 계속 stripped 판본을 쓴다.
@@ -4046,6 +4059,7 @@ const validatesAdminActivityTypeFilters =
   /ACTIVITY_ACTION_TYPES/.test(activityConstantsSource) &&
   /ACTIVITY_TARGET_TYPES/.test(activityConstantsSource) &&
   /parseActivityActionType/.test(activityConstantsSource) &&
+  /parseClientActivityActionType/.test(activityConstantsSource) &&
   /parseActivityTargetType/.test(activityConstantsSource) &&
   /satisfies\s+readonly\s+ActivityActionType\[\]/.test(activityConstantsSource) &&
   /satisfies\s+readonly\s+ActivityTargetType\[\]/.test(activityConstantsSource) &&
@@ -4368,14 +4382,23 @@ const adminArtistMemberMutationRoutesUseSharedApiRoute =
 // `action_type`/`target_type`/`target_id`(logUserActivity의 snake_case
 // 입력 필드명)이지만, 검증된 지역변수(actionType/targetType/targetId)만
 // 실린다는 성질은 그대로 유지한다.
+// 감사(2026-09-25): 계좌·배송 열람 기록이 **클라이언트가 쓸 수 있는** 허용
+// 목록에 들어 있어, 로그인한 사람이면 누구나 `member_account_viewed` 같은 줄을
+// 위조할 수 있었다. 이제 두 클라이언트 라우트는 `parseClientActivityActionType`
+// (참여 기록만)을 쓰고, 증거로 쓰이는 종류는 `SERVER_ONLY_ACTIVITY_ACTION_TYPES`
+// 에 있다. 느슨한 `parseActivityActionType`은 관리자 **필터**에만 남는다.
 const validatesActivityLogTypes =
-  /parseActivityActionType\(action_type\)/.test(activityLogSource) &&
+  /SERVER_ONLY_ACTIVITY_ACTION_TYPES/.test(activityConstantsSource) &&
+  /CLIENT_LOGGABLE_ACTIVITY_ACTION_TYPES/.test(activityConstantsSource) &&
+  /parseClientActivityActionType\(action_type\)/.test(activityLogSource) &&
+  !/parseActivityActionType\(/.test(activityLogSource) &&
+  !/parseActivityActionType\(/.test(activityBatchLogSource) &&
   /parseActivityTargetType\(target_type\)/.test(activityLogSource) &&
   /validateUUID\(target_id,\s*['"]대상 ID['"]\)/.test(activityLogSource) &&
   /action_type:\s*actionType/.test(activityLogSource) &&
   /target_type:\s*targetType/.test(activityLogSource) &&
   /target_id:\s*targetId/.test(activityLogSource) &&
-  /parseActivityActionType\(log\.action_type\)/.test(activityBatchLogSource) &&
+  /parseClientActivityActionType\(log\.action_type\)/.test(activityBatchLogSource) &&
   /parseActivityTargetType\(log\.target_type\)/.test(activityBatchLogSource) &&
   /validateUUID\(log\.target_id,\s*['"]대상 ID['"]\)/.test(activityBatchLogSource) &&
   // 배치는 logUserActivitiesBatch(배열 인자, 단계 4)로 일괄 기록 — 검증된

@@ -4,7 +4,7 @@ import { withRateLimit } from '@/lib/server/rateLimit'
 import { requireUser } from '@/lib/server/memberAuth'
 import { sanitizeInput } from '@/utils/security'
 import { parseJsonObjectBody } from '@/utils/requestBody'
-import { parseActivityActionType, parseActivityTargetType } from '@/constants/activity'
+import { parseClientActivityActionType, parseActivityTargetType } from '@/constants/activity'
 import { validateUUID } from '@/utils/validation'
 import { logUserActivity } from '@/db/queries/activities'
 import type { ActivityLogRequest } from '@/types'
@@ -27,7 +27,11 @@ export async function POST(request: NextRequest) {
 
       const { action_type, target_type = null, target_id = null, metadata = {} } = body
 
-      const actionType = parseActivityActionType(action_type)
+      // **클라이언트 전용 허용 목록으로 판정한다.** 이 라우트는 로그인만
+      // 했으면 누구나 부를 수 있으므로, 계좌 열람처럼 서버가 증거로 남기는
+      // 종류를 여기서 받아 주면 그 증거를 아무나 만들 수 있다
+      // (`@/constants/activity`의 두 목록 설명 참고).
+      const actionType = parseClientActivityActionType(action_type)
       if (!actionType) {
         return ApiError.badRequest('유효한 action_type이 필요합니다.').toNextResponse()
       }

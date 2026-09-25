@@ -4,7 +4,7 @@ import { withRateLimit } from '@/lib/server/rateLimit'
 import { requireUser } from '@/lib/server/memberAuth'
 import { sanitizeInput } from '@/utils/security'
 import { parseJsonObjectBody } from '@/utils/requestBody'
-import { parseActivityActionType, parseActivityTargetType } from '@/constants/activity'
+import { parseClientActivityActionType, parseActivityTargetType } from '@/constants/activity'
 import { validateUUID } from '@/utils/validation'
 import { logUserActivitiesBatch } from '@/db/queries/activities'
 import type { ActivityLogRequest } from '@/types'
@@ -51,7 +51,9 @@ export async function POST(request: NextRequest) {
       for (let i = 0; i < logs.length; i++) {
         const log = logs[i]
 
-        const actionType = parseActivityActionType(log.action_type)
+        // 단건 기록과 같은 판정이다 — 서버 전용 종류는 배치로도 들어오지
+        // 못한다(`@/constants/activity`의 두 목록 설명 참고).
+        const actionType = parseClientActivityActionType(log.action_type)
         if (!actionType) {
           errors.push({ index: i, error: '유효한 action_type이 필요합니다.' })
           continue
