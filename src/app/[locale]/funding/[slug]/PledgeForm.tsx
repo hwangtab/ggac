@@ -376,13 +376,16 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
     } | null
     if (!widgets || !reservation) return
     try {
-      const successUrl = new URL('/funding/success', window.location.origin)
+      // `localePrefix: 'as-needed'`라 한국어는 접두사가 없다 — 여기서 붙이지
+      // 않으면 영문 이용자도 한국어 성공/실패 화면으로 돌아온다.
+      const localePrefix = locale === 'ko' ? '' : `/${locale}`
+      const successUrl = new URL(`${localePrefix}/funding/success`, window.location.origin)
       successUrl.searchParams.set('pledgeId', reservation.pledgeId)
       await widgets.requestPayment({
         orderId: reservation.orderId,
         orderName: reservation.orderName,
         successUrl: successUrl.toString(),
-        failUrl: `${window.location.origin}/funding/fail`,
+        failUrl: `${window.location.origin}${localePrefix}/funding/fail`,
         customerName: reservation.customerName,
         customerEmail: reservation.customerEmail,
       })
@@ -390,7 +393,7 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
       console.error('결제창 실패:', caught)
       setError(t('fail.defaultMessage'))
     }
-  }, [reservation, t])
+  }, [reservation, t, locale])
 
   // 배너는 폼 맨 위에 있고 제출 버튼은 맨 아래에 있다 — 스크린리더가 읽어
   // 주는 것과 별개로, 화면을 눈으로 보는 사람도 아래에서 제출하면 배너가 바뀐
