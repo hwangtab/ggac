@@ -753,3 +753,75 @@ test('마지막 하나를 두 승인이 동시에 확정하려 하면 한 쪽만
   const loser = [mine, theirs].find(x => !x.ok)
   assert.equal(loser.err, 'PledgeStockUnavailableError')
 })
+
+// ── 만료 스윕의 창을 정체된 행이 먹던 것 ───────────────────────────────────
+
+/**
+ * 스윕은 한 번에 100건까지만 본다. 풀리지 않는 행은 정의상 가장 먼저 만료된
+ * 축이라, 차례를 정하지 않으면(= 대체로 삽입순) 그 행들이 창을 통째로 채우고
+ * **새로 만료된 건은 영영 목록에 오르지 못한다.** 그 목록이 유실된 승인을
+ * 구하는 유일한 입구다.
+ */
+test('만료 스윕 목록은 늦게 만료된 것부터 준다 — 오래 막힌 행이 창을 먹지 못한다', async () => {
+  const r = await fq.createReward({
+    campaign_id: campaign.id,
+    title: '창막힘',
+    amount: 1000,
+  })
+  const now = Date.now()
+  const made = []
+  for (const [index, ageMinutes] of [3000, 2000, 1000, 10].entries()) {
+    const pledge = await hold(`funding_window_${index}`, r.id, 1, {
+      reward: r,
+      backer_email: `window${index}@x.kr`,
+    })
+    await client.execute({
+      sql: 'UPDATE funding_pledges SET hold_expires_at = ? WHERE id = ?',
+      args: [now - ageMinutes * 60_000, pledge.id],
+    })
+    made.push({ id: pledge.id, ageMinutes })
+  }
+
+  // 목록 전체가 "늦게 만료된 것부터"여야 한다. 차례가 없으면(= 대체로
+  // 삽입순) 내가 방금 과거로 밀어 놓은 행들 때문에 이 단언이 깨진다.
+  const all = await pq.listExpiredHolds(new Date(now), 1000)
+  const times = all.map(row => new Date(String(row.hold_expires_at)).getTime())
+  for (let i = 1; i < times.length; i++) {
+    assert.ok(times[i - 1] >= times[i], '만료 스윕 목록이 늦게 만료된 순이 아니다')
+  }
+
+  // 창이 좁아지면 살아남는 것은 가장 늦게 만료된 쪽이어야 한다 — 오래 막힌
+  // 행이 창을 먹으면 새 건이 영영 보이지 않는다.
+  const narrow = await pq.listExpiredHolds(new Date(now), 2)
+  assert.deepEqual(
+    narrow.map(row => String(row.id)),
+    all.slice(0, 2).map(row => String(row.id))
+  )
+  const oldest = made.filter(m => m.ageMinutes >= 2000).map(m => m.id)
+  for (const id of oldest) {
+    assert.ok(!narrow.some(row => String(row.id) === id), '오래 막힌 행이 여전히 창을 먹고 있다')
+  }
+  assert.ok(
+    all.some(row => String(row.id) === made.find(m => m.ageMinutes === 10).id),
+    '방금 만료된 건이 목록에 없다'
+  )
+})
+
+test('하루 넘게 pending인 선점만 정체 목록에 오른다', async () => {
+  const r = await fq.createReward({ campaign_id: campaign.id, title: '정체', amount: 1000 })
+  const now = new Date()
+  const old = await hold('funding_stuck_old', r.id, 1, { reward: r, backer_email: 'so@x.kr' })
+  const fresh = await hold('funding_stuck_new', r.id, 1, { reward: r, backer_email: 'sn@x.kr' })
+  await client.execute({
+    sql: 'UPDATE funding_pledges SET hold_expires_at = ? WHERE id = ?',
+    args: [now.getTime() - 48 * 60 * 60 * 1000, old.id],
+  })
+  await client.execute({
+    sql: 'UPDATE funding_pledges SET hold_expires_at = ? WHERE id = ?',
+    args: [now.getTime() - 60_000, fresh.id],
+  })
+
+  const ids = (await pq.listStuckHolds(now)).map(row => String(row.id))
+  assert.ok(ids.includes(old.id), '하루 넘게 풀리지 않은 선점을 세지 못한다')
+  assert.ok(!ids.includes(fresh.id), '방금 만료된 선점까지 정체로 세면 매번 경보가 울린다')
+})

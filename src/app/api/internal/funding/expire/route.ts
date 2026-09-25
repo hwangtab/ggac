@@ -11,6 +11,7 @@ import { timingSafeEqual } from 'node:crypto'
 
 import {
   listExpiredHolds,
+  listStuckHolds,
   expirePledge,
   finalizePledgePayment,
   cancelPendingPledge,
@@ -28,6 +29,7 @@ import { runExpiryGuard } from '@/lib/funding/expiryGuard'
 import { notifyPledgeRefunded } from '@/lib/funding/notify'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
+import { logSecurityEvent } from '@/utils/security'
 
 const log = createLogger('api/internal/funding/expire')
 
@@ -88,7 +90,7 @@ async function handle(request: NextRequest) {
           !Number.isFinite(tossTotalAmount) ||
           tossTotalAmount !== expectedAmount
         ) {
-          log.error('스윕 대상 결제가 이 주문의 것이 아님 — 승격·만료 모두 보류', {
+          log.error('스윕 대상 결제가 이 주문의 것이 아님', {
             orderId,
             paymentKey: payment.payment_key,
             expectedOrderId: orderId,
@@ -96,7 +98,15 @@ async function handle(request: NextRequest) {
             expectedAmount,
             receivedAmount: tossTotalAmount,
           })
-          return 'unknown'
+          // 주문번호가 다르면 **우리 주문으로 승인된 결제가 없다**는 뜻이다
+          // (confirm은 승인 호출 전에 클라이언트가 보낸 식별자를 그대로
+          // 새기므로, 그 식별자가 남의 것이면 우리 승인은 애초에 나가지
+          // 못했다). 다시 물어도 답이 같으니 보류하지 않는다 — 보류하면 이
+          // 행이 다음 스윕의 창을 영영 먹는다.
+          //
+          // 주문번호는 맞는데 금액이 어긋나는 쪽은 다르다. 그 결제는 우리
+          // 것이고 승인됐을 수 있어 만료시키면 돈이 뜬다. 사람이 봐야 한다.
+          return tossOrderId !== orderId ? 'mismatch' : 'unknown'
         }
         return {
           status: String(p.status),
@@ -180,6 +190,22 @@ async function handle(request: NextRequest) {
       return Boolean(confirmed)
     },
     expire: expirePledge,
+    listStuckHolds: () => listStuckHolds(),
+    // 하루가 지나도 풀리지 않은 선점은 자동으로 어느 쪽인지 정할 수 없다
+    // (승인된 돈이 붙어 있을 수 있다). 조용히 두지 않고 높은 심각도로 남겨
+    // 사람이 손으로 확인하게 한다.
+    reportStuck: pledges => {
+      const ids = pledges.slice(0, 20).map(p => String(p.order_id))
+      log.error('하루 넘게 풀리지 않은 선점 — 손으로 확인 필요', {
+        count: pledges.length,
+        orderIds: ids,
+      })
+      logSecurityEvent(
+        'FUNDING_STUCK_PENDING_HOLDS',
+        { count: pledges.length, orderIds: ids },
+        'high'
+      )
+    },
   })
 
   if (refundNotices.length > 0) {

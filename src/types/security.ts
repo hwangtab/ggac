@@ -173,6 +173,12 @@ export type SecurityEventType =
   // 계좌를 뺀 이유가 "누가 언제 남의 계좌를 봤는지 답할 수 있게"였으므로,
   // 기록이 빠지면 그 이유가 통째로 사라진다. 조회 자체는 막지 않는다.
   | 'MEMBER_ACCOUNT_VIEW_AUDIT_FAILED'
+  // 만료 정리 스윕이 하루가 지나도 풀지 못한 결제 대기 선점. 그 스윕은 토스가
+  // 승인했는데 우리 confirm이 유실된 결제를 구하는 유일한 장치라, 못 푸는 행이
+  // 쌓이면 그 안에 "돈은 나갔는데 후원이 없는" 건이 섞여 있을 수 있다. 자동으로
+  // 어느 쪽인지 정할 수 없어 사람에게 넘긴다 — 로그에만 남기고 끝내면 아무도
+  // 보지 않는다.
+  | 'FUNDING_STUCK_PENDING_HOLDS'
 
 export type SecurityEventSeverity = 'low' | 'medium' | 'high'
 

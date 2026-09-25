@@ -698,11 +698,57 @@ async function cancelPendingPledgeOnce(
   return row ? rowToPledge(row as Row) : null
 }
 
+/**
+ * 선점이 만료된 대기 후원. **늦게 만료된 것부터** 최대 `limit`건.
+ *
+ * 차례가 중요하다. 정리 스윕이 해결하지 못하는 행(토스 조회 실패, 남의
+ * 결제 식별자가 실린 행)은 `pending`인 채 남고, 그런 행은 정의상 가장 **먼저**
+ * 만료된 축에 든다. 차례를 정하지 않으면 SQLite가 대체로 삽입순(= 오래된
+ * 것부터)으로 돌려주므로, 풀리지 않는 행 백 개가 창을 채우면 **새로 들어온
+ * 건은 영영 이 목록에 오르지 못한다.** 그 스윕은 토스가 승인했는데 우리
+ * confirm이 유실된 결제를 구하는 유일한 장치라, 창이 막히면 후원자는 돈만 낸
+ * 채 남는다.
+ *
+ * 구할 값이 가장 큰 쪽(방금 만료된 건)을 먼저 보게 뒤집는다. 오래 남은 행은
+ * `listStuckHolds`가 따로 세어 사람에게 알린다.
+ */
 export async function listExpiredHolds(now: Date = new Date(), limit = 100): Promise<Row[]> {
   const rows = await db
     .select()
     .from(fundingPledges)
     .where(and(eq(fundingPledges.status, 'pending'), lte(fundingPledges.holdExpiresAt, now)))
+    .orderBy(desc(fundingPledges.holdExpiresAt))
+    .limit(limit)
+  return rows.map(r => rowToPledge(r as Row))
+}
+
+/** 이만큼 지나도 `pending`이면 스윕이 스스로 풀 수 없다고 본다. */
+export const STUCK_HOLD_AGE_MS = 24 * 60 * 60 * 1000
+
+/**
+ * 만료된 지 한참 지났는데도 아직 `pending`인 선점.
+ *
+ * 만료 스윕은 정상적으로는 10분마다 돌아 확정하거나 만료시킨다. 하루가 지나도
+ * 그대로라는 것은 스윕이 답을 내지 못했다는 뜻이고 — 토스 조회가 계속 실패하고
+ * 있거나, 원장의 결제 식별자가 우리 것이 아니면서 금액까지 어긋나는 경우다 —
+ * 그중에는 **승인된 결제가 붙어 있는데 후원이 없는** 건이 섞일 수 있다.
+ * 자동으로 어느 쪽인지 정할 수 없으므로, 세어서 사람에게 넘긴다.
+ *
+ * (만료된 `pending`은 재고를 차지하지 않는다 — `occupyingCondition` 참고. 그래서
+ * 이 행들이 남아 있어도 재고가 잠기지는 않는다. 해로운 것은 스윕의 창을
+ * 먹는 것과, 후원자가 답 없이 남는 것이다.)
+ */
+export async function listStuckHolds(
+  now: Date = new Date(),
+  olderThanMs: number = STUCK_HOLD_AGE_MS,
+  limit = 100
+): Promise<Row[]> {
+  const cutoff = new Date(now.getTime() - olderThanMs)
+  const rows = await db
+    .select()
+    .from(fundingPledges)
+    .where(and(eq(fundingPledges.status, 'pending'), lte(fundingPledges.holdExpiresAt, cutoff)))
+    .orderBy(fundingPledges.holdExpiresAt)
     .limit(limit)
   return rows.map(r => rowToPledge(r as Row))
 }
