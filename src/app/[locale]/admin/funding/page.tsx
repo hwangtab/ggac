@@ -59,6 +59,8 @@ interface Campaign {
    * 설정을 바꿔도 움직이지 않는다.
    */
   fee_preview: { rate_bp: number; is_member: boolean } | null
+  /** 승인할 수 있는 캠페인의 제안 주소. 주소 칸을 비우고 승인하면 이 값이 쓰인다. */
+  slug_suggestion: string | null
 }
 
 type FilterKey = 'submitted' | 'all' | 'draft' | 'active' | 'closed' | 'settled'
@@ -131,7 +133,9 @@ export default function AdminFundingPage() {
         for (const c of list) {
           if (next[c.id] === undefined) {
             next[c.id] =
-              c.slug && !c.slug.startsWith('draft-') && isValidSlugInput(c.slug) ? c.slug : ''
+              c.slug && !c.slug.startsWith('draft-') && isValidSlugInput(c.slug)
+                ? c.slug
+                : (c.slug_suggestion ?? '')
           }
         }
         return next
@@ -228,7 +232,7 @@ export default function AdminFundingPage() {
 
   function handleApprove(campaign: Campaign) {
     const slug = (slugDrafts[campaign.id] ?? '').trim()
-    if (!isValidSlugInput(slug)) {
+    if (slug && !isValidSlugInput(slug)) {
       setError('주소(slug)는 영문 소문자·숫자·하이픈 3~60자입니다.')
       return
     }
@@ -239,11 +243,11 @@ export default function AdminFundingPage() {
       ? `\n플랫폼 수수료율 ${feeRateLabel(campaign.fee_preview.rate_bp, campaign.fee_preview.is_member)}가 이 캠페인에 고정되며, 나중에 설정을 바꿔도 달라지지 않습니다.`
       : ''
     const ok = window.confirm(
-      `"${campaign.title}"을(를) 승인해 /funding/${slug} 주소로 공개합니다.\n조합원이 후원을 시작할 수 있게 됩니다.${feeLine} 계속할까요?`
+      `"${campaign.title}"을(를) 승인해 /funding/${slug || campaign.slug_suggestion} 주소로 공개합니다.\n조합원이 후원을 시작할 수 있게 됩니다.${feeLine} 계속할까요?`
     )
     if (!ok) return
     void transition(campaign, 'approve', {
-      slug,
+      ...(slug ? { slug } : {}),
       reviewedVersion: reviewedVersions[campaign.id] ?? campaign.updated_at,
     })
   }
@@ -375,7 +379,7 @@ export default function AdminFundingPage() {
               const canSettle = nextStatus(c.status, 'settle') !== null
               const statusInfo = STATUS_LABELS[c.status]
               const slugValue = slugDrafts[c.id] ?? ''
-              const slugValid = isValidSlugInput(slugValue)
+              const slugValid = slugValue === '' || isValidSlugInput(slugValue)
 
               return (
                 <div
@@ -584,7 +588,7 @@ export default function AdminFundingPage() {
                     {canApprove && (
                       <div className="flex flex-col gap-1">
                         <label className="text-xs font-medium text-gray-600">
-                          공개 주소(slug) — /funding/
+                          공개 주소(slug, 선택) — /funding/
                         </label>
                         <div className="flex items-center gap-2">
                           <input
@@ -594,7 +598,7 @@ export default function AdminFundingPage() {
                             onChange={e =>
                               setSlugDrafts(prev => ({ ...prev, [c.id]: e.target.value.trim() }))
                             }
-                            placeholder="예: our-first-album"
+                            placeholder={c.slug_suggestion ?? '예: our-first-album'}
                             className="w-56 rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
                           />
                           <button
@@ -609,9 +613,9 @@ export default function AdminFundingPage() {
                         <p className="text-xs text-gray-400">
                           {slugValue
                             ? slugValid
-                              ? `공개 주소: /funding/${slugValue}`
+                              ? `공개 주소: /funding/${slugValue} — 고치지 않아도 됩니다.`
                               : '영문 소문자·숫자·하이픈 3~60자로 입력해 주세요.'
-                            : '개설자가 정하지 않았습니다. 관리자가 직접 정합니다.'}
+                            : `비워 두면 /funding/${c.slug_suggestion ?? '(추천 주소)'}로 공개됩니다.`}
                         </p>
                         {/* 승인하면 요율이 이 캠페인에 새겨지고 정산까지
                             따라간다. 정산 화면에서 처음 알게 두지 않는다. */}

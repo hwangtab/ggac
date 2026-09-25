@@ -16,6 +16,7 @@ import {
 } from '@/lib/funding/transitions'
 import { checkActionPreconditions } from '@/lib/funding/campaignPreconditions'
 import { isValidSlug } from '@/lib/funding/campaignInput'
+import { resolveApprovalSlug } from '@/lib/funding/approvalSlug'
 import { isFundingEnabled } from '@/lib/funding/settings'
 import { resolveCampaignFeeRate } from '@/lib/server/fundingFeeRate'
 import { notifyCampaignReviewed, notifyCampaignClosed } from '@/lib/funding/notify'
@@ -78,14 +79,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // 승인 활동 기록에 함께 남길 요율 판정. 승인이 아니면 null이다.
     let feeRate: { rate_bp: number; is_member: boolean } | null = null
     if (action === 'approve') {
-      if (!isValidSlug(body?.slug))
-        return ApiError.badRequest(
-          '주소(slug)는 영문 소문자·숫자·하이픈 3~60자입니다.'
-        ).toNextResponse()
-      const taken = await getCampaignBySlug(body.slug)
-      if (taken && taken.id !== id)
-        return ApiError.badRequest('이미 쓰는 주소입니다.').toNextResponse()
-      slug = body.slug
+      // 주소는 선택이다. 비워 두면 개설자 이름·제목의 영문 낱말로 만든 제안
+      // 주소(`resolveApprovalSlug`)를 쓴다 — 심사 화면이 미리 채우는 값과 같다.
+      const requested = typeof body?.slug === 'string' ? body.slug.trim() : ''
+      if (requested) {
+        if (!isValidSlug(requested))
+          return ApiError.badRequest(
+            '주소(slug)는 영문 소문자·숫자·하이픈 3~60자입니다.'
+          ).toNextResponse()
+        const taken = await getCampaignBySlug(requested)
+        if (taken && taken.id !== id)
+          return ApiError.badRequest('이미 쓰는 주소입니다.').toNextResponse()
+        slug = requested
+      } else {
+        slug = await resolveApprovalSlug(campaign)
+      }
       // 요율은 **승인하는 이 순간** 골라 캠페인에 새긴다. 개설자가 조합원이면
       // 3.3%, 아니면 5.5%(둘 다 부가세 포함) — 고르는 규칙과 그 이유는
       // `@/lib/funding/feeRate`에 적혀 있다. 심사 목록이 승인 전에 보여 주는

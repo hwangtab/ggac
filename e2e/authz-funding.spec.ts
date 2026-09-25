@@ -1539,4 +1539,53 @@ test.describe('펀딩 — 관리자 대리 개설', () => {
       await otherContext.dispose()
     }
   })
+
+  test('승인할 때 주소를 비우면 추천 주소로 공개된다', async ({ baseURL }) => {
+    const adminContext = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('admin'),
+    })
+    try {
+      const created = await adminContext.post('/api/admin/funding/campaigns', {
+        data: body(fixtures.users.owner, { title: `Slug Suggest ${Date.now()}` }),
+      })
+      expect(created.status(), await created.text()).toBe(201)
+      const campaignId = ((await created.json()).data.campaign as { id: string }).id
+      createdIds.push(campaignId)
+
+      const rewards = await adminContext.put(
+        `/api/mypage/funding/campaigns/${campaignId}/rewards`,
+        {
+          data: {
+            rewards: [{ title: '음반', amount: 10000, requires_shipping: false, sort_order: 0 }],
+          },
+        }
+      )
+      expect(rewards.status(), await rewards.text()).toBe(200)
+      const submitted = await adminContext.post(
+        `/api/mypage/funding/campaigns/${campaignId}/transition`,
+        { data: { action: 'submit' } }
+      )
+      expect(submitted.status(), await submitted.text()).toBe(200)
+
+      const listed = await adminContext.get('/api/admin/funding/campaigns?status=submitted')
+      const mine = ((await listed.json()).data.campaigns as Array<Record<string, unknown>>).find(
+        c => c.id === campaignId
+      )
+      const suggestion = mine?.slug_suggestion as string
+      // 개설자 이름(authz-owner)과 제목의 영문 낱말로 만든다.
+      expect(suggestion).toMatch(/^authz-owner-slug-suggest/)
+
+      const approved = await adminContext.post(
+        `/api/admin/funding/campaigns/${campaignId}/transition`,
+        { data: { action: 'approve', reviewedVersion: mine!.updated_at } }
+      )
+      expect(approved.status(), await approved.text()).toBe(200)
+      const row = await readCampaignRow(campaignId)
+      expect(row?.status).toBe('active')
+      expect(row?.slug).toBe(suggestion)
+    } finally {
+      await adminContext.dispose()
+    }
+  })
 })

@@ -5,6 +5,7 @@ import { createCampaign, listCampaignsForAdmin, getCampaignProgress } from '@/db
 import { logUserActivity } from '@/db/queries/activities'
 import { getProfileAuthzFields } from '@/db/queries/profiles'
 import { parseCampaignPatch } from '@/lib/funding/campaignInput'
+import { resolveApprovalSlug } from '@/lib/funding/approvalSlug'
 import { proxyOwnerVerdict } from '@/lib/funding/proxyOwner'
 import { isFundingEnabled } from '@/lib/funding/settings'
 import { FUNDING_TERMS_REVISION } from '@/lib/funding/terms'
@@ -45,6 +46,10 @@ export async function GET(request: NextRequest) {
       ...c,
       progress: await getCampaignProgress(String(c.id)),
       fee_preview: await feePreviewFor(c),
+      // 승인할 수 있는 캠페인에만 싣는다 — 심사 화면이 주소 칸을 미리 채운다.
+      slug_suggestion: nextStatus(c.status as CampaignStatus, 'approve')
+        ? await resolveApprovalSlug(c)
+        : null,
     }))
   )
   return ApiSuccess.ok({ campaigns: withProgress }).toNextResponse()
