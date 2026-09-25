@@ -28,7 +28,13 @@ test('공개 가입은 열려 있고, 그 대신 catch-all 라우트가 sign-up/
   // (`\`sign-up/email\` 경로인지 판별한다` 등)만으로 두 단정이 만족돼,
   // **봉쇄 코드를 통째로 지워도 초록불**이 된다.
   const catchAll = stripComments(readFileSync('src/app/api/auth/[...all]/route.ts', 'utf8'))
-  assert.match(catchAll, /endsWith\(['"]\/sign-up\/email['"]\)/)
+  // 경로 판별은 `targetsAuthEndpoint`로 모였다 — Better Auth의 라우터가 보는
+  // 경로(`new URL(request.url)`)와 `nextUrl.pathname`을 **둘 다** 본다. 그
+  // 어긋남이 이메일 인증 관문이 뚫린 종류의 결함이라, 판별을 한 군데로 모아
+  // 두 경로를 함께 보게 했다.
+  assert.match(catchAll, /targetsAuthEndpoint\(request, ['"]\/sign-up\/email['"]\)/)
+  assert.match(catchAll, /request\.nextUrl\.pathname\.endsWith\(suffix\)/)
+  assert.match(catchAll, /new URL\(request\.url\)\.pathname\.endsWith\(suffix\)/)
   assert.match(catchAll, /if \(isSignUpEmailPath\(request\)\) \{\s*return ApiError\.forbidden\(/)
 })
 

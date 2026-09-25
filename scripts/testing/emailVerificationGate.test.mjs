@@ -47,6 +47,7 @@ beforeEach(async () => {
 
 const { isEmailVerificationEnforced, refusesUnverifiedLogin, EMAIL_NOT_VERIFIED_MESSAGE } =
   await import('../../src/lib/auth/emailVerificationGate.ts')
+const { normalizeLoginEmail } = await import('../../src/lib/auth/loginEmail.ts')
 const { getLoginVerificationSubject, countUnverifiedApprovedMembers } = await import(
   '../../src/db/queries/profiles.ts'
 )
@@ -156,6 +157,51 @@ test('없는 주소는 이 관문이 다루지 않는다', async () => {
   assert.equal(await getLoginVerificationSubject('nobody@ggac.test'), null)
   assert.equal(refusesUnverifiedLogin(null), false)
   assert.equal(refusesUnverifiedLogin(undefined), false)
+})
+
+// ------------------------------------------------------------ 글자 모양으로 비켜 가지 못한다
+//
+// 감사(2026-09-25)가 뚫은 자리. 조회가 받은 글자 그대로 찾는 동안에는
+// `User@Example.com`이 0행을 돌려줬고, 관문은 그 0행을 "계정 없음"으로 읽고
+// 비켜 줬다. Better Auth는 같은 요청을 소문자로 접어 찾아 정상 인증한다.
+
+test('접는 방법이 Better Auth와 같다 — 로케일을 모르는 소문자화', () => {
+  assert.equal(normalizeLoginEmail('User@Example.COM'), 'user@example.com')
+  assert.equal(normalizeLoginEmail('  user@example.com  '), 'user@example.com')
+  assert.equal(normalizeLoginEmail(''), '')
+  assert.equal(normalizeLoginEmail(null), '')
+  assert.equal(normalizeLoginEmail(undefined), '')
+  assert.equal(normalizeLoginEmail(['user@example.com']), '')
+  assert.equal(normalizeLoginEmail({ toString: () => 'user@example.com' }), '')
+})
+
+test('대소문자를 바꾼 주소도 같은 계정을 찾는다 — 관문이 비켜 주지 않는다', async () => {
+  await putMember({ email: 'mixedcase@ggac.test', emailVerified: false })
+
+  for (const variant of [
+    'MixedCase@ggac.test',
+    'MIXEDCASE@GGAC.TEST',
+    'mixedcase@GGAC.test',
+    '  MixedCase@ggac.test  ',
+  ]) {
+    const subject = await getLoginVerificationSubject(variant)
+    assert.notEqual(subject, null, `${variant}가 계정을 찾지 못했다 — 관문이 열린다`)
+    assert.equal(refusesUnverifiedLogin(subject), true, `${variant}로 관문을 지나간다`)
+  }
+})
+
+test('인증한 계정도 대소문자와 무관하게 같은 답을 준다', async () => {
+  await putMember({ email: 'donecase@ggac.test', emailVerified: true })
+  const subject = await getLoginVerificationSubject('DoneCase@GGAC.test')
+  assert.equal(subject.email_verified, true)
+  assert.equal(refusesUnverifiedLogin(subject), false)
+})
+
+test('빈 주소로는 조회하지 않는다', async () => {
+  // 공백만 있는 값이 그대로 내려가면 `email = ''`인 행(있을 리 없지만)과
+  // 짝이 맞을 수 있다. 조회 전에 끊는다.
+  assert.equal(await getLoginVerificationSubject('   '), null)
+  assert.equal(await getLoginVerificationSubject(''), null)
 })
 
 test('프로필이 없는 계정(유령 회원)은 관리자로 취급하지 않는다', async () => {

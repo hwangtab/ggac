@@ -122,6 +122,64 @@ test.describe('이메일 인증 관문', () => {
     expect(response.status()).toBe(200)
   })
 
+  // ------------------------------------------------------------ 관문을 돌아가는 길
+  //
+  // 감사(2026-09-25)가 실제로 뚫은 두 가지다. 둘 다 "관문이 보는 것"과
+  // "Better Auth가 보는 것"이 어긋나서 생겼다 — 관문은 아무것도 못 찾고
+  // 비켜 주는데 Better Auth는 같은 요청으로 로그인을 성립시켰다.
+
+  test('주소의 대소문자를 바꿔도 관문을 지나가지 못한다', async ({ request }) => {
+    await setGate(true)
+
+    const response = await request.post('/api/auth/sign-in/email', {
+      data: { ...UNVERIFIED, email: UNVERIFIED.email.toUpperCase() },
+      headers: fromIp(16),
+    })
+    expect(response.status()).toBe(403)
+    expect((await response.json()).code).toBe('EMAIL_NOT_VERIFIED')
+
+    const cookies = response.headersArray().filter(h => h.name.toLowerCase() === 'set-cookie')
+    expect(cookies.map(h => h.value).join(';')).not.toContain('session_token')
+  })
+
+  test('관문이 꺼져 있으면 대소문자를 바꾼 주소로도 그냥 로그인된다', async ({ request }) => {
+    // 위 테스트의 짝. 이게 200이어야 "대문자로 보내면 Better Auth는 멀쩡히
+    // 인증한다"가 사실이고, 그래야 위의 403이 관문이 막은 결과임을 말할 수 있다.
+    await setGate(false)
+
+    const response = await request.post('/api/auth/sign-in/email', {
+      data: { ...UNVERIFIED, email: UNVERIFIED.email.toUpperCase() },
+      headers: fromIp(17),
+    })
+    expect(response.status()).toBe(200)
+  })
+
+  test('폼 인코딩으로 보내도 관문을 지나가지 못한다', async ({ request }) => {
+    // `/sign-in/email`은 `application/x-www-form-urlencoded`도 받는다
+    // (better-auth `allowedMediaTypes`). 관문이 본문을 JSON으로만 읽던 동안에는
+    // 이 요청 하나로 관문이 눈을 감았다.
+    await setGate(true)
+
+    const response = await request.post('/api/auth/sign-in/email', {
+      form: UNVERIFIED,
+      headers: fromIp(18),
+    })
+    expect(response.status()).toBe(403)
+    expect((await response.json()).code).toBe('EMAIL_NOT_VERIFIED')
+  })
+
+  test('관문이 꺼져 있으면 폼 인코딩 로그인은 그대로 된다', async ({ request }) => {
+    // 폼 인코딩이 원래 통하는 경로임을 보인다 — 위의 403이 "폼이라서 400"이
+    // 아니라 관문이 막은 결과다.
+    await setGate(false)
+
+    const response = await request.post('/api/auth/sign-in/email', {
+      form: UNVERIFIED,
+      headers: fromIp(19),
+    })
+    expect(response.status()).toBe(200)
+  })
+
   test('켜져 있어도 비밀번호가 틀리면 인증 여부가 아니라 자격 증명 오류다', async ({ request }) => {
     await setGate(true)
 

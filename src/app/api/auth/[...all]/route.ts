@@ -8,8 +8,10 @@ import {
   isEmailVerificationEnforced,
   refusesUnverifiedLogin,
 } from '@/lib/auth/emailVerificationGate'
+import { normalizeLoginEmail } from '@/lib/auth/loginEmail'
 import { getLoginVerificationSubject } from '@/db/queries/profiles'
 import { ApiError } from '@/utils/apiWrapper'
+import { logSecurityEvent } from '@/utils/security'
 import { RATE_LIMITS, applyRouteRateLimit, createIPKeyGenerator } from '@/lib/server/rateLimit'
 
 export const runtime = 'nodejs'
@@ -34,16 +36,32 @@ const { GET, POST: betterAuthPOST, PATCH, PUT, DELETE } = toNextJsHandler(auth)
 export { GET, PATCH, PUT, DELETE }
 
 /**
- * `sign-up/email` 경로인지 판별한다. catch-all이라 `request.nextUrl.pathname`은
- * 항상 `/api/auth/`로 시작하므로 접미사만 본다.
+ * 이 요청이 `suffix` 엔드포인트를 향하는가.
+ *
+ * **두 경로를 모두 본다.** Better Auth의 라우터는 `new URL(request.url)`의
+ * 경로로 엔드포인트를 고르는데(better-call `dist/router.mjs`), 이 파일은
+ * 편의상 `request.nextUrl.pathname`을 읽어 왔다. 평소에는 같은 값이지만
+ * 둘이 갈라지는 순간 **여기서 건너뛴 요청을 Better Auth는 처리한다** —
+ * 이 관문이 뚫린 방식과 정확히 같은 종류의 어긋남이다. 한쪽이라도 그
+ * 엔드포인트를 가리키면 관문을 건다(더 많이 붙잡는 쪽으로 틀린다).
  */
+function targetsAuthEndpoint(request: NextRequest, suffix: string): boolean {
+  if (request.nextUrl.pathname.endsWith(suffix)) return true
+  try {
+    return new URL(request.url).pathname.endsWith(suffix)
+  } catch {
+    return false
+  }
+}
+
+/** `sign-up/email` 경로인지 판별한다. */
 function isSignUpEmailPath(request: NextRequest): boolean {
-  return request.nextUrl.pathname.endsWith('/sign-up/email')
+  return targetsAuthEndpoint(request, '/sign-up/email')
 }
 
 /** 로그인 시도 경로인지 판별한다(크리덴셜 스터핑 방어 대상). */
 function isSignInEmailPath(request: NextRequest): boolean {
-  return request.nextUrl.pathname.endsWith('/sign-in/email')
+  return targetsAuthEndpoint(request, '/sign-in/email')
 }
 
 /**
@@ -163,6 +181,42 @@ async function enforce(
 }
 
 /**
+ * better-call이 JSON으로 읽는 Content-Type. 정규식은 better-call
+ * `dist/utils.mjs`의 `jsonContentTypeRegex`를 그대로 옮긴 것이다.
+ */
+const JSON_CONTENT_TYPE = /^application\/([a-z0-9.+-]*\+)?json/i
+
+/**
+ * 로그인 요청 본문에서 이메일을 **Better Auth가 읽는 것과 같은 방식으로** 꺼낸다.
+ *
+ * 예전에는 `request.clone().json()` 한 줄이었다. 그게 두 번째 우회로였다 —
+ * `/sign-in/email`은 `allowedMediaTypes: ['application/x-www-form-urlencoded',
+ * 'application/json']`으로 열려 있어(better-auth
+ * `dist/api/routes/sign-in.mjs`) 폼 인코딩 본문으로도 정상 로그인이 된다.
+ * 그런 요청에서 `.json()`은 예외를 던지고, 관문은 그 예외를 삼키고 통과시켰다.
+ * 쿠키·Origin·Sec-Fetch-* 가 없는 요청은 Better Auth의 폼 CSRF 검사도 그냥
+ * 지나간다(`dist/api/middlewares/origin-check.mjs`) — 즉 curl 한 줄이면
+ * 관문이 아예 눈을 감았다.
+ *
+ * 그래서 두 형식을 **better-call과 같은 순서로** 읽는다. 그 밖의
+ * Content-Type은 better-call이 415로 돌려보내므로 볼 필요가 없다.
+ */
+async function readSignInEmail(request: NextRequest): Promise<string> {
+  const contentType = (request.headers.get('content-type') ?? '').toLowerCase()
+  const baseType = contentType.split(';')[0].trim()
+
+  if (JSON_CONTENT_TYPE.test(contentType)) {
+    const body = await request.clone().json()
+    return normalizeLoginEmail((body as Record<string, unknown> | null)?.email)
+  }
+  if (baseType.includes('application/x-www-form-urlencoded')) {
+    const form = await request.clone().formData()
+    return normalizeLoginEmail(form.get('email'))
+  }
+  return ''
+}
+
+/**
  * 이메일 인증 관문. 켜져 있으면 인증하지 않은 계정의 로그인을 **세션이
  * 만들어지기 전에** 돌려보낸다.
  *
@@ -171,34 +225,64 @@ async function enforce(
  * 쓰려면 부팅 때 Turso를 읽어야 하고 그 순간 DB 한 번 삐끗하면 사이트
  * 전체의 로그인이 함께 죽는다(`@/lib/auth/emailVerificationGate` 참고).
  *
- * **어떤 이유로든 판정하지 못하면 통과시킨다.** 본문이 JSON이 아니거나,
- * 이메일 칸이 없거나, 설정·프로필 조회가 실패하면 여기서 아무 말도 하지
- * 않고 Better Auth에게 넘긴다. 이 관문은 로그인을 **막는** 장치이지
- * 로그인을 **성립시키는** 장치가 아니므로, 모를 때 막으면 그 순간 전
- * 조합원이 문 앞에 선다.
+ * ## 계정을 찾지 못하면 — 통과시킨다. 그리고 그게 왜 안전한가
+ *
+ * 처음엔 "찾지 못하면 통과"가 이 관문을 뚫은 원인처럼 보였다. 아니다.
+ * 원인은 **관문과 Better Auth가 서로 다른 계정을 찾은 것**이다. 관문은
+ * 받은 글자 그대로 찾고 Better Auth는 소문자로 접어 찾았으니,
+ * `User@Example.com`은 관문에는 없는 계정이고 Better Auth에는 있는 계정이었다.
+ *
+ * 이제 두 조회가 **같은 함수로 같은 값을 만들어** 같은 행을 본다
+ * (`normalizeLoginEmail` 참고). 그래서 관문이 못 찾은 주소는 Better Auth도
+ * 못 찾고, 그 요청은 곧바로 401(자격 증명 오류)이 된다 — 통과시켜도 아무도
+ * 들어오지 않는다.
+ *
+ * 반대로 **모르는 주소를 전부 막으면** 로그인 창이 계정 존재 여부를 알려
+ * 주는 기계가 된다: 없는 주소는 403(인증 필요), 있고 인증된 주소는 401.
+ * 비밀번호 없이 명부를 훑을 수 있게 되고, 얻는 것은 없다. 그래서 막지 않는다.
+ *
+ * ## 정말로 판정하지 못했을 때 — 통과시키되, 조용히 넘어가지 않는다
+ *
+ * 설정·프로필 조회가 **실패**하는 것은 다른 이야기다. 그때도 통과시킨다
+ * (Turso가 흔들린다고 전 조합원이 문 앞에 서면 안 되고, 어차피 그 상태에서는
+ * Better Auth도 인증하지 못한다). 다만 예전처럼 빈 `catch`로 삼키지 않고
+ * 보안 로그를 남긴다 — 관문이 열려 있던 시간을 나중에 셀 수 있어야 한다.
  *
  * 돌려보내는 응답은 Better Auth의 오류 본문과 같은 모양(`{code, message}`)
  * 이다 — `authClient`가 그 JSON을 그대로 `error`에 실어 주므로 로그인 화면이
  * 두 경로를 따로 다루지 않아도 된다.
  */
 async function refuseUnverifiedSignIn(request: NextRequest) {
+  if ((await isEmailVerificationEnforced()) === false) return null
+
+  let email = ''
   try {
-    if (!(await isEmailVerificationEnforced())) return null
-
-    const body = await request.clone().json()
-    const email = typeof body?.email === 'string' ? body.email.trim() : ''
-    if (email === '') return null
-
-    const subject = await getLoginVerificationSubject(email)
-    if (refusesUnverifiedLogin(subject) === false) return null
-
-    return NextResponse.json(
-      { code: EMAIL_NOT_VERIFIED_CODE, message: EMAIL_NOT_VERIFIED_MESSAGE },
-      { status: 403 }
-    )
+    email = await readSignInEmail(request)
   } catch {
+    // 본문을 읽지 못했다. Better Auth도 같은 형식을 같은 방식으로 읽으므로
+    // 여기서 깨진 본문은 거기서도 400이 된다 — 통과시켜도 들어오지 않는다.
     return null
   }
+  if (email === '') return null
+
+  let subject
+  try {
+    subject = await getLoginVerificationSubject(email)
+  } catch (error) {
+    logSecurityEvent(
+      'EMAIL_VERIFICATION_GATE_FAILED_OPEN',
+      { reason: 'lookup_failed', error: error instanceof Error ? error.message : String(error) },
+      'high'
+    )
+    return null
+  }
+
+  if (refusesUnverifiedLogin(subject) === false) return null
+
+  return NextResponse.json(
+    { code: EMAIL_NOT_VERIFIED_CODE, message: EMAIL_NOT_VERIFIED_MESSAGE },
+    { status: 403 }
+  )
 }
 
 export async function POST(request: NextRequest) {
