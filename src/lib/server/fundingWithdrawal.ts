@@ -15,14 +15,20 @@
 
 import { listCampaignsByOwner } from '@/db/queries/funding'
 import { listPledgesByCampaign } from '@/db/queries/fundingPledges'
+import { getSettlementByCampaign } from '@/db/queries/fundingSettlements'
 import {
   campaignWithdrawalVerdict,
   type WithdrawalCampaignVerdict,
 } from '@/lib/funding/withdrawalGuard'
 
 /**
- * 마감·정산된 프로젝트만 후원을 세어 본다 — 진행 중인 것은 그것만으로 이미
- * 막히므로 쿼리를 더 쏠 이유가 없다.
+ * 마감·정산된 프로젝트만 후원과 정산서를 읽는다 — 진행 중인 것은 그것만으로
+ * 이미 막히므로 쿼리를 더 쏠 이유가 없다.
+ *
+ * 캠페인의 `'settled'` 상태와 정산서의 `'paid'`는 **다른 것이다.** 앞은 전이
+ * 표의 한 칸이고(`src/lib/funding/transitions.ts`), 뒤는 사무국이 실제로 돈을
+ * 보냈다고 찍는 도장이다(`markSettlementPaid`). 지급 여부를 묻고 있으므로
+ * 뒤를 읽는다.
  */
 export async function collectOwnedCampaignsForWithdrawal(userId: string) {
   const campaigns = await listCampaignsByOwner(userId)
@@ -30,12 +36,22 @@ export async function collectOwnedCampaignsForWithdrawal(userId: string) {
     campaigns.map(async c => {
       const status = String(c.status)
       if (status !== 'closed' && status !== 'settled') {
-        return { status, undelivered_pledge_count: 0 }
+        return {
+          status,
+          undelivered_pledge_count: 0,
+          paid_pledge_count: 0,
+          settlement_status: null,
+        }
       }
-      const pledges = await listPledgesByCampaign(String(c.id), { status: 'paid' })
+      const [pledges, settlement] = await Promise.all([
+        listPledgesByCampaign(String(c.id), { status: 'paid' }),
+        getSettlementByCampaign(String(c.id)),
+      ])
       return {
         status,
         undelivered_pledge_count: pledges.filter(p => p.fulfillment_status !== 'delivered').length,
+        paid_pledge_count: pledges.length,
+        settlement_status: settlement ? String(settlement.status) : null,
       }
     })
   )
