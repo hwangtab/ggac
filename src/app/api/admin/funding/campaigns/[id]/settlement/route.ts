@@ -5,7 +5,9 @@
  *   어긋나면(`is_stale`) 화면이 그 사실을 먼저 말한다.
  * - `POST` 정산서를 만들거나 다시 정리한다. 사람이 넣는 값은 결제대행 수수료와
  *   메모뿐이고, 나머지는 서버가 원장에서 다시 센다 — 브라우저가 보낸 금액은
- *   무엇이든 받지 않는다.
+ *   무엇이든 받지 않는다. 세기 **전에** 토스와 대조해 콘솔에서 취소된 결제를
+ *   원장에 들여온다(`@/lib/server/settlementReconcile`). 한 건이라도 확인하지
+ *   못하면 저장하지 않고 503으로 답한다 — 없는 정산서가 틀린 정산서보다 낫다.
  * - `PATCH { action: 'mark_paid' }` 조합이 실제로 돈을 보냈다는 기록. 이 뒤로
  *   숫자는 움직이지 않는다.
  *
@@ -70,6 +72,8 @@ import {
   type PayoutAccount,
 } from '@/lib/funding/payoutAccount'
 import { isFundingEnabled } from '@/lib/funding/settings'
+import { reconcileCampaignWithToss } from '@/lib/server/settlementReconcile'
+import { getServerPaymentConfig, isPaymentEnabled } from '@/lib/payments/toss/config'
 import { notifySettlementPaid, notifySettlementPrepared } from '@/lib/funding/notify'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
@@ -234,6 +238,38 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     const campaign = await getCampaignById(id)
     if (!campaign) return ApiError.notFound('프로젝트를 찾을 수 없습니다.').toNextResponse()
     const account = await ownerPayoutAccount(campaign)
+
+    // 셈을 하기 **전에** 토스와 대조한다. 저장소에 토스 웹훅이 없어서,
+    // 콘솔에서 취소된 결제는 원장에 닿지 않은 채 총 모금액으로 계속 세인다
+    // (`@/lib/server/settlementReconcile` 머리 주석). 여기서 들여오지 않으면
+    // 이미 돌려준 돈까지 지급하라는 정산서가 굳는다.
+    if (isPaymentEnabled()) {
+      const { secretKey } = getServerPaymentConfig()
+      const reconciled = await reconcileCampaignWithToss({
+        campaignId: id,
+        secretKey,
+        actorId: auth.user.id,
+      })
+      if (reconciled.ok === false) {
+        log.error('정산 전 토스 대사 실패 — 저장하지 않음', {
+          campaignId: id,
+          reason: reconciled.reason,
+          pledgeCode: reconciled.pledge_code,
+          message: reconciled.message,
+        })
+        return ApiError.serviceUnavailable(
+          reconciled.reason === 'partial'
+            ? `후원 ${reconciled.pledge_code}이(가) 토스에서 부분 취소돼 있습니다. (${reconciled.message}) 사무국이 먼저 처리한 뒤 다시 정리해 주세요. 지금은 정산서를 저장하지 않았습니다.`
+            : `후원 ${reconciled.pledge_code}의 결제 상태를 토스에서 확인하지 못했습니다. (${reconciled.message}) 틀린 금액이 굳지 않도록 정산서를 저장하지 않았습니다. 잠시 뒤 다시 눌러 주세요.`
+        ).toNextResponse()
+      }
+      if (reconciled.reconciled.length > 0) {
+        log.warn('토스 콘솔 환불을 원장에 들여왔다', {
+          campaignId: id,
+          count: reconciled.reconciled.length,
+        })
+      }
+    }
 
     const result = await prepareSettlement({
       campaign_id: id,
