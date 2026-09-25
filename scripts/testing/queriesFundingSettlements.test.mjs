@@ -23,7 +23,9 @@ const SETTLE_URL = new URL('../../src/db/queries/fundingSettlements.ts', import.
 const PAYMENTS_URL = new URL('../../src/db/queries/payments.ts', import.meta.url)
 const PRECONDITIONS_URL = new URL('../../src/lib/funding/campaignPreconditions.ts', import.meta.url)
 
-const { cooperativeLossFor } = await import('../../src/lib/funding/settlement.ts')
+const { cooperativeLossFor, changedSettlementFields } = await import(
+  '../../src/lib/funding/settlement.ts'
+)
 
 let client, pq, fq, sq, payq, preq
 let seq = 0
@@ -337,7 +339,7 @@ test('정산서가 없으면 지급을 기록할 수 없고, 있으면 직전 �
   assert.equal(first.ok, true)
   assert.equal(first.created, true)
   // 처음 만든 정산서에는 '직전'이 없다 — 호출부는 이 null을 보고 알린다.
-  assert.equal(first.previous_payout_amount, null)
+  assert.equal(first.previous_amounts, null)
 
   const again = await sq.prepareSettlement({
     campaign_id: campaign.id,
@@ -346,8 +348,58 @@ test('정산서가 없으면 지급을 기록할 수 없고, 있으면 직전 �
   })
   assert.equal(again.ok, true)
   // 직전 값은 트랜잭션 안에서 읽는다 — 같은 금액을 두 번 알리지 않기 위한 근거다.
-  assert.equal(again.previous_payout_amount, 10_000)
+  assert.equal(again.previous_amounts.payout_amount, 10_000)
   assert.equal(again.settlement.payout_amount, 9_000)
+})
+
+test('다시 정리하면 덮이기 전의 금액 한 벌과 달라진 칸이 남는다', async () => {
+  const { campaign, reward } = await openCampaign({ platformFeeRate: 500 })
+  await paidPledge(campaign, reward)
+  const second = await paidPledge(campaign, reward)
+  await close(campaign)
+
+  const first = await sq.prepareSettlement({
+    campaign_id: campaign.id,
+    platform_fee_rate_bp: 500,
+    pg_fee_amount: 500,
+  })
+  assert.equal(first.ok, true)
+  assert.equal(first.previous_amounts, null)
+  const before = {
+    gross_amount: first.amounts.gross_amount,
+    refund_amount: first.amounts.refund_amount,
+    backer_count: first.amounts.backer_count,
+    pg_fee_amount: first.amounts.pg_fee_amount,
+    platform_fee_amount: first.amounts.platform_fee_amount,
+    payout_amount: first.amounts.payout_amount,
+  }
+
+  // 정리한 뒤 환불이 들어오고, 사무국이 결제대행 수수료를 고쳐 다시 정리한다.
+  await refund(second)
+  const again = await sq.prepareSettlement({
+    campaign_id: campaign.id,
+    platform_fee_rate_bp: 500,
+    pg_fee_amount: 700,
+  })
+  assert.equal(again.ok, true)
+  assert.equal(again.created, false)
+
+  // 사라질 뻔한 숫자가 통째로 손에 들어온다 — 활동 기록에 적히는 값이 이것이다.
+  assert.deepEqual(again.previous_amounts, before)
+  assert.notEqual(again.previous_amounts.payout_amount, again.amounts.payout_amount)
+
+  const changed = changedSettlementFields(again.previous_amounts, again.amounts)
+  assert.deepEqual(changed.sort(), [
+    'backer_count',
+    'payout_amount',
+    'pg_fee_amount',
+    'platform_fee_amount',
+    'refund_amount',
+  ])
+  // 총 모금액은 "들어온 적 있는 돈"이라 환불에도 줄지 않는다.
+  assert.equal(changed.includes('gross_amount'), false)
+  // 바뀐 것이 없으면 목록도 비어 있다.
+  assert.deepEqual(changedSettlementFields(again.amounts, again.amounts), [])
 })
 
 // ---------------------------------------------------------------- 정리 뒤 환불
