@@ -56,6 +56,17 @@ const requiredEnvVars = [
   'RESEND_INBOUND_API_KEY',
   'RESEND_INBOUND_WEBHOOK_SECRET',
   'MAILBOX_ALLOWED_RECIPIENTS',
+  // Vercel 크론이 실제로 보내는 값이다. Vercel은 `Authorization: Bearer
+  // $CRON_SECRET`을 고정으로 붙이고 헤더를 바꿀 수단이 없으므로, 이 값이 없으면
+  // vercel.json에 등록한 크론 셋이 **전부 401만 받는다**(fail-closed).
+  //  · /api/internal/funding/expire — 받아들이는 토큰이 CRON_SECRET **하나뿐**이다.
+  //    멈추면 만료된 선점이 풀리지 않아 환불도, 유실된 승인의 대체 확정도,
+  //    "후원이 완료됐습니다" 통지도 나가지 않는다. 돈이 걸린 경로다.
+  //  · /api/internal/uploads/cleanup, /api/internal/mailbox/backfill — 각자
+  //    손호출 토큰(CLEANUP_CRON_TOKEN·MAILBOX_BACKFILL_CRON_TOKEN)이 있지만
+  //    Vercel 크론은 그 이름으로 부르지 못한다.
+  // 어느 쪽도 에러를 내지 않고 조용히 401만 쌓이므로 배포 전에 여기서 잡는다.
+  'CRON_SECRET',
 ]
 
 const redisEnvGroups = [
@@ -117,6 +128,18 @@ const optionalEnvVars = [
   'MAILBOX_BACKFILL_CRON_TOKEN',
   // 일일 수신 임계치. 기본 60.
   'MAILBOX_DAILY_INBOUND_ALERT',
+  // 결제 킬스위치. `isPaymentEnabled()`(src/lib/payments/toss/config.ts)이 값이
+  // 정확히 'toss'일 때만 true다 — 비어 있으면 신규 결제가 전부 막히고
+  // funding/expire 크론도 skipped로 빠진다. 켜지 않은 상태가 정상 동작이라
+  // 선택이다. 대신 'toss'로 켠 뒤에는 아래 키 점검이 필수로 바뀐다.
+  'NEXT_PUBLIC_PAYMENT_MODE',
+  // 일반결제(주문서형) 키 쌍. 스위치가 꺼져 있으면 읽히지 않으므로 선택이다.
+  'NEXT_PUBLIC_TOSS_CLIENT_KEY',
+  'TOSS_SECRET_KEY',
+  // 자동결제(빌링) 키 쌍. 일반결제와 **다른 키**를 쓴다(ck/sk 계열). 없거나
+  // 계열이 틀리면 자동결제 기능이 화면에서 통째로 사라진다 — 에러는 안 난다.
+  'NEXT_PUBLIC_TOSS_BILLING_CLIENT_KEY',
+  'TOSS_BILLING_SECRET_KEY',
 ]
 
 console.log('🔍 Environment Variable Verification\n')
@@ -298,6 +321,84 @@ if (env.MAILBOX_REPLY_TO && env.MAILBOX_ALLOWED_RECIPIENTS) {
     console.log(
       `⚠️  MAILBOX_REPLY_TO(${env.MAILBOX_REPLY_TO})가 MAILBOX_ALLOWED_RECIPIENTS에 없습니다 — 그 주소로 온 회신이 저장되지 않고 조용히 사라집니다.`
     )
+  }
+}
+
+// 결제 키는 **스위치가 켜져 있을 때만** 판정한다.
+// NEXT_PUBLIC_PAYMENT_MODE가 'toss'가 아니면 키가 없는 것이 정상 동작이므로
+// (`isPaymentEnabled()`가 false → 신규 결제 전면 차단) 조용히 넘어간다. 켜 놓고
+// 키가 없거나 test/live가 어긋난 상태는 **결제창까지는 정상적으로 뜨고 승인
+// 단계에서 통째로 실패하는** 종류의 사고라 화면에 원인이 드러나지 않는다
+// (src/lib/payments/toss/config.ts의 assertKeyPairConsistent). 값은 절대 찍지
+// 않고 접두사로 얻은 환경 이름만 쓴다.
+function tossKeyEnvironment(value) {
+  if (typeof value !== 'string') return null
+  if (value.startsWith('test_')) return 'test'
+  if (value.startsWith('live_')) return 'live'
+  return null
+}
+
+if (env.NEXT_PUBLIC_PAYMENT_MODE === 'toss') {
+  const payKeys = [
+    ['NEXT_PUBLIC_TOSS_CLIENT_KEY', env.NEXT_PUBLIC_TOSS_CLIENT_KEY],
+    ['TOSS_SECRET_KEY', env.TOSS_SECRET_KEY],
+  ]
+
+  payKeys.forEach(([varName, value]) => {
+    if (!value) {
+      console.log(`❌ ${varName}: Missing (NEXT_PUBLIC_PAYMENT_MODE=toss로 결제가 켜져 있습니다)`)
+      hasErrors = true
+    } else if (value === VERCEL_HIDDEN_VALUE_PRESENT) {
+      // --source=vercel에서 sensitive로 등록된 키는 값을 읽을 수 없다. 있는 것만
+      // 확인하고 접두사 판정은 건너뛴다 — 여기서 빨간불을 내면 거짓 빨간불이다.
+      console.log(`⚠️  ${varName}: 값이 가려져 있어 test/live 일치는 확인하지 못했습니다.`)
+    } else if (!tossKeyEnvironment(value)) {
+      console.log(`❌ ${varName}: Invalid format (test_ 또는 live_로 시작해야 합니다)`)
+      hasErrors = true
+    }
+  })
+
+  const clientEnvName = tossKeyEnvironment(env.NEXT_PUBLIC_TOSS_CLIENT_KEY)
+  const secretEnvName = tossKeyEnvironment(env.TOSS_SECRET_KEY)
+  if (clientEnvName && secretEnvName && clientEnvName !== secretEnvName) {
+    console.log(
+      `❌ 토스 결제 키의 환경이 어긋납니다 (NEXT_PUBLIC_TOSS_CLIENT_KEY: ${clientEnvName}, TOSS_SECRET_KEY: ${secretEnvName}) — 결제창은 뜨지만 승인 단계에서 전부 실패합니다.`
+    )
+    hasErrors = true
+  }
+
+  // 자동결제는 경고에 그친다 — 키가 없으면 카드 등록 화면 자체가 렌더되지
+  // 않아(`isBillingEnabled()`) 결제 실패로 이어지지 않고, 일반결제만 쓰는
+  // 운영 상태가 성립한다. 다만 "켜 둔 줄 알았는데 화면에 없다"가 되기 쉬워
+  // 여기서 이유를 남긴다.
+  const billingClientKey = env.NEXT_PUBLIC_TOSS_BILLING_CLIENT_KEY
+  const billingSecretKey = env.TOSS_BILLING_SECRET_KEY
+  const generalFamily = /^(test|live)_g(c|s)k_/
+  const billingKeyHidden =
+    billingClientKey === VERCEL_HIDDEN_VALUE_PRESENT ||
+    billingSecretKey === VERCEL_HIDDEN_VALUE_PRESENT
+  if (!billingClientKey || !billingSecretKey) {
+    console.log(
+      '⚠️  자동결제 키(NEXT_PUBLIC_TOSS_BILLING_CLIENT_KEY + TOSS_BILLING_SECRET_KEY)가 없어 자동결제(카드 등록)가 화면에서 조용히 사라집니다.'
+    )
+  } else if (billingKeyHidden) {
+    // 위와 같은 이유 — 값이 가려져 있으면 계열·환경을 판정할 수 없다.
+  } else if (generalFamily.test(billingClientKey) || generalFamily.test(billingSecretKey)) {
+    console.log(
+      '⚠️  자동결제 키가 일반결제 계열(gck/gsk)입니다 — 자동결제는 API 개별 연동 키(ck/sk)가 필요하고, 계열이 틀리면 기능이 숨겨집니다.'
+    )
+  } else {
+    const billingClientEnvName = tossKeyEnvironment(billingClientKey)
+    const billingSecretEnvName = tossKeyEnvironment(billingSecretKey)
+    if (
+      !billingClientEnvName ||
+      !billingSecretEnvName ||
+      billingClientEnvName !== billingSecretEnvName
+    ) {
+      console.log(
+        '⚠️  자동결제 키 쌍의 환경이 어긋나거나 형식이 올바르지 않습니다 — 자동결제가 화면에서 조용히 사라집니다.'
+      )
+    }
   }
 }
 
