@@ -43,6 +43,75 @@ test('middleware.ts가 system_settings를 직접 조회하지 않는다(getSyste
   assert.match(src, /getSystemSettings/)
 })
 
+// ------------------------------------------------ 가입 중단: 비로그인도 본다
+
+test('가입 중단 판정이 비로그인 갈래보다 먼저 있다', () => {
+  // 가입 페이지에 오는 사람은 대부분 로그인하지 않은 방문자다. 판정이
+  // `if (!user)` 아래에 있으면 그 사람은 막혔다는 사실을 못 보고 폼을 다
+  // 채운 뒤에야 API에서 403을 받는다 — 그게 고치는 대상이다.
+  const src = readFileSync('src/middleware/auth.ts', 'utf8')
+  const gateAt = src.indexOf('!systemSettings.registrationEnabled')
+  const anonymousAt = src.indexOf('if (!user) {')
+  assert.ok(gateAt >= 0, '가입 중단 판정을 찾지 못했다')
+  assert.ok(anonymousAt >= 0, '비로그인 갈래를 찾지 못했다')
+  assert.ok(gateAt < anonymousAt, '비로그인 방문자는 이 판정에 닿지 못한다')
+  // 판정이 두 곳으로 갈라지면 한쪽만 고치는 사고가 난다.
+  assert.equal(
+    src.split('!systemSettings.registrationEnabled').length - 1,
+    1,
+    '가입 중단 판정은 한 곳에만 있어야 한다'
+  )
+})
+
+test('설정을 읽지 못하면 가입을 막지 않는다(fail-open)', () => {
+  // Turso가 한 번 삐끗했다고 가입이 조용히 닫히면 안 된다 — 유지보수 판정과
+  // 같은 정책이다.
+  const src = readFileSync('src/middleware/auth.ts', 'utf8')
+  assert.match(src, /systemSettings && !systemSettings\.registrationEnabled/)
+})
+
+test('서버 쪽 재확인은 그대로 남아 있다 — 화면 판정은 문이 아니다', () => {
+  const src = readFileSync('src/app/api/member-signup/route.ts', 'utf8')
+  assert.match(src, /registrationEnabled/)
+})
+
+// -------------------------------------------------- 유지보수: 결제 확정은 통과
+
+test('유지보수 모드는 결제 승인(confirm) 라우트를 막지 않는다', async () => {
+  const src = readFileSync('src/middleware.ts', 'utf8')
+  // 토스 위젯에서 이미 승인한 사람의 요청이다 — 카드는 긁혔고 우리 쪽 승인만
+  // 남았다. 여기서 503을 주면 결제는 승인되지 않은 채 남고, 되돌리려면 사람이
+  // 손으로 취소를 걸어야 한다.
+  for (const route of [
+    '/api/funding/pledges/confirm',
+    '/api/tickets/confirm',
+    '/api/payments/dues/confirm',
+  ]) {
+    assert.ok(src.includes(`'${route}'`), `${route}가 면제 목록에 없다`)
+  }
+  // 면제 목록이 선언만 되고 판정에 쓰이지 않으면 아무것도 바뀌지 않는다.
+  assert.match(src, /PAYMENT_CONFIRM_EXEMPT_API\.includes\(pathname\)/)
+})
+
+test('승인을 부르는 성공 화면도 함께 통과한다(화면이 503이면 라우트를 연 의미가 없다)', async () => {
+  const src = readFileSync('src/middleware.ts', 'utf8')
+  for (const page of ['/funding/success', '/tickets/success', '/mypage/dues/success']) {
+    assert.ok(src.includes(`'${page}'`), `${page}가 면제 목록에 없다`)
+  }
+  // 페이지 쪽 유지보수 판정에 실제로 걸려 있어야 한다.
+  assert.match(src, /maintenanceMode && !PAYMENT_CONFIRM_EXEMPT_PAGES\.has\(pathname\)/)
+  // 로케일 접두사가 붙은 주소(`/en/funding/success`)도 같이 열려야 한다 —
+  // 영어로 후원한 사람만 결제를 잃으면 안 된다.
+  assert.match(src, /routing\.locales\.map/)
+})
+
+test('준비(prepare)와 새 후원·예매는 면제하지 않는다 — 그쪽이 막아야 할 새 행동이다', async () => {
+  const src = readFileSync('src/middleware.ts', 'utf8')
+  assert.ok(!src.includes("'/api/funding/pledges/prepare'"))
+  assert.ok(!src.includes("'/api/tickets/prepare'"))
+  assert.ok(!src.includes("'/api/payments/dues/prepare'"))
+})
+
 // ---------------------------------------------------------------- 실제 SQLite: 값 반영
 
 const DB_PATH = 'scripts/testing/.middleware-settings-test.db'
@@ -353,4 +422,58 @@ test('동시 요청은 조회 하나를 공유한다(취소가 불가능하므�
   assert.equal(a.maintenanceMode, false)
   assert.equal(b, a, '뒤따라온 요청은 앞선 조회의 결과를 그대로 받는다')
   assert.equal(c, a)
+})
+
+test('조회가 실패하면 마지막으로 성공한 값을 쓴다 — 장애 한복판에 유지보수가 스스로 꺼지면 안 된다', async () => {
+  const originalTtl = process.env.SETTINGS_CACHE_TTL_MS
+  delete process.env.SETTINGS_CACHE_TTL_MS
+
+  mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 0 })
+  try {
+    const { getSystemSettings } = await loadFreshSettingsModule()
+    let shouldFail = false
+    const flaky = async () => {
+      if (shouldFail) throw new Error('Turso 순단 재현')
+      return [
+        {
+          category: 'site',
+          setting_key: 'maintenance_mode',
+          setting_value: { enabled: true, message: '점검 중입니다' },
+        },
+      ]
+    }
+
+    const good = await getSystemSettings(flaky)
+    assert.equal(good.maintenanceMode, true)
+
+    // 성공 TTL이 지난 뒤 조회가 실패한다 — 예전에는 여기서 null이 되어
+    // 유지보수가 꺼진 것처럼 동작했다.
+    mock.timers.tick(60_001)
+    shouldFail = true
+    const stale = await getSystemSettings(flaky)
+    assert.ok(stale, '마지막으로 성공한 값을 버리면 안 된다')
+    assert.equal(stale.maintenanceMode, true, '장애 중에 유지보수가 스스로 꺼졌다')
+    assert.equal(stale.maintenanceMessage, '점검 중입니다')
+
+    // 실패 캐시 창 안의 재호출도 같은 값이다(null로 떨어지지 않는다).
+    assert.equal((await getSystemSettings(flaky)).maintenanceMode, true)
+
+    // 복구되면 새 값이 즉시 지배한다 — 낡은 값이 굳으면 안 된다.
+    mock.timers.tick(10_001)
+    shouldFail = false
+    const recovered = await getSystemSettings(async () => [])
+    assert.equal(recovered.maintenanceMode, false)
+  } finally {
+    mock.timers.reset()
+    if (originalTtl === undefined) delete process.env.SETTINGS_CACHE_TTL_MS
+    else process.env.SETTINGS_CACHE_TTL_MS = originalTtl
+  }
+})
+
+test('성공한 적이 없으면 실패는 여전히 null이다(fail-open — 사이트를 막지 않는다)', async () => {
+  const { getSystemSettings } = await loadFreshSettingsModule()
+  const failing = async () => {
+    throw new Error('Turso 순단 재현')
+  }
+  assert.equal(await getSystemSettings(failing), null)
 })

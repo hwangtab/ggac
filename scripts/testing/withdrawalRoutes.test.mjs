@@ -36,6 +36,26 @@ test('펀딩을 열어 둔 사람의 탈퇴 신청은 접수 전에 막는다', 
   assert.doesNotMatch(deleteBody, /fundingWithdrawalVerdictFor\(/)
 })
 
+test('펀딩 판정은 정산서의 지급 여부까지 읽는다', async () => {
+  // 개설자가 스스로 누르는 `fulfillment_status`만 보면, 탈퇴 직전에 전부
+  // '전달 완료'로 눌러 문을 열 수 있다. 사무국만 찍는 정산서의 `'paid'`를
+  // 함께 봐야 그 우회가 막힌다 — 헬퍼가 정산서를 읽지 않으면 순수 함수가
+  // 아무리 옳아도 판정 입력에 그 값이 없다.
+  const helper = await readFile(
+    new URL('../../src/lib/server/fundingWithdrawal.ts', import.meta.url),
+    'utf8'
+  )
+  assert.match(helper, /getSettlementByCampaign/, '정산서를 읽지 않는다')
+  assert.match(helper, /settlement_status/, '판정 입력에 정산 상태가 없다')
+  assert.match(helper, /paid_pledge_count/, '판정 입력에 결제된 후원 수가 없다')
+
+  const guard = await readFile(
+    new URL('../../src/lib/funding/withdrawalGuard.ts', import.meta.url),
+    'utf8'
+  )
+  assert.match(guard, /settlement_unpaid/, '정산 미지급 사유가 없다')
+})
+
 // ---------------------------------------------------------------- 관리자 확정
 
 const ADMIN_ROUTE = new URL('../../src/app/api/admin/member-action/route.ts', import.meta.url)

@@ -36,11 +36,26 @@ interface PublicSystemSettings {
 // 캐시는 Edge isolate 단위라 인스턴스 간 전파가 없다. 관리자가 유지보수 모드를
 // 토글했을 때 최대 이 시간만큼 반영이 늦을 수 있으므로 짧게 유지한다
 // (조회는 타임아웃 보호가 걸린 Turso 쿼리 1회 — 60초당 1회면 부담 없음).
-// 조회 실패 시에는 null을 반환해 유지보수 모드가 꺼진 것처럼 동작한다(fail-open).
-// 이는 의도된 정책이다: settings 장애가 사이트 전체 차단(fail-closed)으로
-// 번지는 것보다 유지보수 안내가 늦는 쪽이 낫다. Turso 전환 이후에도 이 정책은
-// 그대로 유지한다 — "모름"을 "꺼짐"으로 처리하지 않으면(fail-closed로 바꾸면)
+//
+// **조회에 실패하면 마지막으로 성공한 값을 그대로 쓴다.** 한 번도 성공한 적이
+// 없을 때만 null이고, 그때는 예전처럼 유지보수 모드가 꺼진 것으로 동작한다
+// (fail-open). fail-open 자체는 그대로 둔다 — "모름"을 "켜짐"으로 바꾸면
 // Turso 순단 한 번에 사이트 전체가 503이 된다.
+//
+// 바뀌는 것은 **"모름"의 범위**다. 예전에는 조회가 한 번 실패하는 순간 직전에
+// 읽어 둔 값까지 함께 버리고 "유지보수 꺼짐"으로 돌아섰다 — 하필 유지보수가
+// 가장 필요한 때(DB 장애 한복판)에 유지보수 안내가 스스로 꺼지는 동작이다.
+// 방금 전까지 읽던 값이 있으면 그것이 null보다 낫다.
+//
+// ⚠ 이 기억은 **isolate 하나의 수명 안에서만** 유효하다. Edge 런타임의 모듈
+// 스코프는 인스턴스별이고 공유되지도 지속되지도 않으므로, 새 isolate는 아무
+// 값도 없이 시작한다. 그래서 이것은 보장이 아니라 **따뜻한 isolate에 한한
+// 최선의 완화**다. 장애 중 유지보수를 확실히 세우려면 여전히 사람이 다른
+// 수단(Vercel 쪽 차단)을 써야 한다.
+//
+// 반대 방향의 대가도 적어 둔다: 유지보수를 끄자마자 Turso가 멎으면 그 isolate는
+// 실패 캐시 창(아래 10초)마다 재시도하면서 그때까지 옛 "켜짐"을 계속 보여 준다.
+// 조회가 한 번이라도 성공하면 즉시 풀린다.
 let settingsCache: PublicSystemSettings | null = null
 
 // 기본 60초. 테스트 환경에서만 0으로 낮춰 설정 변경이 즉시 반영되게 한다
@@ -60,9 +75,9 @@ const SETTINGS_CACHE_DURATION = (() => {
  * 모든 요청에 최대 3초가 얹히고, 포기한 요청의 쿼리는 취소되지 않은 채
  * 뒤에 남아 쌓인다(아래 "취소" 문단 참고). 순단 한 번이 그대로 폭주가 된다.
  *
- * 실패를 짧게 기억하면 그 창 동안은 조회를 아예 시도하지 않고 즉시 null
- * (fail-open, 유지보수 꺼짐)을 돌려준다. 성공 TTL(60초)보다 훨씬 짧게 두는
- * 이유는 복구를 늦게 알아채면 안 되기 때문이다.
+ * 실패를 짧게 기억하면 그 창 동안은 조회를 아예 시도하지 않고 마지막으로
+ * 성공한 값(없으면 null — fail-open, 유지보수 꺼짐)을 즉시 돌려준다. 성공
+ * TTL(60초)보다 훨씬 짧게 두는 이유는 복구를 늦게 알아채면 안 되기 때문이다.
  *
  * `SETTINGS_CACHE_TTL_MS=0`(E2E)에서는 이 값도 0이 되어 실패 캐시가 꺼진다 —
  * 유지보수 모드를 켜고 끄며 즉시 반영을 검증하는 스펙이 실패 캐시에 걸리면
@@ -105,8 +120,9 @@ export async function getSystemSettings(
   }
 
   // 직전 조회가 실패했다면 짧은 창 동안은 재시도하지 않는다(위 상수 설명 참고).
+  // 그 동안은 마지막으로 성공한 값을 쓴다 — 한 번도 성공한 적이 없으면 null이다.
   if (Date.now() < settingsFailureUntil) {
-    return null
+    return settingsCache
   }
 
   // 같은 isolate에서 이미 조회가 날아가 있으면 그것을 공유한다 — 취소가 불가능한
@@ -172,7 +188,8 @@ async function fetchPublicSystemSettings(
   } catch (error) {
     console.error('[middleware/settings] System settings fetch error:', error)
     settingsFailureUntil = Date.now() + SETTINGS_FAILURE_CACHE_MS
-    return null
+    // 마지막으로 성공한 값(없으면 null). 위 `settingsCache` 설명 참고.
+    return settingsCache
   }
 }
 

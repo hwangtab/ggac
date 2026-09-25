@@ -44,6 +44,14 @@ const ALL_KEYS = [
   'RESEND_INBOUND_API_KEY',
   'RESEND_INBOUND_WEBHOOK_SECRET',
   'MAILBOX_ALLOWED_RECIPIENTS',
+  'CRON_SECRET',
+  // 결제 변수도 지운다. 남겨 두면 개발자 환경의 실제 키가 조건부 분기를 타서
+  // 아래 결제 대조가 대조가 되지 않는다.
+  'NEXT_PUBLIC_PAYMENT_MODE',
+  'NEXT_PUBLIC_TOSS_CLIENT_KEY',
+  'TOSS_SECRET_KEY',
+  'NEXT_PUBLIC_TOSS_BILLING_CLIENT_KEY',
+  'TOSS_BILLING_SECRET_KEY',
 ]
 
 const COMPLETE_ENV = {
@@ -57,6 +65,16 @@ const COMPLETE_ENV = {
   RESEND_INBOUND_API_KEY: 'local-placeholder',
   RESEND_INBOUND_WEBHOOK_SECRET: 'local-placeholder',
   MAILBOX_ALLOWED_RECIPIENTS: 'office@ggac.kr',
+  CRON_SECRET: 'local-placeholder',
+}
+
+/** 결제를 켠 상태의 최소 구성. 접두사만 의미가 있고 값은 아무래도 좋다. */
+const PAYMENT_ENV = {
+  NEXT_PUBLIC_PAYMENT_MODE: 'toss',
+  NEXT_PUBLIC_TOSS_CLIENT_KEY: 'test_gck_sample',
+  TOSS_SECRET_KEY: 'test_gsk_sample',
+  NEXT_PUBLIC_TOSS_BILLING_CLIENT_KEY: 'test_ck_sample',
+  TOSS_BILLING_SECRET_KEY: 'test_sk_sample',
 }
 
 function run(overrides) {
@@ -96,6 +114,9 @@ for (const key of [
   'RESEND_INBOUND_API_KEY',
   'RESEND_INBOUND_WEBHOOK_SECRET',
   'MAILBOX_ALLOWED_RECIPIENTS',
+  // Vercel 크론이 실제로 보내는 값. 없으면 vercel.json의 크론 셋이 전부 401만
+  // 받고, funding/expire는 대체 토큰조차 없어 만료·환불이 통째로 멈춘다.
+  'CRON_SECRET',
 ]) {
   test(`부정 대조: ${key}가 없으면 실패한다`, () => {
     const env = { ...COMPLETE_ENV }
@@ -132,4 +153,69 @@ test('NEXT_PUBLIC_SUPABASE_URL은 더 이상 필수가 아니다', () => {
   const { code, stdout } = run(env)
   assert.equal(code, 0, stdout)
   assert.doesNotMatch(stdout, /NEXT_PUBLIC_SUPABASE_URL: Missing/)
+})
+
+// 결제 키는 킬스위치(NEXT_PUBLIC_PAYMENT_MODE)가 켜져 있을 때만 필수다.
+// 양방향을 다 못박는다 — 꺼 놓은 배포를 막아서도 안 되고, 켜 놓고 키가
+// 없거나 어긋난 상태를 초록불로 넘겨서도 안 된다(승인 단계에서 통째로 실패).
+test('결제를 켜지 않았으면 토스 키가 없어도 통과한다', () => {
+  const { code, stdout } = run(COMPLETE_ENV)
+  assert.equal(code, 0, stdout)
+  assert.match(stdout, /NEXT_PUBLIC_PAYMENT_MODE: Not set \(optional\)/)
+  assert.match(stdout, /NEXT_PUBLIC_TOSS_CLIENT_KEY: Not set \(optional\)/)
+  assert.match(stdout, /TOSS_SECRET_KEY: Not set \(optional\)/)
+  assert.doesNotMatch(stdout, /NEXT_PUBLIC_TOSS_CLIENT_KEY: Missing/)
+})
+
+test('결제 키 쌍이 갖춰져 있으면 통과한다', () => {
+  const { code, stdout } = run({ ...COMPLETE_ENV, ...PAYMENT_ENV })
+  assert.equal(code, 0, stdout)
+  assert.doesNotMatch(stdout, /자동결제/)
+})
+
+for (const key of ['NEXT_PUBLIC_TOSS_CLIENT_KEY', 'TOSS_SECRET_KEY']) {
+  test(`부정 대조: 결제를 켰는데 ${key}가 없으면 실패한다`, () => {
+    const env = { ...COMPLETE_ENV, ...PAYMENT_ENV }
+    delete env[key]
+    const { code, stdout } = run(env)
+    assert.equal(code, 1, `${key} 없이 통과하면 안 된다:\n${stdout}`)
+    assert.match(stdout, new RegExp(`${key}: Missing`))
+  })
+}
+
+test('부정 대조: 결제 키의 test/live가 어긋나면 실패한다', () => {
+  const { code, stdout } = run({
+    ...COMPLETE_ENV,
+    ...PAYMENT_ENV,
+    TOSS_SECRET_KEY: 'live_gsk_sample',
+  })
+  assert.equal(code, 1, stdout)
+  assert.match(stdout, /토스 결제 키의 환경이 어긋납니다/)
+})
+
+test('부정 대조: 결제 키 형식이 test_·live_가 아니면 실패한다', () => {
+  const { code, stdout } = run({
+    ...COMPLETE_ENV,
+    ...PAYMENT_ENV,
+    TOSS_SECRET_KEY: 'gsk_sample',
+  })
+  assert.equal(code, 1, stdout)
+  assert.match(stdout, /TOSS_SECRET_KEY: Invalid format/)
+})
+
+test('자동결제 키가 없거나 계열이 틀리면 경고만 하고 통과한다', () => {
+  const missing = { ...COMPLETE_ENV, ...PAYMENT_ENV }
+  delete missing.TOSS_BILLING_SECRET_KEY
+  const first = run(missing)
+  assert.equal(first.code, 0, first.stdout)
+  assert.match(first.stdout, /자동결제 키.*없어/)
+
+  const wrongFamily = run({
+    ...COMPLETE_ENV,
+    ...PAYMENT_ENV,
+    NEXT_PUBLIC_TOSS_BILLING_CLIENT_KEY: 'test_gck_sample',
+    TOSS_BILLING_SECRET_KEY: 'test_gsk_sample',
+  })
+  assert.equal(wrongFamily.code, 0, wrongFamily.stdout)
+  assert.match(wrongFamily.stdout, /자동결제 키가 일반결제 계열/)
 })

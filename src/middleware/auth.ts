@@ -176,6 +176,27 @@ export async function handleAuth(
   const isAuthPage = AUTH_PAGES.includes(authPathname)
   const isRegistrationPage = REGISTRATION_PAGES.includes(authPathname)
 
+  // 가입이 막혀 있으면 **누가 왔든** 폼을 그리지 않는다.
+  //
+  // 예전에는 이 판정이 아래 "인증된 사용자" 갈래 안에만 있었다. 그런데 가입
+  // 페이지에 오는 사람은 대부분 로그인하지 않은 방문자이고, 그 갈래는 여기
+  // 위에서 이미 `shouldContinue: true`로 빠져나간다 — 막혀 있다는 사실을
+  // 아무도 보지 못한 채 폼이 그려지고, 열 몇 칸을 다 채워 보낸 뒤에야
+  // `/api/member-signup`이 403으로 돌려보냈다.
+  //
+  // 서버 쪽 재확인은 그대로 둔다(그쪽이 진짜 문). 여기서는 헛수고를 시키지
+  // 않을 뿐이다. 설정을 읽지 못했으면(`systemSettings`가 null) 막지 않는다 —
+  // 유지보수 판정과 같은 fail-open이다.
+  if (authPathname === '/signup' && systemSettings && !systemSettings.registrationEnabled) {
+    return {
+      response: new NextResponse(getRegistrationDisabledHtml(), {
+        status: 403,
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      }),
+      shouldContinue: false,
+    }
+  }
+
   // 1. 인증되지 않은 사용자 처리
   if (!user) {
     // 보호된 페이지에 접근 시 로그인 페이지로 리다이렉트
@@ -276,16 +297,7 @@ export async function handleAuth(
 
   // 2.1. 인증 페이지에 접근 시 리다이렉트
   if (isAuthPage) {
-    // 회원 가입 페이지에서 등록이 비활성화되어 있으면 차단
-    if (authPathname === '/signup' && systemSettings && !systemSettings.registrationEnabled) {
-      return {
-        response: new NextResponse(getRegistrationDisabledHtml(), {
-          status: 403,
-          headers: { 'Content-Type': 'text/html; charset=utf-8' },
-        }),
-        shouldContinue: false,
-      }
-    }
+    // 가입 중단 판정은 위(비로그인 갈래보다 앞)에서 이미 끝났다.
 
     // 로그인 페이지는 인증된 사용자도 접근 가능하도록 허용 (로그인 페이지에서 자체 처리)
     if (authPathname === '/login') {
