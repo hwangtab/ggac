@@ -230,6 +230,29 @@ test('익명 후원자의 이름은 개설자에게 가는 어느 통로로도 �
   }
 })
 
+// ------------------------------------------------ 메일 한도(429)
+
+test('한 통짜리 발송도 429를 만나면 한 번 더 해 본다', async () => {
+  // 429는 "지금은 안 된다"이지 "이 주소는 못 쓴다"가 아니다. 여기서 포기하면
+  // 그 사람만 영영 아무것도 못 받는다 — 영수증일 때 특히 나쁘다.
+  let attempts = 0
+  const { deps, calls } = spy({
+    getCampaignById: async () => ({ ...CAMPAIGN, owner_user_id: null }),
+    sendEmail: async mail => {
+      attempts += 1
+      if (attempts === 1) throw new Error('Resend 발송 실패 (429): Too many requests')
+      calls.mail.push(mail)
+    },
+  })
+  await notify.notifyPledgePaid(GUEST_PLEDGE, deps)
+  assert.equal(attempts, 2, '429를 받고 그대로 포기했다')
+  assert.deepEqual(
+    calls.mail.map(m => m.to),
+    ['backer@example.com']
+  )
+  assert.ok(!calls.logs.some(([level]) => level === 'error'), '재시도로 성공했는데 실패로 남겼다')
+})
+
 // ------------------------------------------------ 본인 취소
 
 test('본인 취소는 후원자에게 영수를, 개설자에게 소식을 보낸다', async () => {

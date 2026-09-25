@@ -1,6 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
+import { readFileSync } from 'node:fs'
+
 import { sendNoticesPaced } from '../../src/lib/funding/pacedNotices.ts'
 import { BULK_MIN_INTERVAL_MS } from '../../src/lib/funding/notifyContent.ts'
 
@@ -9,6 +11,11 @@ import { BULK_MIN_INTERVAL_MS } from '../../src/lib/funding/notifyContent.ts'
  * 그 전부를 `Promise.allSettled`로 한꺼번에 띄웠다 — Resend의 기본 한도가 초당
  * 2통이라, 돈은 돌려받았는데 통지는 대부분 429로 사라졌다.
  */
+
+/** 주석에서 말하는 것과 코드가 하는 것을 가른다. */
+function stripComments(src) {
+  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+}
 
 test('간격을 두고 하나씩 보낸다 — 첫 통은 기다리지 않는다', async () => {
   const at = []
@@ -74,4 +81,24 @@ test('상한을 넘는 만큼은 보내지 않고 세어서 알린다', async ()
 
 test('기본 간격은 대량 발송과 같은 값을 쓴다 — 한도 판단이 갈라지지 않게', () => {
   assert.equal(BULK_MIN_INTERVAL_MS, 500)
+})
+
+/**
+ * 속도 제한은 종류별이 아니라 **배포 전체의 것**이다. 만료 크론은 한 번에
+ * 사무국 공지·확정 통지·환불 통지·정체 선점 공지를 모을 수 있는데, 종류마다
+ * 따로 돌리면 각자 제 간격(초당 2통)을 지키면서 합쳐서는 초당 여섯 통이 되어
+ * 정확히 Resend 한도를 넘긴다 — 매진 직후의 스윕이 그 모양이다.
+ */
+test('만료 크론은 통지 전부를 한 줄에 세워 한 번만 보낸다', () => {
+  const src = stripComments(
+    readFileSync(
+      new URL('../../src/app/api/internal/funding/expire/route.ts', import.meta.url),
+      'utf8'
+    )
+  )
+  const paced = src.match(/sendNoticesPaced\s*\(/g) ?? []
+  assert.equal(paced.length, 1, `속도 제한기가 ${paced.length}개다 — 합치면 한도를 넘는다`)
+  // 네 갈래가 모두 그 한 줄에 들어간다.
+  assert.match(src, /officeAlerts,\s*\.\.\.paidNotices,\s*\.\.\.refundNotices/)
+  assert.match(src, /notices\.push\(\(\) => notifyStuckHolds\(/)
 })

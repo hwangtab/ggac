@@ -315,28 +315,36 @@ async function handle(request: NextRequest) {
     },
   })
 
+  // **속도 제한은 하나다.** 메일 제공자가 받아 주는 속도(초당 2통)는 종류별이
+  // 아니라 이 배포 전체의 것이고, Resend 한도는 가입 인증·비밀번호 재설정과
+  // 같은 통을 쓴다. 종류마다 `sendNoticesPaced`를 따로 돌리면 각자 제 간격을
+  // 지키면서 **합쳐서는 초당 여섯 통**이 되어, 매진 직후처럼 세 갈래가 한꺼번에
+  // 쌓인 스윕에서 정확히 한도를 넘긴다. 한 줄에 세워 한 번만 돈다.
+  //
+  // 차례는 급한 순이다 — 사무국이 손으로 처리해야 하는 공지, 돈을 받은 사람의
+  // 확정 통지, 돈이 돌아간 사람의 환불 통지, 마지막으로 하루 한 번짜리 정체
+  // 선점 공지.
+  const notices = [...officeAlerts, ...paidNotices, ...refundNotices]
   if (stuckToReport) {
     // 하루 한 번만 낸다(`notifyStuckHolds`가 최근 공지를 보고 스스로 거른다).
     // 알림 함수는 스스로 삼키지만 `after()` 안에서 새는 예외는 잡아 줄 사람이
     // 없으므로 한 번 더 잡는다.
     const stuck = stuckToReport
-    after(() => notifyStuckHolds(stuck).catch(e => log.error('정체 선점 알림 실패', e)))
+    notices.push(() => notifyStuckHolds(stuck).catch(e => log.error('정체 선점 알림 실패', e)))
   }
 
-  if (officeAlerts.length > 0) {
-    // 같은 속도 제한(초당 2통)을 탄다. 관리자에게 가는 통지라 건수는 적다.
-    after(() => sendNoticesPaced(officeAlerts, { log }).then(r => log.info('사무국 공지 발송', r)))
-  }
-
-  if (paidNotices.length > 0) {
-    // 환불 통지와 같은 속도 제한(초당 2통)을 탄다.
-    after(() => sendNoticesPaced(paidNotices, { log }).then(r => log.info('확정 통지 발송', r)))
-  }
-
-  if (refundNotices.length > 0) {
-    // 메일 제공자가 받아 주는 속도(초당 2통)에 맞춰 하나씩 보낸다. 한꺼번에
-    // 띄우면 429가 돌아오고, 그건 "돈은 돌아갔는데 아무도 모른다"가 된다.
-    after(() => sendNoticesPaced(refundNotices, { log }).then(r => log.info('환불 통지 발송', r)))
+  if (notices.length > 0) {
+    after(() =>
+      sendNoticesPaced(notices, { log }).then(r =>
+        log.info('스윕 통지 발송', {
+          ...r,
+          office: officeAlerts.length,
+          paid: paidNotices.length,
+          refund: refundNotices.length,
+          stuck: stuckToReport ? 1 : 0,
+        })
+      )
+    )
   }
 
   log.info('후원 만료 정리', result)

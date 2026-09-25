@@ -54,6 +54,7 @@ import {
 } from './notifyThrottle.ts'
 import {
   MAX_BULK_RECIPIENTS,
+  RATE_LIMIT_RETRY_DELAY_MS,
   buildBulkAbandonedNotice,
   buildCampaignClosedNotice,
   buildCampaignReviewedNotice,
@@ -69,6 +70,7 @@ import {
   buildSettlementPreparedNotice,
   buildRefundAfterPayoutNotice,
   buildStuckHoldsNotice,
+  isRateLimited,
   isSendableEmail,
   maskEmail,
   pledgePaidBackerExtraLines,
@@ -151,7 +153,19 @@ function resolve(overrides?: Partial<NotifyDeps>): NotifyDeps {
 
 // ---------------------------------------------------------------- 공통 동작
 
-/** 한 통. 실패·키 부재를 전부 삼킨다. */
+const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
+
+/**
+ * 한 통. 실패·키 부재를 전부 삼킨다.
+ *
+ * **429는 한 번 더 해 본다.** Resend의 기본 한도는 초당 두 통이고, 이 함수를
+ * 부르는 자리들은 저마다 자기 속도로 보낸다 — 크론 한 번에 통지가 몰리면 서로
+ * 겹쳐 한도를 넘길 수 있다. 429는 "지금은 안 된다"이지 "이 주소는 못 쓴다"가
+ * 아닌데, 여기서 포기하면 **그 사람만 영영 아무것도 못 받는다**(영수증일 때가
+ * 특히 나쁘다). 대량 발송기(`sendManyEmails`)가 이미 같은 판단을 하고 있어
+ * 간격 값과 판정 함수를 그대로 가져다 쓴다 — 한도 판단이 두 군데로 갈라지지
+ * 않게.
+ */
 async function sendOne(
   d: NotifyDeps,
   to: unknown,
@@ -168,6 +182,19 @@ async function sendOne(
     await d.sendEmail({ to, subject, html })
     return true
   } catch (error) {
+    if (isRateLimited(error)) {
+      await sleep(RATE_LIMIT_RETRY_DELAY_MS)
+      try {
+        await d.sendEmail({ to, subject, html })
+        return true
+      } catch (retryError) {
+        d.log.error('펀딩 메일 발송 실패(429 재시도 뒤에도)', {
+          to: maskEmail(to),
+          error: retryError instanceof Error ? retryError.message : String(retryError),
+        })
+        return false
+      }
+    }
     d.log.error('펀딩 메일 발송 실패', {
       to: maskEmail(to),
       error: error instanceof Error ? error.message : String(error),
