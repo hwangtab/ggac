@@ -45,7 +45,7 @@ export interface RewardLockState {
   /** 이름·설명을 잠그는가. 결제 잠금은 이름·설명을 건드리지 않는다(서버
    * `evaluateRewardPatch` 참고) — 공개 중 기존 리워드만 잠근다. */
   nameDescDisabled: boolean
-  /** 금액·배송 여부를 잠그는가. 결제 잠금과 공개 중 기존 리워드 둘 다. */
+  /** 금액·배송 여부·이름 기재 여부를 잠그는가. 결제 잠금과 공개 중 기존 리워드 둘 다. */
   amountShippingDisabled: boolean
   /** 삭제 버튼을 아예 없애는가(비활성이 아니라 부재). */
   deleteHidden: boolean
@@ -105,6 +105,7 @@ export interface RewardPayloadItem {
   amount: number
   total_quantity: number | null
   requires_shipping: boolean
+  requires_credit_name: boolean
   estimated_delivery: string | null
   image_url: string | null
   sort_order: number
@@ -120,6 +121,7 @@ export function buildRewardsPayload(rows: RewardRow[]): RewardPayloadItem[] {
       amount: r.amount,
       total_quantity: r.total_quantity,
       requires_shipping: r.requires_shipping,
+      requires_credit_name: r.requires_credit_name,
       estimated_delivery: r.estimated_delivery,
       image_url: r.image_url,
       sort_order: r.sort_order,

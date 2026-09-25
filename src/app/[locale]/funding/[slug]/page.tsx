@@ -14,7 +14,11 @@ import { getTranslations, setRequestLocale } from 'next-intl/server'
 import OptimizedImage from '@/components/OptimizedImage'
 import PostContentRenderer from '@/components/PostContentRenderer'
 import { getCampaignBySlug, listRewards, getCampaignProgress } from '@/db/queries/funding'
-import { getRemainingQuantity, listPublicBackers } from '@/db/queries/fundingPledges'
+import {
+  getRemainingQuantity,
+  listCreditNames,
+  listPublicBackers,
+} from '@/db/queries/fundingPledges'
 import { getFundingSettings } from '@/lib/funding/settings'
 import { PUBLIC_CAMPAIGN_STATUSES } from '@/lib/funding/transitions'
 import { isPaymentEnabled } from '@/lib/payments/toss/config'
@@ -28,7 +32,7 @@ import {
 } from '@/utils/structuredData'
 
 import { computeDaysLeft, computePercent, formatAmount, hasBackers } from '../format'
-import type { CampaignDetail, PublicBacker, Reward } from '../types'
+import type { CampaignDetail, CreditNames, PublicBacker, Reward } from '../types'
 import PledgeForm from './PledgeForm'
 
 const log = createLogger('funding/detail')
@@ -63,6 +67,7 @@ const loadCampaign = cache(async (slug: string): Promise<CampaignDetail | null> 
         total_quantity: r.total_quantity === null ? null : Number(r.total_quantity),
         remaining_quantity: await getRemainingQuantity(String(r.id)),
         requires_shipping: Boolean(r.requires_shipping),
+        requires_credit_name: Boolean(r.requires_credit_name),
         estimated_delivery: typeof r.estimated_delivery === 'string' ? r.estimated_delivery : null,
         image_url: typeof r.image_url === 'string' ? r.image_url : null,
       }))
@@ -166,6 +171,8 @@ export default async function FundingDetailPage({
     message: typeof b.message === 'string' ? b.message : null,
     paid_at: String(b.paid_at ?? ''),
   }))
+  const hasCreditRewards = campaign.rewards.some(r => r.requires_credit_name)
+  const creditNames: CreditNames = hasCreditRewards ? await listCreditNames(campaign.id) : []
 
   const percent = computePercent(campaign.progress.raised_amount, campaign.goal_amount)
   const days = campaign.status === 'active' ? computeDaysLeft(campaign.end_at) : null
@@ -235,6 +242,24 @@ export default async function FundingDetailPage({
                   </ul>
                 )}
               </section>
+
+              {hasCreditRewards ? (
+                <section className="mt-8 rounded-xl border border-gray-200 bg-white p-6">
+                  <h2 className="mb-2 text-xl font-semibold text-gray-900">
+                    {t('detail.creditsHeading')}
+                  </h2>
+                  <p className="mb-4 text-sm text-gray-600">{t('detail.creditsLead')}</p>
+                  {creditNames.length === 0 ? (
+                    <p className="text-gray-600">{t('detail.creditsEmpty')}</p>
+                  ) : (
+                    <ul className="flex flex-wrap gap-x-4 gap-y-2 text-gray-900">
+                      {creditNames.map((name, i) => (
+                        <li key={`${name}-${i}`}>{name}</li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+              ) : null}
             </div>
 
             <aside className="lg:sticky lg:top-24 lg:self-start">

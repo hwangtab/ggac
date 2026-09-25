@@ -19,6 +19,7 @@ import {
 } from '@/db/queries/fundingPledges'
 import { createPendingPayment } from '@/db/queries/payments'
 import { PledgeAmountError, computePledgeTotal } from '@/lib/funding/amounts'
+import { evaluateCreditName } from '@/lib/funding/creditName'
 import { generateOrderId, buildCustomerKey } from '@/lib/payments/toss/protocol'
 import { isPaymentEnabled, getPublicClientKey } from '@/lib/payments/toss/config'
 import { getFundingSettings } from '@/lib/funding/settings'
@@ -137,6 +138,19 @@ export async function POST(request: NextRequest) {
       throw error
     }
 
+    const credit = evaluateCreditName({
+      requiresCreditName: Boolean(reward.requires_credit_name),
+      raw: body.creditName,
+      quantity,
+    })
+    if (credit.ok === false) {
+      return ApiError.badRequest(
+        credit.reason === 'required'
+          ? '부클릿과 웹사이트에 기재할 이름을 입력해 주세요.'
+          : `기재할 이름은 수량(${quantity}개)만큼만 적을 수 있습니다. 쉼표로 나눈 이름 수를 확인해 주세요.`
+      ).toNextResponse()
+    }
+
     let shipping: {
       name: string
       phone: string
@@ -183,6 +197,7 @@ export async function POST(request: NextRequest) {
         is_anonymous: body.isAnonymous === true,
         supporter_message: supporterMessage,
         message_public: body.messagePublic === true,
+        credit_name: credit.value,
         shipping,
         terms_version: FUNDING_TERMS_VERSION,
         hold_minutes: fundingSettings.hold_minutes,

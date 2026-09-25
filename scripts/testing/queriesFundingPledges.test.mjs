@@ -754,6 +754,39 @@ test('마지막 하나를 두 승인이 동시에 확정하려 하면 한 쪽만
   assert.equal(loser.err, 'PledgeStockUnavailableError')
 })
 
+test('크레딧 명단은 결제된 후원의 기재할 이름만 가나다순으로 나눠 준다 — 익명 후원이어도 싣는다', async () => {
+  const credited = await fq.createReward({
+    campaign_id: campaign.id,
+    title: '이름 기재',
+    amount: 10000,
+    requires_credit_name: true,
+  })
+  assert.equal(credited.requires_credit_name, true)
+  assert.equal(unlimited.requires_credit_name, false)
+
+  const paid = await hold('funding_credit_paid', credited.id, 2, {
+    reward: credited,
+    is_anonymous: true,
+    credit_name: '하늘, 가람',
+  })
+  await pq.finalizePledgePayment({
+    orderId: 'funding_credit_paid',
+    pledgeId: paid.id,
+    paymentKey: 'pk_credit',
+    method: '카드',
+    approvedAt: new Date(),
+    raw: {},
+  })
+  await hold('funding_credit_pending', credited.id, 1, {
+    reward: credited,
+    credit_name: '미결제',
+  })
+
+  assert.equal((await pq.getPledgeById(paid.id)).credit_name, '하늘, 가람')
+  const names = await pq.listCreditNames(campaign.id)
+  assert.deepEqual(names, ['가람', '하늘'])
+})
+
 // ── 만료 스윕의 창을 정체된 행이 먹던 것 ───────────────────────────────────
 
 /**

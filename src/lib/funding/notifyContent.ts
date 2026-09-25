@@ -258,6 +258,11 @@ export function buildPledgePaidBackerNotice(
 /** 후원자 메일에만 덧붙이는 줄. 리워드와 조회 방법. */
 export function pledgePaidBackerExtraLines(pledge: Record<string, unknown>): string[] {
   const lines = [`리워드: ${str(pledge.reward_title, '-')} ${Number(pledge.quantity) || 1}개`]
+  if (typeof pledge.credit_name === 'string' && pledge.credit_name.trim() !== '') {
+    lines.push(
+      `기재할 이름: ${pledge.credit_name.trim()} — 틀렸다면 펀딩이 끝나기 전에 사무국(contact@ggac.kr)으로 알려 주세요.`
+    )
+  }
   if (!pledge.user_id) {
     lines.push('후원번호와 후원할 때 쓰신 이메일로 후원 내역을 확인하고 취소할 수 있습니다.')
   }

@@ -73,6 +73,7 @@ test('심사 화면은 본문과 리워드를 판정에 필요한 만큼 싣는�
     amount: 30000,
     total_quantity: 50,
     requires_shipping: true,
+    requires_credit_name: false,
     estimated_delivery: '2026-12',
     image_url: '/images/cd.jpg',
   })
@@ -118,6 +119,7 @@ test('응답에 키가 늘어도 저절로 새지 않는다 — 싣는 목록이
     'estimated_delivery',
     'id',
     'image_url',
+    'requires_credit_name',
     'requires_shipping',
     'title',
     'total_quantity',

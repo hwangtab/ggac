@@ -51,6 +51,9 @@ function ownerPledgeView(p: Record<string, unknown>, shippingRewardIds: Set<stri
     paid_at: p.paid_at,
     backer_name: p.is_anonymous ? '익명' : p.backer_name,
     supporter_message: p.supporter_message,
+    // 부클릿·웹사이트에 실으려고 받은 이름이라 공개 명단에도 나간다 — 개설자가
+    // 명단을 만들 수 있도록 익명 후원이어도 그대로 싣는다.
+    credit_name: p.credit_name ?? null,
     fulfillment_status: p.fulfillment_status,
     ...(ships
       ? {

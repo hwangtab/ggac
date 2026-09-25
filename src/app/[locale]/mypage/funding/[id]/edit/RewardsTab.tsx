@@ -62,6 +62,7 @@ export interface RewardRow {
   amount: number
   total_quantity: number | null
   requires_shipping: boolean
+  requires_credit_name: boolean
   estimated_delivery: string | null
   image_url: string | null
   sort_order: number
@@ -87,6 +88,7 @@ function blankReward(sortOrder: number): RewardRow {
     amount: 0,
     total_quantity: null,
     requires_shipping: false,
+    requires_credit_name: false,
     estimated_delivery: null,
     image_url: null,
     sort_order: sortOrder,
@@ -413,7 +415,7 @@ export default function RewardsTab({
                 </div>
 
                 <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                  <div>
+                  <div className="space-y-3">
                     <label className="flex items-center gap-2 text-sm text-gray-900">
                       <input
                         type="checkbox"
@@ -424,6 +426,23 @@ export default function RewardsTab({
                       />
                       {t('creator.rewardShipping')}
                     </label>
+                    <div>
+                      <label className="flex items-center gap-2 text-sm text-gray-900">
+                        <input
+                          type="checkbox"
+                          checked={reward.requires_credit_name}
+                          onChange={e =>
+                            setRow(reward.id, { requires_credit_name: e.target.checked })
+                          }
+                          disabled={readOnly || lock.amountShippingDisabled}
+                          className="h-4 w-4 rounded border-gray-300 disabled:cursor-not-allowed"
+                        />
+                        {t('creator.rewardCreditName')}
+                      </label>
+                      <p className="mt-1 text-xs text-gray-500">
+                        {t('creator.rewardCreditNameHelp')}
+                      </p>
+                    </div>
                   </div>
 
                   <div>

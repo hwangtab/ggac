@@ -395,6 +395,9 @@
       "rewardsHeading": "Rewards",
       "backersHeading": "Backers",
       "backersEmpty": "Be the first to back this project.",
+      "creditsHeading": "Made together with",
+      "creditsLead": "Backers who chose a name-credit reward. These names appear in the booklet and on this page.",
+      "creditsEmpty": "No names yet.",
       "closedNotice": "This campaign has ended. Thank you to everyone who backed it.",
       "preparingNotice": "Preparing payment. Please check again shortly."
     },
@@ -405,6 +408,7 @@
       "unlimited": "No quantity limit",
       "shipping": "Includes shipping",
       "noShipping": "No shipping",
+      "creditName": "Name credit",
       "delivery": "Estimated delivery {month}"
     },
     "form": {
@@ -424,6 +428,8 @@
       "shippingMemo": "Delivery notes",
       "message": "Message of support",
       "messageHelp": "Up to 300 characters.",
+      "creditName": "Name to credit in the booklet and website",
+      "creditNameHelp": "Published exactly as written in the booklet and on this page (even if you back anonymously). If you choose a quantity above 1, you may list that many names separated by commas.",
       "messagePublic": "Show my message in the backer list",
       "anonymous": "Show as \"Anonymous\" instead of my name",
       "total": "Total payment",
@@ -437,6 +443,8 @@
       "errorName": "Please enter your name.",
       "errorEmail": "Please enter a valid email address.",
       "errorShipping": "Please fill in all shipping details.",
+      "errorCreditName": "Please enter the name to credit in the booklet and website.",
+      "errorCreditNameTooMany": "You can list at most {count} name(s) — one per quantity.",
       "retryWidget": "Reopen payment window"
     },
     "success": {
@@ -535,6 +543,7 @@
       "backers": "Backers",
       "noBackers": "No backers yet.",
       "backerName": "Name",
+      "backerCreditName": "Credit: {name}",
       "backerReward": "Reward",
       "backerAmount": "Amount",
       "backerShipping": "Shipping address",
@@ -579,6 +588,8 @@
       "rewardQuantity": "Quantity",
       "rewardQuantityHelp": "Leave blank for no quantity limit.",
       "rewardShipping": "Requires shipping",
+      "rewardCreditName": "Collect a name to credit (booklet / website)",
+      "rewardCreditNameHelp": "Adds a \"name to credit\" field to the pledge form; collected names are shown publicly under \"Made together with\" on the project page.",
       "rewardDelivery": "Estimated delivery",
       "rewardDeliveryHelp": "Write it as year-month, like 2026-12.",
       "rewardRemove": "Remove",

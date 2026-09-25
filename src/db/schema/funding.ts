@@ -75,6 +75,10 @@ export const fundingRewards = sqliteTable(
     /** null이면 무제한. */
     totalQuantity: integer('total_quantity'),
     requiresShipping: integer('requires_shipping', { mode: 'boolean' }).notNull().default(false),
+    /** 후원자에게 부클릿·웹사이트 등에 실을 이름을 받는가. 배송 여부와 같이 잠긴다. */
+    requiresCreditName: integer('requires_credit_name', { mode: 'boolean' })
+      .notNull()
+      .default(false),
     /** 'YYYY-MM'. */
     estimatedDelivery: text('estimated_delivery'),
     imageUrl: text('image_url'),
@@ -130,6 +134,8 @@ export const fundingPledges = sqliteTable(
     shippingAddress1: text('shipping_address1'),
     shippingAddress2: text('shipping_address2'),
     shippingMemo: text('shipping_memo'),
+    /** 크레딧에 실을 이름. 공개를 전제로 받은 값이라 익명 여부와 무관하게 공개된다. */
+    creditName: text('credit_name'),
     fulfillmentStatus: text('fulfillment_status', { enum: FULFILLMENT_STATUS })
       .notNull()
       .default('none'),

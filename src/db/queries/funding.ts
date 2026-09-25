@@ -312,6 +312,7 @@ export type RewardCreateInput = {
   amount: number
   total_quantity?: number | null
   requires_shipping?: boolean
+  requires_credit_name?: boolean
   estimated_delivery?: string | null
   image_url?: string | null
   sort_order?: number
@@ -325,6 +326,7 @@ function rewardInsertValues(input: RewardCreateInput): typeof fundingRewards.$in
     amount: input.amount,
     totalQuantity: input.total_quantity ?? null,
     requiresShipping: input.requires_shipping ?? false,
+    requiresCreditName: input.requires_credit_name ?? false,
     estimatedDelivery: input.estimated_delivery ?? null,
     imageUrl: input.image_url ?? null,
     sortOrder: input.sort_order ?? 0,
@@ -350,6 +352,7 @@ export type RewardPatchInput = {
   amount?: number
   total_quantity?: number | null
   requires_shipping?: boolean
+  requires_credit_name?: boolean
   estimated_delivery?: string | null
   image_url?: string | null
   sort_order?: number
@@ -362,6 +365,7 @@ function rewardUpdateSet(patch: RewardPatchInput): Partial<typeof fundingRewards
   if (patch.amount !== undefined) set.amount = patch.amount
   if (patch.total_quantity !== undefined) set.totalQuantity = patch.total_quantity
   if (patch.requires_shipping !== undefined) set.requiresShipping = patch.requires_shipping
+  if (patch.requires_credit_name !== undefined) set.requiresCreditName = patch.requires_credit_name
   if (patch.estimated_delivery !== undefined) set.estimatedDelivery = patch.estimated_delivery
   if (patch.image_url !== undefined) set.imageUrl = patch.image_url
   if (patch.sort_order !== undefined) set.sortOrder = patch.sort_order

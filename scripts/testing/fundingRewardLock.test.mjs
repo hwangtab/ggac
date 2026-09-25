@@ -257,6 +257,26 @@ test('빈 값과 값 없음은 같은 것으로 본다 — 사진·설명이 NUL
   )
 })
 
+test('이름 기재 여부는 배송 여부처럼 결제 잠금과 공개 중 잠금에 걸린다', () => {
+  assert.deepEqual(evaluateRewardPatch(unlocked, { requires_credit_name: true }), { ok: true })
+  assert.deepEqual(evaluateRewardPatch(locked, { requires_credit_name: true }), {
+    ok: false,
+    reason: 'locked_credit_name',
+  })
+  assert.deepEqual(evaluateRewardPatch(unlocked, { requires_credit_name: true }, 'contentOnly'), {
+    ok: false,
+    reason: 'content_only_field',
+  })
+  // 컬럼이 없던 행(undefined)은 false와 같다 — 같은 값을 다시 보내면 통과한다.
+  assert.deepEqual(evaluateRewardPatch(locked, { requires_credit_name: false }), { ok: true })
+  const lockedCredit = { ...locked, requires_credit_name: true }
+  assert.deepEqual(evaluateRewardPatch(lockedCredit, { requires_credit_name: true }), { ok: true })
+  assert.deepEqual(evaluateRewardPatch(lockedCredit, { requires_credit_name: false }), {
+    ok: false,
+    reason: 'locked_credit_name',
+  })
+})
+
 // ── 값이 그대로인 리워드는 쓰지 않는다 ─────────────────────────────────────
 
 /**
