@@ -10,6 +10,7 @@ import { validateUUID } from '@/utils/validation'
 import { getProfileById, updateProfile, type ProfilePatch } from '@/db/queries/profiles'
 import { withdrawMember } from '@/db/queries/withdrawal'
 import { fundingWithdrawalVerdictFor } from '@/lib/server/fundingWithdrawal'
+import { adminLockoutVerdictFor } from '@/lib/server/adminLockout'
 import { notifyMemberApproved, notifyMemberRejected } from '@/lib/server/memberStatusNotify'
 import { deleteBillingKey } from '@/lib/payments/toss/client'
 import { getBillingConfig, isBillingEnabled } from '@/lib/payments/toss/config'
@@ -247,6 +248,32 @@ export const POST = defineApiRoute<Record<string, unknown>>({
         }
 
         return ApiSuccess.ok({ status: 'withdrawn' }, '탈퇴가 확정되었습니다.').toNextResponse()
+      }
+
+      // 권한을 내리는 액션(거부·비활성화·정지)은 **관리자 화면 자체를 잠글 수
+      // 있다.** `requireAdmin()`이 보는 조건이 정확히 승인·활성·관리자라
+      // (`isApprovedActiveAdmin`) 비활성·정지가 그 조건을 무너뜨리기 때문이다.
+      // 자기 자신을 내리거나 마지막 관리자를 내리면 화면에서 되돌릴 방법이
+      // 없어지고 DB를 직접 고쳐야 한다. 규칙은
+      // `@/lib/members/adminLockoutGuard`에 있다.
+      //
+      // 읽고-판단하고-쓰는 모양이라 관리자 둘이 서로를 동시에 내리는 찰나는
+      // 남는다. 탈퇴 확정은 되돌릴 수 없어서 쿼리 계층의 단일 UPDATE 안에
+      // 원자적으로 넣었지만(`db/queries/withdrawal.ts`), 이쪽은 되돌릴 수
+      // 있으므로 같은 기계를 들이지 않는다.
+      const lockout = await adminLockoutVerdictFor({
+        action,
+        actorId: user.id,
+        targetId: memberId,
+        targetProfile: targetMember,
+      })
+      if (lockout.blocked) {
+        logSecurityEvent(
+          'ADMIN_LOCKOUT_BLOCKED',
+          { memberId: maskId(memberId), action, reason: lockout.reason, adminId: maskId(user.id) },
+          'medium'
+        )
+        return ApiError.conflict(lockout.message).toNextResponse()
       }
 
       // 액션에 따른 업데이트 데이터 준비
