@@ -43,6 +43,38 @@ test('middleware.ts가 system_settings를 직접 조회하지 않는다(getSyste
   assert.match(src, /getSystemSettings/)
 })
 
+// ------------------------------------------------ 가입 중단: 비로그인도 본다
+
+test('가입 중단 판정이 비로그인 갈래보다 먼저 있다', () => {
+  // 가입 페이지에 오는 사람은 대부분 로그인하지 않은 방문자다. 판정이
+  // `if (!user)` 아래에 있으면 그 사람은 막혔다는 사실을 못 보고 폼을 다
+  // 채운 뒤에야 API에서 403을 받는다 — 그게 고치는 대상이다.
+  const src = readFileSync('src/middleware/auth.ts', 'utf8')
+  const gateAt = src.indexOf('!systemSettings.registrationEnabled')
+  const anonymousAt = src.indexOf('if (!user) {')
+  assert.ok(gateAt >= 0, '가입 중단 판정을 찾지 못했다')
+  assert.ok(anonymousAt >= 0, '비로그인 갈래를 찾지 못했다')
+  assert.ok(gateAt < anonymousAt, '비로그인 방문자는 이 판정에 닿지 못한다')
+  // 판정이 두 곳으로 갈라지면 한쪽만 고치는 사고가 난다.
+  assert.equal(
+    src.split('!systemSettings.registrationEnabled').length - 1,
+    1,
+    '가입 중단 판정은 한 곳에만 있어야 한다'
+  )
+})
+
+test('설정을 읽지 못하면 가입을 막지 않는다(fail-open)', () => {
+  // Turso가 한 번 삐끗했다고 가입이 조용히 닫히면 안 된다 — 유지보수 판정과
+  // 같은 정책이다.
+  const src = readFileSync('src/middleware/auth.ts', 'utf8')
+  assert.match(src, /systemSettings && !systemSettings\.registrationEnabled/)
+})
+
+test('서버 쪽 재확인은 그대로 남아 있다 — 화면 판정은 문이 아니다', () => {
+  const src = readFileSync('src/app/api/member-signup/route.ts', 'utf8')
+  assert.match(src, /registrationEnabled/)
+})
+
 // -------------------------------------------------- 유지보수: 결제 확정은 통과
 
 test('유지보수 모드는 결제 승인(confirm) 라우트를 막지 않는다', async () => {
