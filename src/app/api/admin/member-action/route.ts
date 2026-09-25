@@ -9,6 +9,7 @@ import { createLogger, maskId } from '@/utils/logger'
 import { validateUUID } from '@/utils/validation'
 import { getProfileById, updateProfile, type ProfilePatch } from '@/db/queries/profiles'
 import { withdrawMember } from '@/db/queries/withdrawal'
+import { fundingWithdrawalVerdictFor } from '@/lib/server/fundingWithdrawal'
 import { notifyMemberApproved, notifyMemberRejected } from '@/lib/server/memberStatusNotify'
 import { deleteBillingKey } from '@/lib/payments/toss/client'
 import { getBillingConfig, isBillingEnabled } from '@/lib/payments/toss/config'
@@ -114,6 +115,17 @@ export const POST = defineApiRoute<Record<string, unknown>>({
       if (action === 'withdraw') {
         if (memberId === user.id) {
           return ApiError.badRequest('자기 자신은 탈퇴 처리할 수 없습니다.').toNextResponse()
+        }
+
+        // 신청 라우트와 **같은 판정**을 확정 앞에도 둔다. 신청만 막으면
+        // ① 이 가드가 생기기 전에 접수된 신청이 그대로 확정되고 ② 신청과
+        // 확정 사이에 캠페인이 다시 열려도 아무도 모른다. 확정이 되돌릴 수
+        // 없는 쪽이므로 마지막 문이 여기다 — 탈퇴가 확정되면 정산금을 받을
+        // 주체와 리워드를 보낼 책임자가 사라지고, 후원자는 돈을 낸 채 상대를
+        // 잃는다.
+        const funding = await fundingWithdrawalVerdictFor(memberId)
+        if (funding.blocked) {
+          return ApiError.conflict(funding.message).toNextResponse()
         }
 
         const outcome = await withdrawMember(memberId)

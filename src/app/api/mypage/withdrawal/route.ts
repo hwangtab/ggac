@@ -3,32 +3,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { ApiError, ApiSuccess } from '@/utils/apiWrapper'
 import { requireActiveMember } from '@/lib/server/memberAuth'
 import { requestWithdrawal, cancelWithdrawal } from '@/db/queries/withdrawal'
-import { listCampaignsByOwner } from '@/db/queries/funding'
-import { listPledgesByCampaign } from '@/db/queries/fundingPledges'
-import { campaignWithdrawalVerdict } from '@/lib/funding/withdrawalGuard'
+// 신청과 확정(`/api/admin/member-action`)이 **같은 판정**을 쓴다. 한쪽에만
+// 두면 가드가 생기기 전에 들어온 신청이 그대로 확정된다.
+import { fundingWithdrawalVerdictFor } from '@/lib/server/fundingWithdrawal'
 import { rateLimit } from '@/lib/server/rateLimit'
-
-/**
- * 이 사람이 펀딩에 벌여 놓은 것을 판정에 넘길 모양으로 모은다. 마감·정산된
- * 프로젝트만 후원을 세어 본다 — 진행 중인 것은 그것만으로 이미 막히므로
- * 쿼리를 더 쏠 이유가 없다.
- */
-async function collectOwnedCampaigns(userId: string) {
-  const campaigns = await listCampaignsByOwner(userId)
-  return Promise.all(
-    campaigns.map(async c => {
-      const status = String(c.status)
-      if (status !== 'closed' && status !== 'settled') {
-        return { status, undelivered_pledge_count: 0 }
-      }
-      const pledges = await listPledgesByCampaign(String(c.id), { status: 'paid' })
-      return {
-        status,
-        undelivered_pledge_count: pledges.filter(p => p.fulfillment_status !== 'delivered').length,
-      }
-    })
-  )
-}
 
 export const dynamic = 'force-dynamic'
 
@@ -49,7 +27,7 @@ export async function POST(request: NextRequest) {
   // 펀딩을 열어 둔 채로는 신청을 받지 않는다. 탈퇴가 확정되면 정산금을 받을
   // 주체와 리워드를 보낼 책임자가 사라진다 — 후원자는 돈을 낸 채 상대를 잃는다.
   // 없애는 것이 아니라 사무국을 거치게 하는 것이므로 문장이 그 길을 알려 준다.
-  const funding = campaignWithdrawalVerdict(await collectOwnedCampaigns(auth.user.id))
+  const funding = await fundingWithdrawalVerdictFor(auth.user.id)
   if (funding.blocked) {
     return ApiError.conflict(funding.message).toNextResponse()
   }

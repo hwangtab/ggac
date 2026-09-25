@@ -19,20 +19,21 @@ test('신청 실패는 409다 (조건부 UPDATE의 rowsAffected 판정)', async 
 test('펀딩을 열어 둔 사람의 탈퇴 신청은 접수 전에 막는다', async () => {
   const src = await readFile(ROUTE, 'utf8')
   // 판정은 순수 함수가 한다(`src/lib/funding/withdrawalGuard.ts`) — 라우트가
-  // 상태 목록을 직접 들고 있으면 전이 표와 갈라진다.
-  assert.match(src, /campaignWithdrawalVerdict/, '펀딩 검사가 없다')
+  // 상태 목록을 직접 들고 있으면 전이 표와 갈라진다. 신청·확정 두 라우트가
+  // 같은 서버 헬퍼를 거쳐 그 함수에 닿는다.
+  assert.match(src, /fundingWithdrawalVerdictFor/, '펀딩 검사가 없다')
   // 검사는 **신청을 쓰기 전에** 있어야 한다. 뒤에 있으면 이미 접수된 뒤다.
   const postBody = src.slice(
     src.indexOf('export async function POST'),
     src.indexOf('export async function DELETE')
   )
-  const verdictAt = postBody.indexOf('campaignWithdrawalVerdict(')
+  const verdictAt = postBody.indexOf('fundingWithdrawalVerdictFor(')
   const writeAt = postBody.indexOf('requestWithdrawal(')
   assert.ok(verdictAt >= 0 && writeAt >= 0, '두 호출을 찾지 못했다')
   assert.ok(verdictAt < writeAt, '신청을 쓴 뒤에 검사하면 이미 접수된 뒤다')
   // 신청 취소(DELETE)는 막지 않는다 — 되돌리는 쪽을 막을 이유가 없다.
   const deleteBody = src.slice(src.indexOf('export async function DELETE'))
-  assert.doesNotMatch(deleteBody, /campaignWithdrawalVerdict\(/)
+  assert.doesNotMatch(deleteBody, /fundingWithdrawalVerdictFor\(/)
 })
 
 // ---------------------------------------------------------------- 관리자 확정
@@ -47,6 +48,22 @@ test('관리자 액션에 withdraw가 있고 자기 자신은 막는다', async 
   // 확정은 쿼리 계층의 트랜잭션이 한다 — 라우트가 직접 표를 지우면 안 된다.
   assert.match(src, /withdrawMember/)
   assert.doesNotMatch(src, /db\.delete\(/, '라우트가 직접 삭제하면 트랜잭션 밖이 된다')
+})
+
+test('관리자 확정도 같은 펀딩 검사를 거친다 — 확정이 마지막 문이다', async () => {
+  const src = await readFile(ADMIN_ROUTE, 'utf8')
+  // 신청만 막으면 ① 가드가 생기기 전에 접수된 신청이 그대로 확정되고
+  // ② 신청과 확정 사이에 캠페인이 다시 열려도 아무도 모른다.
+  assert.match(src, /fundingWithdrawalVerdictFor/, '확정 경로에 펀딩 검사가 없다')
+  const block = src.slice(src.indexOf("action === 'withdraw'"))
+  const verdictAt = block.indexOf('fundingWithdrawalVerdictFor(')
+  const writeAt = block.indexOf('await withdrawMember(')
+  assert.ok(verdictAt >= 0 && writeAt >= 0, '두 호출을 찾지 못했다')
+  assert.ok(verdictAt < writeAt, '확정한 뒤에 검사하면 이미 되돌릴 수 없다')
+  // 신청 라우트와 같은 코드로 거절해야 화면이 같은 문장을 보여 준다.
+  const between = block.slice(verdictAt, writeAt)
+  assert.match(between, /conflict\(/, '펀딩 거절은 409여야 한다')
+  assert.match(between, /funding\.message/, '판정이 준 문장을 그대로 써야 한다')
 })
 
 test('탈퇴 확정 뒤 커밋된 결과로 빌링키 해지를 시도한다', async () => {
