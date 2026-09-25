@@ -79,6 +79,7 @@ export const PostContentRenderer: React.FC<PostContentRendererProps> = ({
               // 우리 저장소의 음원 링크는 플레이어로 그린다. 링크 글자는 곡 설명이
               // 된다. 문단(<p>) 안에 들어가므로 figure 대신 span으로 감싼다.
               if (isOwnAudioUrl(href)) {
+                const audioSrc = href
                 return (
                   <span className="not-prose my-4 block">
                     <span className="mb-2 block text-sm font-medium">{children}</span>
@@ -87,10 +88,10 @@ export const PostContentRenderer: React.FC<PostContentRendererProps> = ({
                       controls
                       preload="metadata"
                       controlsList="nodownload"
-                      src={href}
+                      src={audioSrc}
                       className="w-full [color-scheme:dark]"
                     >
-                      <a href={href}>{children}</a>
+                      <a href={audioSrc}>{children}</a>
                     </audio>
                   </span>
                 )
