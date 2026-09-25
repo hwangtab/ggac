@@ -548,6 +548,31 @@ test('정산 라우트는 정리·지급 때 개설자에게 알린다', () => {
   assert.match(src, /payoutChanged/)
 })
 
+/**
+ * 숫자가 굳는 자리는 정리(POST)가 아니라 **지급 기록(PATCH)**이다. 정리에서만
+ * 토스와 대조하면, 정리한 뒤 콘솔에서 환불이 나간 캠페인은 지급 버튼이 낡은
+ * 금액을 그대로 굳힌다 — 그 뒤로 숫자는 움직이지 않는다.
+ */
+test('정리와 지급 기록 둘 다 굳히기 전에 토스와 대조한다', () => {
+  const src = routeSource('admin/funding/campaigns/[id]/settlement/route.ts')
+  const patchAt = src.indexOf('export async function PATCH')
+  assert.ok(patchAt > 0, 'PATCH 핸들러를 찾지 못했다')
+  const post = src.slice(src.indexOf('export async function POST'), patchAt)
+  const patch = src.slice(patchAt)
+  assert.match(post, /reconcileBeforeFreezing\(/, '정리가 대조를 건너뛴다')
+  assert.match(patch, /reconcileBeforeFreezing\(/, '지급 기록이 대조를 건너뛴다')
+  // 지급 기록의 대조는 `markSettlementPaid`보다 **먼저**여야 한다.
+  assert.ok(
+    patch.indexOf('reconcileBeforeFreezing(') < patch.indexOf('markSettlementPaid('),
+    '대조가 지급 기록보다 늦다'
+  )
+  // 대조에 실패하면 아무것도 저장하지 않고 503으로 물러난다.
+  const helper = src.slice(src.indexOf('async function reconcileBeforeFreezing'))
+  assert.match(helper.slice(0, helper.indexOf('\n}\n')), /serviceUnavailable\(/)
+  // 정산서를 만든 뒤 환불이 들어온 건을 막는 기존 빗장은 그대로다.
+  assert.match(patch, /후원 환불이 있었습니다/)
+})
+
 test('개설자 대시보드 라우트가 정산 내역을 함께 준다', () => {
   const src = routeSource('mypage/funding/campaigns/[id]/route.ts')
   assert.match(src, /getSettlementByCampaign\(/)

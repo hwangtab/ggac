@@ -9,7 +9,10 @@
  *   원장에 들여온다(`@/lib/server/settlementReconcile`). 한 건이라도 확인하지
  *   못하면 저장하지 않고 503으로 답한다 — 없는 정산서가 틀린 정산서보다 낫다.
  * - `PATCH { action: 'mark_paid' }` 조합이 실제로 돈을 보냈다는 기록. 이 뒤로
- *   숫자는 움직이지 않는다.
+ *   숫자는 움직이지 않는다. **그래서 여기서도 먼저 토스와 대조한다** — 굳는
+ *   자리가 정리(POST)가 아니라 이 자리이기 때문이다. 대조에서 환불이
+ *   들어오면 정산 근거가 낡아지고, 기존 409가 "다시 정리한 뒤 지급을
+ *   기록하라"고 답한다.
  *
  * 캠페인이 `settled`가 되는 것은 여기가 아니라 전이 라우트(`…/transition`)이고,
  * 그쪽은 **지급까지 끝난 정산서**가 있어야만 통과한다
@@ -179,6 +182,49 @@ async function recordPayoutAccountView(
   }
 }
 
+/**
+ * 셈을 굳히기 **전에** 토스와 대조한다. 저장소에 토스 웹훅이 없어서, 콘솔에서
+ * 취소된 결제는 원장에 닿지 않은 채 총 모금액으로 계속 세인다
+ * (`@/lib/server/settlementReconcile` 머리 주석).
+ *
+ * 정리(POST)와 지급 기록(PATCH) **둘 다** 이걸 지난다. 정리에서만 물어보면,
+ * 정리한 뒤 콘솔에서 환불이 나간 캠페인은 지급 버튼이 낡은 금액을 그대로
+ * 굳힌다 — 그 숫자는 그 뒤로 움직이지 않는다.
+ *
+ * 돌려주는 값이 `null`이 아니면 **그 응답을 그대로 내보내고 아무것도
+ * 저장하지 않는다.** 없는 정산서가 틀린 정산서보다 낫다.
+ */
+async function reconcileBeforeFreezing(
+  campaignId: string,
+  actorId: string
+): Promise<NextResponse | null> {
+  // 스위치를 내린 날은 토스 설정 자체가 없을 수 있다. 사무국의 뒷정리는
+  // 스위치를 보지 않으므로(아래 라우트 주석) 대조만 건너뛴다.
+  if (!isPaymentEnabled()) return null
+  const { secretKey } = getServerPaymentConfig()
+  const reconciled = await reconcileCampaignWithToss({ campaignId, secretKey, actorId })
+  if (reconciled.ok === false) {
+    log.error('정산 전 토스 대사 실패 — 저장하지 않음', {
+      campaignId,
+      reason: reconciled.reason,
+      pledgeCode: reconciled.pledge_code,
+      message: reconciled.message,
+    })
+    return ApiError.serviceUnavailable(
+      reconciled.reason === 'partial'
+        ? `후원 ${reconciled.pledge_code}이(가) 토스에서 부분 취소돼 있습니다. (${reconciled.message}) 사무국이 먼저 처리한 뒤 다시 정리해 주세요. 지금은 정산서를 저장하지 않았습니다.`
+        : `후원 ${reconciled.pledge_code}의 결제 상태를 토스에서 확인하지 못했습니다. (${reconciled.message}) 틀린 금액이 굳지 않도록 정산서를 저장하지 않았습니다. 잠시 뒤 다시 눌러 주세요.`
+    ).toNextResponse()
+  }
+  if (reconciled.reconciled.length > 0) {
+    log.warn('토스 콘솔 환불을 원장에 들여왔다', {
+      campaignId,
+      count: reconciled.reconciled.length,
+    })
+  }
+  return null
+}
+
 export async function GET(request: NextRequest, { params }: Ctx) {
   const auth = await requireAdmin()
   if (auth instanceof NextResponse) return auth
@@ -246,33 +292,8 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     // 콘솔에서 취소된 결제는 원장에 닿지 않은 채 총 모금액으로 계속 세인다
     // (`@/lib/server/settlementReconcile` 머리 주석). 여기서 들여오지 않으면
     // 이미 돌려준 돈까지 지급하라는 정산서가 굳는다.
-    if (isPaymentEnabled()) {
-      const { secretKey } = getServerPaymentConfig()
-      const reconciled = await reconcileCampaignWithToss({
-        campaignId: id,
-        secretKey,
-        actorId: auth.user.id,
-      })
-      if (reconciled.ok === false) {
-        log.error('정산 전 토스 대사 실패 — 저장하지 않음', {
-          campaignId: id,
-          reason: reconciled.reason,
-          pledgeCode: reconciled.pledge_code,
-          message: reconciled.message,
-        })
-        return ApiError.serviceUnavailable(
-          reconciled.reason === 'partial'
-            ? `후원 ${reconciled.pledge_code}이(가) 토스에서 부분 취소돼 있습니다. (${reconciled.message}) 사무국이 먼저 처리한 뒤 다시 정리해 주세요. 지금은 정산서를 저장하지 않았습니다.`
-            : `후원 ${reconciled.pledge_code}의 결제 상태를 토스에서 확인하지 못했습니다. (${reconciled.message}) 틀린 금액이 굳지 않도록 정산서를 저장하지 않았습니다. 잠시 뒤 다시 눌러 주세요.`
-        ).toNextResponse()
-      }
-      if (reconciled.reconciled.length > 0) {
-        log.warn('토스 콘솔 환불을 원장에 들여왔다', {
-          campaignId: id,
-          count: reconciled.reconciled.length,
-        })
-      }
-    }
+    const reconcileFailure = await reconcileBeforeFreezing(id, auth.user.id)
+    if (reconcileFailure) return reconcileFailure
 
     const result = await prepareSettlement({
       campaign_id: id,
@@ -382,6 +403,13 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
     if (accountRegistered === false && body.acknowledge_no_account !== true) {
       return ApiError.conflict(PAYOUT_ACCOUNT_MISSING_NOTICE).toNextResponse()
     }
+
+    // 지급 기록은 숫자를 굳히는 자리다. 정리(POST) 뒤에 콘솔에서 환불이
+    // 나갔으면 지금 굳는 금액이 이미 틀렸으므로, 여기서도 먼저 토스와
+    // 대조한다. 대조로 환불이 들어오면 아래 `markSettlementPaid`의 기존
+    // 409(정산 근거가 낡았다)가 그대로 걸린다 — 그쪽이 다시 정리하라고 말한다.
+    const reconcileFailure = await reconcileBeforeFreezing(id, auth.user.id)
+    if (reconcileFailure) return reconcileFailure
 
     const result = await markSettlementPaid(id)
     if (result.ok === false) {
