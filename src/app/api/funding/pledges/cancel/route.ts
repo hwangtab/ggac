@@ -11,9 +11,10 @@
  * 토스 클라이언트가 "이미 취소됨"을 성공으로 바꿔 주므로 재시도는 그대로
  * 끝까지 간다.
  */
-import { NextRequest } from 'next/server'
+import { NextRequest, after } from 'next/server'
 
 import { getOptionalUser } from '@/lib/server/memberAuth'
+import { notifyPledgeSelfCanceled } from '@/lib/funding/notify'
 import { getCampaignById } from '@/db/queries/funding'
 import {
   getPledgeById,
@@ -198,6 +199,13 @@ export async function POST(request: NextRequest) {
         '환불은 처리됐으나 상태를 갱신하지 못했습니다. 사무국으로 문의해 주세요.'
       ).toNextResponse()
     }
+
+    // 돈은 돌아갔다. 지금까지 이 경로는 **아무에게도 말하지 않았다** —
+    // 후원자는 화면에서 한 번 본 것이 전부라 통장에 언제 들어오는지 모르고,
+    // 개설자는 모인 금액이 줄어든 것을 설명 없이 목록에서 발견한다.
+    // 응답 뒤에 보낸다: 맨 promise로 두면 응답과 함께 함수가 얼어 통지가
+    // 통째로 사라진다(확정 라우트와 같은 모양).
+    after(() => notifyPledgeSelfCanceled(refunded).catch(e => log.error('후원 취소 알림 실패', e)))
 
     log.info('후원 취소', { pledgeId: pledge.id, refundAmount })
     return ApiSuccess.ok({

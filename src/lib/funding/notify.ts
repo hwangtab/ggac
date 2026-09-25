@@ -59,9 +59,11 @@ import {
   buildCampaignReviewedNotice,
   buildCampaignSubmittedNotice,
   buildDeliveryChangedNotice,
+  buildPledgeCanceledCreatorNotice,
   buildPledgePaidBackerNotice,
   buildPledgePaidCreatorNotice,
   buildPledgeRefundedNotice,
+  buildPledgeSelfCanceledNotice,
   buildPledgeShippedNotice,
   buildSettlementPaidNotice,
   buildSettlementPreparedNotice,
@@ -666,6 +668,47 @@ export async function notifyPledgeRefunded(
     await sendOne(d, pledge.backer_email, notice)
   } catch (error) {
     d.log.error('후원 환불 알림 실패', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
+/**
+ * 후원자가 **스스로** 취소해 전액 환불됐다 → **후원자**와 **개설자**.
+ *
+ * 지금까지 이 경로는 아무에게도 말하지 않았다. 후원자는 화면에서 한 번 본 것이
+ * 전부라 통장에 돈이 돌아오는 날짜를 모르고(비회원은 남는 기록조차 없다),
+ * 개설자는 **모인 금액이 줄어든 것을 아무 설명 없이** 목록에서 발견한다.
+ *
+ * 후원자에게는 **거래성**이다(자기 돈이 돌아온다는 영수). 개설자에게는
+ * **선택**이며, 후원 완료 통지와 같은 규칙을 그대로 따른다 — 익명 후원자의
+ * 이름은 가고, 자기 프로젝트에 자기가 후원한 건은 개설자 몫을 보내지 않는다.
+ */
+export async function notifyPledgeSelfCanceled(
+  pledge: Record<string, unknown>,
+  overrides?: Partial<NotifyDeps>
+): Promise<void> {
+  const d = resolve(overrides)
+  try {
+    const siteUrl = d.siteUrl()
+    const campaign = pledge.campaign_id
+      ? await d.getCampaignById(String(pledge.campaign_id)).catch(() => null)
+      : null
+
+    // 후원자 — 거래성. 인앱(회원일 때)과 메일 둘 다 수신 설정을 보지 않는다.
+    const backerNotice = buildPledgeSelfCanceledNotice(pledge, campaign, siteUrl)
+    await inApp(d, pledge.user_id, 'funding_refunded', backerNotice)
+    await sendOne(d, pledge.backer_email, backerNotice)
+
+    // 개설자 — 선택.
+    const ownerId = campaign?.owner_user_id
+    if (typeof ownerId === 'string' && ownerId.length > 0 && ownerId !== pledge.user_id) {
+      const creatorNotice = buildPledgeCanceledCreatorNotice(pledge, campaign, siteUrl)
+      await inApp(d, ownerId, 'funding_refunded', creatorNotice)
+      await mailOwnerIfAllowed(d, ownerId, creatorNotice)
+    }
+  } catch (error) {
+    d.log.error('후원 취소 알림 실패', {
       error: error instanceof Error ? error.message : String(error),
     })
   }

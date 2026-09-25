@@ -230,6 +230,55 @@ test('익명 후원자의 이름은 개설자에게 가는 어느 통로로도 �
   }
 })
 
+// ------------------------------------------------ 본인 취소
+
+test('본인 취소는 후원자에게 영수를, 개설자에게 소식을 보낸다', async () => {
+  const { deps, calls } = spy()
+  await notify.notifyPledgeSelfCanceled(MEMBER_PLEDGE, deps)
+
+  // 후원자 — 수신 설정과 무관하게(영수) 인앱과 메일 둘 다.
+  assert.ok(
+    calls.inApp.some(n => n.user_id === 'user-9'),
+    '후원자에게 인앱 알림이 가지 않았다'
+  )
+  assert.ok(
+    calls.mail.some(m => m.to === 'backer@example.com'),
+    '후원자에게 환불 영수가 가지 않았다'
+  )
+  // 개설자 — 모인 금액이 줄어든 이유를 아무 설명 없이 발견하게 두지 않는다.
+  assert.ok(
+    calls.inApp.some(n => n.user_id === 'owner-1'),
+    '개설자에게 알리지 않았다'
+  )
+  assert.ok(calls.mail.some(m => m.to === 'owner-1@example.com'))
+})
+
+test('본인 취소 통지도 익명·자기 후원 규칙을 그대로 따른다', async () => {
+  const anon = spy()
+  await notify.notifyPledgeSelfCanceled({ ...MEMBER_PLEDGE, is_anonymous: true }, anon.deps)
+  const toCreator = [
+    ...anon.calls.inApp.filter(n => n.user_id === 'owner-1'),
+    ...anon.calls.mail.filter(m => m.to === 'owner-1@example.com'),
+  ]
+  assert.ok(toCreator.length >= 2, '개설자에게 아무것도 가지 않았다')
+  for (const payload of toCreator) {
+    const blob = JSON.stringify(payload)
+    assert.ok(!blob.includes('김후원'), '익명인데 실명이 샜다')
+    assert.ok(!blob.includes('backer@example.com'), '후원자 이메일이 샜다')
+  }
+
+  const self = spy()
+  await notify.notifyPledgeSelfCanceled({ ...MEMBER_PLEDGE, user_id: 'owner-1' }, self.deps)
+  assert.equal(self.calls.inApp.length, 1, '같은 사람에게 두 번 알렸다')
+
+  // 비회원은 인앱을 만들 자리가 없어 메일뿐이고, 그래서 후원번호가 실린다.
+  const guest = spy({ getCampaignById: async () => ({ ...CAMPAIGN, owner_user_id: null }) })
+  await notify.notifyPledgeSelfCanceled(GUEST_PLEDGE, guest.deps)
+  assert.equal(guest.calls.inApp.length, 0)
+  assert.equal(guest.calls.mail.length, 1)
+  assert.ok(guest.calls.mail[0].html.includes('FND-20260923-ABCDEFGH'), '후원번호가 없다')
+})
+
 // ------------------------------------------------ 관리자·상한
 
 test('심사 제출은 관리자 전원에게 인앱과 메일로 간다', async () => {

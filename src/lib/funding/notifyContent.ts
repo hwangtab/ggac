@@ -362,6 +362,63 @@ export function buildPledgeRefundedNotice(
 }
 
 /**
+ * ⑦-b 후원자가 **스스로** 취소했다 → 그 후원자에게(영수).
+ *
+ * 사무국 대리 환불(`buildOfficeRefundedNotice`)과 갈라 두는 이유는 문장이
+ * 답해야 하는 질문이 다르기 때문이다 — 그쪽은 "왜 내가 누르지도 않았는데
+ * 환불됐는가"이고, 이쪽은 "내가 누른 그 취소가 정말 됐는가"다. 화면에서 한
+ * 번 본 사실이지만, **돈이 도로 들어오는 날짜**는 그 화면에 없다.
+ */
+export function buildPledgeSelfCanceledNotice(
+  pledge: Record<string, unknown>,
+  campaign: Record<string, unknown> | null,
+  siteUrl: string
+): NoticeCopy {
+  const urls = fundingUrls(siteUrl)
+  const title = str(campaign?.title, '프로젝트')
+  return {
+    title: '후원을 취소했습니다',
+    message: `'${title}' 후원이 취소되어 ${formatWon(pledge.total_amount)}을 전액 환불했습니다. 카드사에 따라 영업일 기준 3~5일 안에 확인하실 수 있습니다. 환불이 보이지 않으면 사무국(contact@ggac.kr)으로 후원자 성함과 결제하신 날짜를 알려 주세요.${lookupHint(pledge)}`,
+    url: pledge.user_id ? urls.myPledges : urls.guestLookup,
+    cta: pledge.user_id ? '내 후원 내역 보기' : '후원 내역 조회하기',
+    data: {
+      campaign_id: pledge.campaign_id ?? campaign?.id ?? null,
+      pledge_code: pledge.pledge_code ?? null,
+      canceled_by: 'backer',
+      scope: 'funding',
+    },
+  }
+}
+
+/**
+ * ⑦-c 후원이 취소됐다 → **개설자**에게.
+ *
+ * 후원이 들어왔을 때 알렸으면 빠져나갔을 때도 알려야 한다 — 개설자는 그 숫자로
+ * 제작 수량을 잡는다. 후원 완료 통지와 같은 판단으로 **익명 후원자의 이름은
+ * 싣지 않고**(`backerDisplayName`), 자기 프로젝트에 자기가 후원한 건은 부르는
+ * 쪽이 거른다. **선택 알림**이다 — 남의 결제 소식이지 자기 돈 이야기가 아니다.
+ */
+export function buildPledgeCanceledCreatorNotice(
+  pledge: Record<string, unknown>,
+  campaign: Record<string, unknown> | null,
+  siteUrl: string
+): NoticeCopy {
+  const urls = fundingUrls(siteUrl)
+  const campaignTitle = str(campaign?.title, '프로젝트')
+  return {
+    title: '후원이 취소되었습니다',
+    message: `'${campaignTitle}'의 후원 한 건이 취소되어 전액 환불됐습니다. ${backerDisplayName(pledge)}님, ${formatWon(pledge.total_amount)}, 리워드는 ${str(pledge.reward_title, '-')}입니다. 모인 금액과 후원자 수가 그만큼 줄어듭니다.`,
+    url: urls.creatorCampaign(pledge.campaign_id ?? campaign?.id),
+    cta: '후원자 목록 보기',
+    data: {
+      campaign_id: pledge.campaign_id ?? campaign?.id ?? null,
+      canceled_by: 'backer',
+      scope: 'funding',
+    },
+  }
+}
+
+/**
  * ⑧ 리워드를 보냈다 → **그 후원의 후원자**.
  *
  * 개설자가 이행 상태를 `shipped`(또는 건너뛴 `delivered`)로 옮긴 건에만
