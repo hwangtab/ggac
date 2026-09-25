@@ -179,6 +179,7 @@ async function handlePut(request: NextRequest, params: Promise<{ id: string }>) 
           description: (cur.description as string | null) ?? null,
           amount: Number(cur.amount),
           requires_shipping: Boolean(cur.requires_shipping),
+          requires_credit_name: Boolean(cur.requires_credit_name),
           total_quantity: (cur.total_quantity as number | null) ?? null,
           image_url: (cur.image_url as string | null) ?? null,
           estimated_delivery: (cur.estimated_delivery as string | null) ?? null,
