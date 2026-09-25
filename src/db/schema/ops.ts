@@ -60,6 +60,10 @@ export const ACTIVITY_ACTION_TYPE = [
   // 일. 목록에서는 더 이상 계좌가 나가지 않고, 이 기록이 남는 조회 한 자리
   // (`/api/admin/members/[id]/account`)에서만 값이 나간다.
   'member_account_viewed',
+  // 사무국 대리 예매 환불. 관객이 스스로 취소할 수 없던 예매(비회원·공연 당일
+  // 등)를 사무국이 돌려준 일이라, 누가 왜 눌렀는지가 남아야 한다.
+  // 타입 배열일 뿐 DB CHECK가 없으므로 마이그레이션 불필요.
+  'ticket_reservation_refunded',
 ] as const
 
 export const ACTIVITY_TARGET_TYPE = [
@@ -75,6 +79,7 @@ export const ACTIVITY_TARGET_TYPE = [
   'inbound_email_attachment',
   'funding_campaign',
   'funding_pledge',
+  'ticket_reservation',
 ] as const
 
 export const systemSettings = sqliteTable(

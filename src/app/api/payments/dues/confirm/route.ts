@@ -8,6 +8,14 @@
  *
  *  1. 돌아온 금액이 원장에 저장된 금액과 같은지 대조한다.
  *  2. 토스에 넘기는 금액은 **수신값이 아니라 저장값**이다.
+ *
+ * **어느 달의 회비인가도 여기서 다시 세운다.** 준비와 확정 사이에는 결제창을
+ * 여는 사람의 시간이 통째로 들어 있다. 그 사이에 달이 바뀌면 "지금 달"은 더
+ * 이상 이 결제가 산 달이 아니고, 그 사이에 사무국이 계좌이체를 기록했다면 그
+ * 달은 이미 납부다. 그래서 청구월은 **주문을 만든 때**로 되짚고
+ * (`resolveDuesBillingMonth`), 그 달이 아직 미납인지 **승인을 보내기 전에**
+ * 확인한다(`canConfirmDuesPayment`). 카드가 긁히는 시점이 승인이므로, 여기서
+ * 멈추면 이중 결제 자체가 일어나지 않는다 — 승인 뒤에 알면 남는 일은 환불뿐이다.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -24,13 +32,15 @@ import {
 import { assertAmountMatches, AmountMismatchError } from '@/lib/payments/toss/protocol'
 import { confirmPayment, TossApiError, TossLookupError } from '@/lib/payments/toss/client'
 import {
-  getServerPaymentConfig,
-  isPaymentEnabled,
-  currentBillingMonth,
-} from '@/lib/payments/toss/config'
+  canConfirmDuesPayment,
+  readDuesMonthState,
+  resolveDuesBillingMonth,
+} from '@/lib/payments/dues'
+import { getServerPaymentConfig, isPaymentEnabled } from '@/lib/payments/toss/config'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger, maskId } from '@/utils/logger'
+import { logSecurityEvent } from '@/utils/security'
 
 const log = createLogger('api/payments/dues/confirm')
 
@@ -38,6 +48,68 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 /** 토스 승인은 최대 60초까지 걸린다. 기본 함수 시간으로는 모자랄 수 있다. */
 export const maxDuration = 90
+
+/**
+ * 확정된 결제를 **그 달의 회비**와 잇는다.
+ *
+ * 두 자리에서 같은 일을 한다 — 방금 승인한 건과, 이미 `done`인 주문을 다시
+ * 확정 요청한 건. 두 번째가 없으면 앞선 요청이 승인까지 끝내고 연결 직전에
+ * 죽었을 때(연결은 실패해도 던지지 않는다) 그 달이 영영 미납으로 남고, 다음
+ * 달 청구가 그 달을 다시 걷는다. 재확정은 원장을 두 번 건드리지 않는다 —
+ * `markDuesPaid`가 미납 행만 바꾸기 때문이다.
+ *
+ * 결제는 이미 확정됐으므로 여기서 무엇이 어긋나도 **던지지 않는다.** 대신
+ * 어긋난 것을 시끄럽게 남긴다: 돈은 들어왔는데 어느 달도 납부로 바뀌지 않은
+ * 상태가 조용히 지나가면, 다음 달 청구가 같은 달을 또 걷을 때까지 아무도 모른다.
+ */
+async function linkDuesMonth(input: {
+  userId: string
+  payment: Record<string, unknown>
+  orderId: string
+}): Promise<void> {
+  const paymentId = String(input.payment.id ?? '')
+  const billingMonth = resolveDuesBillingMonth(input.payment)
+  if (!billingMonth) {
+    logSecurityEvent(
+      'DUES_CONFIRM_MONTH_UNSETTLED',
+      { orderId: input.orderId, reason: 'unresolved-month' },
+      'high'
+    )
+    log.error('청구월을 정하지 못했다(결제는 확정됨)', { orderId: input.orderId })
+    return
+  }
+
+  try {
+    const before = readDuesMonthState(await getDues(input.userId, billingMonth), paymentId)
+    // 이 결제가 이미 그 달을 납부로 바꿨다. 성공 화면 새로고침이 여기로 온다.
+    if (before === 'paid-by-this') return
+
+    const after = readDuesMonthState(
+      await markDuesPaid({ userId: input.userId, billingMonth, paymentId }),
+      paymentId
+    )
+    if (after === 'paid-by-this') return
+
+    logSecurityEvent(
+      'DUES_CONFIRM_MONTH_UNSETTLED',
+      { orderId: input.orderId, billingMonth, before, after },
+      'high'
+    )
+    log.error('회비 납부 연결 실패(결제는 확정됨)', {
+      orderId: input.orderId,
+      billingMonth,
+      before,
+      after,
+    })
+  } catch (error) {
+    logSecurityEvent(
+      'DUES_CONFIRM_MONTH_UNSETTLED',
+      { orderId: input.orderId, billingMonth, reason: 'exception' },
+      'high'
+    )
+    log.error('회비 납부 연결 실패(결제는 확정됨)', { orderId: input.orderId, error })
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -95,7 +167,12 @@ export async function POST(request: NextRequest) {
 
     // 이미 확정된 주문이면 그대로 성공으로 답한다 — 성공 화면 새로고침이
     // 오류로 보이면 안 되고, 재확정은 원장을 건드리지 않는다.
+    //
+    // 다만 **회비 연결은 다시 시도한다.** 연결은 실패해도 던지지 않으므로(아래),
+    // 앞선 요청이 승인까지 끝내고 연결에서 넘어졌을 수 있다. 그 상태로 두면 낸
+    // 달이 미납으로 남아 다음 청구가 같은 달을 또 걷는다.
     if (payment.status === 'done') {
+      await linkDuesMonth({ userId: user.id, payment, orderId })
       return ApiSuccess.ok({ orderId, status: 'done', amount: payment.amount }).toNextResponse()
     }
 
@@ -120,6 +197,46 @@ export async function POST(request: NextRequest) {
         ).toNextResponse()
       }
       throw error
+    }
+
+    // 청구월을 **주문을 만든 때**로 되짚는다. "지금 달"로 정하면 월말 자정을
+    // 넘긴 결제가 엉뚱한 달을 납부로 바꾼다(`resolveDuesBillingMonth`).
+    const billingMonth = resolveDuesBillingMonth(payment)
+    if (!billingMonth) {
+      log.error('청구월을 정하지 못해 승인하지 않았다', { orderId })
+      return ApiError.internalServerError(
+        '결제 정보를 확인하지 못했습니다. 사무국으로 문의해 주세요.'
+      ).toNextResponse()
+    }
+
+    // 그 달이 **아직 미납인지** 승인 전에 확인한다. 준비와 확정 사이에 사무국이
+    // 계좌이체를 기록했거나 회원이 창을 두 개 열어 둘 다 결제했다면, 승인을
+    // 보내는 순간 같은 달을 두 번 걷는다. 카드가 긁히는 시점이 승인이므로
+    // 여기서 멈추면 이중 결제 자체가 일어나지 않는다.
+    const gate = canConfirmDuesPayment(
+      readDuesMonthState(await getDues(user.id, billingMonth), String(payment.id ?? '')),
+      billingMonth
+    )
+    if (gate.ok === false) {
+      // 승인을 보내지 않았으므로 돈은 나가지 않았다. 대기 행을 그대로 두면
+      // 대사 크론이 나중에 토스에 물어보게 되므로 여기서 실패로 닫는다
+      // (결제 식별자를 새기기 전이라 그 스윕의 목록에도 오르지 않는다).
+      await markPaymentFailed(orderId, {
+        code: 'DUES_MONTH_NOT_PAYABLE',
+        message: gate.message,
+      })
+      logSecurityEvent(
+        'DUES_CONFIRM_DUPLICATE_MONTH',
+        { orderId, billingMonth, reason: gate.reason },
+        'medium'
+      )
+      log.warn('납부할 수 없는 달의 승인 요청 — 승인하지 않음', {
+        userId: maskId(user.id),
+        orderId,
+        billingMonth,
+        reason: gate.reason,
+      })
+      return ApiError.conflict(gate.message).toNextResponse()
     }
 
     const { secretKey } = getServerPaymentConfig()
@@ -162,47 +279,10 @@ export async function POST(request: NextRequest) {
       raw: approved,
     })
 
-    // 결제와 청구월을 연결한다.
-    //
-    // **청구월은 시계가 아니라 이 주문에서 나온다.** 예전에는 확정하는 그
-    // 순간의 `currentBillingMonth()`를 썼는데, 준비(prepare)와 확정 사이에
-    // 달이 넘어가면 — 월말 23시 59분에 결제창을 띄우고 자정을 넘겨 승인이
-    // 끝나는, 실제로 일어나는 일이다 — **다음 달이 납부 완료로 찍힌다.**
-    // 그러면 정작 결제한 달은 미납으로 남아 다음 청구가 또 나가고, 새 달은
-    // 걷지도 않은 채 납부로 굳는다(`markDuesPaid`는 미납 행만 바꾸므로 그 뒤
-    // 진짜 납부가 들어와도 덮이지 않는다).
-    //
-    // 준비 라우트가 그 시점의 청구월로 회비 행을 만들고 주문을 남겼으므로,
-    // 같은 값은 **주문이 만들어진 시각**에서 다시 얻는다. 브라우저가 보낸
-    // 값은 어느 쪽으로도 쓰지 않는다.
-    try {
-      const confirmed = await getPaymentByOrderId(orderId)
-      const orderedAt = confirmed?.created_at ? new Date(String(confirmed.created_at)) : null
-      const billingMonth =
-        orderedAt && !Number.isNaN(orderedAt.getTime())
-          ? currentBillingMonth(orderedAt)
-          : currentBillingMonth()
-
-      // 이미 납부로 기록된 달은 건드리지 않는다. 아래 쓰기도 `unpaid`일 때만
-      // 걸리므로 덮일 일은 없지만, 두 번째 확정이 조용히 지나가 버리면 "왜
-      // 이 결제가 어느 달에도 안 붙었는가"를 나중에 되짚을 수 없다.
-      const before = await getDues(user.id, billingMonth)
-      if (before?.status === 'paid') {
-        log.warn('이미 납부된 달의 확정 요청 — 회비 연결을 건너뜀', {
-          userId: maskId(user.id),
-          orderId,
-          billingMonth,
-        })
-      } else {
-        await markDuesPaid({
-          userId: user.id,
-          billingMonth,
-          paymentId: String(confirmed?.id ?? ''),
-        })
-      }
-    } catch (error) {
-      log.error('회비 납부 연결 실패(결제는 확정됨)', { orderId, error })
-    }
+    // 결제와 청구월을 연결한다. 위에서 정한 달 그대로이고, 쓰기는 미납 행만
+    // 바꾼다 — 실패해도 결제 자체는 이미 확정이므로 던지지 않고, 대신 어긋난
+    // 것을 시끄럽게 남긴다.
+    await linkDuesMonth({ userId: user.id, payment, orderId })
 
     log.info('조합비 결제 확정', { userId: maskId(user.id), orderId })
     return ApiSuccess.ok({ orderId, status: 'done', amount: storedAmount }).toNextResponse()

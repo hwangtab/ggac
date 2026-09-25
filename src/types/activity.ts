@@ -31,6 +31,7 @@ export type ActivityActionType =
   | 'funding_fulfillment_updated'
   | 'funding_shipping_exported'
   | 'funding_payout_account_viewed'
+  | 'ticket_reservation_refunded'
   | 'member_account_viewed'
 
 export type ActivityTargetType =
@@ -45,6 +46,7 @@ export type ActivityTargetType =
   | 'inbound_email_attachment'
   | 'funding_campaign'
   | 'funding_pledge'
+  | 'ticket_reservation'
 
 export interface UserActivity {
   id: string
