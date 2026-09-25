@@ -48,7 +48,7 @@ export interface NotifyStuckDeps {
   getUserSettingsByUserIds: (ids: string[]) => Promise<Map<string, SettingLike[]>>
   createBulkNotifications: (input: Record<string, unknown>) => Promise<unknown>
   hasRecentSystemNotice: (kind: string, since: Date) => Promise<boolean>
-  sendEmail: (mail: { to: string; subject: string; html: string }) => Promise<void>
+  sendEmail: (mail: { to: string; subject: string; html: string }) => Promise<unknown>
   isMailConfigured: () => boolean
   log: {
     info: (msg: string, meta?: unknown) => void
