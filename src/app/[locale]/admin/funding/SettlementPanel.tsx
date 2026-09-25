@@ -22,12 +22,7 @@ import {
 } from '@/lib/funding/payoutAccount'
 import { cooperativeLossFor } from '@/lib/funding/settlement'
 import { apiErrorMessage } from '@/utils/apiErrorMessage'
-import {
-  FEE_RATE_VAT_NOTE,
-  formatFeeRatePercent,
-  MEMBER_FEE_RATE_BP,
-  NONMEMBER_FEE_RATE_BP,
-} from '@/lib/funding/feeRate'
+import { FEE_RATE_VAT_NOTE, formatFeeRatePercent } from '@/lib/funding/feeRate'
 
 interface Settlement {
   status: 'pending' | 'paid'
@@ -306,10 +301,9 @@ export default function SettlementPanel({
           새긴 값이다. 그리고 부가세가 이미 들어 있다. */}
       {settlement ? (
         <p className="mt-2 text-xs text-gray-500">
-          플랫폼 수수료율 {formatFeeRatePercent(rate)}%는 이 캠페인을 승인할 때 새긴 값입니다
-          (조합원 {formatFeeRatePercent(MEMBER_FEE_RATE_BP)}% / 비조합원{' '}
-          {formatFeeRatePercent(NONMEMBER_FEE_RATE_BP)}%, 둘 다 {FEE_RATE_VAT_NOTE}이라 여기에
-          부가세를 따로 더하지 않습니다). 지금 설정을 바꿔도 이 캠페인에는 적용되지 않습니다.
+          플랫폼 수수료율 {formatFeeRatePercent(rate)}%는 이 캠페인을 승인할 때 새긴 값입니다(
+          {FEE_RATE_VAT_NOTE}이라 여기에 부가세를 따로 더하지 않습니다). 지금 설정을 바꿔도 이
+          캠페인에는 적용되지 않습니다.
         </p>
       ) : null}
 

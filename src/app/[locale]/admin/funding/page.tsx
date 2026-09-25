@@ -22,13 +22,18 @@ import {
   PUBLIC_CAMPAIGN_STATUSES,
   type CampaignStatus,
 } from '@/lib/funding/transitions'
-import {
-  feeRateLabel,
-  formatFeeRatePercent,
-  FEE_RATE_VAT_NOTE,
-  MEMBER_FEE_RATE_BP,
-  NONMEMBER_FEE_RATE_BP,
-} from '@/lib/funding/feeRate'
+import { feeRateLabel, formatFeeRatePercent, FEE_RATE_VAT_NOTE } from '@/lib/funding/feeRate'
+
+/**
+ * 설정에 들어 있는 두 요율. **화면은 요율을 알지 못한다** — 서버가 목록과
+ * 함께 실어 준다(`GET /api/admin/funding/campaigns`의 `fee_rates`). 여기에
+ * 상수를 박아 두면 사무국이 설정에서 요율을 바꾼 날 화면만 옛 숫자로 남고,
+ * 심사자는 실제로 떼일 몫과 다른 값을 읽고 승인 버튼을 누른다.
+ */
+interface FeeRates {
+  member_bp: number
+  nonmember_bp: number
+}
 
 // 서버 규칙(`@/lib/funding/campaignInput`의 isValidSlug)과 동일하게 유지한다.
 // db 스키마를 끌어오는 서버 모듈을 클라이언트 번들에 넣지 않으려 정규식만 복제한다.
@@ -45,6 +50,11 @@ interface Campaign {
   summary: string
   category: string
   goal_amount: number
+  /**
+   * 승인할 때 이 캠페인에 **새겨진** 요율(bp). 승인 전에는 0이고, 그때는
+   * `fee_preview`가 "지금 누르면 붙을 요율"을 말한다.
+   */
+  platform_fee_rate: number
   status: CampaignStatus
   review_note: string | null
   submitted_at: string | null
@@ -100,6 +110,7 @@ function formatDate(value: string | null): string {
 
 export default function AdminFundingPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
+  const [feeRates, setFeeRates] = useState<FeeRates | null>(null)
   const [filter, setFilter] = useState<FilterKey>('submitted')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -176,6 +187,7 @@ export default function AdminFundingPage() {
       if (res.ok === false) throw new Error(apiErrorMessage(json, '목록을 불러오지 못했습니다.'))
       const list: Campaign[] = json.data.campaigns
       setCampaigns(list)
+      setFeeRates((json.data.fee_rates as FeeRates | undefined) ?? null)
       setReviewedVersions(Object.fromEntries(list.map(c => [c.id, c.updated_at])))
       // 펼쳐 둔 칸을 **에러로 바꾸지 않는다.** 예전에는 여기서 `details`를
       // 통째로 비웠고, 그러면 열려 있던 칸이 전부 "내용을 불러오지
@@ -337,11 +349,12 @@ export default function AdminFundingPage() {
             <div>
               <h2 className="text-xl font-semibold text-gray-900">캠페인 심사</h2>
               <p className="text-sm text-gray-500">
-                제출된 캠페인을 승인하면 주소가 확정되고 공개되며, 그 순간 플랫폼 수수료율(조합원{' '}
-                {formatFeeRatePercent(MEMBER_FEE_RATE_BP)}% / 비조합원{' '}
-                {formatFeeRatePercent(NONMEMBER_FEE_RATE_BP)}%, 둘 다 {FEE_RATE_VAT_NOTE})이
-                개설자의 가입 승인 상태에 따라 캠페인에 고정됩니다. 조합원이 아닌 창작자의 캠페인은
-                대리 개설로 만듭니다.
+                제출된 캠페인을 승인하면 주소가 확정되고 공개되며, 그 순간 플랫폼 수수료율
+                {feeRates
+                  ? `(조합원 ${formatFeeRatePercent(feeRates.member_bp)}% / 비조합원 ${formatFeeRatePercent(feeRates.nonmember_bp)}%, 둘 다 ${FEE_RATE_VAT_NOTE})`
+                  : ''}
+                이 개설자의 가입 승인 상태에 따라 캠페인에 고정됩니다. 조합원이 아닌 창작자의
+                캠페인은 대리 개설로 만듭니다.
               </p>
             </div>
           </div>
@@ -370,16 +383,21 @@ export default function AdminFundingPage() {
           ))}
         </div>
 
-        <ProxyCreatePanel
-          memberRateBp={MEMBER_FEE_RATE_BP}
-          nonmemberRateBp={NONMEMBER_FEE_RATE_BP}
-          onCreated={campaign => {
-            setCreated(campaign)
-            setSuccess(null)
-            setFilter('draft')
-            void load()
-          }}
-        />
+        {/* 요율을 모르는 채로는 그리지 않는다 — 대리 개설 폼은 "승인하면
+            몇 %가 붙는다"를 문장으로 말하는 자리라, 틀린 숫자를 띄우느니
+            목록을 받을 때까지 기다리는 편이 낫다. */}
+        {feeRates && (
+          <ProxyCreatePanel
+            memberRateBp={feeRates.member_bp}
+            nonmemberRateBp={feeRates.nonmember_bp}
+            onCreated={campaign => {
+              setCreated(campaign)
+              setSuccess(null)
+              setFilter('draft')
+              void load()
+            }}
+          />
+        )}
         {created && (
           <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
             &quot;{created.title}&quot; 초안을 만들었습니다.{' '}
@@ -475,6 +493,14 @@ export default function AdminFundingPage() {
                           </>
                         )}
                       </div>
+                      {/* 승인된 캠페인은 **새겨진 값**이 사실이다. 지금
+                          설정이 무엇이든 이 캠페인에서 떼는 몫은 이 숫자다. */}
+                      {c.platform_fee_rate > 0 && (
+                        <div className="mt-1 text-xs text-gray-500">
+                          적용 요율 {formatFeeRatePercent(c.platform_fee_rate)}% (
+                          {FEE_RATE_VAT_NOTE}) — 승인할 때 고정된 값입니다.
+                        </div>
+                      )}
                       {c.review_note && c.status === 'draft' && (
                         <p className="mt-1 text-xs text-amber-700">반려 사유: {c.review_note}</p>
                       )}
@@ -682,7 +708,7 @@ export default function AdminFundingPage() {
                         {c.fee_preview?.is_member === false && (
                           <p className="text-xs text-amber-700">
                             캠페인 개설은 승인·활성 조합원만 할 수 있어 비조합원 요율(
-                            {feeRateLabel(NONMEMBER_FEE_RATE_BP, false)})이 붙는 일은 보통 없습니다.
+                            {feeRateLabel(c.fee_preview.rate_bp, false)})이 붙는 일은 보통 없습니다.
                             이 캠페인은 개설한 뒤 승인 전에 조합원 자격이 풀린 경우이니, 승인하기
                             전에 사무국이 사정을 확인해 주세요.
                           </p>

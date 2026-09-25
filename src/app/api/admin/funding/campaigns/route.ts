@@ -7,7 +7,7 @@ import { getProfileAuthzFields } from '@/db/queries/profiles'
 import { parseCampaignPatch } from '@/lib/funding/campaignInput'
 import { resolveApprovalSlug } from '@/lib/funding/approvalSlug'
 import { proxyOwnerVerdict } from '@/lib/funding/proxyOwner'
-import { isFundingEnabled } from '@/lib/funding/settings'
+import { feeRatesOf, getFundingSettings, isFundingEnabled } from '@/lib/funding/settings'
 import { FUNDING_TERMS_REVISION } from '@/lib/funding/terms'
 import { nextStatus, type CampaignStatus } from '@/lib/funding/transitions'
 import { resolveCampaignFeeRate, type CampaignFeeRate } from '@/lib/server/fundingFeeRate'
@@ -52,7 +52,11 @@ export async function GET(request: NextRequest) {
         : null,
     }))
   )
-  return ApiSuccess.ok({ campaigns: withProgress }).toNextResponse()
+  // 지금 설정에 들어 있는 두 요율. 심사 화면이 "조합원 3.3% / 비조합원
+  // 5.5%"를 상수로 박아 두고 있었는데, 사무국이 설정에서 요율을 바꾸면 그
+  // 문장만 옛 숫자로 남는다 — 화면에 적힌 값과 실제로 떼는 돈이 갈라진다.
+  const rates = feeRatesOf(await getFundingSettings())
+  return ApiSuccess.ok({ campaigns: withProgress, fee_rates: rates }).toNextResponse()
 }
 
 /**
