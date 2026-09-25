@@ -23,6 +23,7 @@ import OptimizedImage from '@/components/OptimizedImage'
 import { Link } from '@/i18n/navigation'
 import { ADDITIONAL_AMOUNT_STEP, MAX_ADDITIONAL_AMOUNT, MAX_QUANTITY } from '@/lib/funding/amounts'
 import { CREDIT_NAME_MAX_LENGTH, evaluateCreditName } from '@/lib/funding/creditName'
+import { minutesUntil } from '@/lib/funding/holdCountdown'
 import { apiErrorMessage } from '@/utils/apiErrorMessage'
 
 import { formatAmount } from '../format'
@@ -34,6 +35,7 @@ interface Prepared {
   amount: number
   pledgeId: string
   pledgeCode: string
+  holdExpiresAt: string
   clientKey: string
   customerKey: string
   customerName?: string
@@ -135,6 +137,13 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
     [rewards, rewardId]
   )
 
+  // 선점이 서는 순간의 남은 시간을 한 번만 굳힌다 — 결제창을 띄워 둔 채로
+  // 몇 분을 보내도 문구가 째깍이며 줄어들 필요는 없다.
+  const holdMinutesLeft = useMemo(
+    () => (reservation ? minutesUntil(reservation.holdExpiresAt) : null),
+    [reservation]
+  )
+
   /**
    * 추가 후원금은 **입력 중에 정규화하지 않는다.** 글자마다 1,000원 단위로
    * 깎으면 5 → 0, 50 → 0이 되어 대부분의 값을 아예 타이핑할 수 없다
@@ -194,9 +203,12 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
         widgetsRef.current = widgets
         setWidgetReady(true)
       } catch (caught) {
+        // 위젯 스크립트 로드 자체가 실패한 것이지 결제가 거절된 게 아니다 —
+        // 광고 차단기·일시적 네트워크 오류가 대부분이라 결제 거절 문구를
+        // 그대로 쓰면 "왜 거절됐지"라는 잘못된 질문을 하게 만든다.
         console.error('결제창 준비 실패:', caught)
         setWidgetReady(false)
-        setError(t('fail.defaultMessage'))
+        setError(t('fail.widgetLoadFailed'))
       }
     },
     [t]
@@ -376,13 +388,16 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
     } | null
     if (!widgets || !reservation) return
     try {
-      const successUrl = new URL('/funding/success', window.location.origin)
+      // `localePrefix: 'as-needed'`라 한국어는 접두사가 없다 — 여기서 붙이지
+      // 않으면 영문 이용자도 한국어 성공/실패 화면으로 돌아온다.
+      const localePrefix = locale === 'ko' ? '' : `/${locale}`
+      const successUrl = new URL(`${localePrefix}/funding/success`, window.location.origin)
       successUrl.searchParams.set('pledgeId', reservation.pledgeId)
       await widgets.requestPayment({
         orderId: reservation.orderId,
         orderName: reservation.orderName,
         successUrl: successUrl.toString(),
-        failUrl: `${window.location.origin}/funding/fail`,
+        failUrl: `${window.location.origin}${localePrefix}/funding/fail`,
         customerName: reservation.customerName,
         customerEmail: reservation.customerEmail,
       })
@@ -390,7 +405,7 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
       console.error('결제창 실패:', caught)
       setError(t('fail.defaultMessage'))
     }
-  }, [reservation, t])
+  }, [reservation, t, locale])
 
   // 배너는 폼 맨 위에 있고 제출 버튼은 맨 아래에 있다 — 스크린리더가 읽어
   // 주는 것과 별개로, 화면을 눈으로 보는 사람도 아래에서 제출하면 배너가 바뀐
@@ -758,6 +773,11 @@ export default function PledgeForm({ campaign, paymentEnabled, locale }: Props) 
           더한다(대신하지 않는다). */}
       <section className={reservation ? 'block' : 'hidden'}>
         <h2 className="mb-4 text-lg font-semibold text-gray-900">{t('form.paymentHeading')}</h2>
+        {holdMinutesLeft !== null ? (
+          <p className="mb-4 text-xs text-gray-500">
+            {t('form.holdNoticeMinutes', { minutes: holdMinutesLeft })}
+          </p>
+        ) : null}
         <div id="funding-payment-method" />
         <div id="funding-payment-agreement" />
         {widgetReady ? (

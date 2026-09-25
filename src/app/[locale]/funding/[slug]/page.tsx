@@ -262,7 +262,10 @@ export default async function FundingDetailPage({
               ) : null}
             </div>
 
-            <aside className="lg:sticky lg:top-24 lg:self-start">
+            <aside
+              id="pledge-form"
+              className="scroll-mt-24 lg:sticky lg:top-24 lg:max-h-[calc(100vh-8rem)] lg:self-start lg:overflow-y-auto"
+            >
               <div className="rounded-xl border border-gray-200 bg-white p-6">
                 {showFigures ? (
                   <>
@@ -342,6 +345,19 @@ export default async function FundingDetailPage({
           </div>
         </div>
       </div>
+
+      {/* 모바일 전용 후원 바로가기 — 후원 폼은 항상 스토리·후원자 명단 아래에
+          있어 스크롤이 길다. 데스크톱은 aside가 sticky라 필요 없다. */}
+      {campaign.status === 'active' ? (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 p-3 backdrop-blur-sm lg:hidden">
+          <a
+            href="#pledge-form"
+            className="block w-full rounded-lg bg-primary-600 px-5 py-3 text-center font-medium text-white transition hover:bg-primary-700"
+          >
+            {t('form.submit')}
+          </a>
+        </div>
+      ) : null}
     </>
   )
 }

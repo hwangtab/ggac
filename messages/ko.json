@@ -437,6 +437,7 @@
       "submitting": "준비 중…",
       "agreeNotice": "후원하기를 누르면 <terms>펀딩 약관</terms>과 <privacy>개인정보 처리방침</privacy>에 동의하는 것으로 봅니다.",
       "holdNotice": "결제창이 열려 있는 동안 리워드가 선점됩니다. 정해진 시간 안에 결제를 마치지 못하면 선점한 수량이 다시 풀립니다.",
+      "holdNoticeMinutes": "{minutes}분 안에 결제를 완료해 주세요. 시간이 지나면 선점한 수량이 다시 풀립니다.",
       "paymentHeading": "결제",
       "payButton": "{amount} 결제하기",
       "errorReward": "후원할 리워드를 선택해 주세요.",
@@ -463,6 +464,7 @@
     "fail": {
       "title": "결제가 완료되지 않았습니다",
       "defaultMessage": "결제창이 닫혔거나 결제가 거절되었습니다.",
+      "widgetLoadFailed": "결제 위젯을 불러오지 못했습니다. 광고 차단 프로그램을 확인하거나 새로고침해 주세요.",
       "retry": "다시 후원하기",
       "toList": "펀딩 목록으로",
       "codes": {

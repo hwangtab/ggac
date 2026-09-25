@@ -437,6 +437,7 @@
       "submitting": "Preparing…",
       "agreeNotice": "By clicking Back this project, you agree to the <terms>Funding Terms</terms> and <privacy>Privacy Policy</privacy>.",
       "holdNotice": "Your reward is held while the payment window is open. If payment isn't completed in time, your reserved quantity is released again.",
+      "holdNoticeMinutes": "Please complete payment within {minutes} minutes. If time runs out, your held quantity will be released again.",
       "paymentHeading": "Payment",
       "payButton": "Pay {amount}",
       "errorReward": "Please choose a reward to back.",
@@ -463,6 +464,7 @@
     "fail": {
       "title": "Payment was not completed",
       "defaultMessage": "The payment window was closed or the payment was declined.",
+      "widgetLoadFailed": "We couldn't load the payment widget. Check for an ad blocker or refresh the page.",
       "retry": "Try again",
       "toList": "Back to funding list",
       "codes": {
