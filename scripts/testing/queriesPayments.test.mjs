@@ -345,6 +345,21 @@ test('납부 처리하면 결제와 연결되고 납부 시각이 남는다', as
   assert.equal(row.status, 'paid')
   assert.equal(row.payment_id, payment.id)
   assert.ok(row.paid_at)
+
+  // 같은 달을 다른 결제로 다시 납부 처리해도 덮이지 않는다 — 확정 요청이
+  // 두 번 들어와도(새로고침·재시도) 어느 결제로 냈는지가 흔들리지 않는다.
+  await createPendingPayment(pendingInput({ orderId: 'dues_link02' }))
+  await markPaymentDone('dues_link02', {
+    paymentKey: 'pk_link2',
+    method: '카드',
+    approvedAt: '2026-12-02T10:00:00+09:00',
+    raw: {},
+  })
+  const second = await getPaymentByOrderId('dues_link02')
+  await markDuesPaid({ userId: 'm-001', billingMonth: '2026-12', paymentId: second.id })
+  const again = await getDues('m-001', '2026-12')
+  assert.equal(again.payment_id, payment.id, '이미 납부된 달의 결제 연결이 덮였다')
+  assert.equal(again.paid_at, row.paid_at)
 })
 
 test('미납 청구월만 골라낸다', async () => {

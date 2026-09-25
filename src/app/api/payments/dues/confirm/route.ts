@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from 'next/server'
 
 import { requireActiveMember } from '@/lib/server/memberAuth'
 import {
+  getDues,
   getPaymentByOrderId,
   markPaymentDone,
   markPaymentFailed,
@@ -161,16 +162,44 @@ export async function POST(request: NextRequest) {
       raw: approved,
     })
 
-    // 결제와 청구월을 연결한다. 청구월은 주문을 만든 시점 기준이어야 하지만,
-    // 월말 자정을 넘겨 결제한 경우를 감안해 원장에 남은 주문명이 아니라
-    // 현재 청구월로 맞춘다 — 실패해도 결제 자체는 이미 확정이므로 던지지 않는다.
+    // 결제와 청구월을 연결한다.
+    //
+    // **청구월은 시계가 아니라 이 주문에서 나온다.** 예전에는 확정하는 그
+    // 순간의 `currentBillingMonth()`를 썼는데, 준비(prepare)와 확정 사이에
+    // 달이 넘어가면 — 월말 23시 59분에 결제창을 띄우고 자정을 넘겨 승인이
+    // 끝나는, 실제로 일어나는 일이다 — **다음 달이 납부 완료로 찍힌다.**
+    // 그러면 정작 결제한 달은 미납으로 남아 다음 청구가 또 나가고, 새 달은
+    // 걷지도 않은 채 납부로 굳는다(`markDuesPaid`는 미납 행만 바꾸므로 그 뒤
+    // 진짜 납부가 들어와도 덮이지 않는다).
+    //
+    // 준비 라우트가 그 시점의 청구월로 회비 행을 만들고 주문을 남겼으므로,
+    // 같은 값은 **주문이 만들어진 시각**에서 다시 얻는다. 브라우저가 보낸
+    // 값은 어느 쪽으로도 쓰지 않는다.
     try {
       const confirmed = await getPaymentByOrderId(orderId)
-      await markDuesPaid({
-        userId: user.id,
-        billingMonth: currentBillingMonth(),
-        paymentId: String(confirmed?.id ?? ''),
-      })
+      const orderedAt = confirmed?.created_at ? new Date(String(confirmed.created_at)) : null
+      const billingMonth =
+        orderedAt && !Number.isNaN(orderedAt.getTime())
+          ? currentBillingMonth(orderedAt)
+          : currentBillingMonth()
+
+      // 이미 납부로 기록된 달은 건드리지 않는다. 아래 쓰기도 `unpaid`일 때만
+      // 걸리므로 덮일 일은 없지만, 두 번째 확정이 조용히 지나가 버리면 "왜
+      // 이 결제가 어느 달에도 안 붙었는가"를 나중에 되짚을 수 없다.
+      const before = await getDues(user.id, billingMonth)
+      if (before?.status === 'paid') {
+        log.warn('이미 납부된 달의 확정 요청 — 회비 연결을 건너뜀', {
+          userId: maskId(user.id),
+          orderId,
+          billingMonth,
+        })
+      } else {
+        await markDuesPaid({
+          userId: user.id,
+          billingMonth,
+          paymentId: String(confirmed?.id ?? ''),
+        })
+      }
     } catch (error) {
       log.error('회비 납부 연결 실패(결제는 확정됨)', { orderId, error })
     }

@@ -44,6 +44,24 @@ test('명확한 거절만 결제 실패로 기록한다', () => {
   assert.match(apiErrorBlock[1], /markPaymentFailed/)
 })
 
+/**
+ * 준비와 확정 사이에 달이 넘어가는 일은 실제로 일어난다 — 월말 23시 59분에
+ * 결제창을 띄우고 자정을 넘겨 승인이 끝나는 경우다. 그때 확정하는 순간의
+ * 시계를 쓰면 **다음 달이 납부 완료로 찍히고**, 정작 결제한 달은 미납으로
+ * 남아 다음 청구가 또 나간다.
+ */
+test('회비 납부는 확정하는 순간의 시계가 아니라 주문 시각으로 달을 정한다', () => {
+  // 주문이 만들어진 시각에서 청구월을 다시 얻는다.
+  assert.match(CONFIRM, /currentBillingMonth\(orderedAt\)/)
+  // 인자 없는 호출(= 지금 이 순간)을 `markDuesPaid`에 그대로 넘기지 않는다.
+  assert.doesNotMatch(CONFIRM, /billingMonth:\s*currentBillingMonth\(\)/)
+  // 클라이언트가 보낸 달은 어느 쪽으로도 쓰지 않는다.
+  assert.doesNotMatch(CONFIRM, /body\.billingMonth|body\.billing_month/)
+  // 이미 납부된 달은 건드리지 않는다(쓰기도 `unpaid`일 때만 걸린다).
+  assert.match(CONFIRM, /getDues\(/)
+  assert.match(CONFIRM, /status === 'paid'/)
+})
+
 test('준비 라우트가 금액을 클라이언트에서 받지 않는다', () => {
   // 금액은 회원의 회비 설정에서 서버가 정한다. 요청 본문을 읽는 순간
   // "얼마를 낼지 클라이언트가 정하는" 구조가 된다.
