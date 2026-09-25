@@ -19,7 +19,7 @@ export default function BrandLoader({
       role="status"
       aria-live="polite"
       aria-label={ariaLabel}
-      className={`flex min-h-[60vh] items-center justify-center ${
+      className={`flex min-h-screen items-center justify-center bg-black ${
         withHeaderOffset ? 'pt-20' : ''
       } ${className}`}
     >
@@ -31,7 +31,9 @@ export default function BrandLoader({
           height={168}
           priority
           sizes="(max-width: 640px) 220px, 320px"
-          className="h-auto w-[220px] sm:w-[280px] md:w-[320px]"
+          // 원본은 흰 바탕(#fff)에 검은 선이다. 반전하면 바탕이 정확히 #000이 되어
+          // 컨테이너 bg-black과 경계 없이 이어진다.
+          className="h-auto w-[220px] invert sm:w-[280px] md:w-[320px]"
         />
       </div>
       <span className="sr-only">{srText}</span>
