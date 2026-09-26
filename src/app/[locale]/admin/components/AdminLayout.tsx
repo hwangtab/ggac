@@ -14,6 +14,7 @@ import {
   FiBell,
   FiMail,
   FiDollarSign,
+  FiTag,
 } from 'react-icons/fi'
 import { Link, usePathname } from '@/i18n/navigation'
 
@@ -82,6 +83,12 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ title, description, children 
       label: '펀딩 심사',
       href: '/admin/funding',
       icon: <FiDollarSign className="w-5 h-5" />,
+    },
+    {
+      id: 'tickets',
+      label: '예매 관리',
+      href: '/admin/tickets',
+      icon: <FiTag className="w-5 h-5" />,
     },
     {
       id: 'notifications',

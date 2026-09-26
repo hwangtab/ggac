@@ -9,18 +9,33 @@
  * 되돌릴 수 없다 — 공연 당일 입장을 거절해야 하는 사고가 된다.
  */
 
-import { and, asc, desc, eq, gt, inArray, isNull, lt, lte, ne, or, sql } from 'drizzle-orm'
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  lt,
+  lte,
+  ne,
+  or,
+  sql,
+  type SQL,
+} from 'drizzle-orm'
 
 import { db } from '../client.ts'
 import {
   payments,
   performanceShows,
   performances,
+  RESERVATION_STATUS,
   reservations,
   ticketTypes,
 } from '../schema/index.ts'
 
-import { toIso, toSnakeCase } from './_helpers.ts'
+import { likeContains, toIso, toSnakeCase } from './_helpers.ts'
 
 /** 결제창을 열어 두고 사라진 사람의 자리를 언제까지 잡아 둘지. 토스 인증 유효시간과 맞춘다. */
 export const DEFAULT_HOLD_MINUTES = 10
@@ -823,4 +838,132 @@ export async function getShow(id: string): Promise<Record<string, unknown> | nul
   const show = rowToShow(row.show as unknown as Record<string, unknown>)
   show.performance_status = row.performanceStatus
   return show
+}
+
+// ------------------------------------------------------- 사무국 예매 목록
+
+export interface AdminReservationFilter {
+  /** 공연 단위로 좁힌다. 회차가 아니라 공연이다 — 사무국은 "무슨 공연"으로 찾는다. */
+  performanceId?: string | null
+  status?: string | null
+  /** 예매자 이름·연락처·메일 부분일치. 관객이 전화로 말하는 것이 이 셋이다. */
+  search?: string | null
+  limit: number
+  offset: number
+}
+
+/**
+ * 사무국 예매 목록. 대리 환불 화면이 **id를 찾는** 자리다.
+ *
+ * ## 결제 키는 이 함수 안에도 들어오지 않는다
+ *
+ * 환불 단추를 그리려면 "돌려줄 결제가 있는가"를 알아야 하는데, 그 판정에
+ * 필요한 것은 `payment_key`의 **존재**지 값이 아니다. 행을 읽어 놓고 응답에서
+ * 빼는 방식은 언젠가 한 줄 잘못 고치면 새어 나간다 — 그래서 SELECT 자체를
+ * `case when ... then 1 else 0 end`로 바꿔 값이 이 프로세스의 메모리에도
+ * 올라오지 않게 한다. 나가는 것은 있고 없음 하나뿐이다.
+ *
+ * 금액은 원장 두 칸(`amount`·`canceled_amount`)을 그대로 싣는다. 남은 금액의
+ * 뺄셈은 라우트가 `refundableWon`으로 한다 — 화면과 서버가 같은 함수를 쓴다.
+ *
+ * 정렬은 `created_at` 내림차순에 id를 2차 키로 둔다. `created_at`이 ms
+ * 정밀도라 같은 요청에서 만들어진 행들이 같은 값을 갖고, 그러면 페이지
+ * 경계에서 같은 줄이 두 번 나오거나 아예 빠진다(`listProfiles`와 같은 이유).
+ */
+export async function listReservationsForAdmin(
+  filter: AdminReservationFilter
+): Promise<{ rows: Record<string, unknown>[]; total: number }> {
+  const conditions: SQL[] = []
+  if (filter.performanceId) {
+    conditions.push(eq(performanceShows.performanceId, filter.performanceId))
+  }
+  if (filter.status) {
+    conditions.push(eq(reservations.status, filter.status as (typeof RESERVATION_STATUS)[number]))
+  }
+  if (filter.search) {
+    // `%`·`_`를 이스케이프하고 `ESCAPE` 절까지 붙인다 — 그냥 `%${입력}%`로
+    // 끼워 넣으면 검색어의 와일드카드가 해석돼 필터가 통째로 무력화된다
+    // (`_helpers.ts`에 실측 사례가 적혀 있다).
+    conditions.push(
+      or(
+        likeContains(reservations.bookerName, filter.search),
+        likeContains(reservations.bookerPhone, filter.search),
+        likeContains(reservations.bookerEmail, filter.search),
+        likeContains(reservations.reservationCode, filter.search)
+      ) as SQL
+    )
+  }
+  const where = conditions.length > 0 ? and(...conditions) : undefined
+
+  const [rows, totalRows] = await Promise.all([
+    db
+      .select({
+        id: reservations.id,
+        reservation_code: reservations.reservationCode,
+        show_id: reservations.showId,
+        user_id: reservations.userId,
+        order_id: reservations.orderId,
+        booker_name: reservations.bookerName,
+        booker_phone: reservations.bookerPhone,
+        booker_email: reservations.bookerEmail,
+        quantity: reservations.quantity,
+        total_amount: reservations.totalAmount,
+        status: reservations.status,
+        createdAt: reservations.createdAt,
+        canceledAt: reservations.canceledAt,
+        performance_id: performances.id,
+        performance_title: performances.title,
+        venue: performances.venue,
+        startsAt: performanceShows.startsAt,
+        ticket_type_name: ticketTypes.name,
+        payment_status: payments.status,
+        payment_amount: payments.amount,
+        payment_canceled_amount: payments.canceledAmount,
+        /** 토스 키의 **존재**만. 값은 SELECT 목록에 없다(위 주석). */
+        hasPaymentKey: sql<number>`case when ${payments.paymentKey} is not null and ${payments.paymentKey} <> '' then 1 else 0 end`,
+      })
+      .from(reservations)
+      .innerJoin(performanceShows, eq(performanceShows.id, reservations.showId))
+      .innerJoin(performances, eq(performances.id, performanceShows.performanceId))
+      .innerJoin(ticketTypes, eq(ticketTypes.id, reservations.ticketTypeId))
+      .leftJoin(payments, eq(payments.id, reservations.paymentId))
+      .where(where)
+      .orderBy(desc(reservations.createdAt), desc(reservations.id))
+      .limit(filter.limit)
+      .offset(filter.offset),
+    // 세는 쪽은 공연 필터에 필요한 회차 조인만 건다 — 표 넷을 다시 붙일 이유가 없다.
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(reservations)
+      .innerJoin(performanceShows, eq(performanceShows.id, reservations.showId))
+      .where(where),
+  ])
+
+  return {
+    rows: rows.map(row => {
+      const { createdAt, canceledAt, startsAt, hasPaymentKey, ...rest } = row
+      return {
+        ...rest,
+        has_payment: Number(hasPaymentKey) === 1,
+        starts_at: toIso(startsAt as Date | null),
+        created_at: toIso(createdAt as Date | null),
+        canceled_at: toIso(canceledAt as Date | null),
+      }
+    }),
+    total: Number(totalRows[0]?.count ?? 0),
+  }
+}
+
+/**
+ * 공연 고르개에 채울 목록. 공개 목록(`listOpenPerformances`)을 쓸 수 없다 —
+ * 그쪽은 `open`이고 남은 회차가 있는 공연만 돌려준다. 사무국이 환불하는
+ * 때가 바로 **공연이 끝났거나 취소된** 때라, 그 필터를 그대로 쓰면 찾아야 할
+ * 공연이 목록에 없다.
+ */
+export async function listPerformanceOptions(): Promise<Record<string, unknown>[]> {
+  const rows = await db
+    .select({ id: performances.id, title: performances.title, status: performances.status })
+    .from(performances)
+    .orderBy(desc(performances.createdAt), desc(performances.id))
+  return rows
 }

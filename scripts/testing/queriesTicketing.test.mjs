@@ -618,6 +618,228 @@ test('판매 불가 상태(draft/closed/canceled)인 공연의 회차도 조회�
   assert.ok(SELLABLE_PERFORMANCE_STATUSES.includes(openResult.performance_status))
 })
 
+// ------------------------------------------------- 사무국 예매 목록 (관리자 화면)
+//
+// 파일 맨 아래의 동시 예매 테스트보다 **앞**에 둔다. 그 테스트가 같은 파일
+// SQLite에 동시 쓰기를 걸어 락을 한동안 붙들고 있어서, 뒤에 놓으면 여기서
+// 공연을 만드는 INSERT가 검증 대상과 무관한 SQLITE_BUSY로 죽는다.
+
+/**
+ * 목록 테스트는 **자기 공연**에서만 센다. 위 테스트들이 `perf-1`에 예매를
+ * 쌓아 두므로, 공유 공연에서 건수를 세면 앞 테스트가 늘 때마다 여기가 깨진다.
+ */
+async function makeOwnPerformance(status = 'open') {
+  const now = Date.now()
+  const performanceId = `perf-list-${++showSeq}`
+  const showIdForList = `show-list-${++showSeq}`
+  const ticketTypeIdForList = `tt-list-${showSeq}`
+  for (let attempt = 0; attempt < 20; attempt++) {
+    try {
+      await setupClient.execute({
+        sql: `INSERT INTO performances (id, slug, title, venue, status, created_at, updated_at)
+              VALUES (?, ?, '목록 테스트 공연', '테스트홀', ?, ?, ?)`,
+        args: [performanceId, `list-${performanceId}`, status, now, now],
+      })
+      await setupClient.execute({
+        sql: `INSERT INTO performance_shows (id, performance_id, starts_at, capacity, created_at, updated_at)
+              VALUES (?, ?, ?, 50, ?, ?)`,
+        args: [showIdForList, performanceId, now + 24 * HOUR, now, now],
+      })
+      await setupClient.execute({
+        sql: `INSERT INTO ticket_types (id, performance_id, name, price, max_per_order, members_only, sort_order, created_at, updated_at)
+              VALUES (?, ?, '일반석', 20000, 4, 0, 0, ?, ?)`,
+        args: [ticketTypeIdForList, performanceId, now, now],
+      })
+      return { performanceId, showId: showIdForList, ticketTypeId: ticketTypeIdForList }
+    } catch (error) {
+      if (!/SQLITE_BUSY|locked/i.test(String(error))) throw error
+      await new Promise(resolve => setTimeout(resolve, 50))
+    }
+  }
+  throw new Error('목록 테스트용 공연을 만들지 못했다(락 경합).')
+}
+
+test('사무국 목록은 예매에 공연·회차·티켓 종류와 결제 유무를 붙여 돌려준다', async () => {
+  const mod = await loadFresh()
+  const place = await makeOwnPerformance()
+
+  const held = await mod.holdReservation(
+    booking({ showId: place.showId, ticketTypeId: place.ticketTypeId, bookerName: '김관객' })
+  )
+  await confirmVia(mod, held)
+
+  const { rows, total } = await mod.listReservationsForAdmin({
+    performanceId: place.performanceId,
+    limit: 30,
+    offset: 0,
+  })
+
+  assert.equal(total, 1)
+  const row = rows[0]
+  assert.equal(row.id, held.id)
+  assert.equal(row.performance_title, '목록 테스트 공연')
+  assert.equal(row.venue, '테스트홀')
+  assert.equal(row.ticket_type_name, '일반석')
+  assert.equal(row.booker_name, '김관객')
+  assert.equal(row.status, 'confirmed')
+  assert.ok(row.starts_at, '회차 시각이 있어야 관리자가 어느 날 공연인지 안다')
+  assert.equal(row.has_payment, true)
+  assert.equal(row.payment_status, 'done')
+  assert.equal(row.payment_amount, 40000)
+  assert.equal(row.payment_canceled_amount, 0)
+})
+
+test('결제 키는 목록에 실리지 않는다 — 응답에서 지우는 것이 아니라 읽지 않는다', async () => {
+  // 이 값 하나면 우리 시스템 밖에서 토스 API로 결제를 취소할 수 있다.
+  const mod = await loadFresh()
+  const place = await makeOwnPerformance()
+  const held = await mod.holdReservation(
+    booking({ showId: place.showId, ticketTypeId: place.ticketTypeId })
+  )
+  await confirmVia(mod, held)
+
+  const { rows } = await mod.listReservationsForAdmin({
+    performanceId: place.performanceId,
+    limit: 30,
+    offset: 0,
+  })
+
+  const keys = Object.keys(rows[0])
+  assert.ok(!keys.includes('payment_key'), `결제 키가 실렸다: ${keys.join(', ')}`)
+  assert.ok(!keys.includes('paymentKey'))
+  assert.ok(
+    !JSON.stringify(rows[0]).includes(`key-${held.order_id}`),
+    '어떤 이름으로도 결제 키가 나가면 안 된다'
+  )
+})
+
+test('결제가 붙지 않은 선점도 목록에는 나오되 결제 없음으로 표시된다', async () => {
+  // 좌석은 쥐고 있는데 돈이 잡힌 적 없는 줄. 환불할 것이 없다는 사실이
+  // 목록에서 보여야 사무국이 헛걸음하지 않는다.
+  const mod = await loadFresh()
+  const place = await makeOwnPerformance()
+  await mod.holdReservation(booking({ showId: place.showId, ticketTypeId: place.ticketTypeId }))
+
+  const { rows } = await mod.listReservationsForAdmin({
+    performanceId: place.performanceId,
+    limit: 30,
+    offset: 0,
+  })
+  assert.equal(rows.length, 1)
+  assert.equal(rows[0].status, 'pending')
+  assert.equal(rows[0].has_payment, false)
+  assert.equal(rows[0].payment_status, null)
+})
+
+test('상태로 좁히면 그 상태만 남고 total도 함께 줄어든다', async () => {
+  const mod = await loadFresh()
+  const place = await makeOwnPerformance()
+
+  const confirmed = await mod.holdReservation(
+    booking({ showId: place.showId, ticketTypeId: place.ticketTypeId })
+  )
+  await confirmVia(mod, confirmed)
+  await mod.holdReservation(booking({ showId: place.showId, ticketTypeId: place.ticketTypeId }))
+
+  const all = await mod.listReservationsForAdmin({
+    performanceId: place.performanceId,
+    limit: 30,
+    offset: 0,
+  })
+  assert.equal(all.total, 2)
+
+  const only = await mod.listReservationsForAdmin({
+    performanceId: place.performanceId,
+    status: 'confirmed',
+    limit: 30,
+    offset: 0,
+  })
+  assert.equal(only.total, 1)
+  assert.equal(only.rows[0].id, confirmed.id)
+})
+
+test('검색은 이름·연락처·메일·예매번호를 보고, LIKE 와일드카드에 뚫리지 않는다', async () => {
+  const mod = await loadFresh()
+  const place = await makeOwnPerformance()
+
+  const target = await mod.holdReservation(
+    booking({
+      showId: place.showId,
+      ticketTypeId: place.ticketTypeId,
+      bookerName: '박찾는사람',
+      bookerPhone: '01099998888',
+      bookerEmail: 'found@test.local',
+    })
+  )
+  await mod.holdReservation(
+    booking({ showId: place.showId, ticketTypeId: place.ticketTypeId, bookerName: '다른사람' })
+  )
+
+  for (const needle of ['박찾는사람', '9999', 'found@', target.reservation_code]) {
+    const hit = await mod.listReservationsForAdmin({
+      performanceId: place.performanceId,
+      search: needle,
+      limit: 30,
+      offset: 0,
+    })
+    assert.equal(hit.total, 1, needle)
+    assert.equal(hit.rows[0].id, target.id, needle)
+  }
+
+  // `%`를 그대로 LIKE에 끼워 넣으면 "아무 문자열"과 맞아 검색이 통째로
+  // 무력화된다(`_helpers.ts`의 실측 사례). 이스케이프되면 0건이다.
+  const wildcard = await mod.listReservationsForAdmin({
+    performanceId: place.performanceId,
+    search: '%',
+    limit: 30,
+    offset: 0,
+  })
+  assert.equal(wildcard.total, 0, '와일드카드가 검색을 무력화하면 안 된다')
+})
+
+test('total은 페이지 크기와 무관한 전체 건수다', async () => {
+  const mod = await loadFresh()
+  const place = await makeOwnPerformance()
+  for (let i = 0; i < 3; i++) {
+    await mod.holdReservation(
+      booking({ showId: place.showId, ticketTypeId: place.ticketTypeId, quantity: 1 })
+    )
+  }
+
+  const first = await mod.listReservationsForAdmin({
+    performanceId: place.performanceId,
+    limit: 2,
+    offset: 0,
+  })
+  assert.equal(first.rows.length, 2)
+  assert.equal(first.total, 3, '페이지에 담긴 수가 아니라 전체 건수여야 쪽 넘김이 맞는다')
+
+  const second = await mod.listReservationsForAdmin({
+    performanceId: place.performanceId,
+    limit: 2,
+    offset: 2,
+  })
+  assert.equal(second.rows.length, 1)
+  assert.equal(second.total, 3)
+
+  // 같은 줄이 두 쪽에 겹쳐 나오면 안 된다(created_at이 ms라 2차 정렬 키가 필요하다).
+  const ids = new Set([...first.rows, ...second.rows].map(r => r.id))
+  assert.equal(ids.size, 3)
+})
+
+test('공연 고르개는 판매가 끝난 공연도 돌려준다 — 사무국이 찾는 때가 그때다', async () => {
+  const mod = await loadFresh()
+  const closed = await makeOwnPerformance('closed')
+  const canceled = await makeOwnPerformance('canceled')
+
+  const options = await mod.listPerformanceOptions()
+  const ids = options.map(o => o.id)
+  assert.ok(ids.includes(closed.performanceId), '마감된 공연이 빠지면 찾을 수 없다')
+  assert.ok(ids.includes(canceled.performanceId), '취소된 공연이야말로 환불이 몰린다')
+  // 고르개에 필요한 것은 세 칸뿐이다.
+  assert.deepEqual(Object.keys(options[0]).sort(), ['id', 'status', 'title'])
+})
+
 test('마지막 좌석을 동시에 사려 하면 한 명만 성공한다', async () => {
   // 초과 판매가 나는 전형적인 경로. 재고를 "읽고 나서 쓰기"로 짜면 두 요청이
   // 같은 잔여 수를 읽고 둘 다 통과해, 팔지 않은 좌석을 판 것이 된다.
