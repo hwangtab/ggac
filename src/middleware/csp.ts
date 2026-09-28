@@ -10,7 +10,8 @@ import type { NextRequest } from 'next/server'
  * - Next.js 인라인 hydration 스크립트는 'unsafe-inline'으로 허용
  * - 외부 스크립트는 https: 와일드카드가 아니라 호스트를 하나씩 적는다.
  *   현재 허용 대상은 토스 결제 SDK(https://js.tosspayments.com/v2/standard,
- *   서브도메인이 늘어날 수 있어 https://*.tosspayments.com)뿐이다.
+ *   서브도메인이 늘어날 수 있어 https://*.tosspayments.com)와 가입 화면의
+ *   사람 확인 위젯(Cloudflare Turnstile, https://challenges.cloudflare.com)이다.
  *
  * ⚠️ 외부 스크립트 호스트를 추가할 때는 이 파일의 script-src/script-src-elem과
  *    next.config.js의 같은 두 지시문을 **함께** 고쳐라(scripts/testing/payments-csp.test.mjs가
@@ -36,9 +37,9 @@ export function applyCSP(request: NextRequest, response: NextResponse) {
       // 이것이 빠지면 dev에서 모든 페이지의 하이드레이션이 통째로 실패한다
       // (connect-src의 dev 분기와 동일한 패턴, CLAUDE.md 문서와 일치).
       process.env.NODE_ENV === 'development'
-        ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.tosspayments.com"
-        : "script-src 'self' 'unsafe-inline' https://*.tosspayments.com",
-      "script-src-elem 'self' 'unsafe-inline' https://*.tosspayments.com",
+        ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.tosspayments.com https://challenges.cloudflare.com"
+        : "script-src 'self' 'unsafe-inline' https://*.tosspayments.com https://challenges.cloudflare.com",
+      "script-src-elem 'self' 'unsafe-inline' https://*.tosspayments.com https://challenges.cloudflare.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
@@ -53,8 +54,9 @@ export function applyCSP(request: NextRequest, response: NextResponse) {
       process.env.NODE_ENV === 'development'
         ? "media-src 'self' http://localhost:* http://127.0.0.1:* https://www.youtube.com https://r8qnr9c7mestxusj.public.blob.vercel-storage.com"
         : "media-src 'self' https://www.youtube.com https://r8qnr9c7mestxusj.public.blob.vercel-storage.com",
-      // 토스 결제창은 iframe으로 뜬다. 빠지면 결제 버튼이 먹통이 된다.
-      "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://*.tosspayments.com",
+      // 토스 결제창·Turnstile 위젯 둘 다 iframe으로 뜬다. 빠지면 결제 버튼이나
+      // 가입 화면의 사람 확인이 먹통이 된다.
+      "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://*.tosspayments.com https://challenges.cloudflare.com",
       process.env.NODE_ENV === 'development'
         ? "connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:* https://*.tosspayments.com"
         : "connect-src 'self' https://*.tosspayments.com",

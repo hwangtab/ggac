@@ -839,6 +839,7 @@
       "msgWeakPassword": "비밀번호는 최소 8자 이상이어야 합니다.",
       "msgSignupDisabled": "현재 조합원 가입이 일시적으로 중단되었습니다. 관리자에게 문의해주세요.",
       "msgUnexpectedError": "조합원 가입 중 예상치 못한 오류가 발생했습니다.",
+      "msgTurnstileRequired": "사람인지 확인하는 체크박스를 완료해 주세요.",
       "validationEmailFormat": "올바른 이메일 형식을 입력해주세요. (예: example@email.com)",
       "validationPasswordLength": "비밀번호는 최소 8자 이상이어야 합니다.",
       "validationPhoneFormat": "올바른 휴대폰 번호를 입력해주세요. (예: 010-1234-5678)",

@@ -93,6 +93,12 @@ export type SecurityEventType =
 
   // 회원 관리 이벤트
   | 'MEMBER_REGISTRATION_BLOCKED'
+  // 가입 화면의 Turnstile 사람 확인을 거절한 경우(자동화된 시도로 판정됨).
+  | 'TURNSTILE_VERIFY_REJECTED'
+  // Turnstile에 물어보는 것 자체가 실패한 경우(네트워크·Cloudflare 장애).
+  // 거절하지 않고 통과시키지만(가입까지 막으면 안 된다), 계속 실패하면
+  // 레이트리밋만으로 남는다는 신호이므로 남긴다.
+  | 'TURNSTILE_VERIFY_LOOKUP_FAILED'
   | 'MEMBER_APPROVAL_FAILED'
   | 'MEMBER_STATUS_CHANGE_FAILED'
   | 'MEMBER_PROFILE_UPDATE_BLOCKED'

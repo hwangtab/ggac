@@ -839,6 +839,7 @@
       "msgWeakPassword": "Password must be at least 8 characters.",
       "msgSignupDisabled": "Membership registration is temporarily suspended. Please contact an admin.",
       "msgUnexpectedError": "An unexpected error occurred during registration.",
+      "msgTurnstileRequired": "Please complete the human-verification checkbox.",
       "validationEmailFormat": "Please enter a valid email. (e.g. example@email.com)",
       "validationPasswordLength": "Password must be at least 8 characters.",
       "validationPhoneFormat": "Please enter a valid phone number. (e.g. 010-1234-5678)",

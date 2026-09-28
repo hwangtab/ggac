@@ -72,4 +72,24 @@ for (const [name, source] of SOURCES) {
       }
     }
   })
+
+  test(`${name}: 가입 화면의 사람 확인 위젯을 띄울 수 있게 CSP가 Turnstile을 허용한다`, () => {
+    // Turnstile은 스크립트를 내려받고(script-src/script-src-elem) iframe으로
+    // 위젯을 그린다(frame-src). 하나라도 빠지면 위젯이 조용히 안 뜨고,
+    // 서버는 TURNSTILE_SECRET_KEY가 설정된 순간부터 토큰 없는 제출을 전부
+    // 거절하므로 가입 자체가 막힌다.
+    for (const directive of ['script-src', 'script-src-elem', 'frame-src']) {
+      const lines = directiveLines(source, directive).filter(
+        line => !line.includes("script-src 'none'")
+      )
+      assert.ok(lines.length > 0, `${directive} 지시문을 찾지 못했다`)
+      for (const line of lines) {
+        assert.match(
+          line,
+          /challenges\.cloudflare\.com/,
+          `${directive}에 Turnstile이 없다: ${line}`
+        )
+      }
+    }
+  })
 }

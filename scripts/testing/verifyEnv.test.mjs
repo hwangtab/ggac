@@ -52,6 +52,8 @@ const ALL_KEYS = [
   'TOSS_SECRET_KEY',
   'NEXT_PUBLIC_TOSS_BILLING_CLIENT_KEY',
   'TOSS_BILLING_SECRET_KEY',
+  'NEXT_PUBLIC_TURNSTILE_SITE_KEY',
+  'TURNSTILE_SECRET_KEY',
 ]
 
 const COMPLETE_ENV = {
@@ -218,4 +220,28 @@ test('자동결제 키가 없거나 계열이 틀리면 경고만 하고 통과�
   })
   assert.equal(wrongFamily.code, 0, wrongFamily.stdout)
   assert.match(wrongFamily.stdout, /자동결제 키가 일반결제 계열/)
+})
+
+test('Turnstile 키가 한쪽만 있으면 경고만 하고 통과한다', () => {
+  const siteOnly = run({ ...COMPLETE_ENV, NEXT_PUBLIC_TURNSTILE_SITE_KEY: '0xsample' })
+  assert.equal(siteOnly.code, 0, siteOnly.stdout)
+  assert.match(siteOnly.stdout, /TURNSTILE_SECRET_KEY가 없습니다/)
+
+  const secretOnly = run({ ...COMPLETE_ENV, TURNSTILE_SECRET_KEY: '0xsample' })
+  assert.equal(secretOnly.code, 0, secretOnly.stdout)
+  assert.match(secretOnly.stdout, /NEXT_PUBLIC_TURNSTILE_SITE_KEY가 없습니다/)
+})
+
+test('Turnstile 키가 둘 다 없거나 둘 다 있으면 경고가 없다', () => {
+  const neither = run(COMPLETE_ENV)
+  assert.equal(neither.code, 0, neither.stdout)
+  assert.doesNotMatch(neither.stdout, /TURNSTILE.*없습니다/)
+
+  const both = run({
+    ...COMPLETE_ENV,
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY: '0xsample',
+    TURNSTILE_SECRET_KEY: '0xsample',
+  })
+  assert.equal(both.code, 0, both.stdout)
+  assert.doesNotMatch(both.stdout, /TURNSTILE.*없습니다/)
 })

@@ -27,12 +27,14 @@ import { NextRequest } from 'next/server'
 import { auth } from '@/lib/auth/server'
 import { buildSignupProfileRow, isValidBirthDate } from '@/lib/auth/signupProfile'
 import { safeErrorMessage } from '@/lib/auth/errorMessage'
+import { verifyTurnstileToken } from '@/lib/auth/turnstile'
 import { getSystemSettings } from '@/middleware/settings'
 import { upsertProfile, type UpsertProfileInput } from '@/db/queries/profiles'
 import { applyRateLimit, RATE_LIMIT_CONFIGS, createIPKeyGenerator } from '@/lib/server/rateLimit'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { ApiSuccess, ApiError as HttpApiError } from '@/utils/apiWrapper'
 import { createLogger, maskId } from '@/utils/logger'
+import { logSecurityEvent } from '@/utils/security'
 import { parseMonthlyFee, MONTHLY_FEE_RANGE_MESSAGE } from '@/constants/memberProfile'
 
 const log = createLogger('api/member-signup')
@@ -129,6 +131,23 @@ export async function POST(request: NextRequest) {
 
     if (!email || !password || !displayName) {
       return HttpApiError.badRequest('이메일, 비밀번호, 표시명은 필수입니다.').toNextResponse()
+    }
+
+    // 3.5) 사람 확인(Turnstile). 레이트리밋(시간당 10회/IP)은 한 IP의 속도만
+    // 늦출 뿐, 여러 IP로 나눠 도는 자동화 가입·이메일 선점을 막지 못한다.
+    // `TURNSTILE_SECRET_KEY`가 없으면 건너뛴다(레이트리밋만 남는다) —
+    // `verifyTurnstileToken` 주석 참고.
+    const turnstileVerdict = await verifyTurnstileToken(
+      body.turnstileToken,
+      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+        request.headers.get('x-real-ip') ||
+        undefined
+    )
+    if (turnstileVerdict.ok === false) {
+      logSecurityEvent('TURNSTILE_VERIFY_REJECTED', { reason: turnstileVerdict.reason }, 'medium')
+      return HttpApiError.badRequest(
+        '사람인지 확인하지 못했습니다. 체크박스를 다시 확인한 뒤 시도해 주세요.'
+      ).toNextResponse()
     }
 
     // 실측(로컬 스택, 2026-08-19): member_profiles.monthly_fee는 Postgres에서

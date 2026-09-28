@@ -145,6 +145,13 @@ const optionalEnvVars = [
   // 계열이 틀리면 자동결제 기능이 화면에서 통째로 사라진다 — 에러는 안 난다.
   'NEXT_PUBLIC_TOSS_BILLING_CLIENT_KEY',
   'TOSS_BILLING_SECRET_KEY',
+  // 가입 화면의 Turnstile 사람 확인(`@/lib/auth/turnstile`). 둘 다 없으면
+  // 위젯 자체가 렌더링되지 않고 서버 검증도 건너뛴다(레이트리밋만 남는다) —
+  // 기능을 아직 켜지 않은 것과 같은 상태라 필수가 아니다. 하나만 있으면
+  // (사이트 키만 있고 비밀 키가 없는 등) 위젯은 뜨는데 서버가 검증을 건너뛰어
+  // 사실상 장식이 되므로 둘을 짝으로 점검한다.
+  'NEXT_PUBLIC_TURNSTILE_SITE_KEY',
+  'TURNSTILE_SECRET_KEY',
 ]
 
 console.log('🔍 Environment Variable Verification\n')
@@ -327,6 +334,20 @@ if (env.MAILBOX_REPLY_TO && env.MAILBOX_ALLOWED_RECIPIENTS) {
       `⚠️  MAILBOX_REPLY_TO(${env.MAILBOX_REPLY_TO})가 MAILBOX_ALLOWED_RECIPIENTS에 없습니다 — 그 주소로 온 회신이 저장되지 않고 조용히 사라집니다.`
     )
   }
+}
+
+// Turnstile 사이트 키·비밀 키는 짝이어야 의미가 있다. 하나만 있으면 위젯은
+// 뜨는데(사이트 키) 서버 검증이 건너뛰어지거나(비밀 키 없음), 검증 코드는
+// 있는데 위젯이 안 떠 토큰 없는 요청만 오가다 서버가 늘 거절하게(사이트 키
+// 없음) 된다. 둘 다 없는 것(기능 자체를 안 켠 상태)은 정상이라 걸지 않는다.
+if (env.NEXT_PUBLIC_TURNSTILE_SITE_KEY && !env.TURNSTILE_SECRET_KEY) {
+  console.log(
+    '⚠️  NEXT_PUBLIC_TURNSTILE_SITE_KEY는 있는데 TURNSTILE_SECRET_KEY가 없습니다 — 위젯은 뜨지만 서버가 검증을 건너뛰어 장식만 남습니다.'
+  )
+} else if (!env.NEXT_PUBLIC_TURNSTILE_SITE_KEY && env.TURNSTILE_SECRET_KEY) {
+  console.log(
+    '⚠️  TURNSTILE_SECRET_KEY는 있는데 NEXT_PUBLIC_TURNSTILE_SITE_KEY가 없습니다 — 위젯이 안 떠 사람인지 확인할 토큰 자체가 오지 않고, 서버는 매번 거절합니다.'
+  )
 }
 
 // 결제 키는 **스위치가 켜져 있을 때만** 판정한다.

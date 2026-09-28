@@ -7,6 +7,7 @@ import { useState, useRef } from 'react'
 import { useRouter, Link } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
 import FormField from '@/components/FormField'
+import TurnstileWidget, { type TurnstileWidgetHandle } from '@/components/TurnstileWidget'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { useStablePageLoad } from '@/utils/routeProtection'
 
@@ -33,6 +34,8 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState<MessageType>('error')
+  const [turnstileToken, setTurnstileToken] = useState('')
+  const turnstileRef = useRef<TurnstileWidgetHandle | null>(null)
   const router = useRouter()
   const { isLoading: pageLoading, isReady } = useStablePageLoad('/signup')
 
@@ -256,6 +259,14 @@ export default function SignupPage() {
       return
     }
 
+    // Turnstile 위젯이 켜져 있는데(사이트 키 있음) 아직 체크를 못 받았으면
+    // 서버까지 보내지 않고 여기서 막는다 — 어차피 서버가 거절할 요청이다.
+    if (process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY && !turnstileToken) {
+      setMsg(t('signup.msgTurnstileRequired'), 'error')
+      setLoading(false)
+      return
+    }
+
     try {
       const response = await fetch('/api/member-signup', {
         method: 'POST',
@@ -272,6 +283,7 @@ export default function SignupPage() {
           bank_name: formData.bankName,
           account_number: formData.accountNumber,
           account_holder: formData.accountHolder,
+          turnstileToken,
         }),
       })
 
@@ -283,6 +295,9 @@ export default function SignupPage() {
       } | null
 
       if (!response.ok || body?.success !== true) {
+        // 성공이든 실패든 토큰은 한 번 쓰면 무효다 — 재시도하려면 새로 받아야 한다.
+        turnstileRef.current?.reset()
+        setTurnstileToken('')
         if (response.status === 429) {
           setMsg(t('signup.msgRateLimited'), 'warning')
         } else {
@@ -624,6 +639,15 @@ export default function SignupPage() {
                   />
                 </div>
               </div>
+            </div>
+
+            {/* 사람 확인 — 사이트 키가 없으면 컴포넌트가 스스로 아무것도 그리지 않는다. */}
+            <div className="pt-6 flex justify-center">
+              <TurnstileWidget
+                ref={turnstileRef}
+                onVerify={setTurnstileToken}
+                onExpire={() => setTurnstileToken('')}
+              />
             </div>
 
             {/* 제출 버튼 */}

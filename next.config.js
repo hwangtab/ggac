@@ -444,13 +444,14 @@ const nextConfig = {
               // 여기서 프로덕션 CSP만 두면 정상 dev(NEXT_STRICT_CSP 미설정)의 하이드레이션이
               // 통째로 죽는다. src/middleware/csp.ts의 dev 분기와 동일 패턴.
               // 외부 스크립트는 https: 와일드카드가 아니라 호스트 허용목록으로 받는다.
-              // 현재 유일한 외부 스크립트는 토스 결제 SDK(js.tosspayments.com/v2/standard).
+              // 외부 스크립트는 토스 결제 SDK(js.tosspayments.com/v2/standard)와
+              // 가입 화면의 사람 확인 위젯(challenges.cloudflare.com)이다.
               // 호스트를 추가할 때는 src/middleware/csp.ts의 script-src/script-src-elem도
               // 같이 고쳐라 — 빠진 호스트는 에러 없이 조용히 차단된다.
               process.env.NODE_ENV === 'development'
-                ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.tosspayments.com"
-                : "script-src 'self' 'unsafe-inline' https://*.tosspayments.com",
-              "script-src-elem 'self' 'unsafe-inline' https://*.tosspayments.com",
+                ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.tosspayments.com https://challenges.cloudflare.com"
+                : "script-src 'self' 'unsafe-inline' https://*.tosspayments.com https://challenges.cloudflare.com",
+              "script-src-elem 'self' 'unsafe-inline' https://*.tosspayments.com https://challenges.cloudflare.com",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
@@ -465,9 +466,9 @@ const nextConfig = {
               process.env.NODE_ENV === 'development'
                 ? "media-src 'self' http://localhost:* http://127.0.0.1:* https://www.youtube.com https://r8qnr9c7mestxusj.public.blob.vercel-storage.com"
                 : "media-src 'self' https://www.youtube.com https://r8qnr9c7mestxusj.public.blob.vercel-storage.com",
-              // 토스 결제창은 iframe으로 뜬다. 이 항목이 없으면 결제 버튼을 눌러도
-              // 아무 일도 일어나지 않는다(콘솔에만 CSP 위반이 찍힌다).
-              "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://*.tosspayments.com",
+              // 토스 결제창·Turnstile 위젯은 iframe으로 뜬다. 이 항목이 없으면 결제
+              // 버튼이나 가입 화면의 사람 확인이 먹통이 된다(콘솔에만 CSP 위반이 찍힌다).
+              "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://*.tosspayments.com https://challenges.cloudflare.com",
               // dev 분기의 로컬 호스트 허용은 로컬 API/HMR용이다.
               process.env.NODE_ENV === 'development'
                 ? "connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:* https://*.tosspayments.com"
