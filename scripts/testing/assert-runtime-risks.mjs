@@ -3509,6 +3509,7 @@ const SCRIPTS_SCAN_SUBTREE_MINIMUMS = {
   'scripts/import/': 2, // 현재 2 (총회·이사회 기록 수입 도구 — 둘 중 하나만 없어져도 도구가 죽는다)
   'scripts/migrate/': 5, // 현재 7 (copy-private-objects.mjs 삭제 — Supabase 삭제 완료로
   // SCRIPTS_SUPABASE_ALLOWLIST의 "Supabase 삭제 전까지 남긴다" 조건이 끝남)
+  'scripts/ops/': 1, // 현재 1 (publish-grant-digest.mjs — 회차 발행 경로가 통째로 빠지면 안 된다)
   'scripts/perf/': 1, // 현재 1 (backfill-image-dimensions.mjs 삭제)
   'scripts/testing/': 47, // 현재 109
   'scripts/ticketing/': 1, // 현재 1 (공연 등록 도구)
