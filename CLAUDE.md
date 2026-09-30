@@ -73,7 +73,7 @@ vercel whoami                   # Current account
 vercel env pull .env.local      # Pull env vars to local
 vercel env ls                   # List environment variables
 vercel deploy                   # Preview deployment
-vercel deploy --prod            # Production deployment
+# ⛔ vercel deploy --prod 금지 — 로컬 체크아웃을 그대로 올린다. 프로덕션 배포는 main 푸시로.
 vercel logs <deployment-url>    # View runtime logs
 vercel inspect <deployment-url> # Inspect a deployment
 ```
