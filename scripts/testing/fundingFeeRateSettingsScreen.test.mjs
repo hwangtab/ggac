@@ -68,7 +68,7 @@ test('거절 문구가 범위를 숫자로 말한다', () => {
 })
 
 test('저장 직전 검증도 같은 범위를 지킨다', () => {
-  assert.deepEqual(validateFundingFeeRates({ member_bp: 330, nonmember_bp: 550 }), [])
+  assert.deepEqual(validateFundingFeeRates({ member_bp: 550, nonmember_bp: 880 }), [])
   // 보내지 않은 칸은 탓하지 않는다(부분 페이로드).
   assert.deepEqual(validateFundingFeeRates({ member_bp: undefined, nonmember_bp: undefined }), [])
 
@@ -95,33 +95,33 @@ test('저장된 두 요율이 화면 값으로 그대로 올라온다', () => {
 test('새 칸이 없는 운영 행은 조합이 정한 기본 요율로 보인다 — 0%가 아니다', () => {
   // 오늘 운영 행의 모양: 옛 키 하나만 있고 새 두 칸이 없다.
   const legacy = { enabled: false, platform_fee_rate_bp: 0, hold_minutes: 10 }
-  assert.equal(SETTING_MAPPINGS.features.funding_fee_rate_member_bp.transform(legacy), 330)
-  assert.equal(SETTING_MAPPINGS.features.funding_fee_rate_nonmember_bp.transform(legacy), 550)
+  assert.equal(SETTING_MAPPINGS.features.funding_fee_rate_member_bp.transform(legacy), 550)
+  assert.equal(SETTING_MAPPINGS.features.funding_fee_rate_nonmember_bp.transform(legacy), 880)
 })
 
 test('깨진 값도 화면을 0%로 만들지 않는다', () => {
   const broken = { platform_fee_rate_member_bp: '많이', platform_fee_rate_nonmember_bp: 99999 }
-  assert.equal(SETTING_MAPPINGS.features.funding_fee_rate_member_bp.transform(broken), 330)
-  assert.equal(SETTING_MAPPINGS.features.funding_fee_rate_nonmember_bp.transform(broken), 550)
+  assert.equal(SETTING_MAPPINGS.features.funding_fee_rate_member_bp.transform(broken), 550)
+  assert.equal(SETTING_MAPPINGS.features.funding_fee_rate_nonmember_bp.transform(broken), 880)
 })
 
 // ------------------------------------------------- 화면 → 저장할 JSON
 
 test('요율을 저장해도 펀딩 스위치가 켜지지 않는다', () => {
   // 예전 묶음 처리(`{...seed, enabled: frontendValue}`)를 그대로 썼다면
-  // `330`이 `enabled`에 들어가 truthy가 됐다. 켜면 돈이 움직이는 스위치다.
+  // `550`이 `enabled`에 들어가 truthy가 됐다. 켜면 돈이 움직이는 스위치다.
   const seed = seedSettingGroup({ enabled: false, hold_minutes: 10 })
-  const next = applyFundingFeatureField(seed, 'funding_fee_rate_member_bp', 330)
+  const next = applyFundingFeatureField(seed, 'funding_fee_rate_member_bp', 550)
   assert.equal(next.enabled, false)
-  assert.equal(next.platform_fee_rate_member_bp, 330)
+  assert.equal(next.platform_fee_rate_member_bp, 550)
   assert.equal(next.hold_minutes, 10)
 })
 
 test('한 요율만 저장해도 나머지 칸이 사라지지 않는다', () => {
   const stored = {
     enabled: true,
-    platform_fee_rate_member_bp: 330,
-    platform_fee_rate_nonmember_bp: 550,
+    platform_fee_rate_member_bp: 550,
+    platform_fee_rate_nonmember_bp: 880,
     hold_minutes: 10,
   }
   const next = applyFundingFeatureField(
@@ -131,7 +131,7 @@ test('한 요율만 저장해도 나머지 칸이 사라지지 않는다', () =>
   )
   assert.deepEqual(next, {
     enabled: true,
-    platform_fee_rate_member_bp: 330,
+    platform_fee_rate_member_bp: 550,
     platform_fee_rate_nonmember_bp: 500,
     hold_minutes: 10,
   })
@@ -139,16 +139,16 @@ test('한 요율만 저장해도 나머지 칸이 사라지지 않는다', () =>
 
 test('스위치는 여전히 스위치 칸에만 쓴다', () => {
   const next = applyFundingFeatureField(
-    seedSettingGroup({ platform_fee_rate_member_bp: 330 }),
+    seedSettingGroup({ platform_fee_rate_member_bp: 550 }),
     'funding_enabled',
     true
   )
   assert.equal(next.enabled, true)
-  assert.equal(next.platform_fee_rate_member_bp, 330)
+  assert.equal(next.platform_fee_rate_member_bp, 550)
 })
 
 test('저장값을 씨앗으로 받아도 원본을 건드리지 않는다', () => {
-  const stored = { enabled: true, platform_fee_rate_member_bp: 330 }
+  const stored = { enabled: true, platform_fee_rate_member_bp: 550 }
   applyFundingFeatureField(seedSettingGroup(stored), 'funding_fee_rate_member_bp', 100)
-  assert.equal(stored.platform_fee_rate_member_bp, 330)
+  assert.equal(stored.platform_fee_rate_member_bp, 550)
 })

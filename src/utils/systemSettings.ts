@@ -240,7 +240,7 @@ function getDefaultSettings(): SystemSettingsData {
         follow_system: false,
         activity_feed: true,
       },
-      // 요율 기본값은 조합이 정한 규칙 그대로다(3.3%·5.5%, 부가세 포함).
+      // 요율 기본값은 조합이 정한 규칙 그대로다(5.5%·8.8%, 부가세 포함).
       // 예전 이 자리에는 옛 키 하나가 `0`으로 적혀 있었는데, 그 값은 어느
       // 소비처도 읽지 않으면서 "기본 수수료는 0%"라고 말하고 있었다.
       funding_features: {

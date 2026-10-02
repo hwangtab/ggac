@@ -1443,7 +1443,7 @@ test.describe('펀딩 — 관리자 대리 개설', () => {
    * 끊김 없이 가야 한다. 이 테스트가 그 길을 API로 걷는다.
    *
    * 끝에서 셋을 단정한다 — 캠페인이 공개(`active`)됐고, 소유자는 여전히 지정한
-   * 회원이며(사무국이 아니다), 요율은 그 회원의 자격(조합원 3.3%)으로 새겨졌다.
+   * 회원이며(사무국이 아니다), 요율은 그 회원의 자격(조합원 5.5%)으로 새겨졌다.
    * 그리고 무관한 조합원은 그 캠페인을 여전히 남의 것으로 본다 — 대리 개설이
    * 소유 경계를 헐지 않았다.
    */
@@ -1512,7 +1512,7 @@ test.describe('펀딩 — 관리자 대리 개설', () => {
       expect(mine, '심사 대기 목록에 있어야 한다').toBeTruthy()
       const feePreview = mine!.fee_preview as { rate_bp: number; is_member: boolean } | undefined
       expect(feePreview?.is_member, '지정한 회원은 승인·활성 조합원이다').toBe(true)
-      expect(feePreview?.rate_bp).toBe(330)
+      expect(feePreview?.rate_bp).toBe(550)
 
       // 6) 승인한다 — 주소는 사무국이 정하고, 읽은 판에만 도장이 찍힌다.
       const slug = `office-run-${Date.now()}`
@@ -1526,7 +1526,7 @@ test.describe('펀딩 — 관리자 대리 개설', () => {
       const row = await readCampaignRow(campaignId)
       expect(row?.status).toBe('active')
       expect(row?.owner_user_id).toBe(fixtures.users.owner)
-      expect(Number(row?.platform_fee_rate)).toBe(330)
+      expect(Number(row?.platform_fee_rate)).toBe(550)
       expect(row?.slug).toBe(slug)
 
       // 8) 대리 개설이 소유 경계를 헐지 않았다 — 무관한 조합원에게는 여전히 남의 것.
@@ -1593,7 +1593,7 @@ test.describe('펀딩 — 관리자 대리 개설', () => {
    * 개설자가 직접 열고 고치고 심사에 올린다.
    *
    * 여기가 한동안 막혀 있었다. 대리 개설은 비조합원을 개설자로 받는데
-   * (`src/lib/funding/proxyOwner.ts` — 승인 때 5.5%가 붙는다) 개설자 화면과
+   * (`src/lib/funding/proxyOwner.ts` — 승인 때 8.8%가 붙는다) 개설자 화면과
    * API는 `requireActiveMember`·`canManageCampaign`이 함께 승인·활성을
    * 요구해서, 주인이 **자기 캠페인에서 403**을 받았다. 사무국이 모든 편집을
    * 대신 해 주지 않는 한 손댈 수 없는 물건이었다.

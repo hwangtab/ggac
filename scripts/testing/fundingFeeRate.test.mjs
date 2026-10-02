@@ -7,7 +7,7 @@ import { applyMigrations } from './apply-migrations.mjs'
 import { registerAliasResolveHook } from './aliasResolveHook.mjs'
 
 /**
- * 두 요율(조합원 3.3% / 비조합원 5.5%) — **진짜 로컬 DB**를 상대로 한다.
+ * 두 요율(조합원 5.5% / 비조합원 8.8%) — **진짜 로컬 DB**를 상대로 한다.
  *
  * 여기서 확인하려는 것은 네 가지다.
  *
@@ -90,29 +90,29 @@ const { platformFeeFor } = await import('../../src/lib/funding/settlement.ts')
 
 // ------------------------------------------------------------------ 요율 판정
 
-test('조합원은 3.3%, 비조합원은 5.5% — 둘 다 부가세를 포함한 전액 요율', () => {
-  assert.equal(MEMBER_FEE_RATE_BP, 330)
-  assert.equal(NONMEMBER_FEE_RATE_BP, 550)
+test('조합원은 5.5%, 비조합원은 8.8% — 둘 다 부가세를 포함한 전액 요율', () => {
+  assert.equal(MEMBER_FEE_RATE_BP, 550)
+  assert.equal(NONMEMBER_FEE_RATE_BP, 880)
   const rates = { member_bp: MEMBER_FEE_RATE_BP, nonmember_bp: NONMEMBER_FEE_RATE_BP }
 
   assert.deepEqual(
     platformFeeRateFor(rates, { registration_status: 'approved', is_active: true }),
     {
-      rate_bp: 330,
+      rate_bp: 550,
       is_member: true,
     }
   )
   assert.deepEqual(platformFeeRateFor(rates, { registration_status: 'pending', is_active: true }), {
-    rate_bp: 550,
+    rate_bp: 880,
     is_member: false,
   })
-  assert.deepEqual(platformFeeRateFor(rates, null), { rate_bp: 550, is_member: false })
+  assert.deepEqual(platformFeeRateFor(rates, null), { rate_bp: 880, is_member: false })
 
   // 사무국이 읽는 자리에는 부가세가 포함이라는 말이 늘 붙는다.
-  assert.equal(formatFeeRatePercent(330), '3.3')
   assert.equal(formatFeeRatePercent(550), '5.5')
-  assert.equal(feeRateLabel(330, true), '3.3% (조합원 · 부가세 포함)')
-  assert.equal(feeRateLabel(550, false), '5.5% (비조합원 · 부가세 포함)')
+  assert.equal(formatFeeRatePercent(880), '8.8')
+  assert.equal(feeRateLabel(550, true), '5.5% (조합원 · 부가세 포함)')
+  assert.equal(feeRateLabel(880, false), '8.8% (비조합원 · 부가세 포함)')
 })
 
 test('조합원 판정은 is_member·membership_type이 아니라 가입 승인 상태를 본다', () => {
@@ -170,19 +170,19 @@ test('두 요율은 각각 0~3000bp로 갇히고, 범위 밖이면 조합이 정
     platform_fee_rate_member_bp: 3001,
     platform_fee_rate_nonmember_bp: -1,
   })
-  assert.equal(clamped.platform_fee_rate_member_bp, 330)
-  assert.equal(clamped.platform_fee_rate_nonmember_bp, 550)
+  assert.equal(clamped.platform_fee_rate_member_bp, 550)
+  assert.equal(clamped.platform_fee_rate_nonmember_bp, 880)
   assert.equal(
     normalizeFundingSettings({ platform_fee_rate_member_bp: 12.5 }).platform_fee_rate_member_bp,
-    330
+    550
   )
 })
 
 test('모양이 어긋난 설정에도 던지지 않는다 — 펀딩이 설정 한 줄로 멈추지 않는다', () => {
   for (const raw of [undefined, null, 'nope', 42, [], { platform_fee_rate_member_bp: {} }]) {
     const settings = normalizeFundingSettings(raw)
-    assert.equal(settings.platform_fee_rate_member_bp, 330)
-    assert.equal(settings.platform_fee_rate_nonmember_bp, 550)
+    assert.equal(settings.platform_fee_rate_member_bp, 550)
+    assert.equal(settings.platform_fee_rate_nonmember_bp, 880)
     assert.equal(settings.enabled, false)
     assert.equal(settings.hold_minutes, 10)
   }
@@ -193,24 +193,24 @@ test('운영에 남아 있는 옛 한 칸짜리 행을 만나도 기본 요율�
   await putFundingSettings({ enabled: true, platform_fee_rate_bp: 250, hold_minutes: 10 })
   const settings = await getFundingSettings()
   assert.equal(settings.enabled, true, '옛 행이어도 기능 스위치는 그대로 읽혀야 한다')
-  assert.equal(settings.platform_fee_rate_member_bp, 330)
-  assert.equal(settings.platform_fee_rate_nonmember_bp, 550)
-  assert.deepEqual(feeRatesOf(settings), { member_bp: 330, nonmember_bp: 550 })
+  assert.equal(settings.platform_fee_rate_member_bp, 550)
+  assert.equal(settings.platform_fee_rate_nonmember_bp, 880)
+  assert.deepEqual(feeRatesOf(settings), { member_bp: 550, nonmember_bp: 880 })
 })
 
 test('설정에 적힌 두 요율이 개설자에 따라 각각 골라진다', async () => {
   await putFundingSettings({
     enabled: true,
-    platform_fee_rate_member_bp: 330,
-    platform_fee_rate_nonmember_bp: 550,
+    platform_fee_rate_member_bp: 550,
+    platform_fee_rate_nonmember_bp: 880,
     hold_minutes: 10,
   })
-  assert.deepEqual(await resolveCampaignFeeRate('member'), { rate_bp: 330, is_member: true })
-  assert.deepEqual(await resolveCampaignFeeRate('pending'), { rate_bp: 550, is_member: false })
-  assert.deepEqual(await resolveCampaignFeeRate('inactive'), { rate_bp: 550, is_member: false })
+  assert.deepEqual(await resolveCampaignFeeRate('member'), { rate_bp: 550, is_member: true })
+  assert.deepEqual(await resolveCampaignFeeRate('pending'), { rate_bp: 880, is_member: false })
+  assert.deepEqual(await resolveCampaignFeeRate('inactive'), { rate_bp: 880, is_member: false })
   // 임자가 없는(수기 등록·탈퇴) 캠페인은 조합원으로 보지 않는다.
-  assert.deepEqual(await resolveCampaignFeeRate(null), { rate_bp: 550, is_member: false })
-  assert.deepEqual(await resolveCampaignFeeRate('없는사람'), { rate_bp: 550, is_member: false })
+  assert.deepEqual(await resolveCampaignFeeRate(null), { rate_bp: 880, is_member: false })
+  assert.deepEqual(await resolveCampaignFeeRate('없는사람'), { rate_bp: 880, is_member: false })
 })
 
 // ------------------------------------------------------------ 승인 시점의 각인
@@ -241,33 +241,33 @@ async function approveWithResolvedRate(ownerId) {
 test('승인하면 고른 요율이 캠페인에 새겨진다 — 조합원 330bp, 비조합원 550bp', async () => {
   await putFundingSettings({
     enabled: true,
-    platform_fee_rate_member_bp: 330,
-    platform_fee_rate_nonmember_bp: 550,
+    platform_fee_rate_member_bp: 550,
+    platform_fee_rate_nonmember_bp: 880,
     hold_minutes: 10,
   })
 
   const asMember = await approveWithResolvedRate('member')
   assert.equal(asMember.feeRate.is_member, true)
-  assert.equal(Number(asMember.approved.platform_fee_rate), 330)
+  assert.equal(Number(asMember.approved.platform_fee_rate), 550)
 
   const asNonMember = await approveWithResolvedRate('pending')
   assert.equal(asNonMember.feeRate.is_member, false)
-  assert.equal(Number(asNonMember.approved.platform_fee_rate), 550)
+  assert.equal(Number(asNonMember.approved.platform_fee_rate), 880)
 
   // 100만원이 남았을 때 실제로 갈리는 금액. 버림 방향은 그대로다.
-  assert.equal(platformFeeFor(1_000_000, Number(asMember.approved.platform_fee_rate)), 33_000)
-  assert.equal(platformFeeFor(1_000_000, Number(asNonMember.approved.platform_fee_rate)), 55_000)
+  assert.equal(platformFeeFor(1_000_000, Number(asMember.approved.platform_fee_rate)), 55_000)
+  assert.equal(platformFeeFor(1_000_000, Number(asNonMember.approved.platform_fee_rate)), 88_000)
 })
 
 test('승인 뒤 설정을 바꿔도 이미 새겨진 요율은 움직이지 않는다', async () => {
   await putFundingSettings({
     enabled: true,
-    platform_fee_rate_member_bp: 330,
-    platform_fee_rate_nonmember_bp: 550,
+    platform_fee_rate_member_bp: 550,
+    platform_fee_rate_nonmember_bp: 880,
     hold_minutes: 10,
   })
   const { approved } = await approveWithResolvedRate('member')
-  assert.equal(Number(approved.platform_fee_rate), 330)
+  assert.equal(Number(approved.platform_fee_rate), 550)
 
   // 사무국이 요율을 올린다. 이미 승인된 캠페인과의 약속은 그대로여야 한다.
   await client.execute(`DELETE FROM system_settings WHERE category = 'features'`)
@@ -280,6 +280,6 @@ test('승인 뒤 설정을 바꿔도 이미 새겨진 요율은 움직이지 않
   assert.deepEqual(await resolveCampaignFeeRate('member'), { rate_bp: 1000, is_member: true })
 
   const now = await fq.getCampaignById(String(approved.id))
-  assert.equal(Number(now.platform_fee_rate), 330, '승인 때 새긴 요율이 설정을 따라 움직였다')
-  assert.equal(platformFeeFor(1_000_000, Number(now.platform_fee_rate)), 33_000)
+  assert.equal(Number(now.platform_fee_rate), 550, '승인 때 새긴 요율이 설정을 따라 움직였다')
+  assert.equal(platformFeeFor(1_000_000, Number(now.platform_fee_rate)), 55_000)
 })

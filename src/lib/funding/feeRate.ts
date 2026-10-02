@@ -1,11 +1,11 @@
 /**
  * 플랫폼 수수료율 — **누구에게 얼마를 매기는가**를 정하는 유일한 자리.
  *
- * 조합 결정(2026-09-25): **조합원 3.3%, 비조합원 5.5%.**
+ * 조합 결정(2026-10-02): **조합원 5.5%, 비조합원 8.8%.**
  *
- * 두 숫자는 모두 **부가세를 포함한 값**이다(3%·5% + 부가세 10%). 세금을 따로
+ * 두 숫자는 모두 **부가세를 포함한 값**이다(5%·8% + 부가세 10%). 세금을 따로
  * 모델링하지 않고 각각을 하나의 전액 요율로 다룬다 — 그래서 사무국이 이
- * 숫자를 읽는 자리마다 "부가세 포함"이라고 적는다. 화면에 3.3%만 떠 있으면
+ * 숫자를 읽는 자리마다 "부가세 포함"이라고 적는다. 화면에 5.5%만 떠 있으면
  * 다음 사람이 여기에 부가세를 한 번 더 얹는다.
  *
  * 단위는 기존과 같은 만분율(bp)이고 상한도 그대로 3000bp다 — 금액 계산
@@ -18,11 +18,11 @@
 /** 만분율 상한. 설정에 무엇이 들어와도 이 위로는 올라가지 않는다. */
 export const MAX_FEE_RATE_BP = 3000
 
-/** 조합원 요율 3.3%(부가세 포함). */
-export const MEMBER_FEE_RATE_BP = 330
+/** 조합원 요율 5.5%(부가세 포함). */
+export const MEMBER_FEE_RATE_BP = 550
 
-/** 비조합원 요율 5.5%(부가세 포함). 이 요율이 붙는 길은 아래 참고. */
-export const NONMEMBER_FEE_RATE_BP = 550
+/** 비조합원 요율 8.8%(부가세 포함). 이 요율이 붙는 길은 아래 참고. */
+export const NONMEMBER_FEE_RATE_BP = 880
 
 /** 요율 옆에 늘 함께 적는 말. 사무국이 읽는 자리에서 빠지면 안 된다. */
 export const FEE_RATE_VAT_NOTE = '부가세 포함'
@@ -74,7 +74,7 @@ export function isFeeMember(profile: FeeMemberProfile | null | undefined): boole
  * ## 비조합원 요율이 붙는 길
  *
  * 조합원이 스스로 여는 개설(`requireActiveMember`)은 승인 시점에도 대개
- * 조합원이라 3.3%가 붙는다. 비조합원 요율은 관리자 대리 개설
+ * 조합원이라 5.5%가 붙는다. 비조합원 요율은 관리자 대리 개설
  * (`POST /api/admin/funding/campaigns`)로 조합원이 아닌 회원을 개설자로 지정했을
  * 때, 또는 개설 뒤 승인 전에 자격이 풀렸을 때 붙는다.
  */
@@ -86,13 +86,13 @@ export function platformFeeRateFor(
   return { rate_bp: member ? rates.member_bp : rates.nonmember_bp, is_member: member }
 }
 
-/** 만분율을 화면용 백분율 문자열로. 330 → `'3.3'`. 표시 전용이다. */
+/** 만분율을 화면용 백분율 문자열로. 550 → `'5.5'`. 표시 전용이다. */
 export function formatFeeRatePercent(bp: unknown): string {
   const n = Number(bp)
   return String((Number.isFinite(n) ? n : 0) / 100)
 }
 
-/** 사무국이 읽는 한 줄. 예: `3.3% (조합원 · 부가세 포함)`. */
+/** 사무국이 읽는 한 줄. 예: `5.5% (조합원 · 부가세 포함)`. */
 export function feeRateLabel(bp: unknown, isMember: boolean): string {
   return `${formatFeeRatePercent(bp)}% (${isMember ? '조합원' : '비조합원'} · ${FEE_RATE_VAT_NOTE})`
 }
@@ -112,7 +112,7 @@ export function clampFeeRateBp(raw: unknown, fallback: number): number {
 
 /**
  * 저장·계산은 만분율(bp)로 하지만 **사무국은 퍼센트로 말한다.** 조합이 정한
- * 규칙도 "3.3%·5.5%"이지 "330bp·550bp"가 아니다. 그래서 관리자 화면의 칸은
+ * 규칙도 "5.5%·8.8%"이지 "550bp·880bp"가 아니다. 그래서 관리자 화면의 칸은
  * 퍼센트를 받고 퍼센트를 보여 주며, bp는 이 파일 안에서만 오간다.
  *
  * 한 자리(1bp)가 0.01%이므로 소수점 **둘째 자리까지** 표현된다. 셋째 자리는

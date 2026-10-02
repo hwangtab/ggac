@@ -101,7 +101,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         slug = await resolveApprovalSlug(campaign)
       }
       // 요율은 **승인하는 이 순간** 골라 캠페인에 새긴다. 개설자가 조합원이면
-      // 3.3%, 아니면 5.5%(둘 다 부가세 포함) — 고르는 규칙과 그 이유는
+      // 5.5%, 아니면 8.8%(둘 다 부가세 포함) — 고르는 규칙과 그 이유는
       // `@/lib/funding/feeRate`에 적혀 있다. 심사 목록이 승인 전에 보여 주는
       // 요율도 같은 함수에서 나오므로 화면과 도장이 어긋나지 않는다.
       //

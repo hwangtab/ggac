@@ -113,7 +113,7 @@ export const SETTING_MAPPINGS = {
     // 전담하고, 그 자리가 화면이다.
     //
     // 값이 없을 때의 기본값을 소비처(`normalizeFundingSettings`)와 똑같이
-    // `clampFeeRateBp`로 낸다. 화면이 "0%"라고 적어 놓고 실제로는 3.3%를
+    // `clampFeeRateBp`로 낸다. 화면이 "0%"라고 적어 놓고 실제로는 5.5%를
     // 떼는 일이 없어야 한다 — 운영 행에는 아직 옛 키(`platform_fee_rate_bp`)
     // 하나만 있고 새 두 칸이 없으므로, 오늘 이 화면이 처음 뜰 때 읽히는 것이
     // 바로 이 기본값이다.

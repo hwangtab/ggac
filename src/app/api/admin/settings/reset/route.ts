@@ -239,10 +239,10 @@ const DEFAULT_SETTINGS = [
     category: 'features',
     setting_key: 'funding_features',
     setting_value: {
-      // 조합원 3.3% / 비조합원 5.5% — 둘 다 부가세 포함(`@/lib/funding/feeRate`).
+      // 조합원 5.5% / 비조합원 8.8% — 둘 다 부가세 포함(`@/lib/funding/feeRate`).
       enabled: false,
-      platform_fee_rate_member_bp: 330,
-      platform_fee_rate_nonmember_bp: 550,
+      platform_fee_rate_member_bp: 550,
+      platform_fee_rate_nonmember_bp: 880,
       hold_minutes: 10,
     },
     description: '크라우드펀딩 기능 설정',

@@ -6,7 +6,7 @@ import { isApprovedActiveAdmin, type ProfileLike } from '@/lib/server/authz'
  * 소유자에게는 조합원 승인을 묻지 않는다. 사무국이 대신 여는 개설
  * (`POST /api/admin/funding/campaigns`)이 조합원이 아닌 회원도 개설자로
  * 받기 때문이다(`src/lib/funding/proxyOwner.ts`, 승인 때 비조합원 요율
- * 5.5%가 붙는다). 여기서 `isApprovedActive`를 함께 요구하면 그렇게 만들어진
+ * 8.8%가 붙는다). 여기서 `isApprovedActive`를 함께 요구하면 그렇게 만들어진
  * 캠페인의 주인이 **자기 캠페인에서 403**을 받는다 — 사무국이 모든 편집을
  * 대신 해 주지 않는 한 그 캠페인은 주인이 손댈 수 없는 물건이 된다.
  *

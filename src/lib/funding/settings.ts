@@ -8,9 +8,9 @@ import { getSystemSettings } from '@/utils/systemSettings'
 
 export interface FundingSettings {
   enabled: boolean
-  /** 조합원 요율(bp). 기본 330 = 3.3%, 부가세 포함. */
+  /** 조합원 요율(bp). 기본 550 = 5.5%, 부가세 포함. */
   platform_fee_rate_member_bp: number
-  /** 비조합원 요율(bp). 기본 550 = 5.5%, 부가세 포함. */
+  /** 비조합원 요율(bp). 기본 880 = 8.8%, 부가세 포함. */
   platform_fee_rate_nonmember_bp: number
   hold_minutes: number
 }

@@ -101,7 +101,7 @@ function creatorSettlementView(
   return {
     payout_account_registered: payoutAccountRegistered,
     // 수수료 금액만 보이고 요율이 없으면 "얼마를 뗀 것인지"를 개설자가 되짚을
-    // 수 없다. 요율은 조합원 3.3% / 비조합원 5.5%로 갈리므로 더욱 그렇다.
+    // 수 없다. 요율은 조합원 5.5% / 비조합원 8.8%로 갈리므로 더욱 그렇다.
     platform_fee_rate_bp: platformFeeRateBp,
     status: settlement.status,
     gross_amount: settlement.gross_amount,

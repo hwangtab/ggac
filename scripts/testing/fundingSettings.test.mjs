@@ -14,8 +14,8 @@ const { normalizeFundingSettings } = await import('../../src/lib/funding/setting
 test('없거나 깨진 설정은 기본값(꺼짐, 조합원 330bp·비조합원 550bp, 10분)', () => {
   assert.deepEqual(normalizeFundingSettings(undefined), {
     enabled: false,
-    platform_fee_rate_member_bp: 330,
-    platform_fee_rate_nonmember_bp: 550,
+    platform_fee_rate_member_bp: 550,
+    platform_fee_rate_nonmember_bp: 880,
     hold_minutes: 10,
   })
   assert.deepEqual(
@@ -27,8 +27,8 @@ test('없거나 깨진 설정은 기본값(꺼짐, 조합원 330bp·비조합원
     }),
     {
       enabled: false,
-      platform_fee_rate_member_bp: 330,
-      platform_fee_rate_nonmember_bp: 550,
+      platform_fee_rate_member_bp: 550,
+      platform_fee_rate_nonmember_bp: 880,
       hold_minutes: 10,
     }
   )
