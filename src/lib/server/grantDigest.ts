@@ -308,27 +308,52 @@ export function sortByDeadline<T extends { apply_end: string | null }>(items: T[
     .map(entry => entry.item)
 }
 
+/** 마감이 이 일수 안에 오는 공고는 자를 때 가장 먼저 남긴다. */
+export const URGENT_DAYS = 14
+
+/** 마감이 오늘부터 {@link URGENT_DAYS}일 안(오늘 포함)이면 참이다. 지난 마감과 상시는 거짓이다. */
+function isUrgent(applyEnd: string | null | undefined, todayIso: string): boolean {
+  if (!applyEnd) return false
+  const diff =
+    (Date.parse(`${applyEnd}T00:00:00Z`) - Date.parse(`${todayIso}T00:00:00Z`)) / 86_400_000
+  return diff >= 0 && diff <= URGENT_DAYS
+}
+
 /**
- * cap을 넘치면 **신규를 먼저 남기고** 자른다. 넘치지 않으면 입력을 그대로 돌려준다.
+ * cap을 넘치면 자른다. 넘치지 않으면 입력을 그대로 돌려준다.
  *
- * 남긴 항목은 **입력 순서 그대로** 낸다 — 신규를 앞으로 끌어오지 않는다. 순서는 호출부가
- * 이미 정해 두었고(풀 경로는 `interleaveGenreBlocks`의 장르 인터리브, 발행 경로는
- * `sortByDeadline`의 마감 임박순), 구획 나누기는 렌더가 한다.
+ * 남기는 순서: ① **마감 임박**({@link URGENT_DAYS}일 이내, `todayIso`를 줬을 때만) ② 신규
+ * ③ 나머지. 각 단계는 입력 순서대로 채운다 — 발행 경로는 `sortByDeadline`을 거친 뒤 넘기므로
+ * 임박 단계가 마감 빠른 순으로 찬다.
  *
- * 왜 신규를 먼저 남기나: 계속 접수 중인 공고는 지난 회차에도 실렸고 캘린더에도 남아 있다.
- * 자리가 모자랄 때 조합원이 **처음 보는** 것을 잃는 편이 손해가 크다.
+ * 남긴 항목은 **입력 순서 그대로** 낸다 — 끌어오지 않는다. 순서는 호출부가 이미 정해 두었고
+ * (풀 경로는 `interleaveGenreBlocks`의 장르 인터리브, 발행 경로는 마감 임박순), 구획
+ * 나누기는 렌더가 한다.
+ *
+ * 왜 마감 임박이 신규보다 먼저인가: 2026-W42에 한국문화예술위원회 2027 공연예술 지원
+ * 하위 사업 33건이 한꺼번에 올라와 신규가 35건이 됐다(전부 마감 D-22). "신규 먼저"만 적용하면
+ * 메일 20건이 전부 그 사업으로 차고, 마감이 D-4~D-10인 크라우드펀딩 챌린지·서울문화재단
+ * 예술창작지원이 빠진다. 메일을 놓치면 신청 기회를 잃는 것은 임박한 쪽이다. 신규가 두 번째인
+ * 이유는 그대로다 — 계속 접수 중인 공고는 지난 회차와 캘린더에 이미 있다.
+ *
+ * `todayIso`를 주지 않으면 임박 단계 없이 신규 우선만 한다(마감일을 모르는 풀 경로용).
  */
-export function capKeepingNew<T extends { is_new?: boolean }>(items: T[], cap: number): T[] {
+export function capKeepingNew<T extends { is_new?: boolean; apply_end?: string | null }>(
+  items: T[],
+  cap: number,
+  todayIso?: string
+): T[] {
   if (items.length <= cap) return items
   const kept = new Set<T>()
-  for (const it of items) {
-    if (kept.size >= cap) break
-    if (it.is_new) kept.add(it)
+  const fill = (wanted: (it: T) => boolean) => {
+    for (const it of items) {
+      if (kept.size >= cap) return
+      if (!kept.has(it) && wanted(it)) kept.add(it)
+    }
   }
-  for (const it of items) {
-    if (kept.size >= cap) break
-    if (!it.is_new) kept.add(it)
-  }
+  if (todayIso) fill(it => isUrgent(it.apply_end, todayIso))
+  fill(it => it.is_new === true)
+  fill(() => true)
   return items.filter(it => kept.has(it))
 }
 
@@ -364,7 +389,8 @@ export function buildDraftItems(
   fetched: GrantItem[],
   sentKeys: Set<string>,
   cap: number = CAP,
-  sentTitleKeys: Set<string> = new Set()
+  sentTitleKeys: Set<string> = new Set(),
+  todayIso?: string
 ): GrantItem[] {
   const out: GrantItem[] = []
   const seen = new Set<string>()
@@ -384,7 +410,7 @@ export function buildDraftItems(
     const alreadySent = sentKeys.has(it.key) || (titleKey.length > 0 && sentTitleKeys.has(titleKey))
     out.push({ ...it, is_new: !alreadySent })
   }
-  return capKeepingNew(out, cap)
+  return capKeepingNew(out, cap, todayIso)
 }
 
 /** 관리자가 제외하지 않은 항목만. */

@@ -24,6 +24,7 @@ import {
   POOL_CAP,
   buildDraftItems,
   interleaveGenreBlocks,
+  kstTodayIso,
   normalizedTitleKey,
   weekKey,
 } from '@/lib/server/grantDigest'
@@ -148,7 +149,7 @@ export async function POST(request: NextRequest) {
     // `sentKeys`·`sentTitleKeys`는 이제 **버리는 기준이 아니라 표시하는 기준**이다 —
     // 이미 보낸 공고도 아직 접수 중이면 다시 싣고 `is_new: false`를 붙인다(국장 판정
     // 2026-09-14). 같은 응답 안의 중복만 버린다.
-    const items = buildDraftItems(fetched, sentKeys, POOL_CAP, sentTitleKeys)
+    const items = buildDraftItems(fetched, sentKeys, POOL_CAP, sentTitleKeys, kstTodayIso())
     const freshCount = items.filter(i => i.is_new).length
     const ongoingCount = items.length - freshCount
 

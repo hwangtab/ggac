@@ -651,3 +651,93 @@ test('게시글은 두 구획으로 나뉜다', async () => {
     h.calls.notifications[0].message.includes('이번 주 새 공고 1건, 계속 접수 중 1건입니다.')
   )
 })
+
+// ------------------------------------- 신규가 몰린 주에도 임박 공고가 메일에 남는다 (2026-W42)
+
+test('신규가 CAP을 넘겨도 마감 임박 계속분이 메일에서 밀려나지 않는다', async () => {
+  // 실측 2026-W42: 한국문화예술위원회 2027 공연예술 지원 하위 사업이 한꺼번에 올라와
+  // 신규 35건(대부분 마감 D-22). 신규 우선만 적용하면 메일 20건이 전부 그 사업으로 차고
+  // D-4 크라우드펀딩 챌린지·D-9 서울문화재단 예술창작지원이 빠졌다.
+  const arko = Array.from({ length: 33 }, (_, i) =>
+    item({
+      key: `artnuri:arko${i}`,
+      title: `아르코 공연예술 ${i}`,
+      regions: ['전국'],
+      apply_end: '2026-11-05',
+      is_new: true,
+    })
+  )
+  const urgentOld = [
+    item({
+      key: 'artnuri:cf',
+      title: '크라우드펀딩 챌린지',
+      regions: ['전국'],
+      apply_end: '2026-10-18',
+      is_new: false,
+    }),
+    item({
+      key: 'scas:a',
+      title: '예술창작지원 A트랙',
+      regions: ['서울'],
+      apply_end: '2026-10-23',
+      is_new: false,
+    }),
+    item({
+      key: 'scas:b',
+      title: '예술창작지원 B트랙',
+      regions: ['서울'],
+      apply_end: '2026-10-23',
+      is_new: false,
+    }),
+    item({
+      key: 'scas:c',
+      title: '예술창작지원 C트랙',
+      regions: ['서울'],
+      apply_end: '2026-10-23',
+      is_new: false,
+    }),
+    item({
+      key: 'scas:all',
+      title: '서울문화재단 통합공모',
+      regions: ['서울'],
+      apply_end: '2026-10-23',
+      is_new: false,
+    }),
+  ]
+  const farOld = [
+    item({
+      key: 'ypcf:1',
+      title: '양평 공모',
+      regions: ['경기'],
+      apply_end: '2026-12-01',
+      is_new: false,
+    }),
+  ]
+  const h = harness()
+  h.input.now = new Date('2026-10-14T12:00:00+09:00')
+  h.input.digest = {
+    id: 'd42',
+    week_key: '2026-W42',
+    status: 'draft',
+    items: [...arko, ...urgentOld, ...farOld],
+  }
+  const result = await runGrantPublish(h.input)
+
+  assert.equal(h.calls.emails.length, 1)
+  const html = h.calls.emails[0].html
+  for (const t of [
+    '크라우드펀딩 챌린지',
+    '예술창작지원 A트랙',
+    '예술창작지원 B트랙',
+    '예술창작지원 C트랙',
+    '서울문화재단 통합공모',
+  ]) {
+    assert.ok(html.includes(t), `${t}가 메일에 있어야 한다`)
+  }
+  // 임박 5건이 먼저 들어가고 남은 자리를 신규가 채운다 — 합이 CAP이다.
+  const arkoInMail = (html.match(/아르코 공연예술 \d+/g) ?? []).length
+  assert.equal(arkoInMail, CAP - urgentOld.length)
+  assert.ok(!html.includes('양평 공모'), '임박도 신규도 아닌 계속분은 밀려난다')
+  assert.equal(result.per_member[0].matched, CAP)
+  assert.equal(result.per_member[0].truncated, arko.length + urgentOld.length + farOld.length - CAP)
+})

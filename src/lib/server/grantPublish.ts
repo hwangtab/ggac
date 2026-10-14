@@ -242,9 +242,9 @@ export async function runGrantPublish(input: RunGrantPublishInput): Promise<Gran
     // 자르기 전에 마감 임박순으로 정렬한다 — 정렬 없이 자르면 kosmart 점수순 배열의
     // 꼬리가 잘려, 마감이 코앞인 공고가 게시글에는 있고 메일에는 없는 일이 생긴다.
     const eligible = sortByDeadline(active.filter(it => matchesInterests(it, interests)))
-    // CAP은 **개인 필터를 통과한 것 전체**에 걸린다. 자를 때는 신규를 먼저 남긴다 —
-    // 계속 접수 중인 공고는 지난 회차와 캘린더에 이미 있다.
-    const mine = capKeepingNew(eligible, CAP)
+    // CAP은 **개인 필터를 통과한 것 전체**에 걸린다. 자를 때는 마감 임박을 먼저, 그다음
+    // 신규를 남긴다(`capKeepingNew` 참고) — 신규가 몰린 주에도 임박 공고가 밀려나지 않는다.
+    const mine = capKeepingNew(eligible, CAP, todayIso)
     matchedCounts.push(mine.length)
     truncatedCounts.push(eligible.length - mine.length)
 

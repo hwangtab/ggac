@@ -788,6 +788,52 @@ test('capKeepingNew는 자를 때 신규를 먼저 남기고 입력 순서를 �
   )
 })
 
+test('capKeepingNew는 todayIso가 있으면 마감 임박(14일 이내)을 신규보다 먼저 남긴다', () => {
+  const items = [
+    { k: 'new-far-1', is_new: true, apply_end: '2026-11-05' },
+    { k: 'new-far-2', is_new: true, apply_end: '2026-11-05' },
+    { k: 'old-urgent', is_new: false, apply_end: '2026-10-18' }, // D-4
+    { k: 'old-far', is_new: false, apply_end: '2026-12-01' },
+  ]
+  // 임박이 아닌 신규 둘이 자리를 다 차지하면 D-4 계속분이 밀려난다 — 2026-W42가 그랬다.
+  assert.deepEqual(
+    capKeepingNew(items, 2, '2026-10-14').map(i => i.k),
+    ['new-far-1', 'old-urgent']
+  )
+  // todayIso를 안 주면(마감일을 모르는 풀 경로) 예전처럼 신규 우선이다.
+  assert.deepEqual(
+    capKeepingNew(items, 2).map(i => i.k),
+    ['new-far-1', 'new-far-2']
+  )
+})
+
+test('capKeepingNew: 지난 마감과 상시는 임박이 아니고, 14일째는 임박이다', () => {
+  const items = [
+    { k: 'past', is_new: false, apply_end: '2026-10-10' },
+    { k: 'always', is_new: false, apply_end: null },
+    { k: 'd14', is_new: false, apply_end: '2026-10-28' },
+    { k: 'd15', is_new: false, apply_end: '2026-10-29' },
+    { k: 'new', is_new: true, apply_end: '2026-11-30' },
+  ]
+  assert.deepEqual(
+    capKeepingNew(items, 2, '2026-10-14').map(i => i.k),
+    ['d14', 'new']
+  )
+})
+
+test('capKeepingNew: 임박이 cap보다 많으면 입력 순서(마감 빠른 순)대로 자른다', () => {
+  const items = [
+    { k: 'u1', is_new: false, apply_end: '2026-10-15' },
+    { k: 'u2', is_new: false, apply_end: '2026-10-16' },
+    { k: 'u3', is_new: false, apply_end: '2026-10-17' },
+    { k: 'n', is_new: true, apply_end: '2026-11-30' },
+  ]
+  assert.deepEqual(
+    capKeepingNew(items, 2, '2026-10-14').map(i => i.k),
+    ['u1', 'u2']
+  )
+})
+
 test('buildDraftItems는 cap을 넘칠 때 신규를 먼저 남긴다', () => {
   const sent = new Set()
   const many = Array.from({ length: CAP + 5 }, (_, i) => item({ key: `ncas:${i}` }))
