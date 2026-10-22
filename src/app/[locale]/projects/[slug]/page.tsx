@@ -25,6 +25,7 @@ import {
   combineStructuredData,
   structuredDataToScript,
 } from '@/utils/structuredData'
+import { getProjectDisplayDate } from '@/utils/projectDate'
 
 interface ProjectPageProps {
   params: Promise<{
@@ -46,7 +47,7 @@ function describeExternalUrlForLog(url: string): string {
 
 type RelatedProjectItem = Pick<
   ProjectType,
-  'slug' | 'title' | 'coverImage' | 'publishedDate' | 'category'
+  'slug' | 'title' | 'coverImage' | 'publishedDate' | 'eventDate' | 'category'
 >
 
 const RELATED_SERIES_RULES: Array<{ key: string; patterns: RegExp[] }> = [
@@ -112,6 +113,7 @@ function buildRelatedProjects(
           title: project.title,
           coverImage: project.coverImage,
           publishedDate: project.publishedDate,
+          eventDate: project.eventDate,
           category: project.category,
         })
         return
@@ -127,13 +129,17 @@ function buildRelatedProjects(
           title: project.title,
           coverImage: project.coverImage,
           publishedDate: project.publishedDate,
+          eventDate: project.eventDate,
           category: project.category,
         })
       }
     })
 
   return Array.from(relatedMap.values())
-    .sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime())
+    .sort(
+      (a, b) =>
+        new Date(getProjectDisplayDate(b)).getTime() - new Date(getProjectDisplayDate(a)).getTime()
+    )
     .slice(0, 6)
 }
 

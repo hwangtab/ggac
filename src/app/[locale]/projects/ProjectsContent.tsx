@@ -9,6 +9,7 @@ import { PROJECT_CATEGORIES, localizeProjectCategory } from '@/constants/categor
 import { generatePageNumbers } from '@/utils/pagination'
 import { toSafeInternalImagePath } from '@/utils/safeUrl'
 import { parseLocalDate } from '@/utils/date'
+import { getProjectDisplayDate } from '@/utils/projectDate'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { useTranslations, useLocale } from 'next-intl'
 import type { ProjectCategory } from '@/constants/categories'
@@ -164,7 +165,7 @@ export const ProjectsView = ({
                               [{localizeProjectCategory(project.category, locale)}]
                             </span>
                             <span className="text-[11px] tabular-nums tracking-[0.12em] text-gray-500">
-                              {toStamp(project.publishedDate, locale)}
+                              {toStamp(getProjectDisplayDate(project), locale)}
                             </span>
                           </div>
 

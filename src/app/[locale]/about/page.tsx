@@ -11,6 +11,7 @@ import {
 import { getSiteUrl, getLocaleAlternates, getOgLocale } from '@/utils/site'
 import type { Metadata } from 'next'
 import PageHero from '@/components/PageHero'
+import { getProjectDisplayDate } from '@/utils/projectDate'
 
 // ISR 최적화: 정적 콘텐츠는 24시간 캐시
 export const revalidate = 86400
@@ -117,7 +118,8 @@ const AboutPage = async ({ params }: AboutPageProps) => {
   // 배열 인스턴스를 프로세스 수명 내내 돌려준다. 제자리 정렬하면 이 페이지가
   // 한 번 렌더된 뒤부터 sitemap·image-sitemap이 보는 순서까지 뒤집힌다.
   const sortedProjects = [...projects].sort(
-    (a, b) => new Date(a.publishedDate).getTime() - new Date(b.publishedDate).getTime()
+    (a, b) =>
+      new Date(getProjectDisplayDate(a)).getTime() - new Date(getProjectDisplayDate(b)).getTime()
   )
 
   // 고정 이벤트 (조합 설립 관련)
@@ -140,7 +142,7 @@ const AboutPage = async ({ params }: AboutPageProps) => {
   const projectEvents = sortedProjects.map(project => {
     const summary = getProjectSummary(project, 140)
     return {
-      date: project.publishedDate,
+      date: getProjectDisplayDate(project),
       title: project.title,
       description: `${project.category} - ${summary}`,
       summary,

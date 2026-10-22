@@ -48,6 +48,7 @@ export function invalidateArtistsCache() {
 }
 // 중앙화된 타입 시스템에서 임포트
 import type { Artist, Project, GlobalData, DatabaseArtist } from '@/types'
+import { getProjectDisplayDate } from '@/utils/projectDate'
 
 // 타입을 re-export하여 다른 파일에서 사용 가능하게 함
 export type { Artist, Project, GlobalData } from '@/types'
@@ -578,7 +579,8 @@ export const getProjectBySlug = cache(
 export const getProjectsSorted = cache(async (locale = 'ko'): Promise<Project[]> => {
   const projects = await getProjects(locale)
   return [...projects].sort(
-    (a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime()
+    (a, b) =>
+      new Date(getProjectDisplayDate(b)).getTime() - new Date(getProjectDisplayDate(a)).getTime()
   )
 })
 
@@ -632,6 +634,10 @@ export const getArtistProjects = cache(
     const projects = await getProjects(locale)
     return projects
       .filter(project => project.artistIds.includes(artistId))
-      .sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime())
+      .sort(
+        (a, b) =>
+          new Date(getProjectDisplayDate(b)).getTime() -
+          new Date(getProjectDisplayDate(a)).getTime()
+      )
   }
 )

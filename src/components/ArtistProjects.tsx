@@ -7,6 +7,7 @@ import { getProjectSummary } from '@/utils/projectUtils'
 import { useTranslations, useLocale } from 'next-intl'
 import { localizeProjectCategory } from '@/constants/categories'
 import { toSafeInternalImagePath } from '@/utils/safeUrl'
+import { getProjectDisplayDate } from '@/utils/projectDate'
 import type { Project } from '@/types'
 
 interface ArtistProjectsProps {
@@ -106,7 +107,7 @@ export default function ArtistProjects({
                   {/* 날짜 */}
                   <div className="flex items-center gap-1 text-gray-500 text-sm mb-3">
                     <FiCalendar className="w-4 h-4" />
-                    {new Date(project.publishedDate).toLocaleDateString(dateLocale, {
+                    {new Date(getProjectDisplayDate(project)).toLocaleDateString(dateLocale, {
                       year: 'numeric',
                       month: 'long',
                       day: 'numeric',

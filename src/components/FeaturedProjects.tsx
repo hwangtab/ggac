@@ -4,6 +4,7 @@ import { getTranslations, getLocale } from 'next-intl/server'
 import { getProjectSummary } from '@/utils/projectUtils'
 import { toSafeInternalImagePath } from '@/utils/safeUrl'
 import { parseLocalDate } from '@/utils/date'
+import { getProjectDisplayDate } from '@/utils/projectDate'
 import type { FeaturedProjectsProps } from '@/types'
 
 /** 2026-07-25 → 2026.07.25 — 포스터의 날짜 스탬프 표기 */
@@ -90,7 +91,7 @@ const FeaturedProjects = async ({ projects }: FeaturedProjectsProps) => {
                     [{project.category}]
                   </span>
                   <span className="absolute bottom-3 right-4 text-[11px] tabular-nums tracking-[0.12em] text-white/70">
-                    {toStamp(project.publishedDate, locale)}
+                    {toStamp(getProjectDisplayDate(project), locale)}
                   </span>
                 </div>
 

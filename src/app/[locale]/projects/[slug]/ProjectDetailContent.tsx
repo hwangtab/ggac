@@ -17,6 +17,7 @@ import { TicketingInfo } from '@/utils/linkPreview'
 import { toSafeHttpUrl, toSafeInternalImagePath, toSafeLinkHref } from '@/utils/safeUrl'
 import type { Project, Artist } from '@/types'
 import { shiftMarkdownHeadings } from '@/utils/markdownHeadings'
+import { getProjectDisplayDate } from '@/utils/projectDate'
 
 // Lazy load heavy components
 const ReactMarkdown = dynamic(() => import('react-markdown'), {
@@ -31,7 +32,7 @@ interface ProjectDetailContentProps {
   project: Project
   participatingArtists: Artist[]
   relatedProjects: Array<
-    Pick<Project, 'slug' | 'title' | 'coverImage' | 'publishedDate' | 'category'>
+    Pick<Project, 'slug' | 'title' | 'coverImage' | 'publishedDate' | 'eventDate' | 'category'>
   >
   /** 예정 공연 여부(서버 판정). 상세 상단에 예정/지난 뱃지 표기. */
   isUpcoming?: boolean
@@ -48,7 +49,7 @@ export default function ProjectDetailContent({
   const dateLocale = locale === 'en' ? 'en-US' : 'ko-KR'
   const isEn = locale === 'en'
   // 공연일이 있으면 그 날짜를, 없으면 발행일을 상단에 표시.
-  const displayDate = project.eventDate || project.publishedDate
+  const displayDate = getProjectDisplayDate(project)
 
   // 라이트박스 상태 관리
   const [lightboxOpen, setLightboxOpen] = useState(false)
@@ -317,9 +318,9 @@ export default function ProjectDetailContent({
                             {relatedProject.title}
                           </h3>
                           <p className="text-sm text-gray-500">
-                            {parseLocalDate(relatedProject.publishedDate).toLocaleDateString(
-                              dateLocale
-                            )}
+                            {parseLocalDate(
+                              getProjectDisplayDate(relatedProject)
+                            ).toLocaleDateString(dateLocale)}
                           </p>
                         </div>
                       </Link>
