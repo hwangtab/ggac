@@ -813,5 +813,50 @@
         "url": "/en/projects/metal-syndicate-network-iv"
       }
     ]
+  },
+  {
+    "id": "project-029",
+    "slug": "metal-syndicate-network-vi",
+    "title": "Barbed Wire VI",
+    "lead": "Barbed Wire VI (철조망 VI) is the sixth edition of the Gyeonggi–Seoul metal concert series, held at Alleyway Taphouse in Suwon on October 24, 2026 — PANZERKORPS feat. ZSTHYGER, SEOULSPIT, MERIDIES and SABBAHA, free entry, pay to leave.",
+    "category": "Performance & Exhibition",
+    "publishedDate": "2026-10-22",
+    "eventDate": "2026-10-24",
+    "venue": {
+      "name": "Alleyway Taphouse",
+      "address": "4F, 751-11 Jeongjo-ro, Paldal-gu, Suwon"
+    },
+    "description": "The sixth installment of Barbed Wire, the regular Gyeonggi/Seoul metal concert series. Even if everything collapses, the oath sealed in metal will not break. We stand here as one — what is there to fear, though the sky burn?\n\n### Concert Information\n\n- **Title**: Barbed Wire VI\n- **Date**: October 24, 2026 (Sat) — Starting at 8 PM\n- **Venue**: Alleyway Taphouse [@alleywaytaphouse](https://www.instagram.com/alleywaytaphouse) — 4F, 751-11 Jeongjo-ro, Paldal-gu, Suwon, Gyeonggi-do\n- **Admission**: Free entry, pay to leave\n\n### Line-up\n\n- PANZERKORPS FEAT. ZSTHYGER — [@panzerkorps2025](https://www.instagram.com/panzerkorps2025) · [@zsthyger](https://www.instagram.com/zsthyger)\n- SEOULSPIT — [@seoulspitt](https://www.instagram.com/seoulspitt)\n- MERIDIES — [@mrdstlt](https://www.instagram.com/mrdstlt)\n- SABBAHA — [@sabbaha_kr](https://www.instagram.com/sabbaha_kr)",
+    "coverImage": "/images/projects/metal-syndicate-network-vi.webp",
+    "gallery": null,
+    "videoUrl": null,
+    "artistIds": [
+      "artist-001",
+      "artist-009",
+      "artist-013"
+    ],
+    "ticketing": null,
+    "relatedArticles": [
+      {
+        "title": "METAL SYNDICATE NETWORK",
+        "url": "/en/projects/metal-syndicate-network"
+      },
+      {
+        "title": "METAL SYNDICATE NETWORK 2TERNAL",
+        "url": "/en/projects/metal-syndicate-network-2ternal"
+      },
+      {
+        "title": "METAL SYNDICATE NETWORK III",
+        "url": "/en/projects/metal-syndicate-network-iii"
+      },
+      {
+        "title": "Barbed Wire IV",
+        "url": "/en/projects/metal-syndicate-network-iv"
+      },
+      {
+        "title": "METAL SYNDICATE NETWORK V (Barbed Wire V)",
+        "url": "/en/projects/metal-syndicate-network-v"
+      }
+    ]
   }
 ]

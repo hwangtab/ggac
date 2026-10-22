@@ -812,5 +812,50 @@
         "url": "/projects/metal-syndicate-network-iv"
       }
     ]
+  },
+  {
+    "id": "project-029",
+    "slug": "metal-syndicate-network-vi",
+    "title": "철조망 VI",
+    "lead": "〈철조망 VI〉는 2026년 10월 24일 수원 앨리웨이탭하우스에서 열리는 경기·서울 메탈 정기공연 '철조망'의 여섯 번째 무대입니다. PANZERKORPS FEAT. ZSTHYGER, SEOULSPIT, MERIDIES, SABBAHA가 오르며 무료입장, 유료퇴장입니다.",
+    "category": "공연·전시",
+    "publishedDate": "2026-10-22",
+    "eventDate": "2026-10-24",
+    "venue": {
+      "name": "앨리웨이탭하우스",
+      "address": "경기도 수원시 팔달구 정조로 751-11, 중동빌딩 4층"
+    },
+    "description": "경기/서울 메탈 정기공연 철조망의 여섯 번째 시간. 만사가 무너져 내려도 메탈로 맺은 맹세는 끊어지지 않습니다. 우리 한 마음으로 여기 섰거늘, 하늘이 불탄들 무엇이 두려우랴.\n\n### 공연 정보\n\n- **공연명**: 철조망 VI\n- **일시**: 2026년 10월 24일 (토) 오후 8시부터\n- **장소**: 앨리웨이탭하우스 [@alleywaytaphouse](https://www.instagram.com/alleywaytaphouse) — 경기도 수원시 팔달구 정조로 751-11 (중동빌딩 4층)\n- **입장**: 무료입장, 유료퇴장\n\n### 라인업\n\n- PANZERKORPS FEAT. ZSTHYGER — [@panzerkorps2025](https://www.instagram.com/panzerkorps2025) · [@zsthyger](https://www.instagram.com/zsthyger)\n- SEOULSPIT — [@seoulspitt](https://www.instagram.com/seoulspitt)\n- MERIDIES — [@mrdstlt](https://www.instagram.com/mrdstlt)\n- SABBAHA — [@sabbaha_kr](https://www.instagram.com/sabbaha_kr)",
+    "coverImage": "/images/projects/metal-syndicate-network-vi.webp",
+    "gallery": null,
+    "videoUrl": null,
+    "artistIds": [
+      "artist-001",
+      "artist-009",
+      "artist-013"
+    ],
+    "ticketing": null,
+    "relatedArticles": [
+      {
+        "title": "철조망: METAL SYNDICATE NETWORK",
+        "url": "/projects/metal-syndicate-network"
+      },
+      {
+        "title": "철조망 2회: METAL SYNDICATE NETWORK 2TERNAL",
+        "url": "/projects/metal-syndicate-network-2ternal"
+      },
+      {
+        "title": "철조망 III: METAL SYNDICATE NETWORK III",
+        "url": "/projects/metal-syndicate-network-iii"
+      },
+      {
+        "title": "철조망 IV",
+        "url": "/projects/metal-syndicate-network-iv"
+      },
+      {
+        "title": "철조망 V",
+        "url": "/projects/metal-syndicate-network-v"
+      }
+    ]
   }
 ]
