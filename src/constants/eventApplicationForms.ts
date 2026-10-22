@@ -10,8 +10,11 @@
  */
 export type EventFormType = 'market' | 'workshop'
 
-// 기본값은 'market'. 마켓과 다른 구성을 쓰는 행사만 여기에 등록한다.
-const EVENT_FORM_TYPES: Record<string, EventFormType> = {
+// 내부 신청 폼(`applicationForm.internal`)을 쓰는 행사는 마켓이든 워크샵이든 **전부 여기에
+// 등록한다.** 빠뜨리면 기본값 'market'으로 떨어져 워크샵에 판매 물건 폼이 뜬다 —
+// `scripts/testing/eventApplicationFormTypes.test.mjs`가 누락을 막는다.
+export const EVENT_FORM_TYPES: Record<string, EventFormType> = {
+  'suwon-sound-market-vol-2': 'market',
   'home-recording-mixing-workshop': 'workshop',
   'home-recording-mixing-workshop-2': 'workshop',
 }
