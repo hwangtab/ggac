@@ -13,6 +13,7 @@ export type EventFormType = 'market' | 'workshop'
 // 기본값은 'market'. 마켓과 다른 구성을 쓰는 행사만 여기에 등록한다.
 const EVENT_FORM_TYPES: Record<string, EventFormType> = {
   'home-recording-mixing-workshop': 'workshop',
+  'home-recording-mixing-workshop-2': 'workshop',
 }
 
 const DEFAULT_FORM_TYPE: EventFormType = 'market'
