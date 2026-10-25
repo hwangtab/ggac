@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import { useTranslations } from 'next-intl'
 import { Link, usePathname, useRouter } from '@/i18n/navigation'
@@ -38,6 +38,7 @@ const Navigation = () => {
 
   // 홈페이지인지 확인
   const isHomePage = pathname === '/'
+  const navRef = useRef<HTMLElement>(null)
 
   // 이사회 공간 입구. 승인·활성 조합원이면 누구나 들어간다 — 미들웨어도
   // /board-room과 회의·총회를 조합원에게 열어 두고 있다. 예전에는 이 판정이
@@ -99,6 +100,16 @@ const Navigation = () => {
       window.clearTimeout(timer)
     }
   }, [pathname, router])
+
+  // 내비는 경로가 바뀌어도 언마운트되지 않아, 클릭한 링크가 포커스를 쥔 채 남는다.
+  // 그 상태에서 방향키·스페이스로 스크롤하면 :focus-visible이 켜져 로고에 파란
+  // 테두리가 생긴다. 전체 페이지 이동처럼 경로가 바뀌면 내비 안의 포커스를 놓는다.
+  useEffect(() => {
+    const active = document.activeElement
+    if (active instanceof HTMLElement && navRef.current?.contains(active)) {
+      active.blur()
+    }
+  }, [pathname])
 
   // 사용자 인증 상태 관리는 서버 쿠키 세션 API를 단일 진실로 사용한다.
   useEffect(() => {
@@ -180,6 +191,7 @@ const Navigation = () => {
 
   return (
     <nav
+      ref={navRef}
       id="navigation"
       role="navigation"
       aria-label={t('nav.mainNav')}
