@@ -331,11 +331,12 @@ export default function AgendaList({
                     // 안건 본문도 마크다운으로 그린다(제목·목록·표). 예전에 평문으로 쓴
                     // 안건은 줄바꿈이 한 줄로 붙지 않도록 문단의 줄바꿈을 살린다
                     // (`pre-line`). 목록 항목에는 걸지 않는다 — 항목 안의 개행 문자가
-                    // 그대로 그려져 항목 사이에 빈 줄이 생긴다.
+                    // 그대로 그려져 항목 사이에 빈 줄이 생긴다. 본문 안의 소제목은 안건
+                    // 제목(text-sm)보다 커지지 않게 같은 크기로 눌러 둔다.
                     <PostContentRenderer
                       content={agenda.content}
                       contentFormat="markdown"
-                      className="prose-sm mt-1 pl-5 text-gray-600 [&_p]:whitespace-pre-line"
+                      className="prose-sm mt-1 pl-5 text-gray-600 [&_h1]:text-sm [&_h2]:text-sm [&_h3]:text-sm [&_h4]:text-sm [&_h5]:text-sm [&_h6]:text-sm [&_h1]:mb-1 [&_h2]:mb-1 [&_h3]:mb-1 [&_h1]:mt-4 [&_h2]:mt-4 [&_h3]:mt-4 [&_p]:whitespace-pre-line"
                     />
                   )}
                 </div>
