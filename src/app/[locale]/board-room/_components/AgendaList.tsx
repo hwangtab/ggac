@@ -288,7 +288,7 @@ export default function AgendaList({
                   <div className="flex items-start justify-between gap-2 mb-1">
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="text-xs text-gray-400 shrink-0">{idx + 1}.</span>
-                      <h4 className="text-sm font-semibold text-gray-900 truncate">
+                      <h4 className="text-base font-semibold text-gray-900 truncate">
                         {agenda.title}
                       </h4>
                       <span
@@ -332,7 +332,7 @@ export default function AgendaList({
                     // 안건은 줄바꿈이 한 줄로 붙지 않도록 문단의 줄바꿈을 살린다
                     // (`pre-line`). 목록 항목에는 걸지 않는다 — 항목 안의 개행 문자가
                     // 그대로 그려져 항목 사이에 빈 줄이 생긴다. 본문 안의 소제목은 안건
-                    // 제목(text-sm)보다 커지지 않게 같은 크기로 눌러 둔다.
+                    // 제목(text-base)보다 작은 text-sm으로 눌러 둔다.
                     <PostContentRenderer
                       content={agenda.content}
                       contentFormat="markdown"
