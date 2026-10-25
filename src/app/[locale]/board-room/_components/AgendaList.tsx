@@ -329,12 +329,13 @@ export default function AgendaList({
                   </div>
                   {agenda.content && (
                     // 안건 본문도 마크다운으로 그린다(제목·목록·표). 예전에 평문으로 쓴
-                    // 안건은 줄바꿈이 한 줄로 붙지 않도록 문단·목록 항목의 줄바꿈을
-                    // 살린다(`pre-line`).
+                    // 안건은 줄바꿈이 한 줄로 붙지 않도록 문단의 줄바꿈을 살린다
+                    // (`pre-line`). 목록 항목에는 걸지 않는다 — 항목 안의 개행 문자가
+                    // 그대로 그려져 항목 사이에 빈 줄이 생긴다.
                     <PostContentRenderer
                       content={agenda.content}
                       contentFormat="markdown"
-                      className="prose-sm mt-1 pl-5 text-gray-600 [&_li]:whitespace-pre-line [&_p]:whitespace-pre-line"
+                      className="prose-sm mt-1 pl-5 text-gray-600 [&_p]:whitespace-pre-line"
                     />
                   )}
                 </div>
