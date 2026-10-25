@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 import AgendaCommentThread from './AgendaCommentThread'
+import { PostContentRenderer } from '@/components/PostContentRenderer'
 import { BOARD_AGENDA_STATUS } from '@/constants/boardRoom'
 import type { BoardAgendaStatus } from '@/constants/boardRoom'
 
@@ -209,9 +210,10 @@ export default function AgendaList({
               value={newContent}
               onChange={e => setNewContent(e.target.value)}
               placeholder={t('agendaContentPlaceholder')}
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+              rows={8}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-y"
             />
+            <p className="text-xs text-gray-400 mt-1">{t('minutesMarkdownHint')}</p>
           </div>
           {addError && <p className="text-xs text-red-600">{addError}</p>}
           <div className="flex gap-2">
@@ -257,9 +259,10 @@ export default function AgendaList({
                   <textarea
                     value={editContent}
                     onChange={e => setEditContent(e.target.value)}
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+                    rows={12}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-y"
                   />
+                  <p className="text-xs text-gray-400">{t('minutesMarkdownHint')}</p>
                   {editError && <p className="text-xs text-red-600">{editError}</p>}
                   <div className="flex gap-2">
                     <button
@@ -325,9 +328,14 @@ export default function AgendaList({
                     )}
                   </div>
                   {agenda.content && (
-                    <p className="text-sm text-gray-600 mt-1 pl-5 whitespace-pre-wrap">
-                      {agenda.content}
-                    </p>
+                    // 안건 본문도 마크다운으로 그린다(제목·목록·표). 예전에 평문으로 쓴
+                    // 안건은 줄바꿈이 한 줄로 붙지 않도록 문단·목록 항목의 줄바꿈을
+                    // 살린다(`pre-line`).
+                    <PostContentRenderer
+                      content={agenda.content}
+                      contentFormat="markdown"
+                      className="prose-sm mt-1 pl-5 text-gray-600 [&_li]:whitespace-pre-line [&_p]:whitespace-pre-line"
+                    />
                   )}
                 </div>
               )}
