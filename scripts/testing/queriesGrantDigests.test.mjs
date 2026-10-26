@@ -239,3 +239,26 @@ test('claimGrantDigestForPublish: 없는 id를 선점하면 null이다', async (
   const m = await loadFresh()
   assert.equal(await m.claimGrantDigestForPublish('no-such-digest-id'), null)
 })
+
+// ---------------------------------------------------------------- updateDraftGrantDigestItems
+//
+// 관리자 편집과 발행 선점이 겹칠 때, 선점 뒤의 편집이 행에 저장되면 기록이 실제로 나간
+// 메일과 어긋난다. draft일 때만 쓰는 조건부 UPDATE가 그 창을 막는다.
+
+test('updateDraftGrantDigestItems: draft 회차의 items를 바꾼다', async () => {
+  const m = await loadFresh()
+  const created = await m.createGrantDigest({ week_key: '2027-W01', items: [ITEM] })
+  const updated = await m.updateDraftGrantDigestItems(created.id, [{ ...ITEM, excluded: true }])
+  assert.ok(updated)
+  assert.equal(updated.items[0].excluded, true)
+})
+
+test('updateDraftGrantDigestItems: 선점된 회차는 바꾸지 않고 null이다', async () => {
+  const m = await loadFresh()
+  const created = await m.createGrantDigest({ week_key: '2027-W02', items: [ITEM] })
+  await m.claimGrantDigestForPublish(created.id)
+  const updated = await m.updateDraftGrantDigestItems(created.id, [{ ...ITEM, excluded: true }])
+  assert.equal(updated, null)
+  const after = await m.getGrantDigestById(created.id)
+  assert.equal(after.items[0].excluded, undefined, '선점 뒤 편집이 저장되면 안 된다')
+})

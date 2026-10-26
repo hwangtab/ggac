@@ -7,8 +7,8 @@
  *
  * **메일은 회수되지 않으므로 보수적으로 멈춘다.** 아래 중 하나면 아무것도 보내지 않고
  * 관리자에게 알린 뒤 `blocked`로 응답한다(워크플로가 실패로 표시한다). 그 주는 사람이 본다.
- *  - 회차가 없다 (이미 발행된 회차는 정상 건너뜀)
- *  - 발행할 공고 0건·마감 지난 공고 혼입 (`autoPublishBlockers`). 신규가 많은 주는 막지 않는다
+ *  - 회차가 없다 / 'publishing'에 남아 있다(도중에 죽은 발행일 수 있다). 발행된 회차는 정상 건너뜀
+ *  - 발행할 공고 0건·게시글 0건·마감 지난 공고 혼입 (`contentBlockers`). 신규가 많은 주는 막지 않는다
  *  - 게시판 기능이 꺼져 있다 / 게시글 작성자 계정을 못 찾는다
  * 이번 주만 보내지 않으려면 저장소 변수 `GRANT_AUTO_PUBLISH`를 끈다(워크플로 머리 주석).
  *
@@ -18,7 +18,12 @@
 import { NextRequest } from 'next/server'
 import { timingSafeEqual } from 'node:crypto'
 
-import { claimGrantDigestForPublish, getGrantDigestByWeekKey } from '@/db/queries/grantDigests'
+import {
+  claimGrantDigestForPublish,
+  getGrantDigestByWeekKey,
+  updateGrantDigest,
+  type GrantItem,
+} from '@/db/queries/grantDigests'
 import { listProfiles, type ProfileRow } from '@/db/queries/profiles'
 import { isBoardEnabled } from '@/lib/features/settings'
 import { adminUserIds, notifyAdmins } from '@/lib/server/grantAdminNotify'
@@ -29,6 +34,7 @@ import {
   weekKey as currentWeekKey,
 } from '@/lib/server/grantDigest'
 import { MEMBER_FETCH_LIMIT, publishClaimedDigest } from '@/lib/server/grantPublishWiring'
+import { filterByDefaultInterests } from '@/lib/server/interestMatch'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
 
@@ -49,6 +55,22 @@ function isAuthorized(request: NextRequest): boolean {
   const provided = header.startsWith('Bearer ') ? header.slice(7) : ''
   if (provided.length !== expected.length) return false
   return timingSafeEqual(Buffer.from(provided), Buffer.from(expected))
+}
+
+/**
+ * 회차 내용만으로 정하는 멈춤 사유. 선점 **전과 후에 두 번** 본다 — 그 사이 관리자 편집이
+ * 끼면 선점된 items가 처음 읽은 것과 다를 수 있다.
+ *
+ * 게시글·인앱 알림은 조합 기본 관심사로 좁힌 목록을 쓴다(`runGrantPublish`). 활성 항목이
+ * 있어도 기본 관심사를 통과하는 것이 0건이면 "0건" 게시글과 빈 알림이 전원에게 나간다.
+ */
+function contentBlockers(items: GrantItem[]): string[] {
+  const reasons = autoPublishBlockers(items, kstTodayIso())
+  const active = activeItems(items)
+  if (active.length > 0 && filterByDefaultInterests(active).length === 0) {
+    reasons.push('조합 기본 관심사에 맞는 공고가 없어 게시글이 0건이 됩니다.')
+  }
+  return reasons
 }
 
 export async function POST(request: NextRequest) {
@@ -80,6 +102,27 @@ export async function POST(request: NextRequest) {
       )
       return ApiError.notFound(`${key} 회차가 없습니다.`).toNextResponse()
     }
+    if (digest.status === 'publishing') {
+      // 발행이 도중에 죽었을 수 있다(maxDuration에 걸리면 catch도 못 돈다). 일부 메일이
+      // 나갔을 수 있어 다시 보내면 안 되고, 조용히 넘기면 아무도 모른다 — 사람을 부른다.
+      // 관리자가 바로 지금 발행 버튼을 누른 경우에도 이 알림이 갈 수 있다. 그때는 무시하면 된다.
+      if (!dry) {
+        await notifyAdmins(
+          admins,
+          '지원사업 회차가 발행 중 상태로 남아 있습니다',
+          `${key} 회차가 'publishing' 상태라 자동 발행이 손대지 않았습니다. 방금 직접 발행한 ` +
+            `것이 아니라면 발행이 도중에 멈춘 것입니다. 일부 메일이 나갔을 수 있으니 다시 ` +
+            `발행하지 말고 발송 기록을 확인해 주세요.`,
+          { weekKey: key, digestId: digest.id }
+        )
+      }
+      return ApiSuccess.ok({
+        blocked: true,
+        dry,
+        week_key: key,
+        reasons: ["회차가 'publishing' 상태입니다."],
+      }).toNextResponse()
+    }
     if (digest.status !== 'draft') {
       // 이미 발행했다(관리자가 먼저 눌렀거나 수동 스크립트). 정상이다.
       log.info('draft가 아니라 건너뛴다', { weekKey: key, status: digest.status })
@@ -92,14 +135,21 @@ export async function POST(request: NextRequest) {
 
     const active = activeItems(digest.items)
     const freshCount = active.filter(i => i.is_new === true).length
-    const reasons = autoPublishBlockers(digest.items, kstTodayIso())
+    const reasons = contentBlockers(digest.items)
 
     if ((await isBoardEnabled()) === false) {
       reasons.push('게시판 기능이 꺼져 있어 게시글을 만들 수 없습니다.')
     }
     const authorEmail = process.env.GRANT_DIGEST_AUTHOR_EMAIL || DEFAULT_AUTHOR_EMAIL
-    const author = rows.find(r => r.email === authorEmail && r.is_admin && r.is_active)
-    if (!author) reasons.push(`게시글 작성자 계정(${authorEmail})을 관리자로 찾을 수 없습니다.`)
+    const author = rows.find(
+      r =>
+        r.email?.toLowerCase() === authorEmail.toLowerCase() &&
+        r.is_admin &&
+        r.is_active &&
+        !r.is_suspended
+    )
+    // 사유 문구는 공개 Actions 로그에 찍힌다 — 주소는 관리자 알림에만 적는다.
+    if (!author) reasons.push('게시글 작성자 계정을 활성 관리자로 찾을 수 없습니다.')
 
     if (reasons.length > 0 || !author) {
       if (!dry) {
@@ -107,6 +157,7 @@ export async function POST(request: NextRequest) {
           admins,
           '지원사업 자동 발행을 멈췄습니다',
           `${key} 회차를 보내지 않았습니다. ${reasons.join(' ')} ` +
+            (author ? '' : `(작성자 설정: ${authorEmail}) `) +
             `관리자 > 지원사업에서 확인하고 직접 발행해 주세요.`,
           { weekKey: key, digestId: digest.id, reasons }
         )
@@ -136,6 +187,24 @@ export async function POST(request: NextRequest) {
     const claimed = await claimGrantDigestForPublish(digest.id)
     if (!claimed) {
       return ApiSuccess.ok({ skipped: true, week_key: key, status: 'publishing' }).toNextResponse()
+    }
+    // 처음 읽은 뒤 선점 전에 관리자 편집이 끼었을 수 있다 — 실제로 나갈 items로 다시 본다.
+    const lateReasons = contentBlockers(claimed.items)
+    if (lateReasons.length > 0) {
+      await updateGrantDigest(claimed.id, { status: 'draft' })
+      await notifyAdmins(
+        admins,
+        '지원사업 자동 발행을 멈췄습니다',
+        `${key} 회차를 보내지 않았습니다. ${lateReasons.join(' ')} ` +
+          `관리자 > 지원사업에서 확인하고 직접 발행해 주세요.`,
+        { weekKey: key, digestId: claimed.id, reasons: lateReasons }
+      )
+      return ApiSuccess.ok({
+        blocked: true,
+        dry: false,
+        week_key: key,
+        reasons: lateReasons,
+      }).toNextResponse()
     }
 
     const result = await publishClaimedDigest({

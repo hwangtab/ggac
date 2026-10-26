@@ -213,3 +213,23 @@ export async function updateGrantDigest(
   const [row] = await db.update(grantDigests).set(values).where(eq(grantDigests.id, id)).returning()
   return row ? rowToDigest(row) : null
 }
+
+/**
+ * **draft일 때만** items를 바꾼다. 관리자 편집용이다.
+ *
+ * 상태를 읽고 나서 쓰는 사이에 발행 선점(draft → publishing)이 끼면, 메일은 선점 시점의
+ * items로 나가는데 행에는 그 뒤의 편집이 저장된다 — 기록이 실제로 나간 것과 어긋나고, 다음
+ * 회차 중복 판정(`listRecentDigestItems`)이 그 어긋난 기록을 읽는다. 조건부 UPDATE로 막는다.
+ * @returns draft가 아니었거나 행이 없으면 `null`.
+ */
+export async function updateDraftGrantDigestItems(
+  id: string,
+  items: GrantItem[]
+): Promise<GrantDigestRow | null> {
+  const [row] = await db
+    .update(grantDigests)
+    .set({ items })
+    .where(and(eq(grantDigests.id, id), eq(grantDigests.status, 'draft')))
+    .returning()
+  return row ? rowToDigest(row) : null
+}

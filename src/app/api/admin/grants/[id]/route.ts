@@ -1,6 +1,10 @@
 import { z } from 'zod'
 
-import { getGrantDigestById, updateGrantDigest, type GrantItem } from '@/db/queries/grantDigests'
+import {
+  getGrantDigestById,
+  updateDraftGrantDigestItems,
+  type GrantItem,
+} from '@/db/queries/grantDigests'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { POOL_CAP } from '@/lib/server/grantDigest'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
@@ -79,7 +83,11 @@ export const PATCH = defineApiRoute<Record<string, unknown>>({
     // 필수/옵셔널 키 추론이 깨져 z.infer가 전 필드를 optional로 보여준다
     // (zod는 strictNullChecks를 요구한다). 런타임 검증(.strict() 스키마)은
     // 이미 위 safeParse가 했으므로 여기서는 형만 맞춰준다.
-    const updated = await updateGrantDigest(id, { items: parsed.data.items as GrantItem[] })
+    // 위 확인과 이 쓰기 사이에 발행이 선점할 수 있다 — 조건부로 써서 그 경우를 409로 돌린다.
+    const updated = await updateDraftGrantDigestItems(id, parsed.data.items as GrantItem[])
+    if (!updated) {
+      throw ApiError.conflict('그사이 발행이 시작돼 편집을 저장하지 않았습니다.')
+    }
     return ApiSuccess.ok({ digest: updated })
   },
 })
