@@ -28,6 +28,14 @@ on:
         required: false
         default: ""
 
+# 실행을 한 줄로 세운다. 예약 실행은 수 시간 늦기도 해서 17:17 실행이 20:17 예비 실행과
+# 겹칠 수 있다. 겹치면 뒤 실행이 앞 실행의 'publishing'을 보고 "발행이 멈췄다"는 거짓 경보를
+# 관리자에게 보낸다. 줄을 세우면 뒤 실행은 앞 실행이 끝난 뒤 'published'를 보고 건너뛴다.
+# 진행 중인 실행을 취소하면 메일이 반쯤 나간 채 끊기므로 취소하지 않는다.
+concurrency:
+  group: grant-digest-publish
+  cancel-in-progress: false
+
 jobs:
   publish:
     runs-on: ubuntu-latest
