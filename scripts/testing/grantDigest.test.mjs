@@ -20,6 +20,8 @@ const {
   normalizedTitleKey,
   sortByDeadline,
   capKeepingNew,
+  autoPublishBlockers,
+  AUTO_PUBLISH_NEW_LIMIT,
   partitionByNewness,
   newnessCountPhrase,
   CAP,
@@ -195,10 +197,10 @@ test('빈 입력은 빈 배열이다', () => {
 
 // ---------------------------------------------------------------- isExcludedByTitle / 제목 기반 제외 필터
 
-test('EXCLUDE_TITLE_KEYWORDS는 정확히 다섯이다', () => {
+test('EXCLUDE_TITLE_KEYWORDS는 정확히 여섯이다', () => {
   assert.deepEqual(
     [...EXCLUDE_TITLE_KEYWORDS],
-    ['합창', '단원', '예술감독', '제출 안내', '제도 운영 안내']
+    ['합창', '단원', '예술감독', '제출 안내', '제도 운영 안내', '전세자금']
   )
 })
 
@@ -981,4 +983,51 @@ test('실데이터 2026-W38: 28건 중 20건이 담기고 신규 2 · 계속 18�
   assert.equal(out.length - fresh.length, 18)
   // 옛 동작(이미 보낸 것을 버림)이면 초안이 2건뿐이었다 — 그게 이 변경의 이유다.
   assert.equal(fresh.length, 2)
+})
+
+test('전세자금 안내는 제목 키워드로 걸러진다', () => {
+  assert.equal(isExcludedByTitle('[안내] 2026년 전세자금 지역 사업설명회 및 상담창구 운영'), true)
+  assert.equal(isExcludedByTitle('2026년 크라우드펀딩 챌린지 2차 공모'), false)
+})
+
+const mk = (n, over = {}) =>
+  Array.from({ length: n }, (_, i) => ({
+    key: `k${i}`,
+    title: `t${i}`,
+    apply_end: '2026-12-01',
+    ...over,
+  }))
+
+test('autoPublishBlockers: 평범한 회차는 막지 않는다', () => {
+  const items = [...mk(5, { is_new: true }), ...mk(30, { is_new: false })]
+  assert.deepEqual(autoPublishBlockers(items, '2026-10-26'), [])
+})
+
+test('autoPublishBlockers: 신규가 기준을 넘으면 막고, 기준과 같으면 막지 않는다', () => {
+  const at = mk(AUTO_PUBLISH_NEW_LIMIT, { is_new: true })
+  assert.deepEqual(autoPublishBlockers(at, '2026-10-26'), [])
+  const over = mk(AUTO_PUBLISH_NEW_LIMIT + 1, { is_new: true })
+  const r = autoPublishBlockers(over, '2026-10-26')
+  assert.equal(r.length, 1)
+  assert.match(r[0], /신규 공고가 21건/)
+})
+
+test('autoPublishBlockers: 제외된 항목은 세지 않고, 빈 회차와 마감 지난 공고는 막는다', () => {
+  // 관리자가 제외해 신규가 기준 아래로 내려오면 통과한다 — 사람이 훑었다는 뜻이다.
+  const trimmed = [
+    ...mk(AUTO_PUBLISH_NEW_LIMIT, { is_new: true }),
+    ...mk(10, { is_new: true, excluded: true }),
+  ]
+  assert.deepEqual(autoPublishBlockers(trimmed, '2026-10-26'), [])
+  assert.equal(autoPublishBlockers([], '2026-10-26').length, 1)
+  assert.equal(autoPublishBlockers(mk(3, { excluded: true }), '2026-10-26').length, 1)
+  const expired = [...mk(3, { is_new: false }), { key: 'x', title: 'x', apply_end: '2026-10-25' }]
+  const r = autoPublishBlockers(expired, '2026-10-26')
+  assert.equal(r.length, 1)
+  assert.match(r[0], /마감이 지난 공고가 1건/)
+  // 오늘 마감은 아직 지난 게 아니다.
+  assert.deepEqual(
+    autoPublishBlockers([{ key: 'y', title: 'y', apply_end: '2026-10-26' }], '2026-10-26'),
+    []
+  )
 })

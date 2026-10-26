@@ -170,6 +170,10 @@ export const EXCLUDE_TITLE_KEYWORDS = [
   //   잡는다. 공모·모집이 아니라 행정 안내문이다.
   '제출 안내',
   '제도 운영 안내',
+  // 2026-W43·W44 실측: 한국예술인복지재단의 「전세자금 지역 사업설명회 및 상담창구 운영」이
+  // `category='grant'`로 분류돼 category 규칙을 빠져나가고, 마감일이 없어 매주 신규로
+  // 다시 올라왔다. 주거 대출 안내라 조합원의 창작·활동 지원과 무관하다.
+  '전세자금',
 ] as const
 
 /**
@@ -411,6 +415,29 @@ export function buildDraftItems(
     out.push({ ...it, is_new: !alreadySent })
   }
   return capKeepingNew(out, cap, todayIso)
+}
+
+/** 자동 발송을 멈추는 신규 공고 수. 이 값을 넘으면 사람이 먼저 본다. */
+export const AUTO_PUBLISH_NEW_LIMIT = 20
+
+/**
+ * 자동 발송을 멈춰야 하는 사유. 빈 배열이면 보내도 된다.
+ *
+ * 메일은 회수되지 않으므로 "평소와 다른 회차"는 사람이 보게 한다. 2026-W42에 한 사업의
+ * 하위 공고 33건이 한꺼번에 올라와 신규가 35건이 된 주가 기준 사례다 — 그런 주는
+ * 제외할 항목이 있는지 사람이 훑어야 한다.
+ */
+export function autoPublishBlockers(items: GrantItem[], todayIso: string): string[] {
+  const active = activeItems(items)
+  const reasons: string[] = []
+  if (active.length === 0) reasons.push('발행할 공고가 없습니다.')
+  const fresh = active.filter(i => i.is_new === true).length
+  if (fresh > AUTO_PUBLISH_NEW_LIMIT) {
+    reasons.push(`신규 공고가 ${fresh}건으로 기준(${AUTO_PUBLISH_NEW_LIMIT}건)을 넘었습니다.`)
+  }
+  const expired = active.filter(i => i.apply_end && i.apply_end < todayIso).length
+  if (expired > 0) reasons.push(`마감이 지난 공고가 ${expired}건 섞여 있습니다.`)
+  return reasons
 }
 
 /** 관리자가 제외하지 않은 항목만. */

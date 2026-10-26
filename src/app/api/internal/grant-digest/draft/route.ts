@@ -15,8 +15,8 @@ import {
   getGrantDigestByWeekKey,
   listRecentDigestItems,
 } from '@/db/queries/grantDigests'
-import { createBulkNotifications } from '@/db/queries/notifications'
 import { listProfiles, type ProfileRow } from '@/db/queries/profiles'
+import { adminUserIds, notifyAdmins } from '@/lib/server/grantAdminNotify'
 import { fetchGrantOpportunities } from '@/lib/server/grantFetch'
 import {
   DEDUPE_WEEKS,
@@ -60,39 +60,6 @@ function isAuthorized(request: NextRequest): boolean {
   const provided = header.startsWith('Bearer ') ? header.slice(7) : ''
   if (provided.length !== expected.length) return false
   return timingSafeEqual(Buffer.from(provided), Buffer.from(expected))
-}
-
-/** 이미 읽은 회원 목록에서 관리자 id만 거른다. 알림 대상이다. */
-function adminUserIds(rows: ProfileRow[]): string[] {
-  return rows.filter(r => r.is_admin && r.is_active).map(r => r.id)
-}
-
-/** 관리자에게만 알린다. 실패해도 던지지 않는다 — 초안은 이미 만들어졌다(혹은 실패가 이미 확정됐다). */
-async function notifyAdmins(
-  adminIds: string[],
-  title: string,
-  message: string,
-  data: Record<string, unknown>
-) {
-  try {
-    if (adminIds.length === 0) {
-      log.error('관리자 알림 대상이 없다', { title })
-      return
-    }
-    await createBulkNotifications({
-      user_ids: adminIds,
-      type: 'system_notice',
-      title,
-      message,
-      data,
-      expires_at: new Date(Date.now() + 30 * 86_400_000).toISOString(),
-    })
-  } catch (error) {
-    log.error('관리자 알림 생성 실패', {
-      title,
-      error: error instanceof Error ? error.message : String(error),
-    })
-  }
 }
 
 export async function POST(request: NextRequest) {

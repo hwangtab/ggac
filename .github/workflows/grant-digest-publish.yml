@@ -1,0 +1,80 @@
+# 매주 월요일 17:00 KST에 그 주 지원사업 회차를 발행한다.
+#
+# 초안(grant-digest-draft, 08:00)이 만든 회차를 같은 날 오후에 내보낸다. 사이 아홉 시간이
+# 관리자가 검수하거나 폐기할 여유다 — 이번 주를 직접 보려면 회차를 폐기하면 건너뛴다.
+#
+# **저장소 변수 GRANT_AUTO_PUBLISH가 `true`일 때만 실제로 보낸다.** 그 외에는 드라이런이다
+# (판정만 하고 선점도 발송도 없다). 변수는 Settings > Secrets and variables > Actions >
+# Variables에서 바꾼다 — 코드를 건드리지 않고 켜고 끌 수 있다.
+#
+# 자동 발송을 멈춘 주(신규 폭증·마감 지난 공고·회차 없음 등)는 이 워크플로가 **실패로**
+# 끝난다. 관리자 알림도 함께 간다. 그 주는 사람이 직접 발행한다.
+name: grant-digest-publish
+
+on:
+  schedule:
+    - cron: "0 8 * * 1" # 월요일 08:00 UTC = 월요일 17:00 KST
+  workflow_dispatch:
+    inputs:
+      real:
+        description: "true면 실제 발행(변수와 무관). 비우면 드라이런."
+        required: false
+        default: ""
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 발행 요청
+        env:
+          TOKEN: ${{ secrets.GRANT_DIGEST_CRON_TOKEN }}
+          AUTO: ${{ vars.GRANT_AUTO_PUBLISH }}
+          REAL_INPUT: ${{ github.event.inputs.real }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${TOKEN:-}" ]; then
+            echo "::error::GRANT_DIGEST_CRON_TOKEN 시크릿이 없다."
+            exit 1
+          fi
+
+          URL=https://www.ggac.kr/api/internal/grant-digest/publish
+          if [ "${AUTO:-}" = "true" ] || [ "${REAL_INPUT:-}" = "true" ]; then
+            echo "모드: 실제 발행"
+          else
+            echo "모드: 드라이런 (변수 GRANT_AUTO_PUBLISH=true일 때만 보낸다)"
+            URL="${URL}?dry=1"
+          fi
+
+          # 라우트의 maxDuration은 300초다. curl이 먼저 끊으면 서버는 계속 보내는데
+          # Actions만 실패로 남는다 — 초안 워크플로와 같은 이유로 320초.
+          HTTP=$(curl -sS -o /tmp/out.json -w '%{http_code}' \
+            --max-time 320 \
+            -X POST "${URL}" \
+            -H "Authorization: Bearer ${TOKEN}")
+          echo "HTTP ${HTTP}"
+
+          # **본문을 그대로 찍지 마라.** 저장소가 공개라 Actions 로그도 공개다.
+          # 사유(reasons)는 고정 문구와 건수뿐이라 찍어도 된다. id는 찍지 않는다.
+          node -e '
+            const fs = require("fs")
+            try {
+              const d = (JSON.parse(fs.readFileSync("/tmp/out.json", "utf8"))).data ?? {}
+              if (d.published) console.log(`발행 완료 — 회차 ${d.week_key} · 메일 성공 ${d.email_sent} · 실패 ${d.email_failed}`)
+              else if (d.blocked) console.log(`자동 발송 보류${d.dry ? "(드라이런)" : ""} — 회차 ${d.week_key}: ${(d.reasons ?? []).join(" ")}`)
+              else if (d.would_publish) console.log(`드라이런: 보내도 되는 상태 — 회차 ${d.week_key} · 공고 ${d.items}건 · 신규 ${d.new_count}건`)
+              else if (d.skipped) console.log(`건너뜀 — 회차 ${d.week_key} 상태 ${d.status}`)
+              fs.writeFileSync("/tmp/blocked", d.blocked ? "1" : "0")
+            } catch {
+              console.log("응답 본문을 파싱하지 못했다(상태 코드로 판정한다).")
+            }
+          '
+
+          if [ "${HTTP}" != "200" ] && [ "${HTTP}" != "201" ]; then
+            echo "::error::발행 엔드포인트가 ${HTTP}를 반환했다 (401이면 토큰 불일치, 404면 이번 주 회차가 없다)."
+            exit 1
+          fi
+          if [ "$(cat /tmp/blocked 2>/dev/null || echo 0)" = "1" ]; then
+            echo "::error::자동 발송을 멈췄다. 관리자 알림을 확인하고 직접 발행해라."
+            exit 1
+          fi
