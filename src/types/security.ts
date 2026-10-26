@@ -120,6 +120,9 @@ export type SecurityEventType =
   // 게시글·메일은 나갔는데 회차 상태 기록만 실패한 경우 — 회차가 'publishing'에
   // 갇히고 재발행 경로가 없어 사람이 손으로 고쳐야 한다(발행 라우트 주석 참고).
   | 'GRANT_DIGEST_PUBLISH_RECORD_FAILED'
+  // 게시글은 만들어졌는데 알림·메일 단계에서 던진 경우 — 재발행하면 중복 발송이라
+  // 회차를 'publishing'에 둔다(`grantPublishWiring.ts`).
+  | 'GRANT_DIGEST_PUBLISH_PARTIAL'
 
   // 검색 이벤트
   | 'SEARCH_QUERY_BLOCKED'

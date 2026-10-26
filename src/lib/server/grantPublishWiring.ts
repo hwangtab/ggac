@@ -66,6 +66,10 @@ export async function publishClaimedDigest(input: {
   // 링크는 메일로 나가므로 절대 URL이어야 한다. 판단은 `getSiteUrl()`이 한 곳에서 한다.
   const siteUrl = getSiteUrl()
 
+  // 게시글이 만들어진 뒤의 실패는 draft로 되돌리면 안 된다 — 알림과 일부 메일이 이미
+  // 나갔을 수 있고, 되돌리면 재시도가 게시글·메일을 **한 번 더** 보낸다. 그래서 되돌릴지는
+  // "어디서 던졌나"를 추측하지 않고 게시글이 실제로 생겼는지로 정한다.
+  let postCreated = false
   let result: Awaited<ReturnType<typeof runGrantPublish>>
   try {
     result = await runGrantPublish({
@@ -75,15 +79,35 @@ export async function publishClaimedDigest(input: {
       settingsByUserId,
       siteUrl,
       now: new Date(),
-      createPost: async post => createPost(post),
+      createPost: async post => {
+        const created = await createPost(post)
+        postCreated = true
+        return created
+      },
       createBulkNotifications: async n =>
         createBulkNotifications(n as Parameters<typeof createBulkNotifications>[0]),
       sendEmail,
       log,
     })
   } catch (error) {
-    // 게시글 생성 실패(runGrantPublish가 던지는 유일한 지점) — 선점을 되돌리지 않으면
-    // 회차가 'publishing'에 영구히 갇혀 다시 발행할 수 없다.
+    if (postCreated) {
+      const message = error instanceof Error ? error.message : String(error)
+      log.error('게시글 생성 뒤 발행 실패 — 회차를 publishing에 둔다', {
+        digestId: id,
+        error: message,
+      })
+      logSecurityEvent(
+        'GRANT_DIGEST_PUBLISH_PARTIAL',
+        { actor, digestId: id, error: message },
+        'high'
+      )
+      throw ApiError.internalServerError(
+        `게시글은 올라갔지만 알림·메일 발송 중 오류가 났습니다. 일부 메일이 이미 나갔을 수 ` +
+          `있어 회차 ${id}를 'publishing'에 두었습니다. 다시 발행하지 말고 발송 기록을 확인해 주세요.`
+      )
+    }
+    // 게시글 생성 실패 — 아무것도 나가지 않았다. 선점을 되돌리지 않으면 회차가
+    // 'publishing'에 영구히 갇혀 다시 발행할 수 없다.
     try {
       await updateGrantDigest(id, { status: 'draft' })
     } catch (rollbackError) {
