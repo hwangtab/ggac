@@ -1,11 +1,14 @@
 # 매주 월요일 17:00 KST에 그 주 지원사업 회차를 발행한다.
 #
 # 초안(grant-digest-draft, 08:00)이 만든 회차를 같은 날 오후에 내보낸다. 사이 아홉 시간이
-# 관리자가 검수하거나 폐기할 여유다 — 이번 주를 직접 보려면 회차를 폐기하면 건너뛴다.
+# 관리자가 검수할 여유다 — 관리자 > 지원사업에서 항목을 제외하면 그대로 반영된다.
 #
-# **저장소 변수 GRANT_AUTO_PUBLISH가 `true`일 때만 실제로 보낸다.** 그 외에는 드라이런이다
-# (판정만 하고 선점도 발송도 없다). 변수는 Settings > Secrets and variables > Actions >
-# Variables에서 바꾼다 — 코드를 건드리지 않고 켜고 끌 수 있다.
+# **예약 실행은 저장소 변수 GRANT_AUTO_PUBLISH가 `true`일 때만 실제로 보낸다.** 그 외에는
+# 드라이런이다(판정만 하고 선점도 발송도 없다). 이번 주만 보내지 않으려면 17:00 전에 변수를
+# `false`로 바꾼다. 변수는 Settings > Secrets and variables > Actions > Variables에 있다.
+#
+# **수동 실행은 변수와 무관하게 입력 real=true일 때만 보낸다.** 변수가 켜진 채로 시험 삼아
+# 돌렸다가 메일이 나가면 안 된다 — 메일은 회수되지 않는다.
 #
 # 자동 발송을 멈춘 주(공고 0건·마감 지난 공고·회차 없음 등)는 이 워크플로가 **실패로**
 # 끝난다. 관리자 알림도 함께 간다. 그 주는 사람이 직접 발행한다.
@@ -17,7 +20,7 @@ on:
   workflow_dispatch:
     inputs:
       real:
-        description: "true면 실제 발행(변수와 무관). 비우면 드라이런."
+        description: "true면 실제 발행. 비우면 드라이런(저장소 변수와 무관)."
         required: false
         default: ""
 
@@ -28,6 +31,7 @@ jobs:
       - name: 발행 요청
         env:
           TOKEN: ${{ secrets.GRANT_DIGEST_CRON_TOKEN }}
+          EVENT: ${{ github.event_name }}
           AUTO: ${{ vars.GRANT_AUTO_PUBLISH }}
           REAL_INPUT: ${{ github.event.inputs.real }}
         run: |
@@ -39,10 +43,12 @@ jobs:
           fi
 
           URL=https://www.ggac.kr/api/internal/grant-digest/publish
-          if [ "${AUTO:-}" = "true" ] || [ "${REAL_INPUT:-}" = "true" ]; then
+          # 예약 실행은 변수로, 수동 실행은 입력으로만 정한다(머리 주석 참고).
+          if [ "${EVENT}" = "schedule" ]; then REAL="${AUTO:-}"; else REAL="${REAL_INPUT:-}"; fi
+          if [ "${REAL}" = "true" ]; then
             echo "모드: 실제 발행"
           else
-            echo "모드: 드라이런 (변수 GRANT_AUTO_PUBLISH=true일 때만 보낸다)"
+            echo "모드: 드라이런"
             URL="${URL}?dry=1"
           fi
 

@@ -5,7 +5,8 @@
  * 인증은 기존 크론들(`/api/internal/dues/charge`)과 같은 방식 — 공유 토큰을 타이밍 안전 비교.
  *
  * **이 라우트는 조합원에게 아무것도 보내지 않는다.** 초안을 만들고 관리자에게만 알린다.
- * 발행은 사람이 `/admin/grants`에서 누른다.
+ * 발행은 같은 날 17:00 KST에 `../publish` 크론이 하거나(자동 발행이 켜져 있을 때) 관리자가
+ * `/admin/grants`에서 누른다.
  */
 import { NextRequest } from 'next/server'
 import { timingSafeEqual } from 'node:crypto'
@@ -137,7 +138,8 @@ export async function POST(request: NextRequest) {
         // (`interestMatch.ts`의 isGenreUnclassified 참고). 0건이면 굳이 적지 않는다.
         (unclassified > 0 ? `(장르 미분류 ${unclassified}건 포함) ` : '') +
         `(수집 범위: 장르 ${scope.genres.length}종 · 지역 ${scope.regions.length}곳) ` +
-        `관리자 > 지원사업에서 확인하고 발행해 주세요.`,
+        `오늘 17:00에 자동 발행됩니다(자동 발행이 켜져 있을 때). 뺄 공고가 있으면 그 전에 ` +
+        `관리자 > 지원사업에서 제외해 주세요.`,
       {
         weekKey: key,
         digestId: digest.id,

@@ -7,10 +7,10 @@
  *
  * **메일은 회수되지 않으므로 보수적으로 멈춘다.** 아래 중 하나면 아무것도 보내지 않고
  * 관리자에게 알린 뒤 `blocked`로 응답한다(워크플로가 실패로 표시한다). 그 주는 사람이 본다.
- *  - 회차가 없다 / 이미 발행·폐기됐다(후자는 정상 건너뜀)
+ *  - 회차가 없다 (이미 발행된 회차는 정상 건너뜀)
  *  - 발행할 공고 0건·마감 지난 공고 혼입 (`autoPublishBlockers`). 신규가 많은 주는 막지 않는다
  *  - 게시판 기능이 꺼져 있다 / 게시글 작성자 계정을 못 찾는다
- * 관리자가 이번 주를 직접 검수하려면 회차를 **폐기**하면 된다 — 'draft'가 아니면 건너뛴다.
+ * 이번 주만 보내지 않으려면 저장소 변수 `GRANT_AUTO_PUBLISH`를 끈다(워크플로 머리 주석).
  *
  * `?dry=1`이면 판정까지만 하고 선점도 발송도 하지 않는다. 워크플로는 저장소 변수
  * `GRANT_AUTO_PUBLISH`가 `true`일 때만 실제 발행을 요청한다.
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
       return ApiError.notFound(`${key} 회차가 없습니다.`).toNextResponse()
     }
     if (digest.status !== 'draft') {
-      // 이미 발행했거나(수동 발행 포함) 관리자가 폐기했다. 정상이다.
+      // 이미 발행했다(관리자가 먼저 눌렀거나 수동 스크립트). 정상이다.
       log.info('draft가 아니라 건너뛴다', { weekKey: key, status: digest.status })
       return ApiSuccess.ok({
         skipped: true,
