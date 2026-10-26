@@ -21,7 +21,6 @@ const {
   sortByDeadline,
   capKeepingNew,
   autoPublishBlockers,
-  AUTO_PUBLISH_NEW_LIMIT,
   partitionByNewness,
   newnessCountPhrase,
   CAP,
@@ -1003,22 +1002,11 @@ test('autoPublishBlockers: 평범한 회차는 막지 않는다', () => {
   assert.deepEqual(autoPublishBlockers(items, '2026-10-26'), [])
 })
 
-test('autoPublishBlockers: 신규가 기준을 넘으면 막고, 기준과 같으면 막지 않는다', () => {
-  const at = mk(AUTO_PUBLISH_NEW_LIMIT, { is_new: true })
-  assert.deepEqual(autoPublishBlockers(at, '2026-10-26'), [])
-  const over = mk(AUTO_PUBLISH_NEW_LIMIT + 1, { is_new: true })
-  const r = autoPublishBlockers(over, '2026-10-26')
-  assert.equal(r.length, 1)
-  assert.match(r[0], /신규 공고가 21건/)
+test('autoPublishBlockers: 신규가 아무리 많아도 막지 않는다 (W42형)', () => {
+  assert.deepEqual(autoPublishBlockers(mk(35, { is_new: true }), '2026-10-26'), [])
 })
 
-test('autoPublishBlockers: 제외된 항목은 세지 않고, 빈 회차와 마감 지난 공고는 막는다', () => {
-  // 관리자가 제외해 신규가 기준 아래로 내려오면 통과한다 — 사람이 훑었다는 뜻이다.
-  const trimmed = [
-    ...mk(AUTO_PUBLISH_NEW_LIMIT, { is_new: true }),
-    ...mk(10, { is_new: true, excluded: true }),
-  ]
-  assert.deepEqual(autoPublishBlockers(trimmed, '2026-10-26'), [])
+test('autoPublishBlockers: 제외만 남은 빈 회차와 마감 지난 공고는 막는다', () => {
   assert.equal(autoPublishBlockers([], '2026-10-26').length, 1)
   assert.equal(autoPublishBlockers(mk(3, { excluded: true }), '2026-10-26').length, 1)
   const expired = [...mk(3, { is_new: false }), { key: 'x', title: 'x', apply_end: '2026-10-25' }]
