@@ -83,6 +83,7 @@ jobs:
               else if (d.would_publish) console.log(`드라이런: 보내도 되는 상태 — 회차 ${d.week_key} · 공고 ${d.items}건 · 신규 ${d.new_count}건`)
               else if (d.skipped) console.log(`건너뜀 — 회차 ${d.week_key} 상태 ${d.status}`)
               fs.writeFileSync("/tmp/blocked", d.blocked ? "1" : "0")
+              fs.writeFileSync("/tmp/email_failed", String(d.published ? (d.email_failed ?? 0) : 0))
             } catch {
               console.log("응답 본문을 파싱하지 못했다(상태 코드로 판정한다).")
             }
@@ -94,5 +95,13 @@ jobs:
           fi
           if [ "$(cat /tmp/blocked 2>/dev/null || echo 0)" = "1" ]; then
             echo "::error::자동 발송을 멈췄다. 관리자 알림을 확인하고 직접 발행해라."
+            exit 1
+          fi
+          # 게시글은 나갔는데 메일 일부·전부가 실패했다(Resend 키 만료·장애 등). 초록으로 두면
+          # 관리자 알림 한 줄 말고는 신호가 없다. **다시 발행하지 마라** — 성공한 사람에게
+          # 메일이 두 번 간다. 원인(Resend 대시보드)을 보고 실패분만 손으로 처리한다.
+          FAILED="$(cat /tmp/email_failed 2>/dev/null || echo 0)"
+          if [ "${FAILED}" != "0" ]; then
+            echo "::error::발행은 됐지만 메일 ${FAILED}통이 실패했다. 재발행하지 말고 Resend 상태를 확인해라."
             exit 1
           fi

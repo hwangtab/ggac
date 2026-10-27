@@ -215,9 +215,15 @@ export async function POST(request: NextRequest) {
 
     await notifyAdmins(
       admins,
-      '지원사업을 자동 발행했습니다',
+      result.email_failed > 0
+        ? '지원사업을 자동 발행했지만 메일 일부가 실패했습니다'
+        : '지원사업을 자동 발행했습니다',
       `${key} 회차를 발행했습니다. 공고 ${result.post_item_count}건 · 알림 ${result.notified}명 · ` +
-        `메일 ${result.email_sent}통 성공${result.email_failed > 0 ? ` · 실패 ${result.email_failed}통` : ''}.`,
+        `메일 ${result.email_sent}통 성공` +
+        (result.email_failed > 0
+          ? ` · 실패 ${result.email_failed}통. 다시 발행하면 성공한 분께 메일이 두 번 갑니다 — ` +
+            `재발행하지 말고 메일 발송 상태(Resend)를 확인해 주세요.`
+          : '.'),
       {
         weekKey: key,
         digestId: digest.id,
