@@ -35,11 +35,26 @@ interface FooterProps {
   }
 }
 
+/**
+ * `YYYY-MM-DD`를 ICU 없이 표시용 문자열로 바꾼다.
+ *
+ * `toLocaleDateString`은 런타임의 ICU 데이터를 따른다. 서버 Node와 브라우저의
+ * CLDR이 다르면 같은 날짜가 `2025/5/1`(서버)·`2025. 5. 1.`(Chrome)으로 갈려
+ * 푸터 한 줄 때문에 hydration이 실패하고, React가 페이지 전체를 클라이언트에서
+ * 다시 그린다(Homebrew Node의 icu4c 79에서 실측). 또 `new Date('2025-05-01')`은
+ * UTC 자정이라 UTC보다 서쪽 시간대에서는 하루 전날로 보인다. 운영 출력과 같은
+ * 모양을 문자열에서 직접 만든다.
+ */
+function formatIsoDate(iso: string, locale: string): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  if (!y || !m || !d) return iso
+  return locale === 'en' ? `${m}/${d}/${y}` : `${y}. ${m}. ${d}.`
+}
+
 const Footer = ({ globalData }: FooterProps) => {
   const t = useTranslations('footer')
   const tc = useTranslations('common')
   const locale = useLocale()
-  const dateLocale = locale === 'en' ? 'en-US' : 'ko-KR'
 
   // 기본값 설정
   const defaultData = {
@@ -238,10 +253,8 @@ const Footer = ({ globalData }: FooterProps) => {
               {t('businessNumber')}: {data.businessInfo.registrationNumber}
             </p>
             <p>
-              {t('established')}:{' '}
-              {new Date(data.businessInfo.establishedDate).toLocaleDateString(dateLocale)} |
-              {t('incorporated')}:{' '}
-              {new Date(data.businessInfo.registrationDate).toLocaleDateString(dateLocale)}
+              {t('established')}: {formatIsoDate(data.businessInfo.establishedDate, locale)} |
+              {t('incorporated')}: {formatIsoDate(data.businessInfo.registrationDate, locale)}
             </p>
           </div>
           <div className="flex flex-col items-center md:items-end gap-2">
