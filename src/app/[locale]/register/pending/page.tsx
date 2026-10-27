@@ -6,6 +6,7 @@ export const dynamic = 'force-dynamic'
 import { useState, useEffect, useRef } from 'react'
 import { Link, useRouter } from '@/i18n/navigation'
 import { useTranslations, useLocale } from 'next-intl'
+import { intlLocale } from '@/utils/intlLocale'
 import { fetchSessionProfile } from '@/utils/sessionProfile'
 import { SEOUL_TIME_ZONE } from '@/utils/date'
 
@@ -13,7 +14,7 @@ export default function PendingPage() {
   const t = useTranslations('auth')
   const locale = useLocale()
   const router = useRouter()
-  const dateLocale = locale === 'en' ? 'en-US' : 'ko-KR'
+  const dateLocale = intlLocale(locale)
   const [userEmail, setUserEmail] = useState<string>('')
   const [emailVerified, setEmailVerified] = useState<boolean | null>(null)
   const [checkingStatus, setCheckingStatus] = useState(false)

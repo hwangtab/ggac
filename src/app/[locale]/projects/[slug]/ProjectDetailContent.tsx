@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useTranslations, useLocale } from 'next-intl'
+import { intlLocale } from '@/utils/intlLocale'
 import { localizeProjectCategory } from '@/constants/categories'
 import { Link } from '@/i18n/navigation'
 import dynamic from 'next/dynamic'
@@ -46,7 +47,7 @@ export default function ProjectDetailContent({
 }: ProjectDetailContentProps) {
   const t = useTranslations('projects')
   const locale = useLocale()
-  const dateLocale = locale === 'en' ? 'en-US' : 'ko-KR'
+  const dateLocale = intlLocale(locale)
   const isEn = locale === 'en'
   // 공연일이 있으면 그 날짜를, 없으면 발행일을 상단에 표시.
   const displayDate = getProjectDisplayDate(project)

@@ -3,6 +3,7 @@
 import Image from 'next/image'
 import { FaInstagram, FaYoutube } from 'react-icons/fa'
 import { useTranslations, useLocale } from 'next-intl'
+import { intlLocale } from '@/utils/intlLocale'
 import { Link } from '@/i18n/navigation'
 import {
   toSafeEmailHref,
@@ -39,7 +40,7 @@ const Footer = ({ globalData }: FooterProps) => {
   const t = useTranslations('footer')
   const tc = useTranslations('common')
   const locale = useLocale()
-  const dateLocale = locale === 'en' ? 'en-US' : 'ko-KR'
+  const dateLocale = intlLocale(locale)
 
   // 기본값 설정
   const defaultData = {
