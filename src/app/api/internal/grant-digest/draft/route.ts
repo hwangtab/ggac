@@ -5,7 +5,7 @@
  * 인증은 기존 크론들(`/api/internal/dues/charge`)과 같은 방식 — 공유 토큰을 타이밍 안전 비교.
  *
  * **이 라우트는 조합원에게 아무것도 보내지 않는다.** 초안을 만들고 관리자에게만 알린다.
- * 발행은 같은 날 17시대 KST에 `../publish` 크론이 하거나(자동 발행이 켜져 있을 때) 관리자가
+ * 발행은 같은 날 17:17 KST에 `../publish`를 Vercel Cron이 부르거나(자동 발행이 켜져 있을 때) 관리자가
  * `/admin/grants`에서 누른다.
  */
 import { NextRequest } from 'next/server'

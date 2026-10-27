@@ -1,37 +1,25 @@
-# 매주 월요일 17시대 KST에 그 주 지원사업 회차를 발행한다(예비 실행 20시대).
+# 지원사업 회차를 **손으로** 발행한다(수동 실행 전용).
 #
-# 초안(grant-digest-draft, 08:00)이 만든 회차를 같은 날 오후에 내보낸다. 사이 아홉 시간이
-# 관리자가 검수할 여유다 — 관리자 > 지원사업에서 항목을 제외하면 그대로 반영된다.
+# 정기 발행은 Vercel Cron이 한다(`vercel.json`, 월 17:17·예비 20:17 KST — 켜고 끄는 것은
+# Vercel 환경변수 GRANT_AUTO_PUBLISH). 여기 예약 실행을 두지 않는 이유: GitHub 예약 실행이
+# 실측 7시간 늦게 돌았다(2026-10-26, 17:17 예정이 다음 날 00:15).
 #
-# **예약 실행은 저장소 변수 GRANT_AUTO_PUBLISH가 `true`일 때만 실제로 보낸다.** 그 외에는
-# 드라이런이다(판정만 하고 선점도 발송도 없다). 이번 주만 보내지 않으려면 17시 전에 변수를
-# `false`로 바꾼다. 변수는 Settings > Secrets and variables > Actions > Variables에 있다.
+# 이 워크플로는 Vercel 크론이 빠졌거나 멈춘 주에 같은 판정·같은 발행 경로를 손으로 부를 때
+# 쓴다. 입력 real=true일 때만 실제로 보내고, 비우면 드라이런이다.
 #
-# **수동 실행은 변수와 무관하게 입력 real=true일 때만 보낸다.** 변수가 켜진 채로 시험 삼아
-# 돌렸다가 메일이 나가면 안 된다 — 메일은 회수되지 않는다.
-#
-# 자동 발송을 멈춘 주(공고 0건·마감 지난 공고·회차 없음 등)는 이 워크플로가 **실패로**
-# 끝난다. 관리자 알림도 함께 간다. 그 주는 사람이 직접 발행한다.
+# 멈춘 주(공고 0건·마감 지난 공고·회차 없음 등)나 메일 실패가 있으면 **실패로** 끝난다.
 name: grant-digest-publish
 
 on:
-  # GitHub 예약 실행은 늦거나(초안 크론 실측 1시간 40분~3시간) 부하가 크면 **빠질 수 있다**.
-  # 빠지면 그 주가 아무 알림 없이 사라지므로 세 시간 뒤에 한 번 더 돈다. 두 번째 실행은
-  # 이미 발행된 회차를 보고 건너뛴다(선점이 중복 발송을 막는다). 정각은 부하가 몰려 17분에 둔다.
-  schedule:
-    - cron: "17 8 * * 1" # 월요일 08:17 UTC = 17:17 KST
-    - cron: "17 11 * * 1" # 월요일 11:17 UTC = 20:17 KST (예비)
   workflow_dispatch:
     inputs:
       real:
-        description: "true면 실제 발행. 비우면 드라이런(저장소 변수와 무관)."
+        description: "true면 실제 발행. 비우면 드라이런."
         required: false
         default: ""
 
-# 실행을 한 줄로 세운다. 예약 실행은 수 시간 늦기도 해서 17:17 실행이 20:17 예비 실행과
-# 겹칠 수 있다. 겹치면 뒤 실행이 앞 실행의 'publishing'을 보고 "발행이 멈췄다"는 거짓 경보를
-# 관리자에게 보낸다. 줄을 세우면 뒤 실행은 앞 실행이 끝난 뒤 'published'를 보고 건너뛴다.
-# 진행 중인 실행을 취소하면 메일이 반쯤 나간 채 끊기므로 취소하지 않는다.
+# 같은 회차를 두 번 손으로 눌러도 한 줄로 선다. 진행 중인 실행은 취소하지 않는다 —
+# 메일이 반쯤 나간 채 끊긴다.
 concurrency:
   group: grant-digest-publish
   cancel-in-progress: false
@@ -43,8 +31,6 @@ jobs:
       - name: 발행 요청
         env:
           TOKEN: ${{ secrets.GRANT_DIGEST_CRON_TOKEN }}
-          EVENT: ${{ github.event_name }}
-          AUTO: ${{ vars.GRANT_AUTO_PUBLISH }}
           REAL_INPUT: ${{ github.event.inputs.real }}
         run: |
           set -euo pipefail
@@ -55,9 +41,7 @@ jobs:
           fi
 
           URL=https://www.ggac.kr/api/internal/grant-digest/publish
-          # 예약 실행은 변수로, 수동 실행은 입력으로만 정한다(머리 주석 참고).
-          if [ "${EVENT}" = "schedule" ]; then REAL="${AUTO:-}"; else REAL="${REAL_INPUT:-}"; fi
-          if [ "${REAL}" = "true" ]; then
+          if [ "${REAL_INPUT:-}" = "true" ]; then
             echo "모드: 실제 발행"
           else
             echo "모드: 드라이런"
