@@ -40,7 +40,13 @@ test('편집 범위: draft 전체, active 본문만, 나머지 없음', () => {
   assert.equal(editScope('active'), 'contentOnly')
   assert.equal(editScope('submitted'), 'none')
   assert.equal(editScope('closed'), 'none')
-  assert.deepEqual([...CONTENT_ONLY_FIELDS].sort(), ['cover_image', 'end_at', 'og_image', 'story', 'summary'])
+  assert.deepEqual([...CONTENT_ONLY_FIELDS].sort(), [
+    'cover_image',
+    'end_at',
+    'og_image',
+    'story',
+    'summary',
+  ])
 })
 
 test('공개 상태는 active·closed·settled', () => {

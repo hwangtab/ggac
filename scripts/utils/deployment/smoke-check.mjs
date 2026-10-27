@@ -14,12 +14,24 @@
  * status<500만 보면 핵심 라우트가 제거돼 404가 나도 조용히 통과하므로,
  * 배포 회귀(경로 제거·라우팅 파손)를 감지하도록 기대 상태를 명시한다.
  * 하나라도 실패하면 기대/실제 상태를 출력하고 exit 1. Node 내장 fetch(18+)만.
+ *
+ * **리다이렉트가 다른 호스트로 끝나면 실패다.** Vercel 배포 보호가 켜진
+ * `*.vercel.app` URL은 모든 요청을 SSO 로그인 페이지로 302 보내고, 그 페이지는
+ * 200이다 — 상태만 보면 `/`·`/board`가 로그인 화면을 보고 PASS한다
+ * (2026-09-25 이후 실측). 최종 URL의 호스트가 기준 호스트와 같은지 본다.
+ *
+ * `SMOKE_EXPECT_COMMIT`을 주면 먼저 `/api/health`의 `commit`이 그 SHA가 될
+ * 때까지 기다린다(기본 최대 3분). 도메인이 아직 이전 배포를 가리키는 동안
+ * 돌면 이번 배포가 아니라 지난 배포를 검사하게 되기 때문이다.
  */
 
 const baseArg = process.argv[2] || process.env.SMOKE_BASE_URL || 'https://ggac.kr'
 const baseUrl = baseArg.replace(/\/+$/, '')
 
 const TIMEOUT_MS = 15000
+const expectCommit = process.env.SMOKE_EXPECT_COMMIT || ''
+const COMMIT_WAIT_MS = Number(process.env.SMOKE_COMMIT_WAIT_MS || 180000)
+const COMMIT_POLL_MS = 10000
 
 // 기대 상태 판정기: 'lt400'(페이지, 2xx·3xx) | 'eq200'(API) | 커스텀 함수
 const EXPECT = {
@@ -46,6 +58,15 @@ async function checkEndpoint({ path, expect, contract }) {
       signal: controller.signal,
       headers: { 'User-Agent': 'ggac-smoke-check' },
     })
+
+    const finalHost = new URL(res.url).host
+    if (finalHost !== new URL(baseUrl).host) {
+      return {
+        path,
+        ok: false,
+        reason: `다른 호스트로 리다이렉트됨(${finalHost}) — 배포 보호·SSO 페이지일 수 있다`,
+      }
+    }
 
     if (!expect.test(res.status)) {
       return { path, ok: false, reason: `기대 ${expect.label}, 실제 status ${res.status}` }
@@ -88,8 +109,40 @@ async function checkEndpoint({ path, expect, contract }) {
   }
 }
 
+async function readHealthCommit() {
+  try {
+    const res = await fetch(`${baseUrl}/api/health`, {
+      headers: { 'User-Agent': 'ggac-smoke-check' },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    })
+    const body = await res.json()
+    return body?.data?.commit ?? null
+  } catch {
+    return null
+  }
+}
+
+async function waitForCommit() {
+  const deadline = Date.now() + COMMIT_WAIT_MS
+  let seen = null
+  while (Date.now() < deadline) {
+    seen = await readHealthCommit()
+    if (seen === expectCommit) {
+      console.log(`[smoke] 배포 커밋 확인: ${expectCommit}`)
+      return true
+    }
+    await new Promise(resolve => setTimeout(resolve, COMMIT_POLL_MS))
+  }
+  console.error(`[smoke] ${COMMIT_WAIT_MS / 1000}s 안에 배포 커밋이 보이지 않았다`)
+  console.error(`  기대 ${expectCommit}, 실제 ${seen ?? '응답 없음'}`)
+  return false
+}
+
 async function main() {
   console.log(`[smoke] base: ${baseUrl}`)
+  if (expectCommit && !(await waitForCommit())) {
+    process.exit(1)
+  }
   const results = []
   for (const ep of ENDPOINTS) {
     const result = await checkEndpoint(ep)

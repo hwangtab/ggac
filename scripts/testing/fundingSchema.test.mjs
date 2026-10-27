@@ -34,7 +34,12 @@ async function indexNames() {
 
 test('펀딩 표 넷이 생긴다', async () => {
   const names = await tableNames()
-  for (const t of ['funding_campaigns', 'funding_rewards', 'funding_pledges', 'funding_settlements']) {
+  for (const t of [
+    'funding_campaigns',
+    'funding_rewards',
+    'funding_pledges',
+    'funding_settlements',
+  ]) {
     assert.ok(names.includes(t), `${t} 없음`)
   }
 })

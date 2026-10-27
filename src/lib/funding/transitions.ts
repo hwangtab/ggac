@@ -29,7 +29,13 @@ export function actorFor(action: CampaignAction): 'owner_or_admin' | 'admin' {
 }
 
 /** active에서 바꿔도 되는 컬럼(snake_case, 라우트 입력 키). 제목·slug·목표액·수수료율은 잠긴다. */
-export const CONTENT_ONLY_FIELDS = ['summary', 'story', 'cover_image', 'og_image', 'end_at'] as const
+export const CONTENT_ONLY_FIELDS = [
+  'summary',
+  'story',
+  'cover_image',
+  'og_image',
+  'end_at',
+] as const
 
 export function editScope(status: CampaignStatus): 'all' | 'contentOnly' | 'none' {
   if (status === 'draft') return 'all'

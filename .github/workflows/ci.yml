@@ -54,6 +54,15 @@ jobs:
         if: matrix.node-version == '22.x'
         run: npm run test:runtime-risks
 
+      # 쿼리 계층 테스트(documentVisibility·ingestInbound·queriesMailbox)는
+      # `file:local.db`에 실제로 쓰고 읽는다. 새 체크아웃에는 이 파일이 없어
+      # `no such table`로 깨지므로 스키마를 먼저 밀어 넣는다.
+      - name: Prepare local unit-test database
+        if: matrix.node-version == '22.x'
+        run: npx drizzle-kit push --force
+        env:
+          TURSO_DATABASE_URL: file:local.db
+
       # 단위 테스트는 src/**/*.ts를 직접 import한다(타입 스트리핑 필요). 20.x에는
       # 타입 스트리핑이 없고, 22.x는 --experimental-strip-types 플래그가 필요하다
       # (플래그는 test:unit 스크립트에 있음). 그래서 22.x에서만 실행한다.

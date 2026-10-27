@@ -24,11 +24,11 @@ jobs:
         with:
           node-version: "22.x"
 
-      - name: Run smoke check against deployed URL
+      # 배포 고유 URL(environment_url, *.vercel.app)은 배포 보호 때문에 SSO
+      # 로그인 페이지로 302된다 — 2026-09-25부터 그 URL을 치던 스모크가 매번
+      # 실패했다. 그래서 사용자가 실제로 보는 프로덕션 도메인을 치고, health의
+      # commit이 이 배포의 SHA가 될 때까지 기다려 "지난 배포를 검사하는" 일을 막는다.
+      - name: Run smoke check against production domain
         env:
-          # Vercel이 채워주는 배포 URL. 없으면 프로덕션 도메인으로 폴백.
-          DEPLOY_URL: ${{ github.event.deployment_status.environment_url }}
-        run: |
-          BASE="${DEPLOY_URL:-https://ggac.kr}"
-          echo "Running smoke check against: $BASE"
-          node scripts/utils/deployment/smoke-check.mjs "$BASE"
+          SMOKE_EXPECT_COMMIT: ${{ github.event.deployment.sha }}
+        run: node scripts/utils/deployment/smoke-check.mjs https://ggac.kr

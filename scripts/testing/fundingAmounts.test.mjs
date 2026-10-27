@@ -1,11 +1,18 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { computePledgeTotal, PledgeAmountError, MAX_QUANTITY } from '../../src/lib/funding/amounts.ts'
+import {
+  computePledgeTotal,
+  PledgeAmountError,
+  MAX_QUANTITY,
+} from '../../src/lib/funding/amounts.ts'
 import { generatePledgeCode, isPledgeCode } from '../../src/lib/funding/pledgeCode.ts'
 
 test('합계 = 단가×수량 + 추가금', () => {
-  assert.equal(computePledgeTotal({ unitAmount: 30000, quantity: 2, additionalAmount: 5000 }), 65000)
+  assert.equal(
+    computePledgeTotal({ unitAmount: 30000, quantity: 2, additionalAmount: 5000 }),
+    65000
+  )
 })
 
 test('수량 0·소수·상한 초과는 거절', () => {

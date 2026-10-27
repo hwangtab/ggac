@@ -7,10 +7,7 @@
  *
  * fire-and-forget이다 — 에러 화면 자체를 막으면 안 되므로 실패해도 삼킨다.
  */
-export function reportClientError(
-  error: Error & { digest?: string },
-  boundaryName: string
-): void {
+export function reportClientError(error: Error & { digest?: string }, boundaryName: string): void {
   if (typeof window === 'undefined') return
 
   fetch('/api/client-error', {
