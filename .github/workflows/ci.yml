@@ -16,7 +16,8 @@ jobs:
 
     strategy:
       matrix:
-        # 20.x는 EOL이라 보안 패치가 없다. 22.x는 Vercel 런타임, 24.x는 로컬.
+        # 20.x는 EOL이라 보안 패치가 없다. 22.x는 Vercel 런타임이라 lint·tsc만
+        # 확인하고, 테스트 게이트는 로컬과 같은 24.x에서 돈다(로컬 Node는 24만 둔다).
         node-version: [22.x, 24.x]
 
     steps:
@@ -41,33 +42,33 @@ jobs:
       - name: Check Prettier formatting
         run: npx prettier --check .
 
-      # 스키마 계약 검사는 node:fs globSync(Node 22+)를 쓰므로 22.x에서만 실행.
+      # 스키마 계약 검사는 node:fs globSync(Node 22+)를 쓴다. 게이트는 24.x에서만 돈다.
       # 스냅샷 JSON을 대조하므로 DB 접속은 불필요.
       - name: Check schema contract
-        if: matrix.node-version == '22.x'
+        if: matrix.node-version == '24.x'
         run: npm run test:schema-contract
 
       # 런타임 리스크 정적 게이트: 인증 경계·경로 봉쇄·SSRF 방어 등 보안 불변식이
-      # 회귀하지 않는지 소스를 정적으로 검사한다. Node 버전 제약은 없지만 20.x에서도
-      # 중복 실행할 이유가 없으므로 스키마 계약 검사와 동일하게 22.x에서만 실행한다.
+      # 회귀하지 않는지 소스를 정적으로 검사한다. Node 버전 제약은 없지만 두 번
+      # 돌릴 이유가 없으므로 스키마 계약 검사와 같이 24.x에서만 실행한다.
       - name: Check runtime risk gate
-        if: matrix.node-version == '22.x'
+        if: matrix.node-version == '24.x'
         run: npm run test:runtime-risks
 
       # 쿼리 계층 테스트(documentVisibility·ingestInbound·queriesMailbox)는
       # `file:local.db`에 실제로 쓰고 읽는다. 새 체크아웃에는 이 파일이 없어
       # `no such table`로 깨지므로 스키마를 먼저 밀어 넣는다.
       - name: Prepare local unit-test database
-        if: matrix.node-version == '22.x'
+        if: matrix.node-version == '24.x'
         run: npx drizzle-kit push --force
         env:
           TURSO_DATABASE_URL: file:local.db
 
-      # 단위 테스트는 src/**/*.ts를 직접 import한다(타입 스트리핑 필요). 20.x에는
-      # 타입 스트리핑이 없고, 22.x는 --experimental-strip-types 플래그가 필요하다
-      # (플래그는 test:unit 스크립트에 있음). 그래서 22.x에서만 실행한다.
+      # 단위 테스트는 src/**/*.ts를 직접 import한다(타입 스트리핑 필요). 24.x는
+      # 타입 스트리핑이 기본이라 로컬과 같은 조건으로 돈다(test:unit의
+      # --experimental-strip-types 플래그는 22.x 호환용으로 남아 있다).
       - name: Run unit tests
-        if: matrix.node-version == '22.x'
+        if: matrix.node-version == '24.x'
         run: npm run test:unit
 
   build:
