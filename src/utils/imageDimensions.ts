@@ -1,5 +1,5 @@
 import * as cheerio from 'cheerio'
-import sharp from 'sharp'
+import sharp from '../lib/server/sharp.ts'
 
 export type ImageDim = { width: number; height: number }
 

@@ -556,7 +556,9 @@ const nextConfig = {
     // 캐시 수명 — 정적 자산은 길게(31일)가 재방문 LCP에 유리.
     // 이미지가 변경되면 파일명/쿼리스트링이 바뀌므로 stale 콘텐츠 위험은 거의 없음.
     minimumCacheTTL: process.env.NODE_ENV === 'development' ? 600 : 60 * 60 * 24 * 31, // dev 10m / prod 31d
-    dangerouslyAllowSVG: true,
+    // SVG는 최적화기에 넣지 않는다. 최적화 경로의 SVG 렌더링이 RCE였고
+    // (CVE-2026-96889), next/image는 `.svg` src를 자동으로 unoptimized 처리한다.
+    dangerouslyAllowSVG: false,
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
     // 이미지 최적화 오류 시 fallback 허용
     unoptimized: false,

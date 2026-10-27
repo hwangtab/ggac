@@ -10,7 +10,7 @@ export const maxDuration = 30
 export const preferredRegion = 'icn1'
 
 import { NextRequest, NextResponse } from 'next/server'
-import sharp from 'sharp'
+import sharp from '@/lib/server/sharp'
 import { hasPublicBlobStore, listObjects } from '@/lib/storage/blob'
 import { toMediaListing } from '@/lib/storage/mediaListing'
 import type { MediaFile } from '@/types'

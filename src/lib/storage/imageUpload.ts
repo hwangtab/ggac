@@ -25,7 +25,7 @@
  * 않는 것이 이 파일의 목적이다.
  */
 import path from 'path'
-import sharp from 'sharp'
+import sharp from '@/lib/server/sharp'
 
 import { putPublicObject } from '@/lib/storage/provider'
 import { buildVariantPathSuffixes } from '@/lib/storage/paths'

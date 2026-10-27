@@ -16,7 +16,8 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [20.x, 22.x]
+        # 20.x는 EOL이라 보안 패치가 없다. 22.x는 Vercel 런타임, 24.x는 로컬.
+        node-version: [22.x, 24.x]
 
     steps:
       - name: Checkout code
