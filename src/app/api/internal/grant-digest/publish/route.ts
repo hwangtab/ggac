@@ -31,7 +31,7 @@ import {
 } from '@/db/queries/grantDigests'
 import { listProfiles, type ProfileRow } from '@/db/queries/profiles'
 import { isBoardEnabled } from '@/lib/features/settings'
-import { adminUserIds, notifyAdmins } from '@/lib/server/grantAdminNotify'
+import { adminUserIds, alertAdmins, notifyAdmins } from '@/lib/server/grantAdminNotify'
 import {
   activeItems,
   autoPublishBlockers,
@@ -113,8 +113,8 @@ async function run(dry: boolean) {
     const digest = await getGrantDigestByWeekKey(key)
     if (!digest) {
       // 초안 크론이 실패했거나 아직 안 돌았다. 조용히 넘기면 이번 주가 통째로 사라진다.
-      await notifyAdmins(
-        admins,
+      await alertAdmins(
+        rows,
         '지원사업 자동 발행을 하지 못했습니다',
         `${key} 회차가 없습니다. 초안 생성이 실패했는지 확인해 주세요.`,
         { weekKey: key }
@@ -126,8 +126,8 @@ async function run(dry: boolean) {
       // 나갔을 수 있어 다시 보내면 안 되고, 조용히 넘기면 아무도 모른다 — 사람을 부른다.
       // 관리자가 바로 지금 발행 버튼을 누른 경우에도 이 알림이 갈 수 있다. 그때는 무시하면 된다.
       if (!dry) {
-        await notifyAdmins(
-          admins,
+        await alertAdmins(
+          rows,
           '지원사업 회차가 발행 중 상태로 남아 있습니다',
           `${key} 회차가 'publishing' 상태라 자동 발행이 손대지 않았습니다. 방금 직접 발행한 ` +
             `것이 아니라면 발행이 도중에 멈춘 것입니다. 일부 메일이 나갔을 수 있으니 다시 ` +
@@ -173,8 +173,8 @@ async function run(dry: boolean) {
 
     if (reasons.length > 0 || !author) {
       if (!dry) {
-        await notifyAdmins(
-          admins,
+        await alertAdmins(
+          rows,
           '지원사업 자동 발행을 멈췄습니다',
           `${key} 회차를 보내지 않았습니다. ${reasons.join(' ')} ` +
             (author ? '' : `(작성자 설정: ${authorEmail}) `) +
@@ -212,8 +212,8 @@ async function run(dry: boolean) {
     const lateReasons = contentBlockers(claimed.items, draftDayIso)
     if (lateReasons.length > 0) {
       await updateGrantDigest(claimed.id, { status: 'draft' })
-      await notifyAdmins(
-        admins,
+      await alertAdmins(
+        rows,
         '지원사업 자동 발행을 멈췄습니다',
         `${key} 회차를 보내지 않았습니다. ${lateReasons.join(' ')} ` +
           `관리자 > 지원사업에서 확인하고 직접 발행해 주세요.`,
@@ -233,8 +233,12 @@ async function run(dry: boolean) {
       actor: 'cron',
     })
 
-    await notifyAdmins(
-      admins,
+    // 평소 소식은 인앱 알림만, 메일 실패가 있으면 경보(메일 포함)로 보낸다.
+    const tell = (title: string, message: string, data: Record<string, unknown>) =>
+      result.email_failed > 0
+        ? alertAdmins(rows, title, message, data)
+        : notifyAdmins(admins, title, message, data)
+    await tell(
       result.email_failed > 0
         ? '지원사업을 자동 발행했지만 메일 일부가 실패했습니다'
         : '지원사업을 자동 발행했습니다',
@@ -264,17 +268,16 @@ async function run(dry: boolean) {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     log.error('자동 발행 실패', { weekKey: key, error: message })
-    let adminIds: string[] = []
+    let rows: ProfileRow[] = []
     try {
-      const rows =
+      rows =
         profiles ??
         (await listProfiles({ status: 'approved', limit: MEMBER_FETCH_LIMIT, offset: 0 })).rows
-      adminIds = adminUserIds(rows)
     } catch {
-      // 알림 대상을 못 구하면 로그만 남는다. 워크플로가 5xx로 실패 표시한다.
+      // 알림 대상을 못 구하면 로그만 남는다.
     }
-    await notifyAdmins(
-      adminIds,
+    await alertAdmins(
+      rows,
       '지원사업 자동 발행에 실패했습니다',
       `${key} 회차 발행 중 오류가 났습니다. 일부 메일이 이미 나갔을 수 있으니 ` +
         `다시 발행하기 전에 관리자 > 지원사업에서 상태를 확인해 주세요. 원인: ${message.slice(0, 200)}`,

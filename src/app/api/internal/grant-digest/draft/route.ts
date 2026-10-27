@@ -2,7 +2,8 @@
  * 예술지원사업 주간 초안 생성 (크론 전용).
  *
  * 판단 로직은 `src/lib/server/grantDigest.ts`에 있고 여기는 **배선만** 한다.
- * 인증은 기존 크론들(`/api/internal/dues/charge`)과 같은 방식 — 공유 토큰을 타이밍 안전 비교.
+ * 부르는 길: GET은 Vercel Cron(`CRON_SECRET`), POST는 GitHub Actions·수동(`GRANT_DIGEST_CRON_TOKEN`).
+ * 둘 다 같은 일을 하고, 이미 있는 회차는 건너뛴다.
  *
  * **이 라우트는 조합원에게 아무것도 보내지 않는다.** 초안을 만들고 관리자에게만 알린다.
  * 발행은 같은 날 17:17 KST에 `../publish`를 Vercel Cron이 부르거나(자동 발행이 켜져 있을 때) 관리자가
@@ -17,7 +18,7 @@ import {
   listRecentDigestItems,
 } from '@/db/queries/grantDigests'
 import { listProfiles, type ProfileRow } from '@/db/queries/profiles'
-import { adminUserIds, notifyAdmins } from '@/lib/server/grantAdminNotify'
+import { adminUserIds, alertAdmins, notifyAdmins } from '@/lib/server/grantAdminNotify'
 import { fetchGrantOpportunities } from '@/lib/server/grantFetch'
 import {
   DEDUPE_WEEKS,
@@ -54,8 +55,7 @@ export const maxDuration = 300
 /** 수집 범위(관심사 합집합)와 관리자 목록을 함께 낼 때 쓰는 회원 조회 상한. */
 const MEMBER_FETCH_LIMIT = 1000
 
-function isAuthorized(request: NextRequest): boolean {
-  const expected = process.env.GRANT_DIGEST_CRON_TOKEN
+function bearerMatches(request: NextRequest, expected: string | undefined): boolean {
   if (!expected) return false
   const header = request.headers.get('authorization') ?? ''
   const provided = header.startsWith('Bearer ') ? header.slice(7) : ''
@@ -63,11 +63,27 @@ function isAuthorized(request: NextRequest): boolean {
   return timingSafeEqual(Buffer.from(provided), Buffer.from(expected))
 }
 
-export async function POST(request: NextRequest) {
-  if (!isAuthorized(request)) {
+/**
+ * Vercel Cron(`vercel.json`, 월 07:30 KST). GitHub 예약 실행(08:00)은 실측 몇 시간씩 늦어서
+ * (2026-10-26 발행 워크플로는 7시간) 17:17 자동 발행 전에 초안이 없을 수 있다. 정해진 분에
+ * 도는 Vercel이 먼저 만들고, 늦게 오는 GitHub 실행은 "이미 있는 회차"로 건너뛴다.
+ */
+export async function GET(request: NextRequest) {
+  if (!bearerMatches(request, process.env.CRON_SECRET)) {
     return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
   }
+  return run()
+}
 
+/** GitHub Actions(`grant-digest-draft.yml`)와 손으로 부를 때. */
+export async function POST(request: NextRequest) {
+  if (!bearerMatches(request, process.env.GRANT_DIGEST_CRON_TOKEN)) {
+    return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
+  }
+  return run()
+}
+
+async function run() {
   const key = weekKey()
   // 성공 경로에서 이미 읽은 회원 목록을 catch에서도 재사용한다. 목록 조회 자체가
   // 실패하면 이 값은 계속 null이고, catch에서 관리자 id만 다시 조회한다.
@@ -168,33 +184,44 @@ export async function POST(request: NextRequest) {
     const message = error instanceof Error ? error.message : String(error)
     log.error('초안 생성 실패', { weekKey: key, error: message })
 
+    // 두 크론(Vercel·GitHub)이 겹쳐 같은 주를 동시에 만들면 뒤쪽은 week_key 유일 인덱스에
+    // 걸려 던진다. 그건 실패가 아니다 — 회차가 생겼으면 건너뜀으로 끝낸다(거짓 경보 방지).
+    try {
+      const raced = await getGrantDigestByWeekKey(key)
+      if (raced) {
+        log.info('다른 실행이 먼저 회차를 만들었다', { weekKey: key, digestId: raced.id })
+        return ApiSuccess.ok({ skipped: true, week_key: key, digest_id: raced.id }).toNextResponse()
+      }
+    } catch {
+      // 재조회도 실패하면 아래에서 실패로 알린다.
+    }
+
     // 조합원에게는 아무 일도 일어나지 않는다. 관리자만 안다 — 그러니 이 경로에서도
-    // 반드시 알림이 가야 한다. 위에서 회원 목록을 이미 읽었으면 그걸 쓰고, 못 읽었으면
-    // (목록 조회 자체가 실패 원인이었을 수 있다) 관리자 id만 다시 조회한다.
-    let adminIds: string[]
-    if (profiles) {
-      adminIds = adminUserIds(profiles)
-    } else {
+    // 반드시 알림이 가야 한다(메일 포함 — 오후 자동 발행이 이 회차를 기다린다). 위에서
+    // 회원 목록을 이미 읽었으면 그걸 쓰고, 못 읽었으면 다시 조회한다.
+    let rows: ProfileRow[] = profiles ?? []
+    if (!profiles) {
       try {
-        const { rows } = await listProfiles({
-          status: 'approved',
-          limit: MEMBER_FETCH_LIMIT,
-          offset: 0,
-        })
-        adminIds = adminUserIds(rows)
+        rows = (
+          await listProfiles({
+            status: 'approved',
+            limit: MEMBER_FETCH_LIMIT,
+            offset: 0,
+          })
+        ).rows
       } catch (retryError) {
         log.error('관리자 알림 대상 재조회 실패', {
           weekKey: key,
           error: retryError instanceof Error ? retryError.message : String(retryError),
         })
-        adminIds = []
       }
     }
 
-    await notifyAdmins(
-      adminIds,
+    await alertAdmins(
+      rows,
       '지원사업 초안 생성에 실패했습니다',
-      `${key} 회차 초안을 만들지 못했습니다. 원인: ${message.slice(0, 200)}`,
+      `${key} 회차 초안을 만들지 못했습니다. 오늘 오후 자동 발행도 이 회차가 없으면 멈춥니다. ` +
+        `원인: ${message.slice(0, 200)}`,
       { weekKey: key }
     )
     return ApiError.internalServerError('초안 생성에 실패했습니다.').toNextResponse()
