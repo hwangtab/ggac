@@ -5,6 +5,7 @@ import OptimizedImage from '@/components/OptimizedImage'
 import { FiCalendar, FiTag, FiExternalLink } from 'react-icons/fi'
 import { getProjectSummary } from '@/utils/projectUtils'
 import { useTranslations, useLocale } from 'next-intl'
+import { intlLocale } from '@/utils/intlLocale'
 import { localizeProjectCategory } from '@/constants/categories'
 import { toSafeInternalImagePath } from '@/utils/safeUrl'
 import { getProjectDisplayDate } from '@/utils/projectDate'
@@ -23,7 +24,7 @@ export default function ArtistProjects({
 }: ArtistProjectsProps) {
   const t = useTranslations('artists')
   const locale = useLocale()
-  const dateLocale = locale === 'en' ? 'en-US' : 'ko-KR'
+  const dateLocale = intlLocale(locale)
 
   if (projects.length === 0) {
     return (

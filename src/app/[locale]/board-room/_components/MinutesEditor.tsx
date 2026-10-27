@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
-import RichTextEditor from '@/components/RichTextEditor'
+import RichTextEditor from '@/components/RichTextEditorDynamic'
 import { PostContentRenderer } from '@/components/PostContentRenderer'
 
 interface Minutes {

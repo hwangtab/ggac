@@ -6,11 +6,10 @@
  */
 
 import { SEOUL_TIME_ZONE } from '@/utils/date'
+import { intlLocale } from '@/utils/intlLocale'
 
-/** next-intl locale → Intl 로케일 태그. */
-export function intlLocale(locale: string): string {
-  return locale === 'en' ? 'en-US' : 'ko-KR'
-}
+// 금액 통화 표기는 번역 문자열(`priceFormat`)이 붙인다.
+export { intlLocale, formatAmount } from '@/utils/intlLocale'
 
 /** 회차 시각. 예) 9월 12일 (금) 오후 07:30 */
 export function formatShowTime(iso: string | null | undefined, locale: string): string {
@@ -25,9 +24,4 @@ export function formatShowTime(iso: string | null | undefined, locale: string): 
     minute: '2-digit',
     ...SEOUL_TIME_ZONE,
   })
-}
-
-/** 금액의 숫자 부분만 만든다. 통화 표기는 번역 문자열(`priceFormat`)이 붙인다. */
-export function formatAmount(value: number, locale: string): string {
-  return new Intl.NumberFormat(intlLocale(locale)).format(Math.max(0, Math.trunc(value || 0)))
 }

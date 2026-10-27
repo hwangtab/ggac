@@ -6,14 +6,10 @@
  * (`../tickets/format.ts`)과 같은 이유·같은 방식이다.
  */
 
-export function intlLocale(locale: string): string {
-  return locale === 'en' ? 'en-US' : 'ko-KR'
-}
-
-/** 금액의 숫자 부분만. 통화 표기는 번역 문자열(`amountFormat`)이 붙인다. */
-export function formatAmount(value: number, locale: string): string {
-  return new Intl.NumberFormat(intlLocale(locale)).format(Math.max(0, Math.trunc(value || 0)))
-}
+// 상대 경로 + `.ts`: 단위 테스트(scripts/testing/fundingFormat.test.mjs)가 이 파일을
+// node로 직접 불러오므로 `@/` 별칭을 쓸 수 없다. 금액 통화 표기는 번역 문자열
+// (`amountFormat`)이 붙인다.
+export { intlLocale, formatAmount } from '../../../utils/intlLocale.ts'
 
 /**
  * 달성률(%). 내림한 정수다 — 99.9%를 100%로 올리면 목표를 넘긴 것처럼 읽힌다.

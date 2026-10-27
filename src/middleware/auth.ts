@@ -404,15 +404,5 @@ export async function handleAuth(
     }
   }
 
-  // 2.4. 유지보수 모드 확인 (관리자는 제외)
-  if (systemSettings?.maintenanceMode && !isAdmin) {
-    // 유지보수 모드는 상위(middleware.ts)에서 처리하지만, 관리자 여부를 알기 위해 profile이 필요함
-    // 하지만 여기까지 왔다면 상위에서 이미 유지보수 체크를 했을 것임.
-    // 문제는 profile 조회 전에 maintenance check가 있다는 점.
-    // 따라서 상위 middleware.ts에서 maintenance check를 할 때 관리자 여부를 확인해야 함.
-    // 이 부분은 auth.ts가 아니라 maintenance.ts로 분리하거나 middleware.ts에서 처리해야 함.
-    // 여기서는 pass.
-  }
-
   return { user, profile, shouldContinue: true }
 }

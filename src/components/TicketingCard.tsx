@@ -5,12 +5,13 @@ import Image from 'next/image'
 import { createImageProxy } from '@/utils/imageValidation'
 import { getSafeHostname, toSafeHttpUrl } from '@/utils/safeUrl'
 import { useTranslations, useLocale } from 'next-intl'
+import { intlLocale } from '@/utils/intlLocale'
 import type { TicketingInfo, LinkPreview, TicketingCardProps } from '@/types'
 
 const TicketingCard = ({ ticketing }: TicketingCardProps) => {
   const t = useTranslations('projects')
   const locale = useLocale()
-  const dateLocale = locale === 'en' ? 'en-US' : 'ko-KR'
+  const dateLocale = intlLocale(locale)
   const safeTicketingUrl = toSafeHttpUrl(ticketing.url)
   const hostname = getSafeHostname(ticketing.url)
   const [preview, setPreview] = useState<LinkPreview | null>(ticketing.preview || null)

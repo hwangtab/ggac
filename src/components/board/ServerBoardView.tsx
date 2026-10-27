@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Link } from '@/i18n/navigation'
 import { useTranslations, useLocale } from 'next-intl'
+import { intlLocale } from '@/utils/intlLocale'
 import { parseBoardCategory } from '@/constants/categories'
 import { parseIntegerParam } from '@/utils/queryParams'
 import type { BoardInitialPost } from '@/lib/server/board'
@@ -66,7 +67,7 @@ export const BoardListView = ({
 }: BoardListViewProps) => {
   const t = useTranslations('board')
   const locale = useLocale()
-  const dateLocale = locale === 'en' ? 'en-US' : 'ko-KR'
+  const dateLocale = intlLocale(locale)
 
   const isInitialView = category === '전체' && requestedPage === 1
 
