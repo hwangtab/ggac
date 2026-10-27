@@ -24,7 +24,7 @@
     },
     {
       "path": "/api/internal/grant-digest/draft",
-      "schedule": "30 22 * * 0"
+      "schedule": "0 0 * * 1"
     },
     {
       "path": "/api/internal/grant-digest/publish",

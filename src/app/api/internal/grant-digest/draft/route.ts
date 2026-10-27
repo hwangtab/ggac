@@ -64,9 +64,16 @@ function bearerMatches(request: NextRequest, expected: string | undefined): bool
 }
 
 /**
- * Vercel Cron(`vercel.json`, 월 07:30 KST). GitHub 예약 실행(08:00)은 실측 몇 시간씩 늦어서
- * (2026-10-26 발행 워크플로는 7시간) 17:17 자동 발행 전에 초안이 없을 수 있다. 정해진 분에
- * 도는 Vercel이 먼저 만들고, 늦게 오는 GitHub 실행은 "이미 있는 회차"로 건너뛴다.
+ * Vercel Cron(`vercel.json`, 월 09:00 KST).
+ *
+ * **시각은 kosmart 수집 뒤여야 한다.** kosmartweb은 공고를 매일 08:00 KST에 수집한다
+ * (`crawl-opportunities`, 23:00 UTC, 최대 5분). 그 전에 가져가면 일요일 아침 수집분을 받아
+ * 하루치 새 공고가 그 주에서 빠진다. 옛 GitHub 일정(08:00)도 수집과 같은 시각이었는데,
+ * 매번 1~3시간 늦게 돌아 우연히 맞았을 뿐이다.
+ *
+ * GitHub 예약 실행은 실측 몇 시간씩 늦어(2026-10-26 발행 워크플로는 7시간) 17:17 자동 발행
+ * 전에 초안이 없을 수 있다. 정해진 분에 도는 Vercel이 만들고, 늦게 오는 GitHub 실행은
+ * "이미 있는 회차"로 건너뛴다.
  */
 export async function GET(request: NextRequest) {
   if (!bearerMatches(request, process.env.CRON_SECRET)) {
