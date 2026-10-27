@@ -87,7 +87,7 @@ export const GET = defineApiRoute({
 const StatusUpdateSchema = z.object({
   id: z.string().uuid('유효한 ID가 필요합니다.'),
   status: z.enum(EVENT_APPLICATION_STATUSES, {
-    errorMap: () => ({ message: 'pending, approved, rejected 중 하나여야 합니다.' }),
+    error: 'pending, approved, rejected 중 하나여야 합니다.',
   }),
   /**
    * 관리자가 화면에서 보고 있던 상태. 이 값이 아직 그대로일 때만 갱신한다
@@ -96,7 +96,7 @@ const StatusUpdateSchema = z.object({
    */
   expected_status: z
     .enum(EVENT_APPLICATION_STATUSES, {
-      errorMap: () => ({ message: 'pending, approved, rejected 중 하나여야 합니다.' }),
+      error: 'pending, approved, rejected 중 하나여야 합니다.',
     })
     .optional(),
 })
