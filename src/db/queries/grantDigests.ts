@@ -116,7 +116,10 @@ export async function getGrantDigestById(id: string): Promise<GrantDigestRow | n
 export async function claimGrantDigestForPublish(id: string): Promise<GrantDigestRow | null> {
   const [row] = await db
     .update(grantDigests)
-    .set({ status: 'publishing' })
+    // 선점 시각을 `published_at`에 적어 둔다 — 'publishing' 동안은 "발행 시작 시각"이고,
+    // 끝나면 완료 시각으로 덮인다. 크론이 'publishing'을 만났을 때 "지금 다른 실행이 보내는
+    // 중"(몇 분 안)과 "도중에 죽어 갇힘"을 이 값으로 가른다. draft로 되돌릴 때는 지운다.
+    .set({ status: 'publishing', publishedAt: new Date() })
     .where(and(eq(grantDigests.id, id), eq(grantDigests.status, 'draft')))
     .returning()
   return row ? rowToDigest(row) : null

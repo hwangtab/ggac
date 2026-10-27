@@ -24,6 +24,37 @@ const log = createLogger('lib/server/grantPublishWiring')
 /** 승인·활성 조합원. 필터 없는 목록 조회 상한 안에서 받아 메모리로 거른다(현재 23행). */
 export const MEMBER_FETCH_LIMIT = 1000
 
+/** Resend 기본 속도 제한은 초당 2건이다. 연달아 보내면 429로 실패분이 생긴다. */
+const MIN_SEND_INTERVAL_MS = 600
+const RATE_LIMIT_RETRY_DELAY_MS = 1500
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+/**
+ * 순차 발송 사이에 간격을 두고, 429(속도 제한)면 한 번만 다시 보낸다.
+ *
+ * 로컬 스크립트로 보낼 때는 왕복 지연이 간격 노릇을 해서 17통이 다 갔지만, 같은 리전 안의
+ * 서버에서 연달아 부르면 초당 2건을 넘길 수 있다. 다른 실패(주소 거부 등)는 다시 보내지
+ * 않는다 — 실패로 세어 관리자에게 알린다. 429는 Resend가 **받지 않았다**는 뜻이라 다시
+ * 보내도 중복이 아니다.
+ */
+function throttledSendEmail(): typeof sendEmail {
+  let lastAt = 0
+  return async mail => {
+    const wait = lastAt + MIN_SEND_INTERVAL_MS - Date.now()
+    if (wait > 0) await sleep(wait)
+    lastAt = Date.now()
+    try {
+      return await sendEmail(mail)
+    } catch (error) {
+      if (!(error instanceof Error && error.message.includes('(429)'))) throw error
+      await sleep(RATE_LIMIT_RETRY_DELAY_MS)
+      lastAt = Date.now()
+      return sendEmail(mail)
+    }
+  }
+}
+
 export async function publishClaimedDigest(input: {
   claimed: GrantDigestRow
   authorId: string
@@ -86,7 +117,7 @@ export async function publishClaimedDigest(input: {
       },
       createBulkNotifications: async n =>
         createBulkNotifications(n as Parameters<typeof createBulkNotifications>[0]),
-      sendEmail,
+      sendEmail: throttledSendEmail(),
       log,
     })
   } catch (error) {
@@ -109,7 +140,7 @@ export async function publishClaimedDigest(input: {
     // 게시글 생성 실패 — 아무것도 나가지 않았다. 선점을 되돌리지 않으면 회차가
     // 'publishing'에 영구히 갇혀 다시 발행할 수 없다.
     try {
-      await updateGrantDigest(id, { status: 'draft' })
+      await updateGrantDigest(id, { status: 'draft', published_at: null })
     } catch (rollbackError) {
       log.error('발행 실패 후 draft 되돌리기 실패 — 회차가 publishing에 갇혔다', {
         digestId: id,

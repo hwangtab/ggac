@@ -50,6 +50,18 @@ export const dynamic = 'force-dynamic'
 /** 순차 메일 발송 + 게시글 + 알림. 관리자 발행 라우트와 같은 값이다. */
 export const maxDuration = 300
 
+/**
+ * 이 시간 안에 선점된 'publishing'은 "다른 실행이 지금 보내는 중"으로 본다. 발행 함수의
+ * maxDuration(300초)에 여유를 얹었다. 이보다 오래면 도중에 죽어 갇힌 것이다.
+ */
+const IN_FLIGHT_MS = 10 * 60_000
+
+function isRecentClaim(claimedAtIso: string | null): boolean {
+  if (!claimedAtIso) return false
+  const at = Date.parse(claimedAtIso)
+  return Number.isFinite(at) && Date.now() - at < IN_FLIGHT_MS
+}
+
 /** 게시글 작성자. 회차 글은 개인이 아니라 조합 공식 계정 명의로 나간다. */
 const DEFAULT_AUTHOR_EMAIL = 'contact@ggac.kr'
 
@@ -120,6 +132,16 @@ async function run(dry: boolean) {
         { weekKey: key }
       )
       return ApiError.notFound(`${key} 회차가 없습니다.`).toNextResponse()
+    }
+    if (digest.status === 'publishing' && isRecentClaim(digest.published_at)) {
+      // 방금 다른 실행이 선점해 보내는 중이다. Vercel Cron은 같은 호출을 드물게 두 번
+      // 보내고, 관리자가 같은 때 발행 버튼을 누를 수도 있다. 경보를 보내면 거짓 경보다.
+      log.info('다른 실행이 발행 중이라 건너뛴다', { weekKey: key })
+      return ApiSuccess.ok({
+        skipped: true,
+        week_key: key,
+        status: 'publishing',
+      }).toNextResponse()
     }
     if (digest.status === 'publishing') {
       // 발행이 도중에 죽었을 수 있다(maxDuration에 걸리면 catch도 못 돈다). 일부 메일이
@@ -211,7 +233,7 @@ async function run(dry: boolean) {
     // 처음 읽은 뒤 선점 전에 관리자 편집이 끼었을 수 있다 — 실제로 나갈 items로 다시 본다.
     const lateReasons = contentBlockers(claimed.items, draftDayIso)
     if (lateReasons.length > 0) {
-      await updateGrantDigest(claimed.id, { status: 'draft' })
+      await updateGrantDigest(claimed.id, { status: 'draft', published_at: null })
       await alertAdmins(
         rows,
         '지원사업 자동 발행을 멈췄습니다',

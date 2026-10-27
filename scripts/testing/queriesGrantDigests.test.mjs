@@ -206,6 +206,9 @@ test('claimGrantDigestForPublish: draft 회차를 선점하면 publishing이 되
   assert.ok(claimed, '첫 선점은 행을 돌려줘야 한다')
   assert.equal(claimed.id, created.id)
   assert.equal(claimed.status, 'publishing')
+  // 선점 시각이 남는다 — 크론이 "지금 보내는 중"과 "갇힘"을 이 값으로 가른다.
+  assert.ok(claimed.published_at, '선점 시각이 적혀야 한다')
+  assert.ok(Date.now() - Date.parse(claimed.published_at) < 60_000)
 })
 
 test('claimGrantDigestForPublish: 같은 회차를 두 번째로 선점하면 null이다 (중복 발송을 막는 핵심 불변식)', async () => {

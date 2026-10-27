@@ -172,7 +172,7 @@ try {
   // publishing에 갇혀 다시 발행할 수 없다 — 라우트와 같은 복구다.
   if (real) {
     try {
-      await updateGrantDigest(digest.id, { status: 'draft' })
+      await updateGrantDigest(digest.id, { status: 'draft', published_at: null })
       console.error('  게시글 생성 실패 — 회차를 draft로 되돌렸습니다.')
     } catch (rollbackError) {
       console.error(
