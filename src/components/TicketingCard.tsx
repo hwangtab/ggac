@@ -6,6 +6,7 @@ import { createImageProxy } from '@/utils/imageValidation'
 import { getSafeHostname, toSafeHttpUrl } from '@/utils/safeUrl'
 import { useTranslations, useLocale } from 'next-intl'
 import { intlLocale } from '@/utils/intlLocale'
+import { parseLocalDate } from '@/utils/date'
 import type { TicketingInfo, LinkPreview, TicketingCardProps } from '@/types'
 
 const TicketingCard = ({ ticketing }: TicketingCardProps) => {
@@ -60,7 +61,7 @@ const TicketingCard = ({ ticketing }: TicketingCardProps) => {
     if (!ticketing.available) {
       if (ticketing.soldOutDate) {
         return t('ticketing.soldOutDate', {
-          date: new Date(ticketing.soldOutDate).toLocaleDateString(dateLocale),
+          date: parseLocalDate(ticketing.soldOutDate).toLocaleDateString(dateLocale),
         })
       }
       return t('ticketing.soldOut')
@@ -72,7 +73,9 @@ const TicketingCard = ({ ticketing }: TicketingCardProps) => {
       const end = new Date(ticketing.endDate)
 
       if (now < start) {
-        return t('ticketing.opensOn', { date: start.toLocaleDateString(dateLocale) })
+        return t('ticketing.opensOn', {
+          date: parseLocalDate(ticketing.startDate).toLocaleDateString(dateLocale),
+        })
       } else if (now > end) {
         return t('ticketing.closed')
       }
