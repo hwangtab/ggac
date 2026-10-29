@@ -36,6 +36,14 @@ export type Fixtures = {
   boardCommentDeletableId: string
   /** 작성자가 `admin`인 댓글 — "이사이지만 작성자가 아닌 사람" 경계용. */
   boardCommentByAdminId: string
+  /** 판매자 `owner`의 장터 매물. 상태 변경 스펙이 바꾸고 되돌린다. */
+  marketListingId: string
+  /** 관리자 삭제 스펙이 소모하는 매물(판매자 `owner`). */
+  marketListingDeletableId: string
+  /** `other`가 `marketListingId`에 단 문의 댓글. */
+  marketCommentId: string
+  /** 관리자 삭제 스펙이 소모하는 댓글(작성자 `other`). */
+  marketCommentDeletableId: string
   /** `owner` 소유의 초안 캠페인 — 마이페이지 캠페인 경계용. */
   fundingDraftCampaignId: string
   fundingDraftRewardId: string

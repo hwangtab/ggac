@@ -117,6 +117,9 @@ const {
   fundingRewards: tursoFundingRewards,
   fundingPledges: tursoFundingPledges,
 } = await import('@/db/schema/funding')
+const { marketListings: tursoMarketListings, marketComments: tursoMarketComments } = await import(
+  '@/db/schema/market'
+)
 const { eq } = await import('drizzle-orm')
 
 // id는 전부 고정값이다. 예전에는 Supabase가 만들어준 uuid를 그대로 받아
@@ -514,6 +517,13 @@ async function main() {
   const BOARD_COMMENT_ID = '00000000-0000-4000-8000-00000000a008'
   const BOARD_COMMENT_DELETABLE_ID = '00000000-0000-4000-8000-00000000a009'
   const BOARD_COMMENT_BY_ADMIN_ID = '00000000-0000-4000-8000-00000000a00a'
+  // 조합원 장터 경계(`e2e/authz-market.spec.ts`). 매물이 둘인 이유: 관리자
+  // 삭제 스펙이 하나를 소모한다(이사회 댓글 둘과 같은 이유). 댓글도 둘이다 —
+  // 하나는 "남이 못 지운다"를 보고 하나는 관리자가 지운다.
+  const MARKET_LISTING_ID = '00000000-0000-4000-8000-00000000a030'
+  const MARKET_LISTING_DELETABLE_ID = '00000000-0000-4000-8000-00000000a031'
+  const MARKET_COMMENT_ID = '00000000-0000-4000-8000-00000000a032'
+  const MARKET_COMMENT_DELETABLE_ID = '00000000-0000-4000-8000-00000000a033'
   const REGISTRATION_SETTING_ID = '00000000-0000-4000-8000-00000000a005'
   const FUNDING_SETTING_ID = '00000000-0000-4000-8000-00000000a00b'
   // 기능 스위치 넷(`e2e/authz-features.spec.ts`가 껐다 켠다). 시드가 이 행을
@@ -699,6 +709,42 @@ async function main() {
       .insert(tursoBoardAgendaComments)
       .values(values)
       .onConflictDoUpdate({ target: tursoBoardAgendaComments.id, set: values })
+  }
+
+  // 장터 매물 둘(판매자 `owner`)과 댓글 둘(작성자 `other`). `status`·
+  // `isDeleted`를 set에 넣어 매번 판매중·살아 있음으로 되돌린다 — 본인 상태
+  // 변경·관리자 삭제 스펙이 이 값을 바꾸고 지나가므로, set에 없으면 다음
+  // 실행이 엉뚱한 전제(이미 거래완료·이미 삭제)에서 시작한다.
+  for (const id of [MARKET_LISTING_ID, MARKET_LISTING_DELETABLE_ID]) {
+    const values = {
+      id,
+      sellerId: ids.owner,
+      title: 'authz 픽스처 매물',
+      description: '장터 경계 테스트용',
+      dealType: 'sell',
+      itemCategory: 'instrument',
+      price: 10000,
+      status: 'open',
+      images: [],
+      isDeleted: false,
+    }
+    await db
+      .insert(tursoMarketListings)
+      .values(values)
+      .onConflictDoUpdate({ target: tursoMarketListings.id, set: values })
+  }
+  for (const id of [MARKET_COMMENT_ID, MARKET_COMMENT_DELETABLE_ID]) {
+    const values = {
+      id,
+      listingId: MARKET_LISTING_ID,
+      authorId: ids.other,
+      content: 'authz 픽스처 장터 문의',
+      isDeleted: false,
+    }
+    await db
+      .insert(tursoMarketComments)
+      .values(values)
+      .onConflictDoUpdate({ target: tursoMarketComments.id, set: values })
   }
 
   // 펀딩 초안 캠페인. `status`·`submittedAt`·`reviewNote`를 매번 set에
@@ -1237,6 +1283,10 @@ async function main() {
     boardCommentId: BOARD_COMMENT_ID,
     boardCommentDeletableId: BOARD_COMMENT_DELETABLE_ID,
     boardCommentByAdminId: BOARD_COMMENT_BY_ADMIN_ID,
+    marketListingId: MARKET_LISTING_ID,
+    marketListingDeletableId: MARKET_LISTING_DELETABLE_ID,
+    marketCommentId: MARKET_COMMENT_ID,
+    marketCommentDeletableId: MARKET_COMMENT_DELETABLE_ID,
     fundingDraftCampaignId: FUNDING_DRAFT_CAMPAIGN_ID,
     fundingDraftRewardId: FUNDING_DRAFT_REWARD_ID,
     fundingReviewCampaignId: FUNDING_REVIEW_CAMPAIGN_ID,

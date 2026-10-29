@@ -16,6 +16,7 @@ import {
   billingKeys,
   dailyActivityStats,
   fundingPledges,
+  marketListings,
   memberProfiles,
   notifications,
   reservations,
@@ -291,6 +292,14 @@ export async function withdrawMember(userId: string): Promise<WithdrawOutcome> {
       .update(notifications)
       .set({ relatedUserId: null })
       .where(eq(notifications.relatedUserId, userId))
+
+    // ③-2 장터 매물 — 내린다(soft delete). 탈퇴한 판매자에게는 아무도 연락할
+    // 수 없는데, 남겨 두면 "판매중"인 채로 문의 댓글만 쌓인다. 남이 단 댓글은
+    // 매물과 함께 화면에서 사라지고 행은 남는다.
+    await tx
+      .update(marketListings)
+      .set({ isDeleted: true })
+      .where(eq(marketListings.sellerId, userId))
 
     // ④ 결제 수단 — 지운다. 결제·회비 기록은 남긴다(회계 증빙).
     // 토스 해지에 쓸 키를 **지우기 전에** 읽어 둔다. 커밋 뒤 라우트가 부른다.

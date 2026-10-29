@@ -999,7 +999,8 @@
       "join": "조합원 가입",
       "pendingInfo": "조합원 승인 대기 중입니다. 승인 후 게시글 작성이 가능합니다.",
       "writeButton": "새 게시글 작성",
-      "boardOff": "게시판 글쓰기 기능이 지금 꺼져 있습니다. 읽기는 그대로 됩니다."
+      "boardOff": "게시판 글쓰기 기능이 지금 꺼져 있습니다. 읽기는 그대로 됩니다.",
+      "marketLink": "중고장터"
     },
     "write": {
       "noAccess": "접근 권한이 없습니다",
@@ -1015,6 +1016,123 @@
     },
     "empty": "아직 게시글이 없습니다.",
     "loadError": "게시글을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요."
+  },
+  "market": {
+    "kicker": "MARKET",
+    "heading": "조합원 장터",
+    "subtitle": "조합원끼리 쓰던 물건을 사고팔고 나눕니다.",
+    "notice": "조합은 거래 당사자가 아니며 결제·배송·환불에 관여하지 않습니다. 거래는 조합원끼리 직접 합니다.",
+    "backToBoard": "← 게시판으로",
+    "write": "매물 올리기",
+    "mine": "내 매물",
+    "empty": "조건에 맞는 매물이 없습니다.",
+    "commentCount": "댓글 {count}",
+    "filters": {
+      "all": "전체",
+      "hideDone": "거래완료 숨기기",
+      "showDone": "거래완료 보기"
+    },
+    "deal": {
+      "sell": "팝니다",
+      "buy": "삽니다",
+      "free": "나눔"
+    },
+    "item": {
+      "instrument": "악기",
+      "audio": "음향장비",
+      "stage": "조명·무대",
+      "books": "도서·악보",
+      "etc": "기타"
+    },
+    "status": {
+      "open": "판매중",
+      "reserved": "예약중",
+      "done": "거래완료"
+    },
+    "condition": {
+      "new": "새것",
+      "good": "상태 좋음",
+      "used": "사용감 있음",
+      "parts": "부품용"
+    },
+    "trade": {
+      "direct": "직거래",
+      "delivery": "택배",
+      "both": "직거래·택배"
+    },
+    "price": {
+      "free": "나눔",
+      "negotiable": "가격 협의",
+      "won": "{price}원"
+    },
+    "pagination": {
+      "prev": "← 이전",
+      "next": "다음 →"
+    },
+    "gate": {
+      "title": "조합원만 이용할 수 있습니다",
+      "body": "장터는 승인된 조합원끼리 쓰는 공간입니다. 승인이 끝나면 이용할 수 있습니다."
+    },
+    "boardOff": {
+      "title": "지금은 매물을 올릴 수 없습니다",
+      "body": "게시판 새 글 기능이 꺼져 있습니다. 사무국(contact@ggac.kr)으로 문의해 주세요."
+    },
+    "form": {
+      "newTitle": "매물 올리기",
+      "editTitle": "매물 수정",
+      "title": "제목",
+      "titlePlaceholder": "예: 야마하 P-125 디지털피아노",
+      "description": "설명",
+      "descriptionPlaceholder": "구입 시기, 사용 기간, 하자 여부, 구성품 등을 적어 주세요.",
+      "dealType": "거래 유형",
+      "itemCategory": "품목",
+      "price": "가격(원)",
+      "pricePlaceholder": "숫자만 입력",
+      "priceBuyHelp": "비워 두면 '가격 협의'로 표시됩니다.",
+      "condition": "상품 상태",
+      "tradeMethod": "거래 방식",
+      "region": "거래 지역",
+      "regionPlaceholder": "예: 수원 인계동",
+      "images": "사진",
+      "imagesHelp": "최대 {max}장. 첫 장이 목록 썸네일이 됩니다.",
+      "addImage": "사진 추가",
+      "removeImage": "사진 빼기",
+      "uploading": "올리는 중…",
+      "select": "선택 안 함",
+      "contactWarning": "전화번호·계좌번호는 본문에 쓰지 마세요. 연락은 댓글로 시작해 주세요.",
+      "submit": "등록하기",
+      "save": "저장하기",
+      "submitting": "저장 중…",
+      "cancel": "취소",
+      "error": "저장하지 못했습니다."
+    },
+    "detail": {
+      "seller": "판매자",
+      "buyer": "구하는 사람",
+      "region": "지역",
+      "trade": "거래 방식",
+      "condition": "상태",
+      "postedAt": "등록일",
+      "edit": "수정",
+      "delete": "삭제",
+      "deleteConfirm": "이 매물을 삭제할까요?",
+      "statusLabel": "거래 상태",
+      "statusError": "상태를 바꾸지 못했습니다.",
+      "deleteError": "삭제하지 못했습니다.",
+      "backToList": "← 장터 목록"
+    },
+    "comments": {
+      "heading": "문의 댓글",
+      "placeholder": "궁금한 점이나 거래 제안을 남겨 주세요.",
+      "submit": "댓글 남기기",
+      "empty": "아직 댓글이 없습니다.",
+      "deleted": "삭제된 댓글입니다.",
+      "delete": "삭제",
+      "deleteConfirm": "댓글을 삭제할까요?",
+      "seller": "판매자",
+      "error": "댓글을 처리하지 못했습니다.",
+      "loadError": "댓글을 불러오지 못했습니다."
+    }
   },
   "boardRoom": {
     "title": "이사회",

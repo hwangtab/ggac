@@ -10,7 +10,8 @@
  *   2) 첨부 원장(`post_attachments.file_url`)
  *   3) 후원 프로젝트의 표지·OG 이미지와 본문(`funding_campaigns`)
  *   4) 이사회 회의록 본문(`board_minutes.content`)
- * 그래서 후보 판정은 이 넷에 대한 NOT EXISTS다.
+ *   5) 장터 매물 사진(`market_listings.images`, JSON 배열)
+ * 그래서 후보 판정은 이 다섯에 대한 NOT EXISTS다.
  *
  * **이 목록은 업로드를 기록하는 곳(`recordUpload` 호출부)과 한 벌이다.** 새
  * 업로드 경로나 새 리치 텍스트 칸이 생기면 여기도 같이 늘려야 한다. 빠뜨리면
@@ -18,7 +19,7 @@
  * 누가 지웠는지도 화면에 남지 않는다.
  */
 
-import { and, desc, eq, lt, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, lt, sql } from 'drizzle-orm'
 
 import { db } from '../client.ts'
 import { mediaUploads } from '../schema/index.ts'
@@ -90,6 +91,21 @@ export async function getUploadByUrl(url: string) {
 }
 
 /**
+ * `urls` 가운데 `userId`가 올린 것만 돌려준다. 장터 쓰기 라우트가 사진 칸에
+ * **남의 업로드나 외부 주소**를 넣지 못하게 거르는 데 쓴다 — 받은 문자열을
+ * 그대로 `<img src>`에 실으면 조합원 화면에 아무 주소나 띄울 수 있다.
+ */
+export async function filterUploadsOwnedBy(urls: string[], userId: string): Promise<string[]> {
+  if (urls.length === 0) return []
+  const rows = await db
+    .select({ url: mediaUploads.url })
+    .from(mediaUploads)
+    .where(and(eq(mediaUploads.userId, userId), inArray(mediaUploads.url, urls)))
+  const owned = new Set(rows.map(row => row.url))
+  return urls.filter(url => owned.has(url))
+}
+
+/**
  * 정리 후보 — 충분히 오래됐고, 어디에서도 참조하지 않는 업로드.
  *
  * 참조 검사를 LIKE가 아니라 `instr(content, url) > 0`으로 하는 이유: URL에는
@@ -133,7 +149,10 @@ export async function listCleanupCandidates(
         // 이사회 회의록은 게시글과 같은 편집기(`RichTextEditor` →
         // `/api/media/upload`)로 쓴다. 본문에 박힌 이미지는 `posts.content`와
         // 똑같이 참조인데 여기 없었다.
-        sql`NOT EXISTS (SELECT 1 FROM board_minutes WHERE instr(coalesce(content, ''), ${mediaUploads.url}) > 0)`
+        sql`NOT EXISTS (SELECT 1 FROM board_minutes WHERE instr(coalesce(content, ''), ${mediaUploads.url}) > 0)`,
+        // 장터 사진은 본문이 아니라 `images` JSON 배열에 산다. 삭제된 매물은
+        // 게시글과 같은 이유로 참조로 치지 않는다 — 화면 어디에도 안 나온다.
+        sql`NOT EXISTS (SELECT 1 FROM market_listings WHERE is_deleted = 0 AND instr(images, ${mediaUploads.url}) > 0)`
       )
     )
     .orderBy(mediaUploads.createdAt)

@@ -35,6 +35,11 @@ export const NOTIFICATION_TYPE = [
   // 쓴다 — 둘 다 개설자에게 가는 같은 돈 이야기이고, 목록의 이름표도 '펀딩
   // 정산' 하나면 된다. 위와 같이 DB CHECK가 없어 마이그레이션이 필요 없다.
   'funding_settled',
+  // 조합원 장터(2026-10-29). 내 장터 글에 댓글이 달렸다는 통지. `post_reply`를
+  // 다시 쓰지 않는 이유: 그 타입은 `/board/{id}`로 보내는데 장터 글은 `posts`가
+  // 아니라 `market_listings`라 그 주소가 404다. DB CHECK가 없어 마이그레이션이
+  // 필요 없다.
+  'market_comment',
 ] as const
 
 export const posts = sqliteTable(

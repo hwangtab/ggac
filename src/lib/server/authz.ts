@@ -52,6 +52,21 @@ export function canReadBoardRecords(profile: ProfileLike | null): boolean {
 }
 
 /**
+ * 장터 매물·댓글을 **고치거나 지울** 자격 — 승인·활성 조합원이면서 작성자
+ * 본인이거나 관리자. 읽기와 새로 쓰기는 `requireActiveMember`(승인·활성)면
+ * 된다. 관리자에게 수정이 아니라 **삭제**만 여는 것은 호출부가 정한다
+ * (`/api/market/[id]` PATCH는 `actorId === ownerId`만 본다).
+ */
+export function canRemoveMarketItem(
+  profile: ProfileLike | null,
+  actorId: string,
+  ownerId: string
+): boolean {
+  if (!isApprovedActive(profile)) return false
+  return actorId === ownerId || profile?.is_admin === true
+}
+
+/**
  * `ProfileRow`(33개 컬럼 전부 — `account_number`·`bank_name`·`real_name`·
  * `phone_number`·`birth_date` 같은 민감 컬럼 포함)를 세션 판정에만 필요한
  * `ProfileLike`의 5개 필드로 좁힌다. 전환 전 `getSessionContext`는
