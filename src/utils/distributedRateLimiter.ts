@@ -647,6 +647,24 @@ export const DISTRIBUTED_RATE_LIMIT_CONFIGS = {
     message: '관리자 API 요청이 너무 많습니다.',
   },
 
+  // 이사회 업무툴 폴링(`POST /api/board-room/work/sync`, 분당 60회 — 사용자 단위).
+  // 채널을 보는 동안 3초마다 한 번(분당 20회)이라 탭 세 개까지 여유가 있다(docs/board-work/01-설계.md §6-3).
+  WORK_SYNC: {
+    name: 'work_sync',
+    windowMs: 60 * 1000,
+    maxRequests: 60,
+    message: '동기화 요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요.',
+  },
+
+  // 이사회 업무툴 쓰기(메시지·반응·고정·채널 변경 server action, 분당 60회 — 사용자 단위).
+  // POST_CREATION(분당 5회)은 채팅에 너무 좁다. 읽음 표시처럼 스크롤마다 불리는 action은 세지 않는다.
+  WORK_WRITE: {
+    name: 'work_write',
+    windowMs: 60 * 1000,
+    maxRequests: 60,
+    message: '너무 빠르게 보내고 있습니다. 잠시 후 다시 시도해 주세요.',
+  },
+
   // 대량 작업 (시간당 5회)
   BULK_OPERATIONS: {
     name: 'bulk_operations',

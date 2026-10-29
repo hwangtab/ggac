@@ -38,7 +38,7 @@ export const workMemberPrefs = sqliteTable('work_member_prefs', {
   quietEnd: integer('quiet_end').notNull().default(480),
   quietWeekends: integer('quiet_weekends', { mode: 'boolean' }).notNull().default(true),
   /** 'normal' | 'hourly' | 'off' */
-  digestMode: text('digest_mode').notNull().default('normal'),
+  digestMode: text('digest_mode').notNull().default('off'),
   onboardedAt: integer('onboarded_at', { mode: 'timestamp_ms' }),
   /** 'section' | 'recent' */
   channelSort: text('channel_sort').notNull().default('section'),
