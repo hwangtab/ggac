@@ -10,6 +10,8 @@ export type Fixtures = {
     | 'other'
     | 'pending'
     | 'director'
+    // 감사(is_auditor만) — 이사회 업무툴 경계의 허용 쪽(`authz-board-work.spec.ts`).
+    | 'auditor'
     // 탈퇴 "신청" 상태(Task 8) — `registration_status`는 여전히 'approved'라
     // 정상 로그인하고 storageState도 만든다.
     | 'withdrawalRequested'
@@ -25,6 +27,17 @@ export type Fixtures = {
   >
   postId: string
   commentId: string
+  /** 이사회 업무툴 공개 채널 — 관리자가 만들었고 이사·감사가 멤버다 */
+  workPublicChannelId: string
+  workPublicChannelSlug: string
+  /** 비공개 채널 — 감사가 owner, **이사는 멤버가 아니다**(관리자는 0037 규칙으로 읽는다) */
+  workPrivateChannelId: string
+  workPrivateChannelSlug: string
+  /** 이사·감사 DM — **관리자도 읽지 못한다** */
+  workDmChannelId: string
+  workPublicMessageId: string
+  workPrivateMessageId: string
+  workDmMessageId: string
   notificationId: string
   /** 이사회 안건 토론 경계용 — `director`가 작성자다. */
   boardMeetingId: string
