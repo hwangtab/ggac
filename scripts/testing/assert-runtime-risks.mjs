@@ -3072,7 +3072,7 @@ const SRC_SCAN_SUBTREE_MINIMUMS = {
   'src/constants/': 6, // 현재 9
   'src/middleware/': 4, // 현재 7
   'src/i18n/': 2, // 현재 3
-  'src/work/': 14, // 현재 21 (이사회 업무툴 0단계 — UI 키트. 단계마다 올린다)
+  'src/work/': 48, // 현재 72 (이사회 업무툴 1단계 서버 이식까지. 단계마다 올린다)
 }
 const srcScanSubtreeShortfalls = Object.entries(SRC_SCAN_SUBTREE_MINIMUMS).flatMap(
   ([prefix, minimum]) => {
