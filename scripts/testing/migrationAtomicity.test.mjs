@@ -83,7 +83,8 @@ test('트랜잭션을 씌운 뒤에도 처음부터 적용이 정상이다', asy
     // +3 = 0020의 메일함 표 셋(inbound_emails·inbound_email_attachments·inbound_email_replies).
     // +4 = 0022의 펀딩 표 넷(funding_campaigns·funding_rewards·funding_pledges·funding_settlements).
     // +2 = 0024의 장터 표 둘(market_listings·market_comments).
-    assert.equal(Number(tables.rows[0].n), 48, '운영과 같은 표 수여야 한다')
+    // +13 = 0025의 이사회 업무툴 채팅 표(work_*).
+    assert.equal(Number(tables.rows[0].n), 61, '운영과 같은 표 수여야 한다')
     // 23(0004·0005) + 4(0017: 결제 원장·회비 청구월·회의 목록·세션 로그인 시각).
     assert.equal(Number(indexes.rows[0].n), 27, '운영과 같은 성능 인덱스 수여야 한다')
     assert.equal(Number(junk.rows[0].n), 0, '임시 표가 남으면 안 된다')

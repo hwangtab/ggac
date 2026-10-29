@@ -38,6 +38,19 @@ const POST_CUTOVER_TABLES = new Set([
   'funding_settlements', // 0022
   'market_listings', // 0024 조합원 장터
   'market_comments', // 0024
+  'work_member_prefs', // 0025 이사회 업무툴 채팅
+  'work_channel_categories', // 0025
+  'work_channels', // 0025
+  'work_channel_members', // 0025
+  'work_messages', // 0025
+  'work_reactions', // 0025
+  'work_mentions', // 0025
+  'work_bookmarks', // 0025
+  'work_pins', // 0025
+  'work_message_links', // 0025
+  'work_activity_reads', // 0025
+  'work_presence', // 0025
+  'work_typing', // 0025
 ])
 
 export function comparePgToSqlite(pgSnapshot, sqliteSchema) {

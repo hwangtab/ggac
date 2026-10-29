@@ -1,0 +1,339 @@
+// src/db/schema/work.ts
+import { sql } from 'drizzle-orm'
+import {
+  index,
+  integer,
+  primaryKey,
+  sqliteTable,
+  text,
+  uniqueIndex,
+  type AnySQLiteColumn,
+} from 'drizzle-orm/sqlite-core'
+
+import { createdAt, updatedAt, uuidPk } from './_shared.ts'
+import { memberProfiles } from './identity.ts'
+
+/**
+ * 이사회 업무툴 — 채팅(1단계). 원본은 kosmart-work Postgres `work.*` 표다(docs/board-work/01-설계.md §4).
+ *
+ * 옮기면서 바뀐 것:
+ * - 표 이름에 `work_` 접두사(ggac `notifications`·`comments`와 겹치지 않게).
+ * - 사람 FK는 `work.staff` 대신 `member_profiles`. 구성원 표는 따로 두지 않는다 — 이사회 권한이 정한다(§3).
+ * - enum·CHECK는 DB에 두지 않는다(ggac 관례 — 펀딩·장터와 같다). 허용값과 길이는 각 영역의 zod 스키마(`src/work/lib/<영역>/schema.ts`)가 정본이다.
+ * - 원본의 RLS·BEFORE 트리거(작성자 강제·특권 열 동결)·AFTER 트리거(답글 수·생성자 owner 등록·링크 추출)는
+ *   **하나도 옮겨지지 않았다.** 그 규칙은 `src/db/queries/work/*`의 쓰기 함수가 같은 트랜잭션 안에서 지킨다(§5).
+ * - 실시간 브로드캐스트 트리거 대신 `rev` 열(§6) — 폴링이 "무엇이 바뀌었나"를 이것으로 안다.
+ *
+ * 시각은 전부 epoch ms(`timestamp_ms`). 원본은 timestamptz다.
+ */
+
+/** 사용자별 설정 + 상태 메시지 — 원본 `staff_prefs`와 `staff`의 상태 열(0027)을 합쳤다. */
+export const workMemberPrefs = sqliteTable('work_member_prefs', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => memberProfiles.id, { onDelete: 'cascade' }),
+  /** 방해 금지. 분 단위(0~1439), 기본 22:00~08:00 */
+  quietEnabled: integer('quiet_enabled', { mode: 'boolean' }).notNull().default(false),
+  quietStart: integer('quiet_start').notNull().default(1320),
+  quietEnd: integer('quiet_end').notNull().default(480),
+  quietWeekends: integer('quiet_weekends', { mode: 'boolean' }).notNull().default(true),
+  /** 'normal' | 'hourly' | 'off' */
+  digestMode: text('digest_mode').notNull().default('normal'),
+  onboardedAt: integer('onboarded_at', { mode: 'timestamp_ms' }),
+  /** 'section' | 'recent' */
+  channelSort: text('channel_sort').notNull().default('section'),
+  /** 'recent' | 'name' */
+  chatSort: text('chat_sort').notNull().default('recent'),
+  statusEmoji: text('status_emoji'),
+  statusText: text('status_text'),
+  statusUntil: integer('status_until', { mode: 'timestamp_ms' }),
+  /**
+   * 사용자 단위 변경 번호(§6) — 새 채널에 들어감·새 DM처럼 **사이드바 목록 자체**가 바뀔 때 올린다.
+   * 원본 `user:<uid>` 토픽의 MEMBER_ADDED·DM_MESSAGE 신호 자리다.
+   */
+  membershipRev: integer('membership_rev').notNull().default(0),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+})
+
+export const workChannelCategories = sqliteTable(
+  'work_channel_categories',
+  {
+    id: uuidPk(),
+    name: text('name').notNull(),
+    position: integer('position').notNull().default(0),
+    createdBy: text('created_by').references(() => memberProfiles.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  table => [
+    uniqueIndex('work_channel_categories_name_key').on(sql`lower(trim(${table.name}))`),
+    index('work_channel_categories_position_idx').on(table.position, table.createdAt),
+  ]
+)
+
+export const workChannels = sqliteTable(
+  'work_channels',
+  {
+    id: uuidPk(),
+    /** 'public' | 'private' | 'dm' (그룹 채팅도 kind='dm' + is_group) */
+    kind: text('kind').notNull().default('public'),
+    /** 공개·비공개 채널만. DM은 null. 형식 `^[a-z0-9가-힣][a-z0-9가-힣_-]{0,79}$` */
+    slug: text('slug'),
+    name: text('name').notNull(),
+    topic: text('topic'),
+    createdBy: text('created_by').references(() => memberProfiles.id, { onDelete: 'set null' }),
+    /** DM만. 1:1은 정렬된 `uid:uid`, 그룹은 `group:<id>` */
+    dmKey: text('dm_key'),
+    isGroup: integer('is_group', { mode: 'boolean' }).notNull().default(false),
+    /** 그룹 채팅 이름(그룹만) */
+    title: text('title'),
+    /** 'everyone' | 'owners' — owners면 최상위 글은 채널 owner·관리자만 */
+    postPolicy: text('post_policy').notNull().default('everyone'),
+    categoryId: text('category_id').references(() => workChannelCategories.id, {
+      onDelete: 'set null',
+    }),
+    archivedAt: integer('archived_at', { mode: 'timestamp_ms' }),
+    /**
+     * 채널 변경 번호(§6). 이 채널의 메시지·반응·답글 수가 바뀔 때마다 1 올리고, 바뀐 메시지의 `rev`를 같은 값으로 둔다.
+     * 폴링은 "내가 본 rev보다 큰 메시지"만 다시 읽는다.
+     */
+    rev: integer('rev').notNull().default(0),
+    /** 고정 메시지 목록이 바뀔 때 올린다(원본 pins 브로드캐스트 자리) */
+    pinsRev: integer('pins_rev').notNull().default(0),
+    /** 대화 탭·노트가 바뀔 때 올린다(원본 tabs 브로드캐스트 자리, 2단계) */
+    tabsRev: integer('tabs_rev').notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  table => [
+    uniqueIndex('work_channels_slug_key').on(table.slug),
+    uniqueIndex('work_channels_dm_key_key').on(table.dmKey),
+    /** 원본 channels_name_active_uidx — 보관되지 않은 채널(DM 제외)의 이름은 대소문자·공백 무시하고 유일 */
+    uniqueIndex('work_channels_name_active_uidx')
+      .on(sql`lower(trim(${table.name}))`)
+      .where(sql`"archived_at" is null and "kind" <> 'dm'`),
+    index('work_channels_category_id_idx').on(table.categoryId),
+  ]
+)
+
+export const workChannelMembers = sqliteTable(
+  'work_channel_members',
+  {
+    channelId: text('channel_id')
+      .notNull()
+      .references(() => workChannels.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => memberProfiles.id, { onDelete: 'cascade' }),
+    /** 'owner' | 'member' */
+    role: text('role').notNull().default('member'),
+    lastReadAt: integer('last_read_at', { mode: 'timestamp_ms' })
+      .notNull()
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$defaultFn(() => new Date()),
+    /** notify_level='off'와 늘 같게 둔다(원본 sync_member_notify_level 트리거 — 쓰기 함수가 맞춘다) */
+    muted: integer('muted', { mode: 'boolean' }).notNull().default(false),
+    starred: integer('starred', { mode: 'boolean' }).notNull().default(false),
+    /** null | 'all' | 'mentions' | 'off' */
+    notifyLevel: text('notify_level'),
+    joinedAt: integer('joined_at', { mode: 'timestamp_ms' })
+      .notNull()
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$defaultFn(() => new Date()),
+  },
+  table => [
+    primaryKey({ columns: [table.channelId, table.userId] }),
+    index('work_channel_members_user_idx').on(table.userId),
+  ]
+)
+
+export const workMessages = sqliteTable(
+  'work_messages',
+  {
+    /** 클라이언트가 미리 만든 uuid를 받는다(원본과 같다 — 재전송을 23505 대신 PK 충돌로 멱등 처리) */
+    id: uuidPk(),
+    channelId: text('channel_id')
+      .notNull()
+      .references(() => workChannels.id, { onDelete: 'cascade' }),
+    /** 스레드는 1단계 깊이(부모는 최상위·같은 채널) — 쓰기 함수가 지킨다 */
+    parentId: text('parent_id').references((): AnySQLiteColumn => workMessages.id, {
+      onDelete: 'cascade',
+    }),
+    authorId: text('author_id').references(() => memberProfiles.id, { onDelete: 'set null' }),
+    /** 'text' | 'system' | 'bot' */
+    kind: text('kind').notNull().default('text'),
+    /** 최대 40000자 */
+    body: text('body').notNull().default(''),
+    attachmentsCount: integer('attachments_count').notNull().default(0),
+    replyCount: integer('reply_count').notNull().default(0),
+    lastReplyAt: integer('last_reply_at', { mode: 'timestamp_ms' }),
+    editedAt: integer('edited_at', { mode: 'timestamp_ms' }),
+    /** 소프트 삭제. 지우면 body를 비운다(원본 blank_deleted_message) */
+    deletedAt: integer('deleted_at', { mode: 'timestamp_ms' }),
+    sensitive: integer('sensitive', { mode: 'boolean' }).notNull().default(false),
+    quotedMessageId: text('quoted_message_id').references((): AnySQLiteColumn => workMessages.id, {
+      onDelete: 'set null',
+    }),
+    forwardedFromId: text('forwarded_from_id').references((): AnySQLiteColumn => workMessages.id, {
+      onDelete: 'set null',
+    }),
+    /** 마지막으로 바뀐 시점의 채널 rev(§6). 만들 때·고칠 때·지울 때·반응·답글 수가 바뀔 때 갱신 */
+    rev: integer('rev').notNull().default(0),
+    createdAt: createdAt(),
+  },
+  table => [
+    index('work_messages_channel_timeline_idx')
+      .on(table.channelId, sql`${table.createdAt} DESC`, sql`${table.id} DESC`)
+      .where(sql`"parent_id" is null`),
+    index('work_messages_thread_idx')
+      .on(table.parentId, table.createdAt, table.id)
+      .where(sql`"parent_id" is not null`),
+    index('work_messages_author_idx').on(table.authorId),
+    index('work_messages_channel_rev_idx').on(table.channelId, table.rev),
+    index('work_messages_quoted_idx')
+      .on(table.quotedMessageId)
+      .where(sql`"quoted_message_id" is not null`),
+    index('work_messages_forwarded_idx')
+      .on(table.forwardedFromId)
+      .where(sql`"forwarded_from_id" is not null`),
+  ]
+)
+
+export const workReactions = sqliteTable(
+  'work_reactions',
+  {
+    messageId: text('message_id')
+      .notNull()
+      .references(() => workMessages.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => memberProfiles.id, { onDelete: 'cascade' }),
+    /** 1~32자 */
+    emoji: text('emoji').notNull(),
+    createdAt: createdAt(),
+  },
+  table => [
+    primaryKey({ columns: [table.messageId, table.userId, table.emoji] }),
+    index('work_reactions_user_idx').on(table.userId),
+  ]
+)
+
+export const workMentions = sqliteTable(
+  'work_mentions',
+  {
+    messageId: text('message_id')
+      .notNull()
+      .references(() => workMessages.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => memberProfiles.id, { onDelete: 'cascade' }),
+    readAt: integer('read_at', { mode: 'timestamp_ms' }),
+  },
+  table => [
+    primaryKey({ columns: [table.messageId, table.userId] }),
+    index('work_mentions_unread_idx')
+      .on(table.userId)
+      .where(sql`"read_at" is null`),
+  ]
+)
+
+export const workBookmarks = sqliteTable(
+  'work_bookmarks',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => memberProfiles.id, { onDelete: 'cascade' }),
+    messageId: text('message_id')
+      .notNull()
+      .references(() => workMessages.id, { onDelete: 'cascade' }),
+    createdAt: createdAt(),
+  },
+  table => [
+    primaryKey({ columns: [table.userId, table.messageId] }),
+    index('work_bookmarks_message_idx').on(table.messageId),
+  ]
+)
+
+export const workPins = sqliteTable(
+  'work_pins',
+  {
+    channelId: text('channel_id')
+      .notNull()
+      .references(() => workChannels.id, { onDelete: 'cascade' }),
+    messageId: text('message_id')
+      .notNull()
+      .references(() => workMessages.id, { onDelete: 'cascade' }),
+    pinnedBy: text('pinned_by').references(() => memberProfiles.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+  },
+  table => [
+    primaryKey({ columns: [table.channelId, table.messageId] }),
+    index('work_pins_message_idx').on(table.messageId),
+  ]
+)
+
+/** 메시지 본문의 링크(최대 20개) — 원본 sync_message_links 트리거 대신 쓰기 함수가 같은 트랜잭션에서 채운다 */
+export const workMessageLinks = sqliteTable(
+  'work_message_links',
+  {
+    messageId: text('message_id')
+      .notNull()
+      .references(() => workMessages.id, { onDelete: 'cascade' }),
+    channelId: text('channel_id')
+      .notNull()
+      .references(() => workChannels.id, { onDelete: 'cascade' }),
+    /** 10~2000자 */
+    url: text('url').notNull(),
+    createdAt: createdAt(),
+  },
+  table => [
+    primaryKey({ columns: [table.messageId, table.url] }),
+    index('work_message_links_channel_idx').on(
+      table.channelId,
+      sql`${table.createdAt} DESC`,
+      table.messageId
+    ),
+  ]
+)
+
+/** 받은 알림함 '새 활동'을 마지막으로 본 시각 */
+export const workActivityReads = sqliteTable('work_activity_reads', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => memberProfiles.id, { onDelete: 'cascade' }),
+  seenAt: integer('seen_at', { mode: 'timestamp_ms' })
+    .notNull()
+    .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+    .$defaultFn(() => new Date()),
+})
+
+/**
+ * 접속 표시(원본 Realtime Presence `presence:workspace` 자리, §6).
+ * 동기화 요청이 들어올 때 갱신한다(쓰기는 30초에 한 번으로 줄인다). 60초 안에 본 사람이 "접속 중".
+ */
+export const workPresence = sqliteTable('work_presence', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => memberProfiles.id, { onDelete: 'cascade' }),
+  lastSeenAt: integer('last_seen_at', { mode: 'timestamp_ms' }).notNull(),
+})
+
+/**
+ * 입력 중 표시(원본 Realtime broadcast `typing` 자리, §6). scope는 스레드 부모 메시지 id, 채널 본문이면 ''.
+ * 5초 지난 행은 읽을 때 버리고, 쓸 때 덮어쓴다(지우는 크론은 두지 않는다 — 이사 20명 규모라 행이 쌓이지 않는다).
+ */
+export const workTyping = sqliteTable(
+  'work_typing',
+  {
+    channelId: text('channel_id')
+      .notNull()
+      .references(() => workChannels.id, { onDelete: 'cascade' }),
+    scope: text('scope').notNull().default(''),
+    userId: text('user_id')
+      .notNull()
+      .references(() => memberProfiles.id, { onDelete: 'cascade' }),
+    at: integer('at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  table => [primaryKey({ columns: [table.channelId, table.scope, table.userId] })]
+)
