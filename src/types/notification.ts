@@ -31,6 +31,7 @@ export type NotificationType =
   | 'funding_refunded' // 승인 후 확정 불가 — 전액 환불 알림
   | 'funding_shipped' // 리워드 발송 알림
   | 'funding_settled' // 정산 내역 정리·정산금 지급 알림
+  | 'market_comment' // 내 장터 글에 댓글이 달렸다는 알림
 
 /**
  * 알림 인터페이스

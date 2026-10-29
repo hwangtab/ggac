@@ -999,7 +999,8 @@
       "join": "Become a Member",
       "pendingInfo": "Your membership is pending approval. You will be able to write posts once approved.",
       "writeButton": "Write a Post",
-      "boardOff": "Posting to the board is currently switched off. Reading still works."
+      "boardOff": "Posting to the board is currently switched off. Reading still works.",
+      "marketLink": "Market"
     },
     "write": {
       "noAccess": "Access Denied",
@@ -1015,6 +1016,123 @@
     },
     "empty": "No posts yet.",
     "loadError": "Failed to load posts. Please try again shortly."
+  },
+  "market": {
+    "kicker": "MARKET",
+    "heading": "Members Market",
+    "subtitle": "Buy, sell and give away used gear among members.",
+    "notice": "The cooperative is not a party to any trade and is not involved in payment, shipping or refunds. Members trade directly with each other.",
+    "backToBoard": "← Back to board",
+    "write": "Post an item",
+    "mine": "My items",
+    "empty": "No items match these filters.",
+    "commentCount": "{count} comments",
+    "filters": {
+      "all": "All",
+      "hideDone": "Hide completed",
+      "showDone": "Show completed"
+    },
+    "deal": {
+      "sell": "Selling",
+      "buy": "Wanted",
+      "free": "Free"
+    },
+    "item": {
+      "instrument": "Instruments",
+      "audio": "Audio gear",
+      "stage": "Lighting & stage",
+      "books": "Books & scores",
+      "etc": "Other"
+    },
+    "status": {
+      "open": "Available",
+      "reserved": "Reserved",
+      "done": "Completed"
+    },
+    "condition": {
+      "new": "New",
+      "good": "Good",
+      "used": "Used",
+      "parts": "For parts"
+    },
+    "trade": {
+      "direct": "In person",
+      "delivery": "Shipping",
+      "both": "In person or shipping"
+    },
+    "price": {
+      "free": "Free",
+      "negotiable": "Negotiable",
+      "won": "₩{price}"
+    },
+    "pagination": {
+      "prev": "← Previous",
+      "next": "Next →"
+    },
+    "gate": {
+      "title": "Members only",
+      "body": "The market is for approved members. You can use it once your membership is approved."
+    },
+    "boardOff": {
+      "title": "Posting is paused",
+      "body": "New posts are currently turned off. Please contact contact@ggac.kr."
+    },
+    "form": {
+      "newTitle": "Post an item",
+      "editTitle": "Edit item",
+      "title": "Title",
+      "titlePlaceholder": "e.g. Yamaha P-125 digital piano",
+      "description": "Description",
+      "descriptionPlaceholder": "When you bought it, how long you used it, any defects, what's included.",
+      "dealType": "Type",
+      "itemCategory": "Category",
+      "price": "Price (KRW)",
+      "pricePlaceholder": "Numbers only",
+      "priceBuyHelp": "Leave empty to show 'Negotiable'.",
+      "condition": "Condition",
+      "tradeMethod": "Trade method",
+      "region": "Area",
+      "regionPlaceholder": "e.g. Suwon",
+      "images": "Photos",
+      "imagesHelp": "Up to {max}. The first one is the thumbnail.",
+      "addImage": "Add photo",
+      "removeImage": "Remove photo",
+      "uploading": "Uploading…",
+      "select": "Not specified",
+      "contactWarning": "Don't put phone or bank account numbers in the post. Start contact in the comments.",
+      "submit": "Post",
+      "save": "Save",
+      "submitting": "Saving…",
+      "cancel": "Cancel",
+      "error": "Could not save."
+    },
+    "detail": {
+      "seller": "Seller",
+      "buyer": "Posted by",
+      "region": "Area",
+      "trade": "Trade method",
+      "condition": "Condition",
+      "postedAt": "Posted",
+      "edit": "Edit",
+      "delete": "Delete",
+      "deleteConfirm": "Delete this item?",
+      "statusLabel": "Status",
+      "statusError": "Could not change the status.",
+      "deleteError": "Could not delete.",
+      "backToList": "← Market"
+    },
+    "comments": {
+      "heading": "Questions",
+      "placeholder": "Ask a question or make an offer.",
+      "submit": "Comment",
+      "empty": "No comments yet.",
+      "deleted": "This comment was deleted.",
+      "delete": "Delete",
+      "deleteConfirm": "Delete this comment?",
+      "seller": "Seller",
+      "error": "Could not process the comment.",
+      "loadError": "Could not load comments."
+    }
   },
   "boardRoom": {
     "title": "Board Room",

@@ -42,6 +42,7 @@ export const NOTIFICATION_TYPE_COLOR: Record<NotificationType, string> = {
   funding_refunded: 'bg-rose-100 text-rose-800',
   funding_shipped: 'bg-sky-100 text-sky-800',
   funding_settled: 'bg-purple-100 text-purple-800',
+  market_comment: 'bg-teal-100 text-teal-800',
 }
 
 /** 목록에 보이는 한국어 이름. 영문 식별자가 그대로 보이던 것이 출발점이다. */
@@ -66,6 +67,7 @@ export const NOTIFICATION_TYPE_LABEL: Record<NotificationType, string> = {
   funding_refunded: '후원 환불',
   funding_shipped: '리워드 발송',
   funding_settled: '펀딩 정산',
+  market_comment: '장터 댓글',
 }
 
 export function notificationTypeColor(type: NotificationType): string {

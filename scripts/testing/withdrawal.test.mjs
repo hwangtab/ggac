@@ -775,3 +775,36 @@ test('확정은 펀딩 후원의 행은 남기고 개인정보·배송지만 묘
   assert.equal(other.backer_email, 'backer@example.test')
   assert.equal(other.shipping_address1, '경기도 성남시')
 })
+
+test('확정은 탈퇴자의 장터 매물을 내리고(soft delete) 남의 매물은 건드리지 않는다', async () => {
+  await seedWithdrawalFixture(setupClient)
+  const now = Date.now()
+  for (const [id, seller] of [
+    ['ml1', 'm1'],
+    ['ml2', 'm2'],
+  ]) {
+    await setupClient.execute({
+      sql: `INSERT INTO market_listings
+              (id, seller_id, title, description, deal_type, item_category, price, created_at, updated_at)
+            VALUES (?, ?, '매물', '설명', 'sell', 'etc', 1000, ?, ?)`,
+      args: [id, seller, now, now],
+    })
+  }
+
+  const { withdrawMember } = await import(WITHDRAWAL_MODULE_URL.href)
+  try {
+    assert.equal((await withdrawMember('m1')).ok, true)
+
+    const rows = (
+      await setupClient.execute('SELECT id, is_deleted FROM market_listings ORDER BY id')
+    ).rows.map(row => [row.id, Number(row.is_deleted)])
+    // 탈퇴한 판매자에게는 연락할 수 없다 — "판매중"으로 남으면 안 된다.
+    // 행은 남는다(soft delete). 대조군인 m2의 매물은 그대로다.
+    assert.deepEqual(rows, [
+      ['ml1', 1],
+      ['ml2', 0],
+    ])
+  } finally {
+    await setupClient.execute('DELETE FROM market_listings')
+  }
+})
