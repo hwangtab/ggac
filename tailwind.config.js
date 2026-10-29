@@ -1,14 +1,148 @@
+/**
+ * 이사회 업무툴 색 토큰 — 원본(kosmart-work) globals.css `@theme inline`의 v3 짝.
+ * 값은 `src/work/styles.css`가 `[data-work-app]` 범위에서 CSS 변수(oklch)로 정한다.
+ * `bg-primary/10` 같은 불투명도 수식을 살리려고 color-mix로 감싼다(<alpha-value>를 Tailwind가 채운다).
+ * 공개 사이트는 이 이름(bg-background·text-muted-foreground·bg-primary(숫자 없음) …)을 하나도 쓰지 않는다.
+ */
+const wc = name => `color-mix(in oklch, var(--${name}) calc(<alpha-value> * 100%), transparent)`
+const workColors = {
+  background: wc('background'),
+  foreground: wc('foreground'),
+  card: { DEFAULT: wc('card'), foreground: wc('card-foreground') },
+  popover: { DEFAULT: wc('popover'), foreground: wc('popover-foreground') },
+  primary: { DEFAULT: wc('primary'), foreground: wc('primary-foreground') },
+  secondary: { DEFAULT: wc('secondary'), foreground: wc('secondary-foreground') },
+  muted: { DEFAULT: wc('muted'), foreground: wc('muted-foreground') },
+  accent: { DEFAULT: wc('accent'), foreground: wc('accent-foreground') },
+  destructive: { DEFAULT: wc('destructive') },
+  border: wc('border'),
+  input: wc('input'),
+  ring: wc('ring'),
+  sidebar: {
+    DEFAULT: wc('sidebar'),
+    foreground: wc('sidebar-foreground'),
+    primary: wc('sidebar-primary'),
+    'primary-foreground': wc('sidebar-primary-foreground'),
+    accent: wc('sidebar-accent'),
+    'accent-foreground': wc('sidebar-accent-foreground'),
+    border: wc('sidebar-border'),
+    ring: wc('sidebar-ring'),
+  },
+  unread: wc('unread'),
+  mention: {
+    DEFAULT: wc('mention'),
+    solid: wc('mention-solid'),
+    'solid-foreground': wc('mention-solid-foreground'),
+  },
+  online: wc('online'),
+  highlight: wc('highlight'),
+}
+
+/**
+ * 원본이 쓰던 v4 전용 변형을 v3에 다시 정의한다.
+ * - `pointer-coarse:` — 원본 globals.css의 터치 변형
+ * - `data-open:` 등 — shadcn `tailwind.css`의 `@custom-variant`(data-state 와 불리언 data 속성 둘 다 받는다)
+ */
+const workVariants = function ({ addVariant }) {
+  addVariant('pointer-coarse', '@media (pointer: coarse)')
+  const either = (state, attr) => [
+    `&:where([data-state="${state}"])`,
+    `&:where([data-${attr}]:not([data-${attr}="false"]))`,
+  ]
+  addVariant('data-open', either('open', 'open'))
+  addVariant('data-closed', either('closed', 'closed'))
+  addVariant('data-checked', either('checked', 'checked'))
+  addVariant('data-unchecked', either('unchecked', 'unchecked'))
+  addVariant('data-active', either('active', 'active'))
+  addVariant('data-selected', '&:where([data-selected="true"])')
+  addVariant('data-disabled', [
+    '&:where([data-disabled="true"])',
+    '&:where([data-disabled]:not([data-disabled="false"]))',
+  ])
+  addVariant('data-horizontal', '&:where([data-orientation="horizontal"])')
+  addVariant('data-vertical', '&:where([data-orientation="vertical"])')
+}
+
+/**
+ * 원본 tw-animate-css(v4)의 열고 닫는 애니메이션(`animate-in fade-in-0 zoom-in-95 slide-in-from-top-2` …)의 v3 짝.
+ * v3용 `tailwindcss-animate`를 쓰지 않는 이유: 그 플러그인은 `duration-*`·`ease-*`에 animation 속성을 덧붙이고
+ * `paused`·`running`·`animate-in`을 전역 클래스로 만든다 — 공개 사이트에 이미 그런 문자열이 있어 동작이 바뀐다.
+ * 그래서 업무툴 전용 `wa-` 접두사로 따로 둔다. 키프레임은 `src/work/styles.css`(`wa-enter`·`wa-exit`).
+ * port-from-kosmart.mjs가 `animate-in` → `wa-in`, `fade-in-0` → `wa-fade-in-0`처럼 바꾼다.
+ */
+const workAnimations = function ({ addUtilities, matchUtilities, theme }) {
+  addUtilities({
+    '.wa-in': {
+      animationName: 'wa-enter',
+      animationDuration: '150ms',
+      '--tw-enter-opacity': 'initial',
+      '--tw-enter-scale': 'initial',
+      '--tw-enter-translate-x': 'initial',
+      '--tw-enter-translate-y': 'initial',
+    },
+    '.wa-out': {
+      animationName: 'wa-exit',
+      animationDuration: '150ms',
+      '--tw-exit-opacity': 'initial',
+      '--tw-exit-scale': 'initial',
+      '--tw-exit-translate-x': 'initial',
+      '--tw-exit-translate-y': 'initial',
+    },
+  })
+  const neg = v => (String(v).startsWith('-') ? String(v).slice(1) : `-${v}`)
+  matchUtilities(
+    {
+      'wa-fade-in': v => ({ '--tw-enter-opacity': v }),
+      'wa-fade-out': v => ({ '--tw-exit-opacity': v }),
+    },
+    { values: theme('opacity') }
+  )
+  matchUtilities(
+    {
+      'wa-zoom-in': v => ({ '--tw-enter-scale': v }),
+      'wa-zoom-out': v => ({ '--tw-exit-scale': v }),
+    },
+    { values: theme('scale') }
+  )
+  matchUtilities(
+    {
+      'wa-slide-in-from-top': v => ({ '--tw-enter-translate-y': neg(v) }),
+      'wa-slide-in-from-bottom': v => ({ '--tw-enter-translate-y': v }),
+      'wa-slide-in-from-left': v => ({ '--tw-enter-translate-x': neg(v) }),
+      'wa-slide-in-from-right': v => ({ '--tw-enter-translate-x': v }),
+      'wa-slide-out-to-top': v => ({ '--tw-exit-translate-y': neg(v) }),
+      'wa-slide-out-to-bottom': v => ({ '--tw-exit-translate-y': v }),
+      'wa-slide-out-to-left': v => ({ '--tw-exit-translate-x': neg(v) }),
+      'wa-slide-out-to-right': v => ({ '--tw-exit-translate-x': v }),
+    },
+    { values: theme('translate') }
+  )
+}
+
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+    // 이사회 업무툴(kosmart-work 이식) — docs/board-work/01-설계.md §9
+    './src/work/**/*.{js,ts,jsx,tsx,mdx}',
+  ],
+  // 업무툴만 `dark:`를 쓴다(공개 사이트는 0건). 수동 지정(data-work-theme)이 우선, 없으면 OS 설정.
+  // 원본 globals.css의 `@custom-variant dark`를 업무툴 루트([data-work-app]) 범위로 옮긴 것이다.
+  darkMode: [
+    'variant',
+    [
+      '&:where([data-work-theme=dark], [data-work-theme=dark] *)',
+      '@media (prefers-color-scheme: dark) { &:where([data-work-app]:not([data-work-theme]), [data-work-app]:not([data-work-theme]) *) }',
+    ],
   ],
   theme: {
     extend: {
       colors: {
+        ...workColors,
         primary: {
+          ...workColors.primary,
           50: '#f0f9ff',
           100: '#e0f2fe',
           200: '#bae6fd',
@@ -21,6 +155,7 @@ module.exports = {
           900: '#0c4a6e',
         },
         accent: {
+          ...workColors.accent,
           50: '#fef7ee',
           100: '#fdedd3',
           200: '#fbd9a5',
@@ -38,7 +173,25 @@ module.exports = {
       borderColor: {
         DEFAULT: 'rgba(255, 255, 255, 0.15)',
       },
+      // 업무툴 반경(원본 @theme의 --radius 배수). ggac 전역 rounded-lg 등과 섞이지 않게 `w-` 접두사 —
+      // 옮길 때 port-from-kosmart.mjs가 rounded-lg → rounded-w-lg로 바꾼다.
+      borderRadius: {
+        'w-sm': 'calc(var(--radius) * 0.6)',
+        'w-md': 'calc(var(--radius) * 0.8)',
+        'w-lg': 'var(--radius)',
+        'w-xl': 'calc(var(--radius) * 1.4)',
+        'w-2xl': 'calc(var(--radius) * 1.8)',
+        'w-3xl': 'calc(var(--radius) * 2.2)',
+        'w-4xl': 'calc(var(--radius) * 2.6)',
+      },
+      // 업무툴 레이아웃 폭(원본 브리프 §5)
+      spacing: {
+        rail: '64px',
+        sidebar: '260px',
+        panel: '360px',
+      },
       fontFamily: {
+        heading: ['var(--font-pretendard)', 'system-ui', 'sans-serif'],
         sans: ['var(--font-pretendard)', 'system-ui', 'sans-serif'],
         post: ['var(--font-pretendard-black)', 'sans-serif'],
         serif: ['var(--font-pretendard-black)', 'serif'],
@@ -97,6 +250,10 @@ module.exports = {
   },
   plugins: [
     require('@tailwindcss/typography'),
+    // 업무툴용: 컨테이너 쿼리(@lg: 등), 원본 변형(pointer-coarse·shadcn data-*), 열고 닫는 애니메이션(wa-*)
+    require('@tailwindcss/container-queries'),
+    workVariants,
+    workAnimations,
     function ({ addUtilities }) {
       const newUtilities = {
         // 카드 공통 스타일

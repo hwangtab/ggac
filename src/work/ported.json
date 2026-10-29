@@ -1,0 +1,98 @@
+{
+  "src/work/components/ui/auto-tooltip.tsx": {
+    "source": "src/components/ui/auto-tooltip.tsx",
+    "commit": "8ae8dd5",
+    "sha256": "0eaa96240da82e2e"
+  },
+  "src/work/components/ui/avatar.tsx": {
+    "source": "src/components/ui/avatar.tsx",
+    "commit": "8ae8dd5",
+    "sha256": "98b63bd46ac2b90d"
+  },
+  "src/work/components/ui/badge.tsx": {
+    "source": "src/components/ui/badge.tsx",
+    "commit": "8ae8dd5",
+    "sha256": "51a86d6cd41d8424"
+  },
+  "src/work/components/ui/button.tsx": {
+    "source": "src/components/ui/button.tsx",
+    "commit": "8ae8dd5",
+    "sha256": "36444ec1ced38487"
+  },
+  "src/work/components/ui/command.tsx": {
+    "source": "src/components/ui/command.tsx",
+    "commit": "8ae8dd5",
+    "sha256": "3a1ada9eb07f8951"
+  },
+  "src/work/components/ui/confirm-dialog.tsx": {
+    "source": "src/components/ui/confirm-dialog.tsx",
+    "commit": "8ae8dd5",
+    "sha256": "9608b7b881596e15"
+  },
+  "src/work/components/ui/dialog.tsx": {
+    "source": "src/components/ui/dialog.tsx",
+    "commit": "8ae8dd5",
+    "sha256": "c4f9c7427f3c3638"
+  },
+  "src/work/components/ui/dropdown-menu.tsx": {
+    "source": "src/components/ui/dropdown-menu.tsx",
+    "commit": "8ae8dd5",
+    "sha256": "471a01dacb565c7e"
+  },
+  "src/work/components/ui/field.tsx": {
+    "source": "src/components/ui/field.tsx",
+    "commit": "8ae8dd5",
+    "sha256": "71dd23c3b7322698"
+  },
+  "src/work/components/ui/input-group.tsx": {
+    "source": "src/components/ui/input-group.tsx",
+    "commit": "8ae8dd5",
+    "sha256": "0dadc20134d83469"
+  },
+  "src/work/components/ui/input.tsx": {
+    "source": "src/components/ui/input.tsx",
+    "commit": "8ae8dd5",
+    "sha256": "54644e37e8c75fb9"
+  },
+  "src/work/components/ui/native-select.tsx": {
+    "source": "src/components/ui/native-select.tsx",
+    "commit": "8ae8dd5",
+    "sha256": "0e8e9ed7e0f5079b"
+  },
+  "src/work/components/ui/scroll-area.tsx": {
+    "source": "src/components/ui/scroll-area.tsx",
+    "commit": "8ae8dd5",
+    "sha256": "c491d31e772b8d04"
+  },
+  "src/work/components/ui/separator.tsx": {
+    "source": "src/components/ui/separator.tsx",
+    "commit": "8ae8dd5",
+    "sha256": "e746be98b80f5f5a"
+  },
+  "src/work/components/ui/sheet.tsx": {
+    "source": "src/components/ui/sheet.tsx",
+    "commit": "8ae8dd5",
+    "sha256": "d3673c17a0f82867"
+  },
+  "src/work/components/ui/textarea.tsx": {
+    "source": "src/components/ui/textarea.tsx",
+    "commit": "8ae8dd5",
+    "sha256": "7f586dc7a65833e6"
+  },
+  "src/work/components/ui/tooltip.tsx": {
+    "source": "src/components/ui/tooltip.tsx",
+    "commit": "8ae8dd5",
+    "sha256": "f838a9e50313b7d9"
+  },
+  "src/work/lib/ui/auto-tooltip.ts": {
+    "source": "src/lib/ui/auto-tooltip.ts",
+    "commit": "8ae8dd5",
+    "sha256": "83c2cbfc55cfbe08"
+  },
+  "src/work/lib/utils.ts": {
+    "source": "src/lib/utils.ts",
+    "commit": "7ec4e9f",
+    "sha256": "9304a861c8673bee",
+    "modified": "tailwind-merge 2 + rounded-w-* 확장(손으로 고침 — --force로 덮지 말 것)"
+  }
+}

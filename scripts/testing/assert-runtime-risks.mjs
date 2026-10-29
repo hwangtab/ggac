@@ -3072,6 +3072,7 @@ const SRC_SCAN_SUBTREE_MINIMUMS = {
   'src/constants/': 6, // 현재 9
   'src/middleware/': 4, // 현재 7
   'src/i18n/': 2, // 현재 3
+  'src/work/': 14, // 현재 21 (이사회 업무툴 0단계 — UI 키트. 단계마다 올린다)
 }
 const srcScanSubtreeShortfalls = Object.entries(SRC_SCAN_SUBTREE_MINIMUMS).flatMap(
   ([prefix, minimum]) => {
@@ -3515,6 +3516,7 @@ const SCRIPTS_SCAN_SUBTREE_MINIMUMS = {
   'scripts/ticketing/': 1, // 현재 1 (공연 등록 도구)
   'scripts/turso/': 4, // 현재 8
   'scripts/utils/': 11, // 현재 13
+  'scripts/work/': 1, // 현재 1 (port-from-kosmart.mjs — 업무툴 이식 도구)
 }
 const scriptsScanSubtreeShortfalls = Object.entries(SCRIPTS_SCAN_SUBTREE_MINIMUMS).flatMap(
   ([prefix, minimum]) => {
@@ -7487,6 +7489,66 @@ if (trackedFiles === null) {
   if (fundingFailures.length > 0) {
     failures.push(
       `Funding boundaries guard money, and this file can only pin strings — the real safety net is e2e/authz-funding.spec.ts (npm run test:e2e:authz). These contracts catch a gate that disappeared entirely; they prove nothing about reachability, ordering or data flow. Offending contract(s):\n${fundingFailures
+        .map(hit => `- ${hit}`)
+        .join('\n')}`
+    )
+  }
+}
+// ---------------------------------------------------------------------------
+// 이사회 업무툴(kosmart-work 이식)의 server action — docs/board-work/01-설계.md §5-1.
+//
+// 원본은 server action이 Postgres RLS를 믿고 썼다. 여기에는 RLS가 없어서 **action마다 가드를 직접
+// 불러야** 한다. server action은 `route.ts`가 아니라 위 특권 트리 검사에 걸리지 않으므로 따로 본다.
+//
+// 계약(문자열 검사 — 보조다. 안전망은 e2e/authz-board-work.spec.ts):
+// - `'use server'`는 파일 맨 앞에만 둔다(함수 안 인라인 지시문 금지 — 아래 검사를 비켜 간다).
+// - 그런 파일의 export는 `export async function 이름(`뿐이다(`export const x = async` 금지 — 같은 이유).
+// - 모든 export 함수 본문이 `requireWorkStaff(` 또는 `requireWorkAdmin(`를 부른다.
+{
+  const BOARD_WORK_ACTION_TREES = ['src/work', 'src/app/[locale]/board-room']
+  const boardWorkFailures = []
+  const candidates = BOARD_WORK_ACTION_TREES.flatMap(tree =>
+    existsSync(join(root, tree)) ? walkFiles(tree, name => /\.tsx?$/.test(name)) : []
+  )
+  for (const file of candidates) {
+    const code = readSourceAt(join(root, file))
+    if (!/['"]use server['"]/.test(code)) continue
+    if (!/^\s*['"]use server['"]/.test(code)) {
+      boardWorkFailures.push(
+        `${file}: 'use server'가 파일 맨 앞이 아닙니다(인라인 server action 금지)`
+      )
+      continue
+    }
+    if (/export\s+(const|let|var)\s+\w+\s*=/.test(code) || /export\s+default/.test(code)) {
+      boardWorkFailures.push(
+        `${file}: server action은 \`export async function 이름(\`으로만 내보냅니다`
+      )
+    }
+    const names = [...code.matchAll(/export\s+async\s+function\s+(\w+)\s*\(/g)].map(m => m[1])
+    for (const name of names) {
+      const body = extractNamedFunctionBody(code, name)
+      if (!body || !/\brequireWork(Staff|Admin)\s*\(/.test(body)) {
+        boardWorkFailures.push(
+          `${file}: ${name}()가 requireWorkStaff/requireWorkAdmin을 부르지 않습니다`
+        )
+      }
+    }
+  }
+  // 업무툴 레이아웃이 동적 렌더링을 선언하는가. 빠지면 가드가 빌드 때 세션 없이 돌아 리다이렉트가 정적으로 구워진다
+  // (readSessionUser가 Next의 동적 사용 신호까지 삼킨다 — 실측 2026-10-29).
+  const boardWorkLayout = 'src/app/[locale]/board-room/(work)/layout.tsx'
+  if (!existsSync(join(root, boardWorkLayout))) {
+    boardWorkFailures.push(`${boardWorkLayout}: 업무툴 레이아웃이 없습니다`)
+  } else if (
+    !/export\s+const\s+dynamic\s*=\s*['"]force-dynamic['"]/.test(
+      readSourceAt(join(root, boardWorkLayout))
+    )
+  ) {
+    boardWorkFailures.push(`${boardWorkLayout}: export const dynamic = 'force-dynamic'이 없습니다`)
+  }
+  if (boardWorkFailures.length > 0) {
+    failures.push(
+      `Board work tool server actions have no RLS behind them — each one must gate itself. This only pins strings; the real safety net is e2e/authz-board-work.spec.ts (npm run test:e2e:authz). Offending contract(s):\n${boardWorkFailures
         .map(hit => `- ${hit}`)
         .join('\n')}`
     )

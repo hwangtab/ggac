@@ -26,6 +26,8 @@ docs/*
 # 담긴 문서는 여기 두지 말고 이사회 서류함(비공개 Blob)에 올린다.
 !docs/사회적기업/
 !docs/mailbox-cutover.md
+# 이사회 업무툴 설계(기술 문서 — 조합 내부 판단·개인정보 없음). 코드 주석이 이 경로를 가리킨다.
+!docs/board-work/
 
 # playwright MCP session logs — may contain PII/sensitive test data
 .playwright-mcp/
