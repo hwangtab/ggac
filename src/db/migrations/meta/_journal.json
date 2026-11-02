@@ -183,6 +183,13 @@
       "when": 1789300000000,
       "tag": "0025_board_work_chat",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1789400000000,
+      "tag": "0026_board_work_files",
+      "breakpoints": true
     }
   ]
 }

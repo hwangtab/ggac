@@ -38,6 +38,18 @@ export type Fixtures = {
   workPublicMessageId: string
   workPrivateMessageId: string
   workDmMessageId: string
+  /** 업무툴 첨부(2a) — 각 채널 메시지에 하나씩. Blob 객체는 없다(파일 라우트는 권한을 지나면 503) */
+  workPublicAttachmentId: string
+  workPrivateAttachmentId: string
+  workDmAttachmentId: string
+  workPublicFileName: string
+  workPrivateFileName: string
+  workDmFileName: string
+  /** 승격하지 않은 임시 업로드 — 감사(비공개 채널)·이사(공개 채널). 업로드 토큰 경계용 */
+  workAuditorPendingId: string
+  workAuditorPendingPath: string
+  workDirectorPendingId: string
+  workDirectorPendingPath: string
   notificationId: string
   /** 이사회 안건 토론 경계용 — `director`가 작성자다. */
   boardMeetingId: string

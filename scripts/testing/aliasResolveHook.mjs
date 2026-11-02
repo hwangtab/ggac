@@ -33,6 +33,19 @@ export async function resolve(specifier, context, nextResolve) {
   if (specifier.startsWith('@/')) {
     return { url: new URL('src/' + specifier.slice(2) + '.ts', ROOT).href, shortCircuit: true }
   }
+  // 이사회 업무툴 이식 코드의 별칭(tsconfig \`@work/*\` → src/work/*). 확장자는 아래 재시도가 붙인다.
+  if (specifier.startsWith('@work/')) {
+    return nextResolve(new URL('src/work/' + specifier.slice(6), ROOT).href, context).catch(async () => {
+      for (const suffix of FALLBACK_SUFFIXES) {
+        try {
+          return await nextResolve(new URL('src/work/' + specifier.slice(6) + suffix, ROOT).href, context)
+        } catch {
+          // 다음 후보
+        }
+      }
+      throw new Error('cannot resolve ' + specifier)
+    })
+  }
   try {
     return await nextResolve(specifier, context)
   } catch (err) {

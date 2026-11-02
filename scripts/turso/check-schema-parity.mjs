@@ -51,6 +51,8 @@ const POST_CUTOVER_TABLES = new Set([
   'work_activity_reads', // 0025
   'work_presence', // 0025
   'work_typing', // 0025
+  'work_pending_uploads', // 0026 이사회 업무툴 파일
+  'work_attachments', // 0026
 ])
 
 export function comparePgToSqlite(pgSnapshot, sqliteSchema) {

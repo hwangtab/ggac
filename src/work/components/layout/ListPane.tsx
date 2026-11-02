@@ -21,6 +21,7 @@ import ChannelSortMenu, { ChatSortMenu } from './ChannelSortMenu'
 import { useShellData } from './shell-context'
 import { COUNT_BADGE_CLASS, PANE_ACTION_CLASS, ROW_ACTIVE_CLASS, ROW_CLASS } from './pane-styles'
 import SubTitle from './SubTitle'
+import FilesPaneContent from './FilesPaneContent'
 import { EmptyState } from './page'
 import { activeChannelId } from './active-channel'
 import { activeSection, sectionByKey, type SectionKey } from './nav-sections'
@@ -29,8 +30,8 @@ import type { ChannelListItem } from './channel-items'
 export const LIST_PANE_ID = 'list-pane'
 
 /** 목록 패널이 항상 있는 섹션 (관리는 셸 밖 레이아웃이 따로 그린다, 위키는 트리를 받았을 때만) */
-// ggac 이식 1b: 할 일·자료실(2단계)·결재·위키(가져오지 않음)의 목록 패널은 없다
-const PANE_SECTIONS: readonly SectionKey[] = ['activity', 'chat', 'channels']
+// ggac 이식: 자료실은 2a에서 켰다. 할 일(2단계)·결재·위키(가져오지 않음)의 목록 패널은 없다
+const PANE_SECTIONS: readonly SectionKey[] = ['activity', 'chat', 'channels', 'files']
 
 /** wikiAvailable: 위키 트리를 받았는가(게스트는 위키를 못 쓰므로 받지 않는다) */
 export function hasListPane(section: SectionKey | null, wikiAvailable = false): boolean {
@@ -303,6 +304,9 @@ export default function ListPane({
       </>
     )
     body = <ChannelsPaneContent channels={channels} activeId={activeId} />
+  } else if (section === 'files') {
+    header = { title: '자료실' }
+    body = <FilesPaneContent channels={channels} isGuest={isGuest} />
   } else {
     header = { title: sectionByKey(section).label }
     body = (

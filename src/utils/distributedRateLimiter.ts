@@ -665,6 +665,23 @@ export const DISTRIBUTED_RATE_LIMIT_CONFIGS = {
     message: '너무 빠르게 보내고 있습니다. 잠시 후 다시 시도해 주세요.',
   },
 
+  // 이사회 업무툴 문서 미리보기 변환(kordoc — 캐시 적중은 세지 않는다, 사용자 단위 분당 20회).
+  // 원본 kosmart-work render-guard의 프로세스 메모리 리미터 자리 — 서버리스 인스턴스마다 따로 세지 않게 분산 리미터로 둔다.
+  WORK_RENDER: {
+    name: 'work_render',
+    windowMs: 60 * 1000,
+    maxRequests: 20,
+    message: '미리보기 변환 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
+  },
+
+  // 같은 변환의 파일 상세 썸네일 몫(분당 30회) — 자료실을 넘겨 보기만 해도 썸네일 변환이 돌아 미리보기와 따로 센다.
+  WORK_RENDER_THUMB: {
+    name: 'work_render_thumb',
+    windowMs: 60 * 1000,
+    maxRequests: 30,
+    message: '미리보기 변환 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
+  },
+
   // 대량 작업 (시간당 5회)
   BULK_OPERATIONS: {
     name: 'bulk_operations',

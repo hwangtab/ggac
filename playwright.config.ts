@@ -98,8 +98,8 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         ...(process.env.CI ? {} : { channel: 'chrome' as const }),
       },
-      // board-work-chat: 로그인 상태(authz-setup)와 로컬 Turso 시드가 필요해 authz 프로젝트에서만 돈다
-      testIgnore: /authz[.-]|board-work-chat\.spec\.ts/,
+      // board-work-chat·files: 로그인 상태(authz-setup)와 로컬 Turso 시드가 필요해 authz 프로젝트에서만 돈다
+      testIgnore: /authz[.-]|board-work-(chat|files)\.spec\.ts/,
     },
     // authz 계열은 로컬 Turso(`turso dev`)와 픽스처 시드가 있어야 도는 로컬 전용
     // 프로젝트다(CI는 돌리지 않는다). 단계 4 Task 5로 앱에서 Supabase가 사라진 뒤로
@@ -115,7 +115,7 @@ export default defineConfig({
     {
       name: 'authz',
       testMatch:
-        /(authz-(ownership|personal|remaining|maintenance|roles|mailbox|funding|features|email-verification|market|board-work)|board-work-chat)\.spec\.ts/,
+        /(authz-(ownership|personal|remaining|maintenance|roles|mailbox|funding|features|email-verification|market|board-work)|board-work-(chat|files))\.spec\.ts/,
       dependencies: ['authz-setup'],
       use: { ...devices['Desktop Chrome'], channel: 'chrome' },
     },
@@ -184,6 +184,16 @@ export default defineConfig({
         : {}),
       ...(process.env.NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL
         ? { NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL: process.env.NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL }
+        : {}),
+      // 이사회 업무툴 파일(비공개 Blob)은 **E2E에서 운영 비공개 저장소로 절대 떨어지지 않게** 늘 명시한다.
+      // 업무툴 저장소 계층(src/work/lib/files/storage.ts)은 `BOARD_WORK_BLOB_READ_WRITE_TOKEN`이 정의돼 있으면(빈 값 포함)
+      // 그것만 쓴다 — 빈 값이면 저장소를 부르지 않고 503이다. `.env.local`의 운영 `PRIVATE_BLOB_READ_WRITE_TOKEN`
+      // (DB 백업까지 든 저장소)은 Next가 부모 환경에 이미 있는 키를 덮지 않으므로 이 값을 이기지 못한다.
+      // 시험용 저장소 토큰(`BOARD_WORK_TEST_BLOB_TOKEN`)을 셸에 주면 그것으로 실제 업로드 E2E
+      // (e2e/board-work-files.spec.ts)가 돌고, 그때는 다른 비공개 저장소 소비자(서류함·메일함)도 같은 시험 저장소를 본다.
+      BOARD_WORK_BLOB_READ_WRITE_TOKEN: process.env.BOARD_WORK_TEST_BLOB_TOKEN ?? '',
+      ...(process.env.BOARD_WORK_TEST_BLOB_TOKEN
+        ? { PRIVATE_BLOB_READ_WRITE_TOKEN: process.env.BOARD_WORK_TEST_BLOB_TOKEN }
         : {}),
       // BETTER_AUTH_URL — Better Auth는 요청의 Origin 헤더를 이 값과 정확히
       // 비교해 다르면 403 INVALID_ORIGIN을 던진다(실측:

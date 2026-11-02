@@ -1,6 +1,6 @@
 /**
  * 문서 뷰어 변환 결과의 공용 타입·상수(클라이언트·서버 공용 — kordoc 을 import 하지 않는다).
- * 변환은 `/api/files/<id>/render` Route Handler 가 하고, DocumentViewer 가 이 JSON 을 그린다.
+ * 변환은 `/api/board-room/work/files/<id>/render` Route Handler 가 하고, DocumentViewer 가 이 JSON 을 그린다.
  */
 
 /** 변환하는 원본의 상한 — 넘으면 변환하지 않고 413(`too_large`) */
@@ -76,16 +76,16 @@ export class RenderError extends Error {
 }
 
 /**
- * 변환 캐시 객체 경로 — work-files 버킷의 `renders/` 접두. attachments 행의 bucket_path 규약
- * (`channels/…`, DB 트리거가 attachments 행에만 검사)과 겹치지 않고, storage RLS 도 없다(service_role 전용).
- * 첨부는 올라간 뒤 바뀌지 않으므로(bucket_path 동결) attachment id + 변환기 버전이 곧 캐시 키다.
+ * 변환 캐시 객체 경로 — 비공개 Blob의 `board-work/renders/` 접두(ggac 이식: 원본은 work-files 버킷의 `renders/`).
+ * 업로드 키(`board-work/files/…`)와 겹치지 않고, 읽기·쓰기 전마다 `isSafeBoardWorkPath`가 모양을 다시 본다.
+ * 첨부는 올라간 뒤 바뀌지 않으므로(blob_path 동결) attachment id + 변환기 버전이 곧 캐시 키다.
  */
 export function renderCachePath(attachmentId: string, converterVersion: string): string {
-  return `renders/${attachmentId}-${converterVersion}.json`
+  return `${RENDER_CACHE_DIR}/${attachmentId}-${converterVersion}.json`
 }
 
-/** 변환 캐시가 놓이는 버킷 안 폴더(접두) */
-export const RENDER_CACHE_DIR = 'renders'
+/** 변환 캐시가 놓이는 비공개 Blob 안 폴더(접두) */
+export const RENDER_CACHE_DIR = 'board-work/renders'
 
 /** `renders/` 안 객체 이름에서 첨부 id 를 읽는다(`<uuid>-<변환기버전>.json`, 레이아웃 보기는 `<uuid>-<버전>-layout.json`·`…-layout-p<n>.svg`). 규약 밖 이름은 null */
 export function renderCacheAttachmentId(objectName: string): string | null {
@@ -157,12 +157,12 @@ export function isLayoutManifest(v: unknown): v is LayoutManifest {
 
 /** 레이아웃 manifest 캐시 경로 — `renders/` 평면(폴더 없이) 이라 첨부 삭제 정리가 접두 목록으로 함께 지운다 */
 export function layoutManifestPath(attachmentId: string, layoutVersion: string): string {
-  return `renders/${attachmentId}-${layoutVersion}-layout.json`
+  return `${RENDER_CACHE_DIR}/${attachmentId}-${layoutVersion}-layout.json`
 }
 
 /** 쪽 SVG 캐시 경로 */
 export function layoutPagePath(attachmentId: string, layoutVersion: string, page: number): string {
-  return `renders/${attachmentId}-${layoutVersion}-layout-p${page}.svg`
+  return `${RENDER_CACHE_DIR}/${attachmentId}-${layoutVersion}-layout-p${page}.svg`
 }
 
 /**
@@ -174,7 +174,7 @@ export function layoutTooBigPath(
   layoutVersion: string,
   page: number
 ): string {
-  return `renders/${attachmentId}-${layoutVersion}-layout-p${page}-big.json`
+  return `${RENDER_CACHE_DIR}/${attachmentId}-${layoutVersion}-layout-p${page}-big.json`
 }
 
 /**

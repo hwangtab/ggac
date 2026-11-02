@@ -19,12 +19,19 @@ const KORDOC_VIEWER_EXCLUDES = [
   './node_modules/@napi-rs/**',
   './node_modules/@huggingface/**',
 ]
-/** kordoc을 쓰는 라우트(⚠️ 스파이크 라우트 — 실제 구현 때 교체) */
-const KORDOC_ROUTES = ['/api/internal/board-work-spike/render']
+/**
+ * kordoc을 쓰는 라우트 — 이사회 업무툴 문서 미리보기(docs/board-work/01-설계.md §7-3). 라우트를 더하면 여기에도 적는다
+ * (빠지면 운영에서 "Cannot find module 'cfb'"로 HWP·XLS 변환이 전부 실패하고, 제외가 빠지면 번들이 250MB를 넘는다).
+ */
+// 키는 picomatch 글롭이라 동적 구간의 대괄호를 이스케이프한다(문자 집합으로 읽히지 않게).
+const KORDOC_ROUTES = ['/api/board-room/work/files/\\[id\\]/render']
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // 파일 추적 루트를 이 저장소로 고정한다 — 홈 디렉터리의 다른 lockfile 때문에 Next가 루트를 잘못 짚어
+  // 추적 경로(outputFileTracingIncludes)가 어긋났다(이사회 업무툴 0단계 스파이크 실측, 설계 §7-5).
+  outputFileTracingRoot: __dirname,
   allowedDevOrigins: ['127.0.0.1'],
 
   // data/*.json은 src/lib/data.ts가 process.cwd() 기반 동적 경로로 fs 읽기하므로
@@ -496,9 +503,11 @@ const nextConfig = {
               // 버튼이나 가입 화면의 사람 확인이 먹통이 된다(콘솔에만 CSP 위반이 찍힌다).
               "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://*.tosspayments.com https://challenges.cloudflare.com",
               // dev 분기의 로컬 호스트 허용은 로컬 API/HMR용이다.
+              // https://vercel.com: 이사회 업무툴 첨부의 브라우저 직접 업로드(@vercel/blob/client — 본문은
+              // vercel.com/api/blob). src/middleware/csp.ts·src/utils/security.ts와 함께 고친다(설계 §7-5).
               process.env.NODE_ENV === 'development'
-                ? "connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:* https://*.tosspayments.com"
-                : "connect-src 'self' https://*.tosspayments.com",
+                ? "connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:* https://*.tosspayments.com https://vercel.com"
+                : "connect-src 'self' https://*.tosspayments.com https://vercel.com",
               "object-src 'none'",
               "base-uri 'self'",
               // 결제창은 카드사 인증 페이지로 폼을 제출한다. 'self'만 두면 카드를
@@ -506,6 +515,8 @@ const nextConfig = {
               // 달라 미리 다 알 수 없으므로, 실제 결제를 끝까지 통과시켜 보며
               // 필요한 도메인을 확인해 추가한다.
               "form-action 'self' https://*.tosspayments.com",
+              // 업무툴 PDF 미리보기 응답(/api/board-room/work/files/<id>/<name>)은 이 규칙(api 제외) 밖이고,
+              // 라우트가 SAMEORIGIN·frame-ancestors 'self'를 직접 붙인다.
               "frame-ancestors 'none'",
               "worker-src 'self' blob:",
               "manifest-src 'self'",

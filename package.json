@@ -63,6 +63,7 @@
     "lucide-work": "npm:lucide-react@^1.63.0",
     "next": "^15.5.28",
     "next-intl": "^4.12.0",
+    "pdfjs-dist": "4.10.38",
     "pretendard": "^1.3.9",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

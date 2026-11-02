@@ -126,6 +126,7 @@ const { createChannelRow, addChannelMemberRows, openDmRow } = await import(
   '@/db/queries/work/channels'
 )
 const { insertMessage } = await import('@/db/queries/work/messages')
+const { insertPendingUploads, promotePendingUpload } = await import('@/db/queries/work/files')
 
 // id는 전부 고정값이다. 예전에는 Supabase가 만들어준 uuid를 그대로 받아
 // 썼는데, 그쪽이 사라진 지금 매번 새로 뽑으면 재실행마다 계정이 늘고
@@ -1348,6 +1349,78 @@ async function main() {
     if (r.status !== 'created') throw new Error(`업무툴 메시지 시드 실패: ${id} ${r.status}`)
   }
 
+  // ── 이사회 업무툴(파일, 2a) — 첨부 행만 만든다. **Blob 객체는 만들지 않는다**(운영 저장소 오염 방지 — 이 스위트의
+  // 저장소 토큰은 빈 값이라 파일 라우트는 권한을 지난 뒤 503 "저장소 미설정"으로 끝난다: 그게 허용 쪽 표식이다).
+  // 승격은 앱과 같은 쿼리 계층 함수로 한다(첨부 수·rev가 같은 경로로 오른다). 키는 업무툴 규약 모양이다.
+  const workFile = async ({ uploadId, channelId, messageId, uploaderId, name, safeName, mime }) => {
+    const blobPath = `board-work/files/${uploadId}/${safeName}`
+    const inserted = await insertPendingUploads(
+      [{ id: uploadId, channelId, uploaderId, blobPath, name, mime, size: 1234 }],
+      { maxPerUser: 100 }
+    )
+    if (!inserted) throw new Error(`업무툴 임시 업로드 시드 실패: ${uploadId}`)
+    const attachment = await promotePendingUpload({
+      uploadId,
+      messageId,
+      actorId: uploaderId,
+      size: 1234,
+    })
+    return attachment.id
+  }
+  const WORK_PUBLIC_FILE_NAME = 'authz-e2e 공개 회의자료.pdf'
+  const WORK_PRIVATE_FILE_NAME = 'authz-e2e 비공개 감사보고.pdf'
+  const WORK_DM_FILE_NAME = 'authz-e2e DM 개인자료.pdf'
+  const workPublicAttachmentId = await workFile({
+    uploadId: '00000000-0000-4000-8000-00000000c021',
+    channelId: WORK_PUBLIC_CHANNEL_ID,
+    messageId: WORK_PUBLIC_MESSAGE_ID,
+    uploaderId: ids.director,
+    name: WORK_PUBLIC_FILE_NAME,
+    safeName: 'authz-e2e_public.pdf',
+    mime: 'application/pdf',
+  })
+  const workPrivateAttachmentId = await workFile({
+    uploadId: '00000000-0000-4000-8000-00000000c022',
+    channelId: WORK_PRIVATE_CHANNEL_ID,
+    messageId: WORK_PRIVATE_MESSAGE_ID,
+    uploaderId: ids.auditor,
+    name: WORK_PRIVATE_FILE_NAME,
+    safeName: 'authz-e2e_private.pdf',
+    mime: 'application/pdf',
+  })
+  const workDmAttachmentId = await workFile({
+    uploadId: '00000000-0000-4000-8000-00000000c023',
+    channelId: WORK_DM_CHANNEL_ID,
+    messageId: WORK_DM_MESSAGE_ID,
+    uploaderId: ids.auditor,
+    name: WORK_DM_FILE_NAME,
+    safeName: 'authz-e2e_dm.pdf',
+    mime: 'application/pdf',
+  })
+  // 업로드 토큰 경계용 임시 업로드(승격하지 않는다): 감사가 비공개 채널에, 이사가 공개 채널에 준비해 둔 것
+  const WORK_AUDITOR_PENDING_ID = '00000000-0000-4000-8000-00000000c031'
+  const WORK_DIRECTOR_PENDING_ID = '00000000-0000-4000-8000-00000000c032'
+  for (const [uploadId, channelId, uploaderId, safeName] of [
+    [WORK_AUDITOR_PENDING_ID, WORK_PRIVATE_CHANNEL_ID, ids.auditor, 'auditor_pending.pdf'],
+    [WORK_DIRECTOR_PENDING_ID, WORK_PUBLIC_CHANNEL_ID, ids.director, 'director_pending.pdf'],
+  ]) {
+    const ok = await insertPendingUploads(
+      [
+        {
+          id: uploadId,
+          channelId,
+          uploaderId,
+          blobPath: `board-work/files/${uploadId}/${safeName}`,
+          name: safeName,
+          mime: 'application/pdf',
+          size: 1234,
+        },
+      ],
+      { maxPerUser: 100 }
+    )
+    if (!ok) throw new Error(`업무툴 임시 업로드 시드 실패: ${uploadId}`)
+  }
+
   const fixtures = {
     users: ids,
     workPublicChannelId: WORK_PUBLIC_CHANNEL_ID,
@@ -1358,6 +1431,16 @@ async function main() {
     workPublicMessageId: WORK_PUBLIC_MESSAGE_ID,
     workPrivateMessageId: WORK_PRIVATE_MESSAGE_ID,
     workDmMessageId: WORK_DM_MESSAGE_ID,
+    workPublicAttachmentId,
+    workPrivateAttachmentId,
+    workDmAttachmentId,
+    workPublicFileName: WORK_PUBLIC_FILE_NAME,
+    workPrivateFileName: WORK_PRIVATE_FILE_NAME,
+    workDmFileName: WORK_DM_FILE_NAME,
+    workAuditorPendingId: WORK_AUDITOR_PENDING_ID,
+    workAuditorPendingPath: `board-work/files/${WORK_AUDITOR_PENDING_ID}/auditor_pending.pdf`,
+    workDirectorPendingId: WORK_DIRECTOR_PENDING_ID,
+    workDirectorPendingPath: `board-work/files/${WORK_DIRECTOR_PENDING_ID}/director_pending.pdf`,
     postId: POST_ID,
     commentId: COMMENT_ID,
     notificationId: NOTIFICATION_ID,
@@ -1413,7 +1496,7 @@ async function main() {
       `이사회 회의 2(scheduled·completed)·회의록 2·안건 1·안건 의견 3, ` +
       `펀딩 캠페인 6(draft·submitted 3·closed·active)·리워드 6·후원 2(회원·비회원), ` +
       `system_settings ${settingRows.length}행, default_settings ${DEFAULT_SETTINGS.length}행, ` +
-      `업무툴 채널 2(공개·비공개)·DM 1·메시지 3 (전부 Turso)`
+      `업무툴 채널 2(공개·비공개)·DM 1·메시지 3·첨부 3·임시 업로드 2 (전부 Turso)`
   )
 }
 

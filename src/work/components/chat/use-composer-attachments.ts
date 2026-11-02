@@ -1,6 +1,11 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import { createElement, useCallback, useMemo, useRef, type ReactNode } from 'react'
+import PendingAttachments from '@work/components/files/PendingAttachments'
+import {
+  useAttachmentUploads,
+  type AttachmentUploads,
+} from '@work/components/files/useAttachmentUploads'
 import type { AttachmentRow } from '@work/lib/messages/types'
 
 /**
@@ -23,21 +28,38 @@ export type ComposerAttachments = {
   sendBlocked?: boolean
   onSent?: (messageId: string, attachmentIds: string[]) => void | Promise<void>
   onFiles?: (files: File[]) => void
-  /** AttachmentPicker 에 넘길 업로드 상태(ggac 1b: 첨부 미지원이라 null) */
-  uploads: null
+  /** AttachmentPicker 에 넘길 업로드 상태 */
+  uploads: AttachmentUploads
 }
 
-/**
- * ggac 이식 1b: 첨부(자료실)는 2단계다. 원본과 같은 모양을 돌려주되 `onAttach`를 주지 않아 입력창의 첨부 단추가 숨고,
- * 업로드 목록·전송 막기도 없다. 2단계에서 원본으로 되돌린다(`port-from-kosmart.mjs --force`).
- */
-export function useComposerAttachments(_ctx: {
+export function useComposerAttachments(ctx: {
   channelId: string
   parentId?: string | null
   /** 첨부가 메시지에 확정됐을 때(타임라인 dispatch 'attachments') */
   onAttached?: (messageId: string, attachments: AttachmentRow[]) => void
 }): ComposerAttachments {
-  return NO_ATTACHMENTS
-}
+  const uploads = useAttachmentUploads({ channelId: ctx.channelId })
+  const onAttachedRef = useRef(ctx.onAttached)
+  onAttachedRef.current = ctx.onAttached
+  const { attachTo } = uploads
 
-const NO_ATTACHMENTS: ComposerAttachments = { uploads: null }
+  const onSent = useCallback(
+    async (messageId: string) => {
+      const res = await attachTo(messageId)
+      if (res && res.attached.length > 0) onAttachedRef.current?.(messageId, res.attached)
+    },
+    [attachTo]
+  )
+
+  return useMemo(
+    () => ({
+      uploads,
+      onAttach: uploads.openFileDialog,
+      attachmentsSlot: createElement(PendingAttachments, { uploads }),
+      pendingAttachmentIds: uploads.uploadIds,
+      sendBlocked: uploads.isUploading,
+      onSent,
+    }),
+    [uploads, onSent]
+  )
+}
