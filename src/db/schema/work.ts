@@ -437,3 +437,45 @@ export const workAttachments = sqliteTable(
       .where(sql`"version_root_id" is not null`),
   ]
 )
+
+/**
+ * 파일 계보 1행(원본 `file_lineages`, 0032) — 최종본·"수정 중"(체크아웃). 계보 키 = v1 첨부 id.
+ * 원본은 service_role 만 썼고(서버 액션이 권한 판정) 신호 트리거(채널 토픽)가 있었지만 받는 화면이 없어 옮기지 않았다.
+ * 수정 중 만료는 조회 때 `checkout_until > 지금`으로 본다(크론 없음 — 원본과 같다).
+ */
+export const workFileLineages = sqliteTable(
+  'work_file_lineages',
+  {
+    rootAttachmentId: text('root_attachment_id')
+      .primaryKey()
+      .references(() => workAttachments.id, { onDelete: 'cascade' }),
+    channelId: text('channel_id')
+      .notNull()
+      .references(() => workChannels.id, { onDelete: 'cascade' }),
+    finalAttachmentId: text('final_attachment_id').references(() => workAttachments.id, {
+      onDelete: 'set null',
+    }),
+    finalMarkedBy: text('final_marked_by').references(() => memberProfiles.id, {
+      onDelete: 'set null',
+    }),
+    finalMarkedAt: integer('final_marked_at', { mode: 'timestamp_ms' }),
+    checkoutUserId: text('checkout_user_id').references(() => memberProfiles.id, {
+      onDelete: 'set null',
+    }),
+    checkoutAt: integer('checkout_at', { mode: 'timestamp_ms' }),
+    checkoutUntil: integer('checkout_until', { mode: 'timestamp_ms' }),
+    updatedAt: updatedAt(),
+  },
+  table => [
+    index('work_file_lineages_channel_idx').on(table.channelId),
+    index('work_file_lineages_checkout_user_idx')
+      .on(table.checkoutUserId)
+      .where(sql`"checkout_user_id" is not null`),
+    index('work_file_lineages_final_idx')
+      .on(table.finalAttachmentId)
+      .where(sql`"final_attachment_id" is not null`),
+    index('work_file_lineages_final_marked_by_idx')
+      .on(table.finalMarkedBy)
+      .where(sql`"final_marked_by" is not null`),
+  ]
+)

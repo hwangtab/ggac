@@ -57,6 +57,7 @@ const POST_CUTOVER_TABLES = new Set([
   'work_conversation_notes', // 0027
   'work_note_revisions', // 0027
   'work_tasks', // 0027
+  'work_file_lineages', // 0028 이사회 업무툴 문서 버전(최종본·수정 중)
 ])
 
 export function comparePgToSqlite(pgSnapshot, sqliteSchema) {
