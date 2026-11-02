@@ -73,8 +73,9 @@ export default function ChannelFilesTab({
               type="search"
               name="q"
               defaultValue={search.q ?? ''}
-              placeholder="이 채널의 파일명·문서 내용 검색"
-              aria-label="파일명·문서 내용 검색"
+              // ggac 이식: 문서 본문 검색은 4단계라 문구에서 뺐다
+              placeholder="이 채널의 파일명 검색"
+              aria-label="파일명 검색"
               className="pl-8"
             />
           </div>
