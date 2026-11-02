@@ -157,3 +157,43 @@ test('splitSqlStatements — 줄 주석·블록 주석 안의 세미콜론을 �
   const statements = splitSqlStatements(sql)
   assert.equal(statements.length, 2)
 })
+
+test('splitSqlStatements — CREATE TRIGGER 본문 안의 세미콜론에서 끊지 않는다(타임뱅크 원장 트리거)', async () => {
+  const { splitSqlStatements } = await import('../turso/restore-from-dump.mjs')
+  const sql = [
+    'CREATE TABLE t (id text, status text);',
+    'CREATE TRIGGER `t_final` BEFORE UPDATE ON `t`',
+    "WHEN OLD.status <> 'pending' AND NOT (NEW.status IS OLD.status)",
+    'BEGIN',
+    "  SELECT RAISE(ABORT, 'final; rows are immutable');",
+    'END;',
+    'CREATE TRIGGER t_case BEFORE INSERT ON t BEGIN',
+    "  SELECT CASE WHEN NEW.id IS NULL THEN RAISE(ABORT, 'x') END;",
+    '  SELECT 1;',
+    'end;',
+    "INSERT INTO t VALUES ('a; b', 'pending');",
+  ].join('\n')
+  const statements = splitSqlStatements(sql).map(s => s.trim())
+  assert.equal(statements.length, 4)
+  assert.match(
+    statements[1],
+    /^CREATE TRIGGER `t_final`[\s\S]*RAISE\(ABORT, 'final; rows are immutable'\);\nEND;$/
+  )
+  assert.match(statements[2], /^CREATE TRIGGER t_case[\s\S]*SELECT 1;\nend;$/)
+  assert.match(statements[3], /^INSERT INTO t/)
+})
+
+test('restoreFromDump — 트리거가 든 덤프를 원격 경로(문장 분할)로 복원해도 트리거가 살아 있다', async () => {
+  const { splitSqlStatements } = await import('../turso/restore-from-dump.mjs')
+  const sql = [
+    'CREATE TABLE t (id text);',
+    'CREATE TRIGGER t_no_delete BEFORE DELETE ON t BEGIN',
+    "  SELECT RAISE(ABORT, 'never');",
+    'END;',
+    "INSERT INTO t VALUES ('x');",
+  ].join('\n')
+  const client = createClient({ url: ':memory:' })
+  for (const s of splitSqlStatements(sql)) await client.execute(s)
+  await assert.rejects(client.execute('DELETE FROM t'), /never/)
+  client.close()
+})

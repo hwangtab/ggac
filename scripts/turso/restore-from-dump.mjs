@@ -59,8 +59,33 @@ export function splitSqlStatements(sql) {
   let start = 0
   let i = 0
   const n = sql.length
+  // `CREATE TRIGGER … BEGIN …; …; END;`는 본문 안에 세미콜론이 있다(타임뱅크 원장
+  // 트리거, 0025). 문장 첫 단어들로 트리거 정의임을 알아보고, 그 안에서는
+  // BEGIN·CASE와 END의 짝이 맞을 때의 세미콜론에서만 끊는다. CASE도 END로 닫히므로
+  // 함께 센다.
+  let leadWords = []
+  let inTrigger = false
+  let depth = 0
+  const isWordStart = c => /[A-Za-z_]/.test(c)
+  const isWordChar = c => /[A-Za-z0-9_$]/.test(c)
   while (i < n) {
     const ch = sql[i]
+    if (isWordStart(ch) && (i === 0 || !isWordChar(sql[i - 1]))) {
+      let j = i + 1
+      while (j < n && isWordChar(sql[j])) j++
+      const word = sql.slice(i, j).toUpperCase()
+      if (leadWords.length < 3) {
+        leadWords.push(word)
+        const lead = leadWords.filter(w => w !== 'TEMP' && w !== 'TEMPORARY')
+        if (lead[0] === 'CREATE' && lead[1] === 'TRIGGER') inTrigger = true
+      }
+      if (inTrigger) {
+        if (word === 'BEGIN' || word === 'CASE') depth++
+        else if (word === 'END') depth = Math.max(0, depth - 1)
+      }
+      i = j
+      continue
+    }
     if (ch === "'" || ch === '"' || ch === '`') {
       const quote = ch
       i++
@@ -89,8 +114,15 @@ export function splitSqlStatements(sql) {
       continue
     }
     if (ch === ';') {
+      if (inTrigger && depth > 0) {
+        i++
+        continue
+      }
       statements.push(sql.slice(start, i + 1))
       start = i + 1
+      leadWords = []
+      inTrigger = false
+      depth = 0
       i++
       continue
     }
