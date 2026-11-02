@@ -218,13 +218,17 @@ TURSO_DATABASE_URL=http://127.0.0.1:8901 \
   node --experimental-strip-types scripts/testing/seed-authz-fixtures.mjs
 ```
 
-계정 **9개**(Better Auth `user`/`account` + `member_profiles`)와 글 1·댓글
-1·알림 1·좋아요 1·이사회 회의 2(scheduled·completed)·회의록 2·안건 1·안건 의견 3, 그리고 **`system_settings` 8행**(`site/maintenance_mode`,
+계정 **10개**(Better Auth `user`/`account` + `member_profiles`)와 글 1·댓글
+1·알림 1·좋아요 1·이사회 회의 2(scheduled·completed)·회의록 2·안건 1·안건 의견 3, 타임뱅크 픽스처(동의 프로필·글 2·대기 3·확정 1), 그리고 **`system_settings` 9행**(`site/maintenance_mode`,
 `site/registration_enabled`, `features/funding_features`,
 `security/email_verification`, 그리고 기능 스위치
-넷 — `board_features`·`artist_features`·`comment_features`·`file_upload`)과
+넷 — `board_features`·`artist_features`·`comment_features`·`file_upload` —
+과 `features/timebank_features`(enabled·coop_tasks_enabled 켬))과
 `default_settings` 16행을 채우는 멱등
-스크립트다. 두 번 돌려도 행이 늘지 않는다(id가 전부 고정값이다).
+스크립트다. 두 번 돌려도 행이 늘지 않는다(id가 전부 고정값이다). 타임뱅크
+원장 행은 지우고 다시 넣는다 — E2E DB는 `drizzle-kit push`로 만들어 원장 불변성
+트리거가 없기 때문에 가능하다. **마이그레이션을 적용한 DB에 이 시드를 돌리면
+트리거가 막아 실패한다.**
 
 | 계정             | 역할                                    | 로그인 |
 | ---------------- | --------------------------------------- | ------ |
@@ -236,6 +240,7 @@ TURSO_DATABASE_URL=http://127.0.0.1:8901 \
 | `approvalTarget` | 관리자 승인 액션의 대상(미승인)         | X      |
 | `withdrawalRequested` | 탈퇴 **신청** 중(여전히 승인·활성) | O |
 | `unverified`     | 승인·활성이지만 이메일 미인증           | X      |
+| `suspended`      | 정지(`is_suspended=1`, `is_active=0`) — 타임뱅크 동의는 돼 있음 | O |
 
 - `system_settings`가 없으면 `authz-maintenance.spec.ts`의 UPDATE가 0행에
   적용돼 유지보수 모드가 아예 켜지지 않는다. 스펙은 `rowsAffected`를 확인해
