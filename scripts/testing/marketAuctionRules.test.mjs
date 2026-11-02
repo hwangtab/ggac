@@ -12,6 +12,7 @@ import {
   parseMarketListingInput,
 } from '../../src/lib/market/validate.ts'
 import { buildAuctionClosedNotices } from '../../src/lib/server/marketAuctionNotify.ts'
+import { toPublicAuction, toPublicBids } from '../../src/lib/market/auctionView.ts'
 
 /**
  * 경매의 약속(쓰기 규칙)·경매 입력 검증·종료 알림 문장. 부수효과가 없어 DB 없이
@@ -113,4 +114,59 @@ test('종료 알림: 낙찰이면 낙찰자·판매자 두 통(판매자에게 �
     [['S', 'market_auction_ended']]
   )
   assert.match(unsold[0].title, /유찰/)
+})
+
+test('공개 모양: 회원 id를 싣지 않고 "나인가"만 불리언으로 준다', () => {
+  const row = {
+    listing_id: 'L',
+    start_price: 10000,
+    min_increment: 1000,
+    current_price: 12000,
+    current_bidder_id: 'member-a',
+    current_bidder_name: '앨리스',
+    bid_count: 2,
+    next_minimum: 13000,
+    ends_at: '2026-11-03T00:00:00.000Z',
+    original_ends_at: '2026-11-03T00:00:00.000Z',
+    state: 'live',
+    winner_id: null,
+    winner_name: null,
+    winning_price: null,
+    closed_at: null,
+  }
+  const mine = toPublicAuction(row, 'member-a')
+  assert.equal(mine.i_am_leading, true)
+  assert.equal(mine.i_won, false)
+  assert.equal(toPublicAuction(row, 'member-b').i_am_leading, false)
+  assert.ok(!JSON.stringify(mine).includes('member-a'), '회원 id가 새면 안 된다')
+
+  const bids = toPublicBids(
+    [
+      {
+        id: 'b1',
+        bidder_id: 'member-a',
+        bidder_name: '앨리스',
+        amount: 12000,
+        voided: false,
+        created_at: 'x',
+      },
+      {
+        id: 'b2',
+        bidder_id: 'member-b',
+        bidder_name: '밥',
+        amount: 11000,
+        voided: false,
+        created_at: 'x',
+      },
+    ],
+    'member-b'
+  )
+  assert.deepEqual(
+    bids.map(b => [b.id, b.is_mine]),
+    [
+      ['b1', false],
+      ['b2', true],
+    ]
+  )
+  assert.ok(!JSON.stringify(bids).includes('member-'), '입찰 기록에 회원 id가 새면 안 된다')
 })

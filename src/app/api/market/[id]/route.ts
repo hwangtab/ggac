@@ -25,7 +25,14 @@ import {
   updateMarketListing,
 } from '@/db/queries/market'
 import { filterUploadsOwnedBy } from '@/db/queries/uploads'
-import { cancelLiveAuction, getAuction, getAuctionState } from '@/db/queries/marketAuction'
+import {
+  cancelLiveAuction,
+  getAuction,
+  getAuctionState,
+  listActiveBidderIds,
+} from '@/db/queries/marketAuction'
+import { notifyAuctionCanceled } from '@/lib/server/marketAuctionNotify'
+import { toPublicAuction } from '@/lib/market/auctionView'
 import { blockEdit, blockSellerDelete } from '@/lib/market/auctionRules'
 import { closeAuctionAndNotify } from '@/lib/server/marketAuctionClose'
 
@@ -59,7 +66,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       const listing = await getMarketListing(listingId)
       if (!listing) throw ApiError.notFound('매물을 찾을 수 없습니다.')
       const auction = listing.deal_type === 'auction' ? await getAuction(listingId) : null
-      return ApiSuccess.ok({ listing, auction })
+      return ApiSuccess.ok({ listing, auction: auction ? toPublicAuction(auction, user.id) : null })
     },
     `/api/market/${listingId}`,
     { userId: user.id }
@@ -130,9 +137,18 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
       // 아무도 볼 수 없는 매물에 낙찰 알림이 나간다.
       if (owner.deal_type === 'auction') {
         const isAdmin = profile?.is_admin === true
+        // 취소 **전에** 입찰자 명단을 읽어 둔다(취소 뒤에도 행은 남지만, 판단 시점을
+        // 취소와 같은 순간에 맞춘다).
+        const bidderIds =
+          owner.auction_state === 'live' && owner.auction_bid_count > 0
+            ? await listActiveBidderIds(listingId)
+            : []
         const canceled = await cancelLiveAuction(listingId, new Date(), {
           onlyWithoutBids: !isAdmin,
         })
+        if (canceled && bidderIds.length > 0) {
+          await notifyAuctionCanceled({ listingId, listingTitle: owner.title, bidderIds })
+        }
         // 위의 입찰 수 확인과 이 취소 사이에 입찰이 들어왔으면 취소가 0행이다.
         // 판매자에게는 그 경매를 내릴 권한이 없으므로 여기서 멈춘다.
         if (!canceled && !isAdmin) {

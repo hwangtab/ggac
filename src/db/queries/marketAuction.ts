@@ -207,6 +207,8 @@ export interface PlaceBidResult {
   outbid_bidder_id?: string | null
   ends_at?: string
   extended?: boolean
+  /** 이 입찰 전에 살아 있는 최고가가 없었다(첫 입찰). 판매자 알림 기준이다. */
+  first_bid?: boolean
 }
 
 /**
@@ -296,6 +298,7 @@ async function placeBidOnce(input: {
       outbid_bidder_id: previous && previous !== input.bidderId ? previous : null,
       ends_at: toIso(updated[0].endsAt) as string,
       extended: updated[0].endsAt.getTime() > row.endsAt.getTime(),
+      first_bid: previous === null,
     }
   })
 }
@@ -492,4 +495,59 @@ export async function getAuctionState(
     .where(eq(marketAuctions.listingId, listingId))
     .limit(1)
   return row ? { state: row.state, bid_count: row.bidCount } : null
+}
+
+/**
+ * 유찰된 경매를 **같은 매물에서** 다시 연다(판매자). 입찰이 하나도 없이 끝난
+ * 경매만 — 낙찰된 경매를 다시 열면 낙찰자에게 한 약속이 뒤집힌다.
+ *
+ * 조건부 UPDATE라 유찰이 아닌 경매에는 0행이다. 다시 열면 시작가·호가·기간을 새로
+ * 받고, 매물 가격 칸(시작가)과 거래 상태(판매중)도 함께 맞춘다. 무효 처리된 옛
+ * 입찰 기록은 남는다(이력).
+ */
+export async function relistNoBidAuction(
+  listingId: string,
+  auction: AuctionInput,
+  now: Date
+): Promise<boolean> {
+  return withContentionRetry(() =>
+    db.transaction(async tx => {
+      const endsAt = new Date(now.getTime() + auction.duration_days * DAY_MS)
+      const reopened = await tx
+        .update(marketAuctions)
+        .set({
+          startPrice: auction.start_price,
+          minIncrement: auction.min_increment,
+          currentPrice: null,
+          currentBidderId: null,
+          bidCount: 0,
+          endsAt,
+          originalEndsAt: endsAt,
+          state: 'live',
+          winnerId: null,
+          winningPrice: null,
+          closedAt: null,
+        })
+        .where(and(eq(marketAuctions.listingId, listingId), eq(marketAuctions.state, 'no_bids')))
+        .returning({ listingId: marketAuctions.listingId })
+      if (reopened.length !== 1) return false
+      await tx
+        .update(marketListings)
+        .set({ price: auction.start_price, status: 'open', statusChangedAt: now })
+        .where(eq(marketListings.id, listingId))
+      return true
+    })
+  )
+}
+
+/**
+ * 진행 중 경매에 **살아 있는**(무효가 아닌) 입찰을 한 사람들. 관리자가 경매를
+ * 내릴 때 알림 대상이다.
+ */
+export async function listActiveBidderIds(listingId: string): Promise<string[]> {
+  const rows = await db
+    .selectDistinct({ bidderId: marketBids.bidderId })
+    .from(marketBids)
+    .where(and(eq(marketBids.listingId, listingId), isNull(marketBids.voidedAt)))
+  return rows.map(row => row.bidderId)
 }

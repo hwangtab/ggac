@@ -88,7 +88,9 @@ export function getNotificationRoute(
     case 'market_comment':
     case 'market_outbid':
     case 'market_auction_won':
-    case 'market_auction_ended': {
+    case 'market_auction_ended':
+    case 'market_bid_received':
+    case 'market_auction_canceled': {
       const listingId = notification.related_post_id
       if (listingId && UUID_PATTERN.test(listingId)) return `/board/market/${listingId}`
       return options.fallbackToNotifications ? '/notifications' : null

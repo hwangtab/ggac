@@ -45,6 +45,10 @@ export const NOTIFICATION_TYPE = [
   'market_outbid',
   'market_auction_won',
   'market_auction_ended',
+  // 경매 후속(2026-11-02). 판매자에게 첫 입찰을 알리고(입찰마다가 아니다 — 막판
+  // 경쟁이면 수십 통이 된다), 관리자가 입찰이 있는 경매를 내리면 입찰자에게 알린다.
+  'market_bid_received',
+  'market_auction_canceled',
   // 조합원 타임뱅크(2026-11-02, 스펙 §10). 받는 사람·이동은
   // `src/lib/server/timebankNotify.ts`·`src/utils/notificationNavigation.ts`.
   // 위와 같이 DB CHECK가 없어 마이그레이션이 필요 없다.

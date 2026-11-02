@@ -1176,7 +1176,13 @@
         "ended": "Sold",
         "no_bids": "No bids",
         "canceled": "Canceled"
-      }
+      },
+      "youAreLeading": "You're the highest bidder.",
+      "youWon": "You won this auction. Continue with the seller in the comments below.",
+      "noShowHint": "If the trade with the winner falls through, set the status back to Available and reach the other bidders in the comments.",
+      "mine": "You",
+      "relistTitle": "This auction ended with no bids. You can reopen it for the same item.",
+      "relistButton": "Reopen"
     }
   },
   "timebank": {

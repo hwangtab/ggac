@@ -318,6 +318,75 @@ test('닫을 게 없으면(일반 매물·마감 전) 쓰기 없이 null을 돌�
   assert.equal((await auction.getAuction(id)).state, 'live')
 })
 
+test('첫 입찰 표시: 살아 있는 최고가가 없을 때만 first_bid', async () => {
+  const id = await open()
+  assert.equal((await bid(id, 'alice', 10000)).first_bid, true)
+  assert.equal((await bid(id, 'bob', 11000)).first_bid, false)
+})
+
+test('살아 있는 입찰자 명단: 무효 처리된 입찰은 빠지고 중복 없음', async () => {
+  const id = await open()
+  await bid(id, 'alice', 10000)
+  await bid(id, 'bob', 11000)
+  const third = await bid(id, 'alice', 12000)
+  assert.deepEqual((await auction.listActiveBidderIds(id)).sort(), ['alice', 'bob'])
+  await auction.voidBid({ bidId: third.bid_id, listingId: id, actorId: 'admin', now: at(2000) })
+  // alice는 10000원 입찰이 아직 살아 있다.
+  assert.deepEqual((await auction.listActiveBidderIds(id)).sort(), ['alice', 'bob'])
+})
+
+test('다시 열기: 유찰된 경매만, 새 조건으로 진행 중이 되고 매물도 판매중·새 시작가', async () => {
+  const id = await open({ start: 10000 })
+  // 진행 중인 경매는 다시 열 수 없다.
+  assert.equal(
+    await auction.relistNoBidAuction(
+      id,
+      { start_price: 5000, min_increment: 500, duration_days: 3 },
+      at(1000)
+    ),
+    false
+  )
+  await auction.closeAuctionIfDue(id, at(DAY))
+  assert.equal((await auction.getAuction(id)).state, 'no_bids')
+
+  const later = at(DAY + 1000)
+  assert.equal(
+    await auction.relistNoBidAuction(
+      id,
+      { start_price: 5000, min_increment: 500, duration_days: 3 },
+      later
+    ),
+    true
+  )
+  const row = await auction.getAuction(id)
+  assert.equal(row.state, 'live')
+  assert.equal(row.start_price, 5000)
+  assert.equal(row.next_minimum, 5000)
+  assert.equal(row.closed_at, null)
+  assert.equal(row.ends_at, new Date(later.getTime() + 3 * DAY).toISOString())
+  const listing = await market.getMarketListing(id)
+  assert.equal(listing.price, 5000)
+  assert.equal(listing.status, 'open')
+
+  // 다시 연 경매에 입찰할 수 있다.
+  assert.equal((await bid(id, 'alice', 5000, at(DAY + 2000))).error, null)
+})
+
+test('다시 열기: 낙찰된 경매는 열 수 없다(낙찰자에게 한 약속)', async () => {
+  const id = await open()
+  await bid(id, 'alice', 10000)
+  await auction.closeAuctionIfDue(id, at(DAY))
+  assert.equal(
+    await auction.relistNoBidAuction(
+      id,
+      { start_price: 5000, min_increment: 500, duration_days: 1 },
+      at(DAY + 1)
+    ),
+    false
+  )
+  assert.equal((await auction.getAuction(id)).state, 'ended')
+})
+
 // 파일 맨 아래에 두고 **하나만** 둔다 — `queriesTicketing.test.mjs`와 같은 이유.
 // 로컬 **파일** SQLite에 동시 쓰기를 걸면 COMMIT이 BUSY로 실패한 연결이 락을 쥔
 // 채 남을 수 있어, 뒤 테스트의 쓰기가 검증 대상과 무관한 SQLITE_BUSY로 죽는다
