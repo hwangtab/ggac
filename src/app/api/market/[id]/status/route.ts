@@ -15,6 +15,8 @@ import { parseJsonObjectBody } from '@/utils/requestBody'
 import { validateUUID } from '@/utils/validation'
 import { parseMarketStatus } from '@/lib/market/validate'
 import { getMarketListingOwner, updateMarketListingStatus } from '@/db/queries/market'
+import { blockStatusChange } from '@/lib/market/auctionRules'
+import { closeAuctionAndNotify } from '@/lib/server/marketAuctionClose'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -35,9 +37,14 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
   return apiPatch(
     async () => {
+      // 마감은 지났는데 아직 안 닫힌 경매면 먼저 닫는다 — 그래야 판매자가 낙찰
+      // 직후 "거래완료"를 누를 때 "진행 중"으로 막히지 않는다.
+      await closeAuctionAndNotify(listingId)
       const owner = await getMarketListingOwner(listingId)
       if (!owner) throw ApiError.notFound('매물을 찾을 수 없습니다.')
       if (owner.seller_id !== user.id) throw ApiError.forbidden('수정 권한이 없습니다.')
+      const blocked = blockStatusChange(owner)
+      if (blocked) throw ApiError.badRequest(blocked)
 
       const body = await parseJsonObjectBody(request)
       const status = parseMarketStatus(body?.status)

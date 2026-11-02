@@ -40,6 +40,11 @@ export const NOTIFICATION_TYPE = [
   // 아니라 `market_listings`라 그 주소가 404다. DB CHECK가 없어 마이그레이션이
   // 필요 없다.
   'market_comment',
+  // 장터 경매(2026-10-29). 입찰가 추월 · 낙찰(낙찰자) · 경매 종료(판매자, 낙찰·유찰
+  // 모두). 위와 같이 DB CHECK가 없어 마이그레이션이 필요 없다.
+  'market_outbid',
+  'market_auction_won',
+  'market_auction_ended',
 ] as const
 
 export const posts = sqliteTable(

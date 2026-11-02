@@ -44,6 +44,8 @@ export type Fixtures = {
   marketCommentId: string
   /** 관리자 삭제 스펙이 소모하는 댓글(작성자 `other`). */
   marketCommentDeletableId: string
+  /** 판매자 `owner`의 진행 중 경매(시작가 1만 원, 호가 1천 원). 시드가 입찰을 비운다. */
+  marketAuctionId: string
   /** `owner` 소유의 초안 캠페인 — 마이페이지 캠페인 경계용. */
   fundingDraftCampaignId: string
   fundingDraftRewardId: string

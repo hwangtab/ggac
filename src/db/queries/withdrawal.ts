@@ -6,16 +6,19 @@
  * 이 파일은 **권한을 모른다**(저장소 규칙). 누가 부를 수 있는지는 라우트가
  * 판정하고, 여기서는 "그 상태에서 그 전이가 가능한가"만 본다.
  */
-import { and, eq, sql } from 'drizzle-orm'
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm'
 
 import { WITHDRAWN_DISPLAY_NAME, withdrawnEmailFor } from '../../constants/memberProfile.ts'
 import { db } from '../client.ts'
+import { recomputeLiveAuctions } from './marketAuction.ts'
 import {
   account,
   artists,
   billingKeys,
   dailyActivityStats,
   fundingPledges,
+  marketAuctions,
+  marketBids,
   marketListings,
   memberProfiles,
   notifications,
@@ -296,10 +299,52 @@ export async function withdrawMember(userId: string): Promise<WithdrawOutcome> {
     // ③-2 장터 매물 — 내린다(soft delete). 탈퇴한 판매자에게는 아무도 연락할
     // 수 없는데, 남겨 두면 "판매중"인 채로 문의 댓글만 쌓인다. 남이 단 댓글은
     // 매물과 함께 화면에서 사라지고 행은 남는다.
+    // 진행 중인 경매는 먼저 취소한다 — 지운 매물의 경매가 크론에 "낙찰"로 닫히면
+    // 볼 수도 없는 매물에 낙찰 알림이 나간다.
+    const withdrawnAt = new Date()
+    await tx
+      .update(marketAuctions)
+      .set({ state: 'canceled', closedAt: withdrawnAt })
+      .where(
+        and(
+          eq(marketAuctions.state, 'live'),
+          sql`${marketAuctions.listingId} IN (SELECT id FROM market_listings WHERE seller_id = ${userId})`
+        )
+      )
     await tx
       .update(marketListings)
       .set({ isDeleted: true })
       .where(eq(marketListings.sellerId, userId))
+
+    // ③-3 진행 중인 경매의 내 입찰 — 무효로 한다. 연락할 수 없는 사람이 최고가로
+    // 남아 낙찰되면 판매자는 거래할 상대가 없다. 최고가는 남은 입찰에서 다시
+    // 맞춘다. 닫힌 경매의 입찰·낙찰은 기록이라 건드리지 않는다.
+    const liveBidListings = (
+      await tx
+        .selectDistinct({ listingId: marketBids.listingId })
+        .from(marketBids)
+        .innerJoin(marketAuctions, eq(marketAuctions.listingId, marketBids.listingId))
+        .where(
+          and(
+            eq(marketBids.bidderId, userId),
+            isNull(marketBids.voidedAt),
+            eq(marketAuctions.state, 'live')
+          )
+        )
+    ).map(row => row.listingId)
+    if (liveBidListings.length > 0) {
+      await tx
+        .update(marketBids)
+        .set({ voidedAt: withdrawnAt, voidedBy: 'withdrawal' })
+        .where(
+          and(
+            eq(marketBids.bidderId, userId),
+            isNull(marketBids.voidedAt),
+            inArray(marketBids.listingId, liveBidListings)
+          )
+        )
+      await recomputeLiveAuctions(tx, liveBidListings)
+    }
 
     // ④ 결제 수단 — 지운다. 결제·회비 기록은 남긴다(회계 증빙).
     // 토스 해지에 쓸 키를 **지우기 전에** 읽어 둔다. 커밋 뒤 라우트가 부른다.

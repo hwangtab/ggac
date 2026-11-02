@@ -9,6 +9,10 @@ import MarketOwnerControls from '@/components/market/MarketOwnerControls'
 import { formatMarketPrice } from '@/components/market/marketFormat'
 import { resolveMarketViewer } from '@/lib/server/marketPage'
 import { getMarketListing, listMarketComments } from '@/db/queries/market'
+import { getAuction, listBids } from '@/db/queries/marketAuction'
+import AuctionPanel from '@/components/market/AuctionPanel'
+import { closeAuctionAndNotify } from '@/lib/server/marketAuctionClose'
+import { blockEdit, blockSellerDelete, blockStatusChange } from '@/lib/market/auctionRules'
 import { MARKET_STATUS_STYLES } from '@/constants/market'
 import { validateUUID } from '@/utils/validation'
 import { intlLocale } from '@/utils/intlLocale'
@@ -49,11 +53,27 @@ export default async function MarketDetailPage({
     return <MarketGate title={t('gate.title')} body={t('gate.body')} backLabel={t('backToBoard')} />
   }
 
+  // 마감이 지난 경매라면 그리기 전에 닫는다(낙찰자·판매자 알림도 여기서 나간다).
+  await closeAuctionAndNotify(listingId)
   const listing = await getMarketListing(listingId)
   if (!listing) notFound()
   const comments = await listMarketComments(listingId)
+  const isAuction = listing.deal_type === 'auction'
+  const [auction, bids] = isAuction
+    ? await Promise.all([getAuction(listingId), listBids(listingId)])
+    : [null, []]
 
   const isSeller = listing.seller_id === viewer.userId
+  // 버튼을 보이느냐는 안내다 — 같은 규칙을 라우트가 다시 판정한다.
+  const auctionFacts = {
+    deal_type: listing.deal_type,
+    auction_state: auction?.state ?? null,
+    auction_bid_count: auction?.bid_count ?? 0,
+  }
+  const canEdit = isSeller && blockEdit(auctionFacts, listing.deal_type) === null
+  const canChangeStatus = isSeller && blockStatusChange(auctionFacts) === null
+  const canDelete =
+    (isSeller || viewer.isAdmin) && blockSellerDelete(auctionFacts, viewer.isAdmin) === null
   const dateLocale = intlLocale(locale)
 
   const facts: Array<[string, string]> = [
@@ -103,12 +123,26 @@ export default async function MarketDetailPage({
             >
               {t(`status.${listing.status}`)}
             </span>
-            <span className="text-gray-500">{t(`deal.${listing.deal_type}`)}</span>
+            <span className={isAuction ? 'font-medium text-orange-700' : 'text-gray-500'}>
+              {t(`deal.${listing.deal_type}`)}
+            </span>
           </div>
           <h1 className="text-2xl font-bold text-gray-900">{listing.title}</h1>
-          <p className="mt-2 text-xl font-semibold text-gray-900">
-            {formatMarketPrice(t, locale, listing)}
-          </p>
+          {!isAuction && (
+            <p className="mt-2 text-xl font-semibold text-gray-900">
+              {formatMarketPrice(t, locale, listing)}
+            </p>
+          )}
+
+          {auction && (
+            <AuctionPanel
+              listingId={listing.id}
+              auction={auction}
+              bids={bids}
+              isSeller={isSeller}
+              isAdmin={viewer.isAdmin}
+            />
+          )}
 
           <dl className="mt-6 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 rounded-lg bg-gray-50 p-4 text-sm">
             {facts.map(([label, value]) => (
@@ -123,13 +157,14 @@ export default async function MarketDetailPage({
             {listing.description}
           </p>
 
-          {(isSeller || viewer.isAdmin) && (
+          {(canEdit || canChangeStatus || canDelete) && (
             <div className="mt-6 border-t border-gray-100 pt-4">
               <MarketOwnerControls
                 listingId={listing.id}
                 status={listing.status}
-                isSeller={isSeller}
-                canDelete={isSeller || viewer.isAdmin}
+                canEdit={canEdit}
+                canChangeStatus={canChangeStatus}
+                canDelete={canDelete}
               />
             </div>
           )}
