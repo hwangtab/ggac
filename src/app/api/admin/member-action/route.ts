@@ -11,6 +11,8 @@ import { getProfileById, updateProfile, type ProfilePatch } from '@/db/queries/p
 import { withdrawMember } from '@/db/queries/withdrawal'
 import { fundingWithdrawalVerdictFor } from '@/lib/server/fundingWithdrawal'
 import { adminLockoutVerdictFor } from '@/lib/server/adminLockout'
+import { getDirectorRoster } from '@/lib/server/boardRoomAuth'
+import { notifyNegativeWithdrawal } from '@/lib/server/timebankNotify'
 import { notifyMemberApproved, notifyMemberRejected } from '@/lib/server/memberStatusNotify'
 import { deleteBillingKey } from '@/lib/payments/toss/client'
 import { getBillingConfig, isBillingEnabled } from '@/lib/payments/toss/config'
@@ -147,6 +149,25 @@ export const POST = defineApiRoute<Record<string, unknown>>({
           { memberId: maskId(memberId), action, adminId: maskId(user.id) },
           'medium'
         )
+
+        // 타임뱅크 음수 잔액 탈퇴(조합이 떠안음, 스펙 §9.3 4단계) — 커밋 뒤 이사
+        // 전원에게 알린다. 정산 행 자체가 이사회 보고 대상 표시라 알림이 실패해도
+        // 보고에는 남는다. 명단 조회 실패도 탈퇴 응답을 막지 않는다.
+        if (typeof outcome.timebankNegativeMinutes === 'number') {
+          try {
+            const directors = await getDirectorRoster()
+            await notifyNegativeWithdrawal({
+              directorIds: directors.map(d => d.id),
+              // 알림 래퍼는 정산 전 잔액(음수)을 받는다.
+              minutes: -outcome.timebankNegativeMinutes,
+            })
+          } catch (error) {
+            log.error('타임뱅크 음수 탈퇴 알림 실패', {
+              memberId: maskId(memberId),
+              error: error instanceof Error ? error.message : String(error),
+            })
+          }
+        }
 
         // 빌링키 행은 트랜잭션에서 이미 지워졌다. 토스 쪽 해지는 외부 호출이라
         // 트랜잭션 안에 넣으면 쓰기 락을 잡은 채 네트워크를 기다리게 된다.

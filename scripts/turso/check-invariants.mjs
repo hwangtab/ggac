@@ -338,6 +338,96 @@ export function derivedInvariants() {
                    OR backer_email NOT LIKE 'withdrawn+%@ggac.invalid'
                    OR ${WITHDRAWN_PLEDGE_NULL_COLUMNS.map(c => `${c} IS NOT NULL`).join(' OR ')})`,
     },
+    ...timebankInvariants(),
+  ]
+}
+
+/**
+ * 원장 불변성 트리거 세 개(`0025_timebank.sql`). 이름은 마이그레이션 그대로다.
+ *
+ * 존재 검사를 `db:parity`가 아니라 여기 둔 이유(계획 Task 2 후 결정):
+ * `local.db`·authz E2E DB는 `drizzle-kit push`로 만들어 트리거가 없다. 이 검사는
+ * **마이그레이션을 적용한 DB**(운영 덤프 복원본·임시 파일 DB)를 상대로 돈다 —
+ * push로 만든 DB에 돌리면 이 세 항목은 위반으로 나오는 것이 맞다.
+ */
+export const TIMEBANK_LEDGER_TRIGGERS = [
+  'timebank_transfers_core_immutable',
+  'timebank_transfers_final_immutable',
+  'timebank_transfers_no_delete',
+]
+
+/**
+ * 타임뱅크 탈퇴 정산·원장 불변식(스펙 §9.3, 계획 Task 10). `withdrawMember`의
+ * 타임뱅크 단계(`src/db/queries/timebankWithdrawal.ts`)가 같은 성질을 트랜잭션
+ * 안에서 스스로 확인한다 — 여기서는 앱을 지나지 않은 쓰기까지 잡는다.
+ *
+ * 전부 타임뱅크 표를 `table`로 두거나(표가 없으면 러너가 건너뛴다) 표 존재를 먼저
+ * 확인한다 — 이 마이그레이션 전 덤프에서 `no such table`로 죽지 않게.
+ * 러너는 `SELECT count(*) FROM "${table}" WHERE ${where}`라, 행과 무관한 스칼라
+ * 조건은 위반이면 그 표의 모든 행이 세어진다(건수는 "몇 건"이 아니라 "위반 있음").
+ */
+function timebankInvariants() {
+  const withdrawn = `SELECT id FROM member_profiles WHERE registration_status = 'withdrawn'`
+  /** 계좌 `acct`(SQL 식)의 확정 잔액. */
+  const balanceOf =
+    acct => `(SELECT coalesce(sum(CASE WHEN b.to_account = ${acct} THEN b.minutes ELSE 0 END)
+      - sum(CASE WHEN b.from_account = ${acct} THEN b.minutes ELSE 0 END), 0)
+    FROM timebank_transfers b WHERE b.status = 'confirmed' AND (b.to_account = ${acct} OR b.from_account = ${acct}))`
+  const nonzeroWithdrawn = `SELECT w.id FROM member_profiles w
+    WHERE w.registration_status = 'withdrawn' AND ${balanceOf('w.id')} <> 0`
+  const triggerPresent = name => ({
+    constraint: `${name}_present`,
+    // member_profiles를 세는 이유: 원장이 비어 있어도(행 0) 트리거가 없으면 잡혀야 한다.
+    table: 'member_profiles',
+    where: `EXISTS (SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'timebank_transfers')
+            AND NOT EXISTS (SELECT 1 FROM sqlite_master WHERE type = 'trigger' AND name = '${name}')`,
+  })
+
+  return [
+    {
+      // 묘비 회원의 잔액 = 0. 정산(`withdrawal_settlement`)이 빠졌거나 탈퇴 뒤 누가
+      // 그 계좌로 이동을 남겼다. 잔액이 0이 아니면 그 회원의 확정 행이 반드시 있다.
+      constraint: 'timebank_withdrawn_have_zero_balance',
+      table: 'timebank_transfers',
+      where: `status = 'confirmed'
+              AND (from_account IN (${nonzeroWithdrawn}) OR to_account IN (${nonzeroWithdrawn}))`,
+    },
+    {
+      // 묘비 회원이 당사자(보내는 쪽·받는 쪽·확인할 사람)인 pending = 0.
+      constraint: 'timebank_withdrawn_have_no_pending',
+      table: 'timebank_transfers',
+      where: `status = 'pending' AND (from_account IN (${withdrawn})
+                OR to_account IN (${withdrawn}) OR counterparty_id IN (${withdrawn}))`,
+    },
+    {
+      // 묘비 회원의 타임뱅크 프로필 = 0(member_profiles는 지워지지 않아 cascade가 없다).
+      constraint: 'timebank_withdrawn_have_no_profile',
+      table: 'timebank_profiles',
+      where: `member_id IN (${withdrawn})`,
+    },
+    {
+      // 묘비 회원 쪽 원장 이름은 묘비값. 실명이 원장에 남으면 탈퇴 묘비가 무의미하다.
+      constraint: 'timebank_withdrawn_names_tombstoned',
+      table: 'timebank_transfers',
+      where: `(from_account IN (${withdrawn}) AND from_name IS NOT '${WITHDRAWN_RESERVATION_NAME}')
+              OR (to_account IN (${withdrawn}) AND to_name IS NOT '${WITHDRAWN_RESERVATION_NAME}')`,
+    },
+    {
+      // 시스템 합계 = 0: 조합 계좌 + 실재하는 회원 계좌의 잔액 합이 0. 한 행이
+      // 양쪽에 같은 값을 더하고 빼므로 **모든** 계좌를 합하면 구조적으로 0이다 —
+      // 그래서 계좌를 coop과 `member_profiles`에 있는 id로만 좁힌다. 회원도 coop도
+      // 아닌 계좌(오타·손으로 친 행)로 간 확정 이동이 있으면 여기서 어긋난다.
+      constraint: 'timebank_ledger_sums_to_zero',
+      table: 'timebank_transfers',
+      where: `(SELECT coalesce(sum(delta), 0) FROM (
+                SELECT minutes AS delta FROM timebank_transfers
+                 WHERE status = 'confirmed' AND (to_account = 'coop' OR to_account IN (SELECT id FROM member_profiles))
+                UNION ALL
+                SELECT -minutes AS delta FROM timebank_transfers
+                 WHERE status = 'confirmed' AND (from_account = 'coop' OR from_account IN (SELECT id FROM member_profiles))
+              )) <> 0`,
+    },
+    ...TIMEBANK_LEDGER_TRIGGERS.map(triggerPresent),
   ]
 }
 
