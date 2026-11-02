@@ -13,6 +13,9 @@ export type Fixtures = {
     // 탈퇴 "신청" 상태(Task 8) — `registration_status`는 여전히 'approved'라
     // 정상 로그인하고 storageState도 만든다.
     | 'withdrawalRequested'
+    // 정지 회원(타임뱅크 계획 결정 6) — `is_active=false`라 조합원 라우트는 403이지만
+    // 로그인은 되므로 storageState를 만든다.
+    | 'suspended'
     // 로그인하지 않는 계정: 관리자 전용 쓰기 경계(회원 승인)의 **대상**이다.
     | 'approvalTarget'
     // 이메일 인증 관문(`authz-email-verification.spec.ts`)의 대상. 주소를
@@ -73,6 +76,20 @@ export type Fixtures = {
   fundingGuestPledgeId: string
   fundingGuestPledgeCode: string
   fundingGuestBackerEmail: string
+  /** 타임뱅크 제공 글(작성자 `owner`). */
+  timebankListingId: string
+  /** 타임뱅크 조합 업무 글(작성자 `admin`). 자원 기록은 시드가 비워 둔다. */
+  timebankTaskId: string
+  /** 대기 기록 — `owner`가 기록, 상대(확인할 사람) `other`. 스펙이 소모하지 않는다. */
+  timebankPendingId: string
+  /** 확정된 교환 — `owner` → `other`. */
+  timebankConfirmedId: string
+  /**
+   * 정지 회원이 당사자인 대기 기록 둘(결정 6). `bySuspended`는 `suspended`가 기록하고
+   * 상대가 `other`, `toSuspended`는 `owner`가 기록하고 상대가 `suspended`다.
+   * `authz-timebank.spec.ts`가 각각 거절·취소로 소모한다(시드가 되돌린다).
+   */
+  timebankSuspendedPendingIds: { bySuspended: string; toSuspended: string }
 }
 
 /**
