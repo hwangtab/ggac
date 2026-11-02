@@ -1587,7 +1587,7 @@ async function main() {
       `이사회 회의 2(scheduled·completed)·회의록 2·안건 1·안건 의견 3, ` +
       `펀딩 캠페인 6(draft·submitted 3·closed·active)·리워드 6·후원 2(회원·비회원), ` +
       `system_settings ${settingRows.length}행, default_settings ${DEFAULT_SETTINGS.length}행, ` +
-      `업무툴 채널 3(공개·비공개·탭)·DM 1·메시지 3·탭 6(메모 3·할 일 3)·할 일 2 (전부 Turso)``업무툴 채널 2(공개·비공개)·DM 1·메시지 3·첨부 3·임시 업로드 2 (전부 Turso)`
+      `업무툴 채널 3(공개·비공개·탭)·DM 1·메시지 3·첨부 3·임시 업로드 2·탭 6(메모 3·할 일 3)·할 일 2 (전부 Turso)`
   )
 }
 
