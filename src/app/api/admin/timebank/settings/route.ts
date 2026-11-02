@@ -9,7 +9,8 @@
  *   기본값으로 떨어뜨리지 않고 400)·"수치를 바꾸면 이용규칙 판도 올려야 한다"를
  *   본다. 통과하면 `updateSystemSetting({ changeReason: resolution_ref })`가
  *   `system_settings_history`에 근거를 남긴다. 이 인스턴스의 설정 캐시를 비운다.
- *   설정 행이 없으면(시드 전) 409.
+ *   설정 행이 없으면(시드 전) 409. 읽은 뒤 다른 관리자가 먼저 바꿨으면(`updated_at`
+ *   불일치) 쓰지 않고 409.
  *
  * 활동 `timebank_settings_changed` + 보안 로그(high).
  */
@@ -32,6 +33,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 const SETTING_KEY = 'timebank_features'
+const STALE_MESSAGE = '다른 관리자가 먼저 설정을 바꿨습니다. 새로고침 후 다시 시도해 주세요.'
 const NO_ROW_MESSAGE =
   '타임뱅크 설정 행이 없습니다. 시드 스크립트(scripts/turso/seed-timebank-settings.mjs)를 먼저 실행해 주세요.'
 
@@ -77,18 +79,23 @@ export const PUT = defineApiRoute<Record<string, unknown>, AdminAuthSuccess>({
     if (!row) throw ApiError.conflict(NO_ROW_MESSAGE)
 
     const before = normalizeTimebankSettings(row.setting_value)
+    // 읽은 행의 updated_at으로 조건부로 쓴다 — 읽기·병합·쓰기 사이에 다른 관리자가
+    // 먼저 썼으면 그 값을 덮어쓰지 않고 409로 돌려보낸다(lost update 방지).
+    let result: Awaited<ReturnType<typeof updateSystemSetting>>
     try {
-      await updateSystemSetting({
+      result = await updateSystemSetting({
         category: 'features',
         settingKey: SETTING_KEY,
         settingValue: plan.next,
         actorId: auth.user.id,
         changeReason: plan.resolution_ref,
+        expectedUpdatedAt: row.updated_at,
       })
     } catch (error) {
       if (error instanceof SettingNotFoundError) throw ApiError.conflict(NO_ROW_MESSAGE)
       throw error
     }
+    if (result.outcome === 'stale') throw ApiError.conflict(STALE_MESSAGE)
     refreshSettingsCache()
 
     await auditTimebankAdminWrite({

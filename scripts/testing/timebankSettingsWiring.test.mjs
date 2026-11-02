@@ -169,6 +169,95 @@ test('changeReason이 없으면 history의 change_reason은 null이다(기존 �
   assert.equal(rows[0].change_reason, null)
 })
 
+// ---------------------------------------------------------------- 동시 수정(lost update)
+
+test('expectedUpdatedAt이 지금 행과 같으면 쓰고, 다르면 stale로 쓰지도 이력을 남기지도 않는다', async () => {
+  const { getSystemSettingRow } = await import('../../src/db/queries/settings.ts')
+  const id = await putSetting('features', 'timebank_features', { ...TIMEBANK_DEFAULTS })
+  // 두 관리자가 같은 행을 읽었다
+  const seenByA = await getSystemSettingRow('features', 'timebank_features')
+  const seenByB = await getSystemSettingRow('features', 'timebank_features')
+
+  const a = await updateSystemSetting({
+    category: 'features',
+    settingKey: 'timebank_features',
+    settingValue: { ...TIMEBANK_DEFAULTS, signup_grant_minutes: 60 },
+    actorId: 'admin-1',
+    changeReason: '2026-11-20 이사회 3호',
+    expectedUpdatedAt: seenByA.updated_at,
+  })
+  assert.equal(a.outcome, 'updated')
+
+  const b = await updateSystemSetting({
+    category: 'features',
+    settingKey: 'timebank_features',
+    settingValue: { ...TIMEBANK_DEFAULTS, enabled: true },
+    actorId: 'admin-1',
+    changeReason: '2026-11-20 이사회 4호',
+    expectedUpdatedAt: seenByB.updated_at,
+  })
+  assert.equal(b.outcome, 'stale', '먼저 쓴 값을 덮어쓰면 안 된다')
+
+  const row = await readRow(id)
+  assert.equal(JSON.parse(row.setting_value).signup_grant_minutes, 60)
+  assert.equal(JSON.parse(row.setting_value).enabled, false)
+  const history = await historyFor(id)
+  assert.equal(history.length, 1, 'stale 시도는 이력을 남기지 않는다')
+  assert.equal(history[0].change_reason, '2026-11-20 이사회 3호')
+
+  // 새로 읽은 값으로 다시 하면 된다
+  const fresh = await getSystemSettingRow('features', 'timebank_features')
+  const c = await updateSystemSetting({
+    category: 'features',
+    settingKey: 'timebank_features',
+    settingValue: { ...TIMEBANK_DEFAULTS, signup_grant_minutes: 60, enabled: true },
+    actorId: 'admin-1',
+    changeReason: '2026-11-20 이사회 4호',
+    expectedUpdatedAt: fresh.updated_at,
+  })
+  assert.equal(c.outcome, 'updated')
+  assert.equal((await historyFor(id)).length, 2)
+})
+
+test('같은 밀리초 안의 연속 쓰기도 updated_at이 앞으로 간다(가드가 같은 값을 두 번 보지 않는다)', async () => {
+  const { getSystemSettingRow } = await import('../../src/db/queries/settings.ts')
+  await putSetting('features', 'timebank_features', { ...TIMEBANK_DEFAULTS })
+  // 미래 시각으로 박아 둔 행 — Date.now()가 그보다 작아도 updated_at은 줄지 않는다
+  const future = Date.now() + 60_000
+  await client.execute({
+    sql: "UPDATE system_settings SET updated_at = ? WHERE setting_key = 'timebank_features'",
+    args: [future],
+  })
+  const before1 = await getSystemSettingRow('features', 'timebank_features')
+  await updateSystemSetting({
+    category: 'features',
+    settingKey: 'timebank_features',
+    settingValue: { ...TIMEBANK_DEFAULTS, signup_grant_minutes: 60 },
+    actorId: 'admin-1',
+    expectedUpdatedAt: before1.updated_at,
+  })
+  const after1 = await getSystemSettingRow('features', 'timebank_features')
+  assert.ok(Date.parse(after1.updated_at) > Date.parse(before1.updated_at))
+})
+
+test('expectedUpdatedAt이 없으면 예전처럼 무조건 쓴다(다른 호출부 그대로)', async () => {
+  await putSetting('site', 'site_title', { value: 'a' })
+  const r = await updateSystemSetting({
+    category: 'site',
+    settingKey: 'site_title',
+    settingValue: { value: 'b' },
+    actorId: 'admin-1',
+  })
+  assert.equal(r.outcome, 'updated')
+})
+
+test('타임뱅크 설정 PUT은 읽은 updated_at으로 조건부로 쓰고 stale이면 409다', () => {
+  const src = readSource('src/app/api/admin/timebank/settings/route.ts')
+  assert.match(src, /expectedUpdatedAt:\s*row\.updated_at/)
+  assert.match(src, /outcome === 'stale'/)
+  assert.match(src, /다른 관리자가 먼저 설정을 바꿨습니다\. 새로고침 후 다시 시도해 주세요\./)
+})
+
 test('listSystemSettingHistory: 그 키의 이력만 최근 것부터, 사유·변경자 이름과 함께', async () => {
   const { listSystemSettingHistory } = await import('../../src/db/queries/settings.ts')
   await putSetting('features', 'timebank_features', { ...TIMEBANK_DEFAULTS })

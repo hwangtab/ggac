@@ -356,19 +356,44 @@ export interface UpdateSystemSettingInput {
    * (스펙 §9.2). 없으면 예전처럼 null이다.
    */
   changeReason?: string | null
+  /**
+   * 낙관적 동시성 가드. 호출부가 읽어 둔 행의 `updated_at`(ISO, 아직 한 번도 안
+   * 바뀌었으면 null)을 넘기면, 지금 행의 `updated_at`이 그와 같을 때만 쓴다.
+   * 다르면 아무것도 쓰지 않고(이력도 남기지 않고) `outcome: 'stale'`을 돌려준다
+   * — 읽기·병합·쓰기 사이에 다른 관리자가 먼저 쓴 값을 덮어쓰지 않게 한다.
+   * `undefined`(생략)면 예전처럼 무조건 쓴다.
+   */
+  expectedUpdatedAt?: string | null
+}
+
+export type UpdateSystemSettingResult = { id: string; outcome: 'updated' | 'stale' }
+
+function msOrNull(value: Date | string | null | undefined): number | null {
+  if (value === null || value === undefined) return null
+  const ms = value instanceof Date ? value.getTime() : Date.parse(value)
+  return Number.isFinite(ms) ? ms : null
 }
 
 /**
  * `system_settings` UPDATE + 트리거 2종(모듈 설명 참고) 재현. UPDATE
  * 전용이다 — 대상이 없으면 `SettingNotFoundError`를 던진다(UPSERT가 아니다,
  * `systemSettingsWrite.ts`의 기존 계약과 동일).
+ *
+ * `expectedUpdatedAt`을 주면 조건부 쓰기다(위 필드 설명). libSQL 쓰기 트랜잭션은
+ * `BEGIN IMMEDIATE`라 여기서 읽은 `updated_at`과 UPDATE 사이에 다른 쓰기가 끼지
+ * 못한다. 새 `updated_at`은 이전 값보다 **반드시 크게** 잡는다 — 같은 밀리초의
+ * 연속 쓰기가 같은 버전으로 보이면 가드가 뚫린다.
  */
 export async function updateSystemSetting(
   input: UpdateSystemSettingInput
-): Promise<{ id: string }> {
+): Promise<UpdateSystemSettingResult> {
   return db.transaction(async tx => {
     const [existing] = await tx
-      .select({ id: systemSettings.id, settingValue: systemSettings.settingValue })
+      .select({
+        id: systemSettings.id,
+        settingValue: systemSettings.settingValue,
+        updatedAt: systemSettings.updatedAt,
+      })
       .from(systemSettings)
       .where(
         and(
@@ -380,7 +405,12 @@ export async function updateSystemSetting(
 
     if (!existing) throw new SettingNotFoundError(input.category, input.settingKey)
 
-    const now = new Date()
+    const previousMs = msOrNull(existing.updatedAt)
+    if (input.expectedUpdatedAt !== undefined && msOrNull(input.expectedUpdatedAt) !== previousMs) {
+      return { id: existing.id, outcome: 'stale' as const }
+    }
+
+    const now = new Date(Math.max(Date.now(), (previousMs ?? 0) + 1))
 
     // BEFORE UPDATE 트리거(update_system_settings_updated_at) 재현.
     await tx
@@ -404,7 +434,7 @@ export async function updateSystemSetting(
       changeReason: input.changeReason ?? null,
     })
 
-    return { id: existing.id }
+    return { id: existing.id, outcome: 'updated' as const }
   })
 }
 
