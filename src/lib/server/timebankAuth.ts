@@ -103,6 +103,13 @@ export const TIMEBANK_RATE_LIMITS = {
     maxRequests: 10,
     message: '내려받기 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
   },
+  // 공개 집계는 월별 SUM 여러 개를 돈다 — 조회를 되풀이해 차이를 캐는 것도 막는다.
+  stats: {
+    name: 'timebank_stats',
+    windowMs: HOUR_MS,
+    maxRequests: 30,
+    message: '집계 조회가 너무 많습니다. 잠시 후 다시 시도해 주세요.',
+  },
 } as const
 
 /** 한 사람이 동시에 열어 둘 수 있는 제공·요청 글 수(계획 Task 7). */

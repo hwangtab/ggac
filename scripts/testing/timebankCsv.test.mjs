@@ -1,10 +1,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 
 import {
   TIMEBANK_CSV_HEADERS,
   buildTimebankCsv,
   formatKstDateTime,
+  boardPilotStats,
   publicStats,
   summarizeMe,
   timebankCsvDisposition,
@@ -269,6 +271,9 @@ const stats = (over = {}) => ({
   ...over,
 })
 
+/** 공개 집계 테스트의 기준 시각 — 2026-12(KST). `stats()`의 2026-11은 끝난 달이다. */
+const NOW = new Date('2026-12-10T00:00:00.000Z')
+
 test('publicStats: 사람 수 구간이 1~2명이면 null로 다시 가린다', () => {
   for (const n of [1, 2]) {
     const s = publicStats(
@@ -277,14 +282,15 @@ test('publicStats: 사람 수 구간이 1~2명이면 null로 다시 가린다', 
         bidirectional_participants: n,
         over_soft_max_members: n,
         low_balance_members: n,
-      })
+      }),
+      NOW
     )
     assert.equal(s.participants, null)
     assert.equal(s.bidirectional_participants, null)
     assert.equal(s.over_soft_max_members, null)
     assert.equal(s.low_balance_members, null)
   }
-  const s = publicStats(stats())
+  const s = publicStats(stats(), NOW)
   assert.equal(s.participants, 5)
   assert.equal(s.bidirectional_participants, 3)
   assert.equal(s.low_balance_members, 4)
@@ -292,8 +298,73 @@ test('publicStats: 사람 수 구간이 1~2명이면 null로 다시 가린다', 
 })
 
 test('publicStats: 정해진 칸만 내보낸다(개인 식별자 없음)', () => {
-  const s = publicStats(stats({ member_ids: ['a', 'b'], top_member: 'a' }))
+  const s = publicStats(stats({ member_ids: ['a', 'b'], top_member: 'a' }), NOW)
   assert.equal('member_ids' in s, false)
   assert.equal('top_member' in s, false)
   assert.equal(s.min_bucket, 3)
+})
+
+test('publicStats: 이번 달(KST, 끝나지 않은 달)은 교환 건수·분을 숨기고 "집계 중"', () => {
+  // 2026-11-30T15:30Z는 KST로 12월 1일 — 11월은 끝났고 12월이 진행 중이다
+  const boundary = new Date('2026-11-30T15:30:00.000Z')
+  const current = publicStats(stats({ month: '2026-12', exchange_count: 40 }), boundary)
+  assert.equal(current.exchange_count, null)
+  assert.equal(current.exchange_minutes, null)
+  assert.equal(current.month_complete, false)
+  assert.equal(current.exchange_note, '집계 중')
+
+  const done = publicStats(stats({ month: '2026-11', exchange_count: 40 }), boundary)
+  assert.equal(done.exchange_count, 40)
+  assert.equal(done.exchange_minutes, 240)
+  assert.equal(done.month_complete, true)
+  assert.equal(done.exchange_note, null)
+
+  // 앞으로 올 달도 끝난 달이 아니다
+  assert.equal(publicStats(stats({ month: '2027-01' }), boundary).exchange_count, null)
+})
+
+test('publicStats: 끝난 달이어도 3건 미만 건수는 null(교환 분도 함께 가린다)', () => {
+  const s = publicStats(
+    stats({
+      exchange_count: 2,
+      rejected_count: 1,
+      canceled_count: 2,
+      stale_pending_count: 1,
+      market_count: 2,
+    }),
+    NOW
+  )
+  assert.equal(s.exchange_count, null)
+  assert.equal(s.exchange_minutes, null, '건수를 가렸으면 분도 한두 사람의 거래를 드러낸다')
+  assert.equal(s.rejected_count, null)
+  assert.equal(s.canceled_count, null)
+  assert.equal(s.stale_pending_count, null)
+  assert.equal(s.market_count, null)
+  assert.equal(s.exchange_note, null, '집계 중이 아니라 적어서 가린 것')
+
+  const zero = publicStats(stats({ rejected_count: 0, exchange_count: 3 }), NOW)
+  assert.equal(zero.rejected_count, null, '0도 3 미만이다')
+  assert.equal(zero.exchange_count, 3)
+})
+
+test('boardPilotStats: 이사회 보고는 이번 달 교환 건수·분과 작은 건수를 그대로 본다', () => {
+  const s = boardPilotStats(
+    stats({ month: '2026-12', exchange_count: 2, rejected_count: 1, participants: 2 })
+  )
+  assert.equal(s.exchange_count, 2)
+  assert.equal(s.exchange_minutes, 240)
+  assert.equal(s.rejected_count, 1)
+  assert.equal(s.participants, null, '사람 수 구간 가림은 예전 그대로')
+})
+
+test('공개 집계 라우트는 사용자 키 레이트리밋을 걸고, 이사회 보고는 boardPilotStats를 쓴다', () => {
+  const read = rel => readFileSync(new URL(`../../${rel}`, import.meta.url), 'utf8')
+  const route = read('src/app/api/timebank/stats/route.ts')
+  assert.match(route, /timebankRateLimit\('stats', user\.id\)/)
+  assert.match(route, /applyRouteRateLimit/)
+  const auth = read('src/lib/server/timebankAuth.ts')
+  assert.match(auth, /stats: \{\s*name: 'timebank_stats',\s*windowMs: HOUR_MS,\s*maxRequests: 30,/)
+  const oversight = read('src/app/api/board-room/timebank/oversight/route.ts')
+  assert.match(oversight, /boardPilotStats\(stats\)/)
+  assert.doesNotMatch(oversight, /publicStats\(/)
 })

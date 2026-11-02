@@ -10,8 +10,9 @@
  * (`monthlyOversight`)과 타임뱅크 설정 변경 이력(의결 근거 포함). `month`가 없으면
  * 이번 달(KST), 형식이 틀리면 400. 읽기 전용이고 기능 스위치와 무관하다.
  *
- * 파일럿 지표(스펙 §12)도 함께 싣는다(`pilot`): 조합원 공개 집계와 같은 모양
- * (`publicStats` — 사람 수 3명 미만 구간은 null), 요청 글을 쓴 조합원 비율,
+ * 파일럿 지표(스펙 §12)도 함께 싣는다(`pilot`): 조합원 공개 집계와 같은 칸이되
+ * `boardPilotStats`다 — 사람 수 3명 미만 구간만 null이고, 조합원판(`publicStats`)이
+ * 가리는 이번 달 교환 건수·분과 3건 미만 건수는 감독용으로 그대로 싣는다. 요청 글을 쓴 조합원 비율,
  * 고른 달과 그 앞 다섯 달의 발행잔액 추이.
  *
  * 조정 건의 "누가·승인자"는 id라 표시명을 `actor_names`로 따로 싣는다(표시명만 —
@@ -23,7 +24,7 @@ import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { timebankAdminErrorResponse } from '@/lib/server/timebankAdmin'
 import { kstMonthKey, shiftMonthKey } from '@/lib/timebank/month'
 import { parseMonthParam } from '@/lib/timebank/validate'
-import { publicStats } from '@/lib/timebank/format'
+import { boardPilotStats } from '@/lib/timebank/format'
 import { getTimebankSettings } from '@/lib/timebank/settings'
 import { monthlyOversight, outstandingTrend, participationStats } from '@/db/queries/timebankLedger'
 import { requestAuthorShare } from '@/db/queries/timebankBoard'
@@ -77,7 +78,7 @@ export const GET = defineApiRoute({
       actor_names: actorNames,
       settings_history: settingsHistory,
       pilot: {
-        ...publicStats(stats),
+        ...boardPilotStats(stats),
         request_authors: requestShare.request_authors,
         request_author_participants: requestShare.participants,
         request_author_ratio: requestShare.ratio,

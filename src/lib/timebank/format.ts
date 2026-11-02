@@ -22,6 +22,7 @@ import type {
   TransferStateCode,
 } from '../../db/queries/timebankLedger.ts'
 import { csvCell } from '../funding/shippingExport.ts'
+import { kstMonthKey } from './month.ts'
 import type { TimebankSettings } from './settings.ts'
 
 /**
@@ -370,30 +371,67 @@ const PEOPLE_BUCKETS = [
 const hide = (n: number | null): number | null =>
   typeof n === 'number' && n >= STATS_MIN_BUCKET ? n : null
 
+/** 조합원 공개 집계에서 3건 미만이면 가리는 건수 칸. */
+const SMALL_COUNTS = [
+  'rejected_count',
+  'canceled_count',
+  'stale_pending_count',
+  'market_count',
+] as const
+
+/** 진행 중인 달의 교환 칸 자리에 화면이 보여 줄 말. */
+export const STATS_IN_PROGRESS_NOTE = '집계 중'
+
 /**
- * `participationStats` → 조합원 공개 모양. 정해진 칸만 옮기고, 사람 수 구간을
- * **한 번 더** 가린다(3명 미만 → null, 화면은 "3명 미만"). 쿼리 계층이 이미
- * 가리지만 응답 직전에 다시 못 박는다 — 쿼리에 칸이 늘어 새는 일을 막는다.
+ * `participationStats` → 이사회 파일럿 지표 모양(`/api/board-room/timebank/oversight`).
+ * 정해진 칸만 옮기고 사람 수 구간만 가린다(3명 미만 → null). 이사·감사는 감독
+ * 자리라 **이번 달 교환 건수·분과 작은 건수를 그대로 본다** — 조합원 공개판
+ * (`publicStats`)의 추가 가림은 여기 걸지 않는다.
  */
-export function publicStats(row: StatsRow) {
+export function boardPilotStats(row: StatsRow) {
   const out = {
     month: row.month,
-    exchange_count: row.exchange_count,
-    exchange_minutes: row.exchange_minutes,
+    exchange_count: row.exchange_count as number | null,
+    exchange_minutes: row.exchange_minutes as number | null,
     participants: row.participants,
     bidirectional_participants: row.bidirectional_participants,
-    rejected_count: row.rejected_count,
-    canceled_count: row.canceled_count,
-    stale_pending_count: row.stale_pending_count,
+    rejected_count: row.rejected_count as number | null,
+    canceled_count: row.canceled_count as number | null,
+    stale_pending_count: row.stale_pending_count as number | null,
     coop_task_minutes: row.coop_task_minutes,
     coop_task_ratio: row.coop_task_ratio,
     redeem_minutes: row.redeem_minutes,
     redeem_ratio: row.redeem_ratio,
-    market_count: row.market_count,
+    market_count: row.market_count as number | null,
     over_soft_max_members: row.over_soft_max_members,
     low_balance_members: row.low_balance_members,
     min_bucket: STATS_MIN_BUCKET,
   }
   for (const key of PEOPLE_BUCKETS) out[key] = hide(out[key])
   return out
+}
+
+/**
+ * `participationStats` → 조합원 공개 모양(`GET /api/timebank/stats`). 이사회판에
+ * 더해 조합원에게 개별 거래가 비치지 않게 가린다:
+ *
+ * - **끝나지 않은 달**(KST 이번 달·앞으로 올 달)은 교환 건수·분을 null로 두고
+ *   `exchange_note: '집계 중'`. 진행 중인 달은 하루하루 값이 바뀌어 직전 조회와의
+ *   차이로 "방금 누가 몇 분을 주고받았는지"가 드러난다.
+ * - 끝난 달이어도 건수가 3 미만이면 null(교환 건수를 가렸으면 교환 분도 함께).
+ * - 사람 수 구간은 이사회판과 같이 3명 미만이면 null.
+ */
+export function publicStats(row: StatsRow, now: Date = new Date()) {
+  const out = boardPilotStats(row)
+  const monthComplete = row.month < kstMonthKey(now)
+  if (!monthComplete || hide(row.exchange_count) === null) {
+    out.exchange_count = null
+    out.exchange_minutes = null
+  }
+  for (const key of SMALL_COUNTS) out[key] = hide(out[key])
+  return {
+    ...out,
+    month_complete: monthComplete,
+    exchange_note: monthComplete ? null : STATS_IN_PROGRESS_NOTE,
+  }
 }
