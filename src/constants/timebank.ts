@@ -88,3 +88,23 @@ export const TIMEBANK_DESCRIPTION_MAX = 3000
 export const TIMEBANK_COMMENT_MAX = 1000
 export const TIMEBANK_PROFILE_TEXT_MAX = 1000
 export const TIMEBANK_MEMO_MAX = 500
+
+/**
+ * 내역 채널(스펙 §8 "채널 필터") → kind 묶음. 모든 kind가 정확히 한 채널에 든다
+ * (`timebankTransferRoute.test.mjs`가 고정한다).
+ *
+ * - `service`: 조합 서비스(교환권·교환소) 사용과 환불. 1-B에서 둘을 가를 때는
+ *   kind가 아니라 `ref_type`(`reservation`·`reward_order`)으로 가른다.
+ * - `signup`: 가입 크레딧과 재가입 승계.
+ * - `adjustment`: 관리자 조정과 탈퇴 정산.
+ */
+export const TIMEBANK_CHANNELS = {
+  exchange: ['exchange'],
+  market: ['market'],
+  coop_task: ['coop_task'],
+  service: ['redeem', 'redeem_refund'],
+  signup: ['signup_grant', 'carryover'],
+  adjustment: ['adjustment', 'withdrawal_settlement'],
+  reversal: ['reversal'],
+} as const satisfies Record<string, readonly TimebankKind[]>
+export type TimebankChannel = keyof typeof TIMEBANK_CHANNELS

@@ -84,6 +84,25 @@ export const TIMEBANK_RATE_LIMITS = {
     maxRequests: 5,
     message: '동의 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
   },
+  // 계획 Task 8: 기록 20/시간, 확인·거절·취소 60/시간, CSV 10/시간.
+  record: {
+    name: 'timebank_record',
+    windowMs: HOUR_MS,
+    maxRequests: 20,
+    message: '기록을 너무 자주 남기고 있습니다. 잠시 후 다시 시도해 주세요.',
+  },
+  decide: {
+    name: 'timebank_decide',
+    windowMs: HOUR_MS,
+    maxRequests: 60,
+    message: '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
+  },
+  csv: {
+    name: 'timebank_csv',
+    windowMs: HOUR_MS,
+    maxRequests: 10,
+    message: '내려받기 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
+  },
 } as const
 
 /** 한 사람이 동시에 열어 둘 수 있는 제공·요청 글 수(계획 Task 7). */

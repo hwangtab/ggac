@@ -1779,6 +1779,41 @@ const requiredAuthHelperCallCounts = [
     file: 'src/app/api/timebank/directory/route.ts',
     calls: [{ pattern: /requireTimebankPeer\(\)/g, min: 1 }],
   },
+  // 계획 Task 8 — 기록·결정·내 타임. 기록은 Participant, 확인은 Participant,
+  // 거절·취소(§7.2 꺼짐에도 허용)와 읽기는 Reader.
+  {
+    file: 'src/app/api/timebank/transfers/route.ts',
+    calls: [{ pattern: /requireTimebankParticipant\(\)/g, min: 1 }],
+  },
+  {
+    // confirm은 Participant, reject·cancel은 Reader. 둘 중 하나가 빠지면 confirm이
+    // 꺼짐·미동의에서 열리거나 reject·cancel이 꺼짐에서 막힌다.
+    file: 'src/app/api/timebank/transfers/[id]/[action]/route.ts',
+    calls: [
+      { pattern: /requireTimebankParticipant\(\)/g, min: 1 },
+      { pattern: /requireTimebankReader\(\)/g, min: 1 },
+    ],
+  },
+  {
+    file: 'src/app/api/timebank/me/route.ts',
+    calls: [{ pattern: /requireTimebankReader\(\)/g, min: 1 }],
+  },
+  {
+    file: 'src/app/api/timebank/me/transfers/route.ts',
+    calls: [{ pattern: /requireTimebankReader\(\)/g, min: 1 }],
+  },
+  {
+    file: 'src/app/api/timebank/me/transfers.csv/route.ts',
+    calls: [{ pattern: /requireTimebankReader\(\)/g, min: 1 }],
+  },
+  {
+    file: 'src/app/api/timebank/me/pending/route.ts',
+    calls: [{ pattern: /requireTimebankReader\(\)/g, min: 1 }],
+  },
+  {
+    file: 'src/app/api/timebank/stats/route.ts',
+    calls: [{ pattern: /requireTimebankReader\(\)/g, min: 1 }],
+  },
 ]
 const requiredAuthHelperCallViolations = requiredAuthHelperCallCounts.flatMap(({ file, calls }) => {
   const fullPath = join(root, file)
