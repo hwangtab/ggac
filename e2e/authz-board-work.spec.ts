@@ -244,7 +244,7 @@ test.describe('업무툴 입력 중 표시 — 멤버에게만', () => {
     await postSync(browser, 'director', {
       ...base,
       focus: null,
-      typing: { channelId: f.workDmChannelId, scope: '' },
+      typing: { channelId: f.workDmChannelId, scope: null },
     })
     const auditorView = await postSync(browser, 'auditor', {
       ...base,
@@ -257,7 +257,7 @@ test.describe('업무툴 입력 중 표시 — 멤버에게만', () => {
     await postSync(browser, 'auditor', {
       ...base,
       focus: null,
-      typing: { channelId: f.workPrivateChannelId, scope: '' },
+      typing: { channelId: f.workPrivateChannelId, scope: null },
     })
     const adminView = await postSync(browser, 'admin', {
       ...base,
