@@ -74,9 +74,12 @@ const TIMEBANK_ACTIVITY_TYPES = [
   'timebank_adjustment',
   'timebank_adjustment_approved',
   'timebank_settings_changed',
+  // 계획 Task 9: 조합 업무 글 등록, 관리자의 pending 취소(분쟁 정리).
+  'timebank_coop_task_created',
+  'timebank_transfer_admin_canceled',
 ]
 
-test('타임뱅크 활동 종류 일곱은 서버 전용이다 — 브라우저가 "확인했다"를 적지 못한다', () => {
+test('타임뱅크 활동 종류 아홉은 서버 전용이다 — 브라우저가 "확인했다"를 적지 못한다', () => {
   for (const type of TIMEBANK_ACTIVITY_TYPES) {
     assert.ok(
       SERVER_ONLY_ACTIVITY_ACTION_TYPES.includes(type),
@@ -144,6 +147,27 @@ test('두 목록을 합치면 원장의 전체 목록이고, 겹치지 않는다
     SERVER_ONLY_ACTIVITY_ACTION_TYPES.includes(type)
   )
   assert.deepEqual(overlap, [], '한 종류가 양쪽에 있으면 서버 전용이라는 말이 거짓이 된다')
+})
+
+test('타임뱅크 대상 종류(timebank_transfer·timebank_listing)가 세 사본 모두에 있다', async () => {
+  const { ACTIVITY_TARGET_TYPES, parseActivityTargetType } = await import(
+    '../../src/constants/activity.ts'
+  )
+  const opsSource = readFileSync('src/db/schema/ops.ts', 'utf8')
+  const opsBlock = opsSource.slice(opsSource.indexOf('export const ACTIVITY_TARGET_TYPE ='))
+  const opsTargets = [
+    ...opsBlock.slice(0, opsBlock.indexOf('] as const')).matchAll(/'([a-z_]+)'/g),
+  ].map(m => m[1])
+  assert.deepEqual([...opsTargets].sort(), [...ACTIVITY_TARGET_TYPES].sort())
+  const typesSource = readFileSync('src/types/activity.ts', 'utf8')
+  for (const type of ['timebank_transfer', 'timebank_listing']) {
+    assert.equal(parseActivityTargetType(type), type)
+    assert.match(
+      typesSource,
+      new RegExp(`\\| '${type}'`),
+      `${type}이(가) ActivityTargetType에 없다`
+    )
+  }
 })
 
 test('DB 스키마의 종류 목록과 어긋나지 않는다', () => {

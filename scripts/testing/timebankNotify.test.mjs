@@ -179,6 +179,27 @@ test('결정 알림: 조합 계좌와 비어 있는 칸에는 보내지 않는�
   )
 })
 
+test('관리자 취소 알림: 행위자를 뺀 모든 당사자 — 회원 간이면 두 사람, 조정이면 대상과 만든 관리자', () => {
+  assert.deepEqual(
+    notify.pickRecipientsForAdminCancel(row({ status: 'canceled' }), 'admin-1').sort(),
+    ['payee', 'payer']
+  )
+  const adjustment = row({
+    kind: 'adjustment',
+    status: 'canceled',
+    from_account: 'coop',
+    to_account: 'member-1',
+    created_by: 'admin-2',
+    counterparty_id: null,
+  })
+  assert.deepEqual(notify.pickRecipientsForAdminCancel(adjustment, 'admin-1').sort(), [
+    'admin-2',
+    'member-1',
+  ])
+  // 만든 관리자가 스스로 거두면 대상에게만
+  assert.deepEqual(notify.pickRecipientsForAdminCancel(adjustment, 'admin-2'), ['member-1'])
+})
+
 // ---------------------------------------------------------------- 발송 래퍼
 
 function spy(overrides = {}) {
@@ -319,6 +340,22 @@ test('음수 탈퇴 알림은 이사 전원에게(중복 없이) 가고, 이사�
     await notify.notifyNegativeWithdrawal({ directorIds: [], minutes: -300 }, deps)
     assert.equal(calls.bulk.length, 0)
   }
+})
+
+test('관리자 취소 알림은 timebank_canceled로 당사자 모두에게, 사유를 싣는다', async () => {
+  const { deps, calls } = spy()
+  await notify.notifyTransferCanceledByAdmin(
+    row({ status: 'canceled' }),
+    { adminId: 'admin-1', memo: '분쟁 정리' },
+    deps
+  )
+  assert.equal(calls.bulk.length, 1)
+  assert.equal(calls.bulk[0].type, 'timebank_canceled')
+  assert.deepEqual([...calls.bulk[0].user_ids].sort(), ['payee', 'payer'])
+  assert.match(calls.bulk[0].message, /관리자/)
+  assert.match(calls.bulk[0].message, /분쟁 정리/)
+  assert.equal(calls.bulk[0].data.by_admin, true)
+  assertExpiry(calls.bulk[0])
 })
 
 test('발송이 던져도 래퍼는 절대 던지지 않고 오류만 남긴다', async () => {

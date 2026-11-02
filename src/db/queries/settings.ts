@@ -52,13 +52,14 @@
  * 뜨거운 경로 최적화와는 다른 상황).
  */
 
-import { and, eq, inArray } from 'drizzle-orm'
+import { and, desc, eq, inArray } from 'drizzle-orm'
 
 import { db } from '../client.ts'
 import {
   SETTING_CATEGORY,
   SYSTEM_SETTING_CATEGORY,
   defaultSettings,
+  memberProfiles,
   systemSettings,
   systemSettingsHistory,
   userSettings,
@@ -318,6 +319,23 @@ export async function listSystemSettings(includeSensitive: boolean): Promise<Sys
   return rows.map(row => maskSensitiveSystemSetting(rowToSystemSetting(row), includeSensitive))
 }
 
+/**
+ * 설정 행 하나를 캐시 없이 읽는다(원본 값, 마스킹 없음). 없으면 null.
+ * 타임뱅크 설정 라우트가 "현재 값"을 정확히 알아야 할 때 쓴다 — `getSystemSettings`의
+ * 캐시나 조회 실패 시 기본값으로 판정하면 의결되지 않은 값이 섞여 저장될 수 있다.
+ */
+export async function getSystemSettingRow(
+  category: SystemSettingCategoryValue,
+  settingKey: string
+): Promise<SystemSettingRow | null> {
+  const [row] = await db
+    .select()
+    .from(systemSettings)
+    .where(and(eq(systemSettings.category, category), eq(systemSettings.settingKey, settingKey)))
+    .limit(1)
+  return row ? rowToSystemSetting(row) : null
+}
+
 export class SettingNotFoundError extends Error {
   constructor(category: string, settingKey: string) {
     super(`존재하지 않는 설정입니다: ${category}.${settingKey}`)
@@ -388,4 +406,56 @@ export async function updateSystemSetting(
 
     return { id: existing.id }
   })
+}
+
+export interface SystemSettingHistoryRow {
+  id: string
+  category: SystemSettingCategoryValue
+  setting_key: string
+  old_value: unknown
+  new_value: unknown
+  changed_by: string | null
+  /** 변경자의 현재 표시명. 회원 행이 없으면 null. */
+  changed_by_name: string | null
+  changed_at: string | null
+  /** 이사회 의결 근거 등(`updateSystemSetting({ changeReason })`). */
+  change_reason: string | null
+}
+
+/**
+ * 한 설정 키의 변경 이력. 최근 것부터 `limit`건. 이사회 보고(타임뱅크 설정 변경
+ * 이력, 스펙 §9.2·§7.4)와 관리자 타임뱅크 설정 화면이 쓴다.
+ */
+export async function listSystemSettingHistory(
+  settingKey: string,
+  limit = 50
+): Promise<SystemSettingHistoryRow[]> {
+  const rows = await db
+    .select({
+      id: systemSettingsHistory.id,
+      category: systemSettingsHistory.category,
+      settingKey: systemSettingsHistory.settingKey,
+      oldValue: systemSettingsHistory.oldValue,
+      newValue: systemSettingsHistory.newValue,
+      changedBy: systemSettingsHistory.changedBy,
+      changedByName: memberProfiles.displayName,
+      changedAt: systemSettingsHistory.changedAt,
+      changeReason: systemSettingsHistory.changeReason,
+    })
+    .from(systemSettingsHistory)
+    .leftJoin(memberProfiles, eq(memberProfiles.id, systemSettingsHistory.changedBy))
+    .where(eq(systemSettingsHistory.settingKey, settingKey))
+    .orderBy(desc(systemSettingsHistory.changedAt), desc(systemSettingsHistory.id))
+    .limit(Math.max(1, Math.min(200, Math.trunc(limit) || 50)))
+  return rows.map(r => ({
+    id: r.id,
+    category: r.category,
+    setting_key: r.settingKey,
+    old_value: r.oldValue ?? null,
+    new_value: r.newValue ?? null,
+    changed_by: r.changedBy ?? null,
+    changed_by_name: r.changedByName ?? null,
+    changed_at: toIso(r.changedAt),
+    change_reason: r.changeReason ?? null,
+  }))
 }

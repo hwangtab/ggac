@@ -40,6 +40,8 @@ export type ActivityActionType =
   | 'timebank_adjustment' // 관리자 조정 생성
   | 'timebank_adjustment_approved' // 관리자 조정 이중 승인
   | 'timebank_settings_changed' // 타임뱅크 설정 변경(이사회 의결 근거)
+  | 'timebank_coop_task_created' // 관리자의 조합 업무 글 등록
+  | 'timebank_transfer_admin_canceled' // 관리자의 pending 취소(분쟁 정리)
 
 export type ActivityTargetType =
   | 'post'
@@ -54,6 +56,8 @@ export type ActivityTargetType =
   | 'funding_campaign'
   | 'funding_pledge'
   | 'ticket_reservation'
+  | 'timebank_transfer'
+  | 'timebank_listing'
 
 export interface UserActivity {
   id: string

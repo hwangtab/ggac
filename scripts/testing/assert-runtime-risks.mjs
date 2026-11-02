@@ -1288,7 +1288,7 @@ const apiRouteFilesMissed = missingFrom(apiRouteFiles, apiRouteFilesExpected)
 // 예전 가드는 **손으로 적은 약 30개 경로 목록**이었다 — 내일 추가되는
 // admin 라우트를 구조적으로 못 잡는다. 그래서 트리 전체를 훑는다.
 const PRIVILEGED_ROUTE_TREES = ['src/app/api/admin', 'src/app/api/board-room']
-const PRIVILEGED_ROUTE_FILES_MIN = 35 // 현재 41 (admin 30 + board-room 11)
+const PRIVILEGED_ROUTE_FILES_MIN = 35 // 하한이다. 타임뱅크 관리자 6 + 이사회 보고 1이 더해졌다(계획 Task 9)
 const privilegedRouteFiles = PRIVILEGED_ROUTE_TREES.flatMap(tree =>
   globSync(`${tree}/**/route.@(ts|tsx)`, {
     cwd: root,
@@ -7590,6 +7590,96 @@ if (trackedFiles === null) {
     )
   }
 }
+// 조합원 타임뱅크 관리자·이사회 API(계획 Task 9, 스펙 §6·§7.3·§7.4·§9.2).
+//
+// 특권 트리 가드(위)는 `auth`가 'admin'·'board-member'·createSettingsAdminAuth() 중
+// 하나인지만 본다. 타임뱅크 관리자 쓰기(조합 업무 지급·조정·승인·취소·설정)는
+// **관리자만**이어야 한다 — 'board-member'로 퇴화하면 이사·감사가 크레딧을 발행할
+// 수 있는데 그 가드는 초록이다. 그래서 이 트리는 'admin' 하나만 받는다. 이사회
+// 보고는 반대로 'board-member'여야 한다(이사·감사가 읽는다).
+//
+// **증명하지 않는 것**: 도달 가능성·실행 순서. 진짜 그물은 Task 13의 authz E2E다.
+{
+  const timebankFailures = []
+  const adminTimebankRoutes = globSync('src/app/api/admin/timebank/**/route.@(ts|tsx)', {
+    cwd: root,
+    exclude: ['**/node_modules/**', '**/.next/**'],
+  }).sort()
+  // 글롭이 비면 아래 검사가 통째로 꺼진다. 현재 6개.
+  if (adminTimebankRoutes.length < 6) {
+    timebankFailures.push(
+      `타임뱅크 관리자 라우트 글롭이 비었거나 줄었습니다(${adminTimebankRoutes.length}) — 경로가 바뀌었다면 이 계약도 고쳐야 합니다`
+    )
+  }
+  for (const file of adminTimebankRoutes) {
+    const code = stripCommentsAndImports(readSourceAt(join(root, file)))
+    const codeNoStrings = stripStringLiterals(code)
+    const handlers = HTTP_METHODS.filter(m => new RegExp(`export const ${m}\\s*=`).test(code))
+    if (handlers.length === 0) {
+      timebankFailures.push(`${file}: defineApiRoute 핸들러를 찾지 못했습니다`)
+    }
+    const authKeys = [...codeNoStrings.matchAll(/\bauth:/g)]
+    const adminAuths = code.match(/\bauth:\s*'admin'/g) || []
+    if (authKeys.length !== handlers.length || adminAuths.length !== handlers.length) {
+      timebankFailures.push(
+        `${file}: 모든 핸들러가 auth: 'admin'이어야 합니다(핸들러 ${handlers.length}, auth ${authKeys.length}, 'admin' ${adminAuths.length})`
+      )
+    }
+    if (!/createUserKeyGenerator\('admin_timebank_[a-z_]+'\)/.test(code)) {
+      timebankFailures.push(
+        `${file}: 레이트리밋 키가 createUserKeyGenerator('admin_timebank_*')가 아닙니다`
+      )
+    }
+  }
+  const oversightFile = 'src/app/api/board-room/timebank/oversight/route.ts'
+  const oversightSource = existsSync(join(root, oversightFile))
+    ? stripCommentsAndImports(readSourceAt(join(root, oversightFile)))
+    : null
+  if (oversightSource === null) {
+    timebankFailures.push(`${oversightFile}: 파일이 없습니다`)
+  } else if (!/\bauth:\s*'board-member'/.test(oversightSource)) {
+    timebankFailures.push(`${oversightFile}: 이사회 보고는 auth: 'board-member'여야 합니다`)
+  }
+  // 조합 업무 지급은 원장이 순수 판정(judgeCoopCredit)으로 조건 전부를 본다 —
+  // 라우트가 확인 체크를 빠뜨려도 지급되지 않게.
+  const ledgerSource = readSourceAt(join(root, 'src/db/queries/timebankLedger.ts'))
+  if (
+    !/judgeCoopCredit\(\{/.test(ledgerSource) ||
+    !/notPaidElsewhere:\s*input\.notPaidElsewhere/.test(ledgerSource)
+  ) {
+    timebankFailures.push(
+      'src/db/queries/timebankLedger.ts: creditCoopTask가 judgeCoopCredit으로 확인 체크까지 판정하지 않습니다'
+    )
+  }
+  // 설정 백업 복원이 타임뱅크 설정(이사회 의결 사항)을 쓰지 않는다.
+  const backupSource = stripCommentsAndImports(readSourceAt(adminSettingsBackupApiPath))
+  if (
+    !/partitionRestorableSettings\(backupSettings\)/.test(backupSource) ||
+    !/for \(const setting of restorable\)/.test(backupSource)
+  ) {
+    timebankFailures.push(
+      `src/app/api/admin/settings/backup/route.ts: 복원이 partitionRestorableSettings로 걸러진 목록만 쓰지 않습니다(timebank_features 우회)`
+    )
+  }
+  // 설정 PUT은 의결 근거를 history에 남긴다.
+  const tbSettingsSource = readSourceAt(join(root, 'src/app/api/admin/timebank/settings/route.ts'))
+  if (
+    !/planTimebankSettingsChange\(/.test(tbSettingsSource) ||
+    !/changeReason:\s*plan\.resolution_ref/.test(tbSettingsSource)
+  ) {
+    timebankFailures.push(
+      'src/app/api/admin/timebank/settings/route.ts: 설정 PUT이 planTimebankSettingsChange·changeReason(의결 근거)을 거치지 않습니다'
+    )
+  }
+  if (timebankFailures.length > 0) {
+    failures.push(
+      `Timebank admin/board API contracts (plan Task 9). These pin strings only; the real net is the authz E2E (Task 13). Offending contract(s):\n${timebankFailures
+        .map(hit => `- ${hit}`)
+        .join('\n')}`
+    )
+  }
+}
+
 if (failures.length > 0) {
   console.error(failures.join('\n\n'))
   process.exit(1)

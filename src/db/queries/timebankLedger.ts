@@ -18,7 +18,7 @@
  * 이 파일을 직접 import한다(`queriesTimebankLedger.test.mjs`).
  */
 
-import { and, asc, desc, eq, gte, inArray, isNull, lt, or, sql, type SQL } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, inArray, lt, or, sql, type SQL } from 'drizzle-orm'
 
 import { db } from '../client.ts'
 import {
@@ -37,6 +37,7 @@ import {
   REVERSIBLE_KINDS,
   STALE_PENDING_DAYS,
   STATS_MIN_BUCKET,
+  TIMEBANK_KINDS as TIMEBANK_KIND_LIST,
   type TimebankCategory,
   type TimebankKind,
   type TimebankRefType,
@@ -47,6 +48,7 @@ import {
   eligible,
   evaluateTransfer,
   floorFor,
+  judgeCoopCredit,
   pairBlocked,
   validMinutes,
   type Party,
@@ -103,8 +105,12 @@ export type LedgerRejection =
   | 'pair_blocked'
   /** 조합 업무 월 상한(KST, `decided_at`). */
   | 'monthly_cap'
-  /** 그 조합 업무 글의 자원 기록이 없거나 철회했다. */
+  /** 그 조합 업무 글의 자원 기록이 없다. */
   | 'not_volunteer'
+  /** 자원했다가 철회했다. */
+  | 'volunteer_withdrawn'
+  /** "사례비·인건비를 지급하지 않았다" 확인이 없다. */
+  | 'paid_elsewhere_unconfirmed'
   /** 조합 업무 글이 아니거나 지워졌다. */
   | 'not_coop_task'
   /** 같은 글로 그 대상에게 이미 지급했다. */
@@ -721,10 +727,14 @@ export async function issueFromCoop(
 }
 
 /**
- * 조합 업무 크레딧(스펙 §6.3). 한 트랜잭션에서 지급 조건을 전부 본다:
- * 그 글이 살아 있는 `coop_task`이고, 대상이 자원 기록에 있으며 철회하지 않았고,
- * 판정 1을 통과하고, 지급자 본인이 아니고, 같은 글로 받은 적이 없고, 월 상한
- * (`decided_at` KST) 안이다. "사례비 미지급" 확인 체크는 라우트가 본다.
+ * 조합 업무 크레딧(스펙 §6.3). 한 트랜잭션에서 지급 조건 재료를 전부 읽고
+ * `judgeCoopCredit`(순수 판정)으로 본다: 지급자 본인이 아니고, "사례비·인건비
+ * 미지급" 확인이 있고, memo가 있고, 분량이 맞고, 그 글이 살아 있는 `coop_task`이고,
+ * 대상이 자원 기록에 있으며 철회하지 않았고, 판정 1을 통과하고, 같은 글로 받은
+ * 적이 없다. 월 상한(`decided_at` KST)은 `issueFromCoop`이 같은 트랜잭션에서 SUM한다.
+ *
+ * 확인 체크는 라우트도 받지만 여기서도 본다 — 라우트가 빠뜨려도 지급되지 않는다.
+ * 기능 스위치(`coop_tasks_enabled`)는 라우트가 본다(쿼리 계층은 설정을 읽지 않는다).
  */
 export async function creditCoopTask(input: {
   listingId: string
@@ -732,13 +742,11 @@ export async function creditCoopTask(input: {
   actorId: string
   minutes: number
   memo: string
+  notPaidElsewhere: boolean
   settings: TimebankSettings
   now?: Date
 }): Promise<TransferRow> {
   const { settings } = input
-  if (input.actorId === input.memberId) throw reject('self')
-  if (!input.memo?.trim()) throw reject('memo_required')
-  if (!validMinutes('coop_task', input.minutes, { settings })) throw reject('bad_minutes')
   return write(async tx => {
     const [listing] = await tx
       .select({ id: timebankListings.id })
@@ -751,23 +759,19 @@ export async function creditCoopTask(input: {
         )
       )
       .limit(1)
-    if (!listing) throw reject('not_coop_task')
 
     const [volunteer] = await tx
-      .select({ id: timebankTaskVolunteers.id })
+      .select({ withdrawnAt: timebankTaskVolunteers.withdrawnAt })
       .from(timebankTaskVolunteers)
       .where(
         and(
           eq(timebankTaskVolunteers.listingId, input.listingId),
-          eq(timebankTaskVolunteers.memberId, input.memberId),
-          isNull(timebankTaskVolunteers.withdrawnAt)
+          eq(timebankTaskVolunteers.memberId, input.memberId)
         )
       )
       .limit(1)
-    if (!volunteer) throw reject('not_volunteer')
 
     const member = await loadMember(tx, input.memberId, settings.terms_version)
-    if (!member || !eligible(member.party)) throw reject('not_participant')
 
     const [already] = await tx
       .select({ id: t.id })
@@ -781,7 +785,19 @@ export async function creditCoopTask(input: {
         )
       )
       .limit(1)
-    if (already) throw reject('already_credited')
+
+    const verdict = judgeCoopCredit({
+      actorId: input.actorId,
+      memberId: input.memberId,
+      memo: input.memo,
+      notPaidElsewhere: input.notPaidElsewhere,
+      minutesValid: validMinutes('coop_task', input.minutes, { settings }),
+      listingFound: Boolean(listing),
+      volunteer: !volunteer ? 'none' : volunteer.withdrawnAt ? 'withdrawn' : 'active',
+      eligible: Boolean(member) && eligible(member.party),
+      alreadyCredited: Boolean(already),
+    })
+    if (verdict) throw reject(verdict)
 
     return issueFromCoop(
       {
@@ -936,6 +952,54 @@ export async function approveAdjustment(input: {
     }
     return toTransferRow(row)
   })
+}
+
+// ── 관리자 pending 취소(계획 Task 9, 스펙 §7.3) ─────────────────────────────
+
+/**
+ * 분쟁 정리용 관리자 취소. **kind 무관**(회원 간 기록·조정 pending 모두), memo 필수.
+ * 상태 전이는 다른 전이와 같이 조건부 UPDATE(`id`·`pending`)로만 하고, 0행이면
+ * 원인을 다시 읽는다(`not_found`·`not_pending`). 잔액은 움직이지 않는다(pending은
+ * 잔액에 들어가지 않는다) — 그래서 기능 스위치·참여 자격과 무관하게 열린다(§7.2).
+ *
+ * 사유는 원장 행에 남긴다: 원 memo가 있으면 그 뒤에 `' / 관리자 취소: …'`로 붙이고
+ * 없으면 `'관리자 취소: …'`. 원 memo(당사자가 적은 것)를 지우지 않는다.
+ */
+export async function adminCancelPending(input: {
+  id: string
+  adminId: string
+  memo: string
+}): Promise<TransferRow> {
+  const reason = typeof input.memo === 'string' ? input.memo.trim() : ''
+  if (!reason) throw reject('memo_required')
+  return write(async tx => {
+    const current = await readTransfer(tx, input.id)
+    if (!current) throw new TransferStateError('not_found')
+    if (current.status !== 'pending') throw new TransferStateError('not_pending')
+    const note = `관리자 취소: ${reason}`
+    const [row] = await tx
+      .update(t)
+      .set({
+        status: 'canceled',
+        decidedBy: input.adminId,
+        decidedAt: new Date(),
+        memo: current.memo ? `${current.memo} / ${note}` : note,
+      })
+      .where(and(eq(t.id, input.id), eq(t.status, 'pending')))
+      .returning()
+    if (!row) throw await diagnose(tx, input.id, [...TIMEBANK_KIND_LIST], 'not_pending')
+    return toTransferRow(row)
+  })
+}
+
+/** 두 번째 관리자의 승인을 기다리는 조정 전부. 오래된 것부터. */
+export async function listPendingAdjustments(): Promise<TransferRow[]> {
+  const rows = await db
+    .select()
+    .from(t)
+    .where(and(eq(t.kind, 'adjustment'), eq(t.status, 'pending')))
+    .orderBy(asc(t.createdAt), asc(t.id))
+  return rows.map(toTransferRow)
 }
 
 // ── 목록 ─────────────────────────────────────────────────────────────────────

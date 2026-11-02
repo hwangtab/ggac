@@ -169,6 +169,45 @@ test('changeReason이 없으면 history의 change_reason은 null이다(기존 �
   assert.equal(rows[0].change_reason, null)
 })
 
+test('listSystemSettingHistory: 그 키의 이력만 최근 것부터, 사유·변경자 이름과 함께', async () => {
+  const { listSystemSettingHistory } = await import('../../src/db/queries/settings.ts')
+  await putSetting('features', 'timebank_features', { ...TIMEBANK_DEFAULTS })
+  await putSetting('site', 'site_title', { value: 'a' })
+  await updateSystemSetting({
+    category: 'features',
+    settingKey: 'timebank_features',
+    settingValue: { ...TIMEBANK_DEFAULTS, enabled: true },
+    actorId: 'admin-1',
+    changeReason: '2026-11-20 이사회 3호',
+  })
+  await updateSystemSetting({
+    category: 'site',
+    settingKey: 'site_title',
+    settingValue: { value: 'b' },
+    actorId: 'admin-1',
+  })
+  await new Promise(r => setTimeout(r, 5))
+  await updateSystemSetting({
+    category: 'features',
+    settingKey: 'timebank_features',
+    settingValue: { ...TIMEBANK_DEFAULTS, enabled: false },
+    actorId: 'admin-1',
+    changeReason: '2026-12-18 이사회 1호',
+  })
+  const rows = await listSystemSettingHistory('timebank_features', 10)
+  assert.equal(rows.length, 2)
+  assert.deepEqual(
+    rows.map(r => r.change_reason),
+    ['2026-12-18 이사회 1호', '2026-11-20 이사회 3호']
+  )
+  assert.equal(rows[0].changed_by, 'admin-1')
+  assert.equal(rows[0].changed_by_name, '설정관리자')
+  assert.equal(rows[0].old_value.enabled, true)
+  assert.equal(rows[0].new_value.enabled, false)
+  assert.match(rows[0].changed_at, /^\d{4}-\d{2}-\d{2}T/)
+  assert.equal((await listSystemSettingHistory('timebank_features', 1)).length, 1)
+})
+
 // ---------------------------------------------------------------- 초기화 (결정 4)
 
 function resetDefaultsBlock() {

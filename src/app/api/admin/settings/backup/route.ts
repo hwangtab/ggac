@@ -9,6 +9,7 @@ import { logSecurityEvent } from '@/utils/security'
 import { createLogger, maskId } from '@/utils/logger'
 import { refreshSettingsCache } from '@/utils/systemSettings'
 import { listSystemSettings, updateSystemSetting } from '@/db/queries/settings'
+import { partitionRestorableSettings } from '@/lib/server/settingsRestore'
 
 const log = createLogger('admin/settings/backup')
 
@@ -159,11 +160,15 @@ export const POST = defineApiRoute<Record<string, unknown>>({
       throw ApiError.badRequest('지원하지 않는 백업 파일 버전입니다.')
     }
 
+    // 이사회 의결 사항(`timebank_features`)은 복원하지 않는다 — 전용 라우트가
+    // 의결 근거를 받아야만 바뀐다(스펙 §9.2). 건너뛴 키는 응답에 보고한다.
+    const { restorable, skipped } = partitionRestorableSettings(backupSettings)
+
     // 설정 복원 실행
     const restoreResults: string[] = []
     const errorResults: string[] = []
 
-    for (const setting of backupSettings) {
+    for (const setting of restorable) {
       try {
         const { category, setting_key, setting_value } = setting
 
@@ -209,6 +214,7 @@ export const POST = defineApiRoute<Record<string, unknown>>({
         adminId: user.id,
         restored: restoreResults,
         errors: errorResults,
+        skipped,
         backupMetadata: metadata,
       },
       'high'
@@ -218,11 +224,15 @@ export const POST = defineApiRoute<Record<string, unknown>>({
       {
         restored: restoreResults,
         errors: errorResults,
+        skipped,
         backupInfo: metadata,
       },
-      errorResults.length === 0
+      (errorResults.length === 0
         ? '설정이 성공적으로 복원되었습니다.'
-        : `일부 설정 복원에 실패했습니다. 성공: ${restoreResults.length}, 실패: ${errorResults.length}`
+        : `일부 설정 복원에 실패했습니다. 성공: ${restoreResults.length}, 실패: ${errorResults.length}`) +
+        (skipped.length > 0
+          ? ` 이사회 의결 사항(${skipped.join(', ')})은 복원하지 않았습니다 — 타임뱅크 설정 화면에서 의결 근거와 함께 바꿔 주세요.`
+          : '')
     )
   },
 })

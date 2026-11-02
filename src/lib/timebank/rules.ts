@@ -236,3 +236,53 @@ export function directionFor(
 export function pairBlocked(rejectionsFromCounterpartyInWindow: number): boolean {
   return rejectionsFromCounterpartyInWindow >= REJECTION_BLOCK.count
 }
+
+// ── 조합 업무 지급(스펙 §6.3, 계획 Task 9) ──────────────────────────────────
+
+/** 조합 업무 지급 판정의 재료. 원장(`creditCoopTask`)이 같은 트랜잭션에서 읽어 채운다. */
+export type CoopCreditFacts = {
+  actorId: string
+  memberId: string
+  memo: string | null | undefined
+  /** "이 일에 사례비·인건비를 지급하지 않았다" 확인. `=== true`일 때만 통과한다. */
+  notPaidElsewhere: unknown
+  /** `validMinutes('coop_task', …)` 결과. */
+  minutesValid: boolean
+  /** 지워지지 않은 `coop_task` 글이 있다. */
+  listingFound: boolean
+  /** 그 글의 자원 기록: 없음·철회·자원 중. */
+  volunteer: 'none' | 'withdrawn' | 'active'
+  /** 대상이 판정 1(참여 자격)을 통과한다. */
+  eligible: boolean
+  /** 같은 글로 그 대상에게 확정 지급한 행이 있다. */
+  alreadyCredited: boolean
+}
+
+export type CoopCreditRejection =
+  | 'self'
+  | 'paid_elsewhere_unconfirmed'
+  | 'memo_required'
+  | 'bad_minutes'
+  | 'not_coop_task'
+  | 'not_volunteer'
+  | 'volunteer_withdrawn'
+  | 'not_participant'
+  | 'already_credited'
+
+/**
+ * 조합 업무 지급 조건 전부(월 상한 제외 — 원장이 SUM으로 본다). 통과하면 null.
+ * 사유가 조건마다 다르다 — 관리자 화면이 무엇이 막혔는지 그대로 보여 준다.
+ * 순서: 본인 → 확인 체크 → memo → 분량 → 글 → 자원 기록 → 판정 1 → 중복.
+ */
+export function judgeCoopCredit(f: CoopCreditFacts): CoopCreditRejection | null {
+  if (f.actorId === f.memberId) return 'self'
+  if (f.notPaidElsewhere !== true) return 'paid_elsewhere_unconfirmed'
+  if (typeof f.memo !== 'string' || f.memo.trim() === '') return 'memo_required'
+  if (!f.minutesValid) return 'bad_minutes'
+  if (!f.listingFound) return 'not_coop_task'
+  if (f.volunteer === 'none') return 'not_volunteer'
+  if (f.volunteer === 'withdrawn') return 'volunteer_withdrawn'
+  if (!f.eligible) return 'not_participant'
+  if (f.alreadyCredited) return 'already_credited'
+  return null
+}

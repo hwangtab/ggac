@@ -81,7 +81,15 @@ export const LEDGER_REJECTION_RESPONSES: Record<LedgerRejection, LedgerErrorResp
     message: `이 상대에게서 거절이 이어져 ${REJECTION_BLOCK.blockDays}일 동안 기록을 남길 수 없습니다.`,
   },
   monthly_cap: { status: 409, message: '이번 달 상한을 넘습니다.' },
-  not_volunteer: { status: 409, message: '이 조합 업무에 자원한 기록이 없거나 철회했습니다.' },
+  not_volunteer: { status: 409, message: '이 조합원은 이 조합 업무에 자원한 기록이 없습니다.' },
+  volunteer_withdrawn: {
+    status: 409,
+    message: '이 조합원은 이 조합 업무 자원을 철회했습니다. 철회한 사람에게는 지급할 수 없습니다.',
+  },
+  paid_elsewhere_unconfirmed: {
+    status: 400,
+    message: '"이 일에 사례비·인건비를 지급하지 않았다"를 확인해야 지급할 수 있습니다.',
+  },
   not_coop_task: { status: 404, message: '조합 업무 글을 찾을 수 없습니다.' },
   already_credited: { status: 409, message: '이 조합 업무로 이미 지급했습니다.' },
   memo_required: { status: 400, message: '사유(메모)를 적어 주세요.' },

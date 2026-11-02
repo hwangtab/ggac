@@ -650,6 +650,7 @@ const credit = (listingId, memberId, actorId, minutes, extra = {}) =>
     actorId,
     minutes,
     memo: '행사 준비 도움',
+    notPaidElsewhere: true,
     settings: SETTINGS,
     ...extra,
   })
@@ -682,12 +683,25 @@ test('coop_task 지급 조건: 자원자 아님·철회자·본인·비참여자
   await setProfile(frozen, `withdrawal_requested_at = ${Date.now()}`)
 
   await rejectsWith(credit(t, stranger, admin, 60), { reason: 'not_volunteer' })
-  await rejectsWith(credit(t, quitter, admin, 60), { reason: 'not_volunteer' })
+  await rejectsWith(credit(t, quitter, admin, 60), { reason: 'volunteer_withdrawn' })
   await rejectsWith(credit(t, admin, admin, 60), { reason: 'self' })
   await rejectsWith(credit(t, frozen, admin, 60), { reason: 'not_participant' })
   await rejectsWith(credit(t, m, admin, 45), { reason: 'bad_minutes' })
   await rejectsWith(credit(t, m, admin, 60, { memo: '  ' }), { reason: 'memo_required' })
   await rejectsWith(credit('no-such-task', m, admin, 60), { reason: 'not_coop_task' })
+  // "사례비·인건비 미지급" 확인은 원장도 본다 — 라우트가 빠뜨려도 지급되지 않는다
+  await rejectsWith(credit(t, m, admin, 60, { notPaidElsewhere: false }), {
+    reason: 'paid_elsewhere_unconfirmed',
+  })
+  // 일반 글(offer)은 조합 업무가 아니다
+  seq += 1
+  const offer = `offer-${seq}`
+  await client.execute({
+    sql: `INSERT INTO timebank_listings (id, author_id, kind, category, title, description, created_at, updated_at)
+          VALUES (?, ?, 'offer', 'etc', '제공', '내용', ?, ?)`,
+    args: [offer, m, Date.now(), Date.now()],
+  })
+  await rejectsWith(credit(offer, m, admin, 60), { reason: 'not_coop_task' })
 
   await credit(t, m, admin, 60)
   await rejectsWith(credit(t, m, admin, 60), { reason: 'already_credited' })
@@ -865,6 +879,86 @@ test('조정 pending은 조합원 경로(확인·거절·취소)로 닿지 않�
       code: 'not_found',
     }
   )
+})
+
+// ── 관리자 pending 취소(계획 Task 9) ───────────────────────────────────────
+
+const adminCancel = (id, adminId, memo = '분쟁 정리 — 당사자 합의') =>
+  ledger.adminCancelPending({ id, adminId, memo })
+
+test('관리자 취소: 회원 간 pending을 canceled로, 결정자는 관리자, memo는 원 memo 뒤에 붙는다', async () => {
+  const admin = await newMember('adm', { admin: true })
+  const a = await newMember('ac')
+  const b = await newMember('ac')
+  const row = await record(a, b, { memo: '기타 레슨' })
+  const canceled = await adminCancel(row.id, admin)
+  assert.equal(canceled.status, 'canceled')
+  assert.equal(canceled.decided_by, admin)
+  assert.ok(canceled.decided_at)
+  assert.equal(canceled.memo, '기타 레슨 / 관리자 취소: 분쟁 정리 — 당사자 합의')
+  assert.equal(await statusOf(row.id), 'canceled')
+  assert.equal(await ledger.balanceOf(a), 0)
+})
+
+test('관리자 취소: kind 무관 — 조정 pending도 취소한다(원 memo 없으면 사유만)', async () => {
+  const admin = await newMember('adm', { admin: true })
+  const m = await newMember('ac2')
+  const pend = await adjust(admin, m, 30, { dispute: { resolution_ref: '안건' } })
+  assert.equal(pend.status, 'pending')
+  const canceled = await adminCancel(pend.id, admin, '근거 재확인 필요')
+  assert.equal(canceled.status, 'canceled')
+  assert.equal(canceled.kind, 'adjustment')
+  assert.equal(canceled.memo, '정정 / 관리자 취소: 근거 재확인 필요')
+
+  const other = await newMember('ac2')
+  const bare = await insertRow({
+    from_account: m,
+    to_account: other,
+    minutes: 30,
+    kind: 'exchange',
+    status: 'pending',
+    created_by: m,
+    counterparty_id: other,
+  })
+  assert.equal((await adminCancel(bare, admin, '중복 기록')).memo, '관리자 취소: 중복 기록')
+})
+
+test('관리자 취소: memo 없음·확정된 행·없는 행은 거부하고 행을 바꾸지 않는다', async () => {
+  const admin = await newMember('adm', { admin: true })
+  const a = await newMember('ac3')
+  const b = await newMember('ac3')
+  const row = await record(a, b)
+  await rejectsWith(adminCancel(row.id, admin, '   '), { reason: 'memo_required' })
+  assert.equal(await statusOf(row.id), 'pending')
+  await confirm(row.id, b)
+  await rejectsWith(adminCancel(row.id, admin), { code: 'not_pending' })
+  assert.equal(await statusOf(row.id), 'confirmed')
+  await rejectsWith(adminCancel('no-such-row', admin), { code: 'not_found' })
+})
+
+test('관리자 취소: 같은 pending에 병렬 두 번 → 하나만 성공', async () => {
+  const admin = await newMember('adm', { admin: true })
+  const a = await newMember('ac4')
+  const b = await newMember('ac4')
+  const row = await record(a, b)
+  const results = await Promise.allSettled([adminCancel(row.id, admin), adminCancel(row.id, admin)])
+  assert.equal(results.filter(r => r.status === 'fulfilled').length, 1)
+  const failed = results.find(r => r.status === 'rejected')
+  assert.equal(failed.reason.code, 'not_pending')
+})
+
+test('listPendingAdjustments: 승인 대기 조정만, 오래된 것부터', async () => {
+  const admin = await newMember('adm', { admin: true })
+  const m = await newMember('pa')
+  const p1 = await adjust(admin, m, 30, { dispute: { resolution_ref: '안건 1' } })
+  const p2 = await adjust(admin, m, 30, { dispute: { resolution_ref: '안건 2' } })
+  const done = await adjust(admin, await newMember('pa'), 30)
+  assert.equal(done.status, 'confirmed')
+  const list = await ledger.listPendingAdjustments()
+  const ids = list.map(r => r.id)
+  assert.ok(ids.indexOf(p1.id) >= 0 && ids.indexOf(p1.id) < ids.indexOf(p2.id))
+  assert.ok(!ids.includes(done.id))
+  assert.ok(list.every(r => r.kind === 'adjustment' && r.status === 'pending'))
 })
 
 // ── 목록·집계 ───────────────────────────────────────────────────────────────

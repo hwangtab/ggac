@@ -154,6 +154,55 @@ export async function notifyTransferDecided(
   }
 }
 
+/**
+ * 관리자 취소(분쟁 정리, 계획 Task 9)를 알릴 사람. **행위자를 뺀 모든 당사자**다.
+ *
+ * `pickRecipientsForDecision`은 기록자·상대(`created_by`·`counterparty_id`)만 본다.
+ * 조정 pending은 상대가 null이고 기록자가 관리자라 그것만으로는 **대상 회원이
+ * 빠진다**. 그래서 원장 양쪽 계좌(`from`·`to`)도 함께 본다 — 회원 간 기록이면
+ * 결과가 같고, 조정이면 대상 회원과 조정을 만든 관리자(취소한 사람이 아니면)다.
+ */
+export function pickRecipientsForAdminCancel(row: TransferRow, actorId: string): string[] {
+  return uniqueMembers([
+    row.created_by,
+    row.counterparty_id,
+    row.from_account,
+    row.to_account,
+  ]).filter(id => id !== actorId)
+}
+
+/** 관리자가 pending을 취소했다 → 행위자를 뺀 모든 당사자에게(사유 포함). */
+export async function notifyTransferCanceledByAdmin(
+  row: TransferRow,
+  input: { adminId: string; memo: string },
+  overrides?: Partial<TimebankNotifyDeps>
+): Promise<void> {
+  const d = resolveDeps(overrides)
+  try {
+    if (!row) return
+    await send(
+      d,
+      {
+        user_ids: pickRecipientsForAdminCancel(row, input.adminId),
+        type: 'timebank_canceled',
+        title: '관리자가 타임 기록을 취소했습니다',
+        message: `${formatMinutes(row.minutes)} 기록을 관리자가 취소했습니다. 사유: ${input.memo}`,
+        data: {
+          transfer_id: row.id,
+          kind: row.kind,
+          minutes: row.minutes,
+          status: row.status,
+          by_admin: true,
+        },
+        related_user_id: input.adminId,
+      },
+      { transferId: row.id, status: row.status, byAdmin: true }
+    )
+  } catch (e) {
+    d.log.error('타임뱅크 관리자 취소 알림 준비 실패', { error: (e as Error)?.message })
+  }
+}
+
 const CREDIT_LABEL: Partial<Record<TimebankKind, string>> = {
   signup_grant: '가입 크레딧',
   coop_task: '조합 업무 크레딧',

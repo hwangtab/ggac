@@ -82,6 +82,8 @@ export const SERVER_ONLY_ACTIVITY_ACTION_TYPES = [
   'timebank_adjustment',
   'timebank_adjustment_approved',
   'timebank_settings_changed',
+  'timebank_coop_task_created',
+  'timebank_transfer_admin_canceled',
 ] as const satisfies readonly ActivityActionType[]
 
 /**
@@ -107,6 +109,8 @@ export const ACTIVITY_TARGET_TYPES = [
   'funding_campaign',
   'funding_pledge',
   'ticket_reservation',
+  'timebank_transfer',
+  'timebank_listing',
 ] as const satisfies readonly ActivityTargetType[]
 
 /** 원장에 있을 수 있는 종류인가(필터·표시용). **기록 허가가 아니다.** */
