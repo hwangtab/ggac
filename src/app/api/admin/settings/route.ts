@@ -9,9 +9,10 @@ import { logSecurityEvent } from '@/utils/security'
 import { refreshSettingsCache, SETTINGS_CACHE_TTL_MS } from '@/utils/systemSettings'
 import { createLogger } from '@/utils/logger'
 import { listSystemSettings, updateSystemSetting } from '@/db/queries/settings'
-import { MAX_FEE_RATE_BP } from '@/lib/funding/feeRate'
 import {
   SETTING_MAPPINGS,
+  SystemSettingsUpdateSchema,
+  TIMEBANK_SETTINGS_READ_MAPPINGS,
   applyFundingFeatureField,
   buildLoginPolicyValue,
   buildPasswordPolicyValue,
@@ -23,58 +24,6 @@ import {
 } from '@/lib/server/systemSettingsMapping'
 
 const log = createLogger('admin/settings')
-
-// PUT 요청 본문 스키마 (모든 카테고리/필드는 optional, 일부 업데이트 허용)
-const SystemSettingsUpdateSchema = z
-  .object({
-    site: z
-      .object({
-        maintenance_mode: z.boolean().optional(),
-        registration_enabled: z.boolean().optional(),
-        site_title: z.string().min(1).max(200).optional(),
-        site_description: z.string().max(500).optional(),
-        max_members: z.number().int().min(1).max(1_000_000).optional(),
-      })
-      .partial()
-      .optional(),
-    email: z
-      .object({
-        smtp_host: z.string().max(255).optional(),
-        smtp_port: z.number().int().min(1).max(65535).optional(),
-        smtp_user: z.string().max(255).optional(),
-        smtp_password: z.string().max(255).optional(),
-        from_email: z.string().email().or(z.string().length(0)).optional(),
-        from_name: z.string().max(100).optional(),
-      })
-      .partial()
-      .optional(),
-    security: z
-      .object({
-        session_timeout: z.number().int().min(1).max(10080).optional(),
-        max_login_attempts: z.number().int().min(1).max(100).optional(),
-        password_min_length: z.number().int().min(4).max(64).optional(),
-        require_email_verification: z.boolean().optional(),
-      })
-      .partial()
-      .optional(),
-    features: z
-      .object({
-        board_enabled: z.boolean().optional(),
-        artist_registration_enabled: z.boolean().optional(),
-        comments_enabled: z.boolean().optional(),
-        file_uploads_enabled: z.boolean().optional(),
-        funding_enabled: z.boolean().optional(),
-        // 요율은 **만분율(bp) 정수**로 오간다. 화면이 퍼센트를 bp로 옮겨
-        // 보내고(`@/lib/funding/feeRate`의 `feeRatePercentToBp`), 여기서
-        // 범위를 한 번 더 지킨다 — 화면을 거치지 않은 요청도 있다.
-        // 상한 `MAX_FEE_RATE_BP`와 같은 숫자다.
-        funding_fee_rate_member_bp: z.number().int().min(0).max(MAX_FEE_RATE_BP).optional(),
-        funding_fee_rate_nonmember_bp: z.number().int().min(0).max(MAX_FEE_RATE_BP).optional(),
-      })
-      .partial()
-      .optional(),
-  })
-  .strict()
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -109,6 +58,9 @@ interface SystemSettings {
     funding_enabled: boolean
     funding_fee_rate_member_bp: number
     funding_fee_rate_nonmember_bp: number
+    /** 읽기 전용(`TIMEBANK_SETTINGS_READ_MAPPINGS`). PUT은 받지 않는다. */
+    timebank_enabled?: boolean
+    timebank_coop_tasks_enabled?: boolean
   }
 }
 
@@ -183,8 +135,12 @@ export const GET = defineApiRoute({
         continue
       }
 
-      // 매핑을 통해 프론트엔드 키로 변환
-      const categoryMappings = SETTING_MAPPINGS[category as keyof typeof SETTING_MAPPINGS]
+      // 매핑을 통해 프론트엔드 키로 변환. 타임뱅크는 **읽기 표시용**으로만
+      // 더한다 — PUT 루프가 쓰는 `SETTING_MAPPINGS`에는 넣지 않는다(스펙 §9.2).
+      const categoryMappings =
+        category === 'features'
+          ? { ...SETTING_MAPPINGS.features, ...TIMEBANK_SETTINGS_READ_MAPPINGS }
+          : SETTING_MAPPINGS[category as keyof typeof SETTING_MAPPINGS]
       if (categoryMappings) {
         for (const [frontendKey, mapping] of Object.entries(categoryMappings)) {
           if (mapping.key === settingKey) {

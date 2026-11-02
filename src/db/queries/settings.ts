@@ -332,6 +332,12 @@ export interface UpdateSystemSettingInput {
   /** 이미 검증된 관리자 id. BEFORE UPDATE 트리거가 채우던 `updated_by`와
    * AFTER UPDATE 트리거가 채우던 `changed_by`에 그대로 쓰인다(모듈 설명). */
   actorId: string
+  /**
+   * `system_settings_history.change_reason`에 남길 근거. 타임뱅크 설정처럼
+   * 이사회 의결이 필요한 변경은 전용 라우트가 의결 근거(일자·안건)를 넘긴다
+   * (스펙 §9.2). 없으면 예전처럼 null이다.
+   */
+  changeReason?: string | null
 }
 
 /**
@@ -377,6 +383,7 @@ export async function updateSystemSetting(
       oldValue: existing.settingValue,
       newValue: input.settingValue,
       changedBy: input.actorId,
+      changeReason: input.changeReason ?? null,
     })
 
     return { id: existing.id }

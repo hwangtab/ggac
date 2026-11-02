@@ -14,8 +14,15 @@
  * 이 파일에는 DB 접근이 없다(순수 변환·판정만).
  */
 
+import { z } from 'zod'
+
 import { maskSensitiveSystemSetting, type SystemSettingRow } from '../../db/queries/settings.ts'
-import { clampFeeRateBp, MEMBER_FEE_RATE_BP, NONMEMBER_FEE_RATE_BP } from '../funding/feeRate.ts'
+import {
+  clampFeeRateBp,
+  MAX_FEE_RATE_BP,
+  MEMBER_FEE_RATE_BP,
+  NONMEMBER_FEE_RATE_BP,
+} from '../funding/feeRate.ts'
 
 export interface SettingMapping {
   key: string
@@ -129,6 +136,92 @@ export const SETTING_MAPPINGS = {
     },
   },
 }
+
+/**
+ * 타임뱅크 설정의 **읽기 표시용** 매핑(스펙 §9.1). GET만 이 표를 더해 관리자
+ * 일반 설정 화면에 현재 상태를 보여 준다.
+ *
+ * `SETTING_MAPPINGS`에 넣지 않는 이유: PUT 루프는 그 표에서 매핑을 찾아
+ * 저장하므로, 거기 있으면 일반 화면이 이사회 의결 없이 스위치를 바꿀 길이
+ * 생긴다(스펙 §9.2). 쓰기는 전용 라우트만 한다.
+ *
+ * 판정은 `@/lib/timebank/settings`의 `normalizeTimebankSettings`와 같다 —
+ * 스위치는 `=== true`일 때만 켜짐(fail-closed). 그 모듈은 `@/` 별칭을 써서
+ * 이 파일(plain Node로 테스트된다)에서 임포트하지 않는다.
+ */
+export const TIMEBANK_SETTINGS_READ_MAPPINGS = {
+  timebank_enabled: {
+    key: 'timebank_features',
+    transform: (value: any) => value?.enabled === true,
+  },
+  timebank_coop_tasks_enabled: {
+    key: 'timebank_features',
+    transform: (value: any) => value?.coop_tasks_enabled === true,
+  },
+} satisfies Record<string, SettingMapping>
+
+/**
+ * `PUT /api/admin/settings` 본문 스키마(모든 카테고리·필드는 optional, 부분
+ * 갱신 허용). 라우트에서 이 파일로 옮긴 이유는 파일 첫머리와 같다 — 라우트는
+ * plain Node로 못 불러서 "무엇을 거절하는가"를 테스트할 수 없었다.
+ *
+ * `features`는 `.strict()`다. **타임뱅크 키(`timebank_*`)는 여기로 들어오면
+ * 400이다** — 타임뱅크 설정은 이사회 의결 사항이라 의결 근거를 필수로 받는
+ * 전용 라우트(`/api/admin/timebank/settings`)만 바꾼다(스펙 §9.2). 바깥 객체도
+ * `.strict()`라 `timebank` 같은 새 카테고리도 거절된다. 화면은 바뀐 칸만
+ * 보내므로(`diffSettings`) 읽기 전용 칸이 실려 오지 않는다.
+ */
+export const SystemSettingsUpdateSchema = z
+  .object({
+    site: z
+      .object({
+        maintenance_mode: z.boolean().optional(),
+        registration_enabled: z.boolean().optional(),
+        site_title: z.string().min(1).max(200).optional(),
+        site_description: z.string().max(500).optional(),
+        max_members: z.number().int().min(1).max(1_000_000).optional(),
+      })
+      .partial()
+      .optional(),
+    email: z
+      .object({
+        smtp_host: z.string().max(255).optional(),
+        smtp_port: z.number().int().min(1).max(65535).optional(),
+        smtp_user: z.string().max(255).optional(),
+        smtp_password: z.string().max(255).optional(),
+        from_email: z.string().email().or(z.string().length(0)).optional(),
+        from_name: z.string().max(100).optional(),
+      })
+      .partial()
+      .optional(),
+    security: z
+      .object({
+        session_timeout: z.number().int().min(1).max(10080).optional(),
+        max_login_attempts: z.number().int().min(1).max(100).optional(),
+        password_min_length: z.number().int().min(4).max(64).optional(),
+        require_email_verification: z.boolean().optional(),
+      })
+      .partial()
+      .optional(),
+    features: z
+      .object({
+        board_enabled: z.boolean().optional(),
+        artist_registration_enabled: z.boolean().optional(),
+        comments_enabled: z.boolean().optional(),
+        file_uploads_enabled: z.boolean().optional(),
+        funding_enabled: z.boolean().optional(),
+        // 요율은 **만분율(bp) 정수**로 오간다. 화면이 퍼센트를 bp로 옮겨
+        // 보내고(`@/lib/funding/feeRate`의 `feeRatePercentToBp`), 여기서
+        // 범위를 한 번 더 지킨다 — 화면을 거치지 않은 요청도 있다.
+        // 상한 `MAX_FEE_RATE_BP`와 같은 숫자다.
+        funding_fee_rate_member_bp: z.number().int().min(0).max(MAX_FEE_RATE_BP).optional(),
+        funding_fee_rate_nonmember_bp: z.number().int().min(0).max(MAX_FEE_RATE_BP).optional(),
+      })
+      .partial()
+      .strict()
+      .optional(),
+  })
+  .strict()
 
 /**
  * GET이 **지금** 이 필드에 대해 클라이언트로 내보내는 값.

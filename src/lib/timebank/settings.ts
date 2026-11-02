@@ -110,9 +110,8 @@ export function normalizeTimebankSettings(raw: unknown): TimebankSettings {
 
 export async function getTimebankSettings(): Promise<TimebankSettings> {
   const settings = await getSystemSettings()
-  // Task 5가 `SystemSettingsData`에 `timebank_features`를 더하기 전까지는 캐스트로 읽는다.
-  const features = settings?.features as { timebank_features?: unknown } | undefined
-  return normalizeTimebankSettings(features?.timebank_features)
+  // 저장된 행은 타입과 달리 아무 모양일 수 있다 — 정규화가 칸별로 기본값에 떨어뜨린다.
+  return normalizeTimebankSettings(settings?.features?.timebank_features)
 }
 
 export async function isTimebankEnabled(): Promise<boolean> {
