@@ -14,7 +14,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { apiGet, apiPost, ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { requireActiveMember } from '@/lib/server/memberAuth'
-import { applyRouteRateLimit, createIPKeyGenerator, RATE_LIMITS } from '@/lib/server/rateLimit'
+import { applyRouteRateLimit } from '@/lib/server/rateLimit'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { validateUUID } from '@/utils/validation'
 import { parseBidAmount } from '@/lib/market/validate'
@@ -66,19 +66,24 @@ export async function POST(request: NextRequest, context: RouteContext) {
   if (routeId.error) return routeId.error.toNextResponse()
   const listingId = routeId.id
 
-  // 매물·댓글과 통을 나눈다(`market-listing`·`market-comment`와 같은 이유).
+  const auth = await requireActiveMember()
+  if (auth instanceof NextResponse) return auth
+  const { user } = auth
+
+  // **IP가 아니라 회원 기준이다.** 매물·댓글 라우트는 IP로 나누지만 입찰은
+  // 다르다 — 조합 공간이나 행사장 와이파이처럼 한 IP를 여럿이 쓰는 자리에서
+  // 막판 경쟁이 붙으면, IP 기준 분당 5회는 남의 입찰이 내 입찰을 막는다.
+  // 그래서 인증 뒤에 회원 id로 세고, 경쟁 입찰을 감안해 한도를 넉넉히 둔다.
   const rl = await applyRouteRateLimit(request, {
-    ...RATE_LIMITS.POST_CREATION,
+    name: 'market_bid',
+    windowMs: 60 * 1000,
+    maxRequests: 20,
     message: '입찰을 너무 빠르게 하고 있습니다. 잠시 후 다시 시도해주세요.',
-    keyGenerator: createIPKeyGenerator('market-bid'),
+    keyGenerator: () => `rate_limit:market-bid:${user.id}`,
   })
   if (!rl.success) {
     return rl.response ?? ApiError.tooManyRequests('요청이 너무 많습니다.').toNextResponse()
   }
-
-  const auth = await requireActiveMember()
-  if (auth instanceof NextResponse) return auth
-  const { user } = auth
 
   return apiPost(
     async () => {

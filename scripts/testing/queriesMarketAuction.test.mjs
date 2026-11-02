@@ -294,6 +294,30 @@ test('소유권 조회는 경매 상태와 입찰 수를 함께 준다', async (
   assert.equal((await market.getMarketListing(plain)).auction, null)
 })
 
+test('판매자 취소(onlyWithoutBids)는 입찰이 들어온 경매를 취소하지 못한다 — 관리자 취소는 된다', async () => {
+  const id = await open()
+  await bid(id, 'alice', 10000)
+  assert.equal(await auction.cancelLiveAuction(id, at(2000), { onlyWithoutBids: true }), false)
+  assert.deepEqual(await auction.getAuctionState(id), { state: 'live', bid_count: 1 })
+  assert.equal(await auction.cancelLiveAuction(id, at(3000)), true)
+  assert.equal((await auction.getAuctionState(id)).state, 'canceled')
+
+  const empty = await open()
+  assert.equal(await auction.cancelLiveAuction(empty, at(1000), { onlyWithoutBids: true }), true)
+})
+
+test('닫을 게 없으면(일반 매물·마감 전) 쓰기 없이 null을 돌려준다', async () => {
+  const { id: plain } = await market.createMarketListing('seller', {
+    ...fields,
+    deal_type: 'sell',
+    price: 5000,
+  })
+  assert.equal(await auction.closeAuctionIfDue(plain, at(DAY * 30)), null)
+  const id = await open()
+  assert.equal(await auction.closeAuctionIfDue(id, at(DAY - 1)), null)
+  assert.equal((await auction.getAuction(id)).state, 'live')
+})
+
 // 파일 맨 아래에 두고 **하나만** 둔다 — `queriesTicketing.test.mjs`와 같은 이유.
 // 로컬 **파일** SQLite에 동시 쓰기를 걸면 COMMIT이 BUSY로 실패한 연결이 락을 쥔
 // 채 남을 수 있어, 뒤 테스트의 쓰기가 검증 대상과 무관한 SQLITE_BUSY로 죽는다

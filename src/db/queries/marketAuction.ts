@@ -381,6 +381,23 @@ export async function closeAuctionIfDue(
   listingId: string,
   now: Date
 ): Promise<ClosedAuction | null> {
+  // 쓰기 트랜잭션을 열기 전에 **읽기로 먼저 거른다.** 이 함수는 장터 상세를 열
+  // 때마다(경매가 아닌 매물까지) 불린다. 곧장 트랜잭션을 열면 조회 한 번마다
+  // 쓰기 잠금(BEGIN IMMEDIATE)을 잡아, 화면을 보는 것만으로 입찰과 잠금을 다툰다.
+  // 닫을 게 있을 때만 아래로 내려가고, 거기서 조건부 UPDATE가 다시 판정한다.
+  const [due] = await db
+    .select({ listingId: marketAuctions.listingId })
+    .from(marketAuctions)
+    .where(
+      and(
+        eq(marketAuctions.listingId, listingId),
+        eq(marketAuctions.state, 'live'),
+        lte(marketAuctions.endsAt, now)
+      )
+    )
+    .limit(1)
+  if (!due) return null
+
   return withContentionRetry(() =>
     db.transaction(async tx => {
       const closed = await tx
@@ -445,10 +462,34 @@ export async function listDueAuctionIds(now: Date, limit: number): Promise<strin
  * 진행 중인 경매를 취소한다(입찰 없는 경매를 판매자가 내릴 때, 관리자가 내릴
  * 때). 닫힌 경매는 그대로 둔다. 영향을 받았으면 `true`.
  */
-export async function cancelLiveAuction(listingId: string, now: Date): Promise<boolean> {
+export async function cancelLiveAuction(
+  listingId: string,
+  now: Date,
+  options: { onlyWithoutBids?: boolean } = {}
+): Promise<boolean> {
   const result = await db
     .update(marketAuctions)
     .set({ state: 'canceled', closedAt: now })
-    .where(and(eq(marketAuctions.listingId, listingId), eq(marketAuctions.state, 'live')))
+    .where(
+      and(
+        eq(marketAuctions.listingId, listingId),
+        eq(marketAuctions.state, 'live'),
+        // 판매자 취소는 "입찰이 없을 때"만이다. 라우트가 앞에서 입찰 수를 봤어도
+        // 그 사이 입찰이 들어올 수 있으므로, 같은 조건을 이 문장에 다시 건다.
+        options.onlyWithoutBids ? eq(marketAuctions.bidCount, 0) : undefined
+      )
+    )
   return (result.rowsAffected ?? 0) > 0
+}
+
+/** 경매 상태만 가볍게 읽는다(취소 실패 이유를 가르는 데 쓴다). */
+export async function getAuctionState(
+  listingId: string
+): Promise<{ state: MarketAuctionState; bid_count: number } | null> {
+  const [row] = await db
+    .select({ state: marketAuctions.state, bidCount: marketAuctions.bidCount })
+    .from(marketAuctions)
+    .where(eq(marketAuctions.listingId, listingId))
+    .limit(1)
+  return row ? { state: row.state, bid_count: row.bidCount } : null
 }

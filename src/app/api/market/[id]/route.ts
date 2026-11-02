@@ -25,7 +25,7 @@ import {
   updateMarketListing,
 } from '@/db/queries/market'
 import { filterUploadsOwnedBy } from '@/db/queries/uploads'
-import { cancelLiveAuction, getAuction } from '@/db/queries/marketAuction'
+import { cancelLiveAuction, getAuction, getAuctionState } from '@/db/queries/marketAuction'
 import { blockEdit, blockSellerDelete } from '@/lib/market/auctionRules'
 import { closeAuctionAndNotify } from '@/lib/server/marketAuctionClose'
 
@@ -128,7 +128,22 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
 
       // 경매를 먼저 취소해 둔다 — 지운 매물의 경매가 크론에 "낙찰"로 닫히면
       // 아무도 볼 수 없는 매물에 낙찰 알림이 나간다.
-      if (owner.deal_type === 'auction') await cancelLiveAuction(listingId, new Date())
+      if (owner.deal_type === 'auction') {
+        const isAdmin = profile?.is_admin === true
+        const canceled = await cancelLiveAuction(listingId, new Date(), {
+          onlyWithoutBids: !isAdmin,
+        })
+        // 위의 입찰 수 확인과 이 취소 사이에 입찰이 들어왔으면 취소가 0행이다.
+        // 판매자에게는 그 경매를 내릴 권한이 없으므로 여기서 멈춘다.
+        if (!canceled && !isAdmin) {
+          const latest = await getAuctionState(listingId)
+          if (latest?.state === 'live') {
+            throw ApiError.badRequest(
+              '입찰이 들어온 경매는 내릴 수 없습니다. 사무국(contact@ggac.kr)에 요청해 주세요.'
+            )
+          }
+        }
+      }
       await softDeleteMarketListing(listingId)
       return ApiSuccess.ok({ id: listingId }, '매물이 삭제되었습니다.')
     },
