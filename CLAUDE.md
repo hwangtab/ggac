@@ -320,7 +320,10 @@ throw ApiError.internalServerError('Server error')
 - `TURSO_DATABASE_URL` — 원격(`libsql://`)이면 `TURSO_AUTH_TOKEN`도 **필수**.
   `file:`·루프백은 토큰 없이 동작한다(`assertProductionCredentials`)
 - `TURSO_AUTH_TOKEN`
-- `BETTER_AUTH_SECRET`
+- `BETTER_AUTH_SECRET` — **함부로 교체하지 마라.** 타임뱅크 재가입 키
+  (`timebank_withdrawn_keys`)가 이 값으로 해시돼 있어, 바꾸면 옛 키가 전부 안
+  맞는다. 음수 잔액으로 탈퇴한 회원이 재가입하면 가입 크레딧을 새로 받는다. 옛
+  키는 원문이 없어 다시 계산할 수 없으니 교체는 반드시 미리 조율한다
 - `NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL` — **비면 모든 Blob 사진이 기본 로고로
   바뀐다** (`isBlobPublicUrl`이 항상 false가 된다). 에러는 안 난다
 - `PUBLIC_BLOB_READ_WRITE_TOKEN` / `PRIVATE_BLOB_READ_WRITE_TOKEN`
