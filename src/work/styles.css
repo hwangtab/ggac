@@ -10,8 +10,15 @@
  * 대신 기본 규칙은 `:where()`로 감싸 명시도를 0으로 둔다 — 유틸리티 클래스가 항상 이긴다.
  */
 
+/*
+ * 이 아래 토큰·기본 규칙은 **`body:has([data-work-app])`에도** 건다. 대화상자·메뉴·툴팁(@base-ui Portal)은
+ * `document.body`에 바로 그려져 업무툴 루트의 자손이 아니다 — 루트에만 토큰을 두면 그 팝업의 배경(`bg-popover`)이
+ * 투명해지고 다크 테마도 닿지 않는다(3단계 버전 기록 대화상자에서 실측, 2026-11-02). 업무툴 화면일 때만 body가
+ * 걸리므로 공개 사이트에는 영향이 없다.
+ */
 /* ── 라이트(기본) ── */
-[data-work-app] {
+[data-work-app],
+body:has([data-work-app]) {
   color-scheme: light;
   --background: oklch(1 0 0);
   --foreground: oklch(0.2 0.02 250);
@@ -68,7 +75,8 @@
 
 /* ── 다크 — 같은 값 두 벌: OS 다크(수동 지정 없음) / 수동 다크 ── */
 @media (prefers-color-scheme: dark) {
-  [data-work-app]:not([data-work-theme]) {
+  [data-work-app]:not([data-work-theme]),
+  body:has([data-work-app]:not([data-work-theme])) {
     color-scheme: dark;
     --background: oklch(0.17 0.01 250);
     --foreground: oklch(0.96 0 0);
@@ -105,7 +113,8 @@
   }
 }
 
-[data-work-app][data-work-theme='dark'] {
+[data-work-app][data-work-theme='dark'],
+body:has([data-work-app][data-work-theme='dark']) {
   color-scheme: dark;
   --background: oklch(0.17 0.01 250);
   --foreground: oklch(0.96 0 0);
@@ -145,7 +154,7 @@
  * 원본 `@layer base { * { @apply border-border outline-ring/50 } }`의 짝.
  * ggac 전역 기본 테두리색(흰 15%, 포스터 테마용)을 업무툴 안에서만 원본 토큰으로 되돌린다.
  */
-:where([data-work-app], [data-work-app] *) {
+:where([data-work-app], [data-work-app] *, body:has([data-work-app]) *) {
   border-color: var(--border);
   outline-color: color-mix(in oklch, var(--ring) 50%, transparent);
 }
@@ -156,41 +165,42 @@
  * (입력창 안에 상자가 하나 더 보인다), 둥근 단추가 포커스 때 4px로 각진다. 업무툴 안에서만 되돌린다 —
  * 포커스 표시는 원본처럼 각 컴포넌트의 `focus-visible:ring-*`이 맡는다. globals.css는 건드리지 않는다.
  */
-[data-work-app] .focus-visible:focus,
-[data-work-app] :is(button, a, input, select, textarea):focus-visible {
+body:has([data-work-app]) .focus-visible:focus,
+body:has([data-work-app]) :is(button, a, input, select, textarea):focus-visible {
   outline: none !important;
   outline-offset: 0 !important;
 }
-[data-work-app] .rounded-w-sm:focus-visible {
+body:has([data-work-app]) .rounded-w-sm:focus-visible {
   border-radius: var(--radius-sm);
 }
-[data-work-app] .rounded-w-md:focus-visible {
+body:has([data-work-app]) .rounded-w-md:focus-visible {
   border-radius: var(--radius-md);
 }
-[data-work-app] .rounded-w-lg:focus-visible {
+body:has([data-work-app]) .rounded-w-lg:focus-visible {
   border-radius: var(--radius-lg);
 }
-[data-work-app] .rounded-w-xl:focus-visible {
+body:has([data-work-app]) .rounded-w-xl:focus-visible {
   border-radius: var(--radius-xl);
 }
-[data-work-app] .rounded-w-4xl:focus-visible {
+body:has([data-work-app]) .rounded-w-4xl:focus-visible {
   border-radius: var(--radius-4xl);
 }
-[data-work-app] .rounded-full:focus-visible {
+body:has([data-work-app]) .rounded-full:focus-visible {
   border-radius: 9999px;
 }
-[data-work-app] .rounded-none:focus-visible,
-[data-work-app] :is(input, textarea, select):not([class*='rounded']):focus-visible {
+body:has([data-work-app]) .rounded-none:focus-visible,
+body:has([data-work-app]) :is(input, textarea, select):not([class*='rounded']):focus-visible {
   border-radius: 0;
 }
 
 /* v4 preflight는 버튼 커서를 default로 둔다 — 원본은 눌러지는 것을 손 모양으로 되돌렸다. v3도 같게 고정. */
-:where([data-work-app]) :where(button:not(:disabled), [role='button']:not([aria-disabled='true'])) {
+:where(body:has([data-work-app]))
+  :where(button:not(:disabled), [role='button']:not([aria-disabled='true'])) {
   cursor: pointer;
 }
 
 /* 메시지 본문 마크다운 타이포그래피(.post-markdown = prose) */
-[data-work-app] .post-markdown {
+body:has([data-work-app]) .post-markdown {
   --tw-prose-body: var(--foreground);
   --tw-prose-headings: var(--foreground);
   --tw-prose-bold: var(--foreground);
@@ -205,17 +215,17 @@
 
 /* 터치 기기 입력 글자 16px 이상 — iOS Safari 포커스 확대 방지(원본 그대로) */
 @media (hover: none) and (pointer: coarse) {
-  [data-work-app]
+  body:has([data-work-app])
     input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='color']),
-  [data-work-app] textarea,
-  [data-work-app] select {
+  body:has([data-work-app]) textarea,
+  body:has([data-work-app]) select {
     font-size: max(16px, 1em);
   }
 }
 
 /* 길게 누르기로 메시지 작업을 여는 터치 기기에서 iOS 링크·이미지 콜아웃 끄기 */
 @media (hover: none) {
-  [data-work-app] [data-message-id] {
+  body:has([data-work-app]) [data-message-id] {
     -webkit-touch-callout: none;
   }
 }
@@ -236,8 +246,8 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  [data-work-app] .wa-in,
-  [data-work-app] .wa-out {
+  body:has([data-work-app]) .wa-in,
+  body:has([data-work-app]) .wa-out {
     animation-duration: 1ms;
   }
 }

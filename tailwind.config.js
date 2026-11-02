@@ -133,8 +133,9 @@ module.exports = {
   darkMode: [
     'variant',
     [
-      '&:where([data-work-theme=dark], [data-work-theme=dark] *)',
-      '@media (prefers-color-scheme: dark) { &:where([data-work-app]:not([data-work-theme]), [data-work-app]:not([data-work-theme]) *) }',
+      // body:has(...) * — 대화상자·메뉴는 body에 바로 그려져(Portal) 업무툴 루트의 자손이 아니다(src/work/styles.css 머리 주석)
+      '&:where([data-work-theme=dark], [data-work-theme=dark] *, body:has([data-work-app][data-work-theme=dark]) *)',
+      '@media (prefers-color-scheme: dark) { &:where([data-work-app]:not([data-work-theme]), [data-work-app]:not([data-work-theme]) *, body:has([data-work-app]:not([data-work-theme])) *) }',
     ],
   ],
   theme: {
