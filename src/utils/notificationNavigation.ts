@@ -91,6 +91,29 @@ export function getNotificationRoute(
       return options.fallbackToNotifications ? '/notifications' : null
     }
 
+    // 타임뱅크(스펙 §10). **case를 빠뜨리면 아래 default가 `/board/{id}`로 보내
+    // 404다** — `scripts/testing/timebankNotify.test.mjs`가 종류마다 case가
+    // 있는지 확인한다.
+    case 'timebank_pending':
+      return '/mypage/timebank#pending'
+
+    case 'timebank_confirmed':
+    case 'timebank_rejected':
+    case 'timebank_canceled':
+    case 'timebank_credited':
+      return '/mypage/timebank'
+
+    // 타임뱅크 글은 `timebank_listings`라 장터와 같은 이유로 전용 경로다.
+    case 'timebank_comment':
+    case 'timebank_volunteer': {
+      const listingId = notification.related_post_id
+      if (listingId && UUID_PATTERN.test(listingId)) return `/board/timebank/${listingId}`
+      return options.fallbackToNotifications ? '/notifications' : null
+    }
+
+    case 'timebank_withdrawal_negative':
+      return '/board-room/timebank'
+
     default:
       return (
         getStoredUrlRoute(notification) ??

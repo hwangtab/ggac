@@ -64,6 +64,13 @@ export const ACTIVITY_ACTION_TYPE = [
   // 등)를 사무국이 돌려준 일이라, 누가 왜 눌렀는지가 남아야 한다.
   // 타입 배열일 뿐 DB CHECK가 없으므로 마이그레이션 불필요.
   'ticket_reservation_refunded',
+  'timebank_agreed',
+  'timebank_transfer_recorded',
+  'timebank_transfer_decided',
+  'timebank_coop_credit',
+  'timebank_adjustment',
+  'timebank_adjustment_approved',
+  'timebank_settings_changed',
 ] as const
 
 export const ACTIVITY_TARGET_TYPE = [

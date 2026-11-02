@@ -65,6 +65,37 @@ test('승인·심사·관리 행위와 결제 전이도 브라우저가 적지 �
   }
 })
 
+/** 타임뱅크 원장·설정 행위(계획 Task 6). 시간 이동의 증거라 서버만 적는다. */
+const TIMEBANK_ACTIVITY_TYPES = [
+  'timebank_agreed',
+  'timebank_transfer_recorded',
+  'timebank_transfer_decided',
+  'timebank_coop_credit',
+  'timebank_adjustment',
+  'timebank_adjustment_approved',
+  'timebank_settings_changed',
+]
+
+test('타임뱅크 활동 종류 일곱은 서버 전용이다 — 브라우저가 "확인했다"를 적지 못한다', () => {
+  for (const type of TIMEBANK_ACTIVITY_TYPES) {
+    assert.ok(
+      SERVER_ONLY_ACTIVITY_ACTION_TYPES.includes(type),
+      `${type}이(가) 서버 전용 목록에 없다`
+    )
+    assert.equal(parseClientActivityActionType(type), null, `${type}이(가) 위조 가능하다`)
+    assert.equal(parseActivityActionType(type), type, `${type}을(를) 관리자 필터가 고를 수 없다`)
+  }
+  const found = ACTIVITY_ACTION_TYPES.filter(t => t.startsWith('timebank_'))
+  assert.deepEqual([...found].sort(), [...TIMEBANK_ACTIVITY_TYPES].sort())
+})
+
+test('활동 종류 유니온(src/types/activity.ts)에 타임뱅크 종류가 전부 있다', () => {
+  const src = readFileSync('src/types/activity.ts', 'utf8')
+  for (const type of TIMEBANK_ACTIVITY_TYPES) {
+    assert.match(src, new RegExp(`\\| '${type}'`), `${type}이(가) ActivityActionType에 없다`)
+  }
+})
+
 test('평범한 참여 기록은 그대로 통과한다 — 화면의 로깅을 죽이지 않는다', () => {
   for (const type of [
     'login',

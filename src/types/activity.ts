@@ -33,6 +33,13 @@ export type ActivityActionType =
   | 'funding_payout_account_viewed'
   | 'ticket_reservation_refunded'
   | 'member_account_viewed'
+  | 'timebank_agreed' // 타임뱅크 이용규칙 동의
+  | 'timebank_transfer_recorded' // 타임 기록(pending 생성)
+  | 'timebank_transfer_decided' // 타임 기록 확인·거절·취소
+  | 'timebank_coop_credit' // 조합 업무 크레딧 지급
+  | 'timebank_adjustment' // 관리자 조정 생성
+  | 'timebank_adjustment_approved' // 관리자 조정 이중 승인
+  | 'timebank_settings_changed' // 타임뱅크 설정 변경(이사회 의결 근거)
 
 export type ActivityTargetType =
   | 'post'

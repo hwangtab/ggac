@@ -32,6 +32,14 @@ export type NotificationType =
   | 'funding_shipped' // 리워드 발송 알림
   | 'funding_settled' // 정산 내역 정리·정산금 지급 알림
   | 'market_comment' // 내 장터 글에 댓글이 달렸다는 알림
+  | 'timebank_pending' // 타임 기록 확인 요청(확인할 상대)
+  | 'timebank_confirmed' // 타임 기록 확인됨(다른 당사자)
+  | 'timebank_rejected' // 타임 기록 거절됨(다른 당사자)
+  | 'timebank_canceled' // 타임 기록 취소됨(다른 당사자)
+  | 'timebank_comment' // 내 타임뱅크 글에 댓글
+  | 'timebank_credited' // 타임 적립(가입·조합 업무·조정·환불)
+  | 'timebank_volunteer' // 조합 업무 글에 자원(글쓴 관리자)
+  | 'timebank_withdrawal_negative' // 음수 잔액 탈퇴 — 이사회 보고 대상(이사)
 
 /**
  * 알림 인터페이스
