@@ -790,3 +790,206 @@ test.describe('업무툴 파일 경계 — 업로드 준비·토큰(/api/board-r
     ).toBe(403)
   })
 })
+
+/**
+ * 3단계(문서 버전·앱 안 편집) 경계 — 편집 화면(`/board-room/edit/<id>`)과 문서 편집 라우트(form·blocks·draft·
+ * drafts/<uploadId>/{verify,render}·new-drafts/<uploadId>/verify). 원본은 RLS(can_read_channel) + 편집 권한(canEditFile,
+ * 채널 멤버)이 막았다. 시드: 비공개 채널(감사 owner, 이사 아님)의 HWP 첨부 · 이사–감사 DM 의 DOCX 첨부(객체는 없다).
+ *
+ * 허용 쪽 표식: 편집 화면은 200 + 파일 이름이 그려진 머리줄, 라우트는 권한을 지난 뒤 원본 객체를 읽는 단계의
+ * 503("원본 파일을 읽지 못했습니다" — 이 스위트에는 객체가 없다) 또는 내 임시 업로드를 읽는 단계의 404 "저장본" 문구.
+ * 금지 쪽은 존재를 숨기는 404(일반 문구). 편집기 출처 env(`NEXT_PUBLIC_OFFICE_EDITOR_ORIGIN`)가 없으면 편집 화면은
+ * 누구에게나 404 라(기능 숨김) 그때는 화면 쪽 짝 단정을 "둘 다 404"로 바꾼다.
+ */
+test.describe('업무툴 문서 편집 경계 — 편집 화면·문서 편집 라우트', () => {
+  const editorOn = Boolean(process.env.NEXT_PUBLIC_OFFICE_EDITOR_ORIGIN)
+  const NOT_FOUND_MESSAGE = '파일을 찾을 수 없거나 권한이 없습니다.'
+
+  async function openPage(browser: import('@playwright/test').Browser, role: string, path: string) {
+    const context = await browser.newContext({
+      storageState: storageStatePath(role),
+      viewport: { width: 1280, height: 800 },
+    })
+    const page = await context.newPage()
+    const res = await page.goto(path, { waitUntil: 'domcontentloaded' })
+    return { context, page, status: res?.status() ?? 0 }
+  }
+
+  test('편집 화면: 비공개 채널 HWP 를 이사는 404, owner인 감사는 연다', async ({ browser }) => {
+    const f = readFixtures()
+    const path = `/board-room/edit/${f.workPrivateHwpAttachmentId}`
+    const denied = await openPage(browser, 'director', path)
+    const allowed = await openPage(browser, 'auditor', path)
+    try {
+      expect(denied.status).toBe(404)
+      await expect(denied.page.getByText('authz-e2e 비공개 감사의견.hwp')).toHaveCount(0)
+      if (editorOn) {
+        expect(allowed.status).toBe(200)
+        // HWP 편집 플래그가 켜져 있으면 편집 화면 머리줄에, 꺼져 있으면 "편집할 수 없는 형식" 안내가 뜬다 —
+        // 어느 쪽이든 권한 판정(listFileVersions — 읽기·편집 권한)을 지난 뒤의 화면이다
+        const header = allowed.page.getByRole('heading', { name: /authz-e2e 비공개 감사의견\.hwp/ })
+        const denial = allowed.page.getByTestId('board-work-edit-denied')
+        await expect(header.or(denial)).toBeVisible({ timeout: 20000 })
+        if (await denial.isVisible()) {
+          await expect(denial).toContainText('형식')
+        }
+      } else {
+        expect(allowed.status, '편집기 출처 env 가 없으면 기능을 숨긴다').toBe(404)
+      }
+    } finally {
+      await denied.context.close()
+      await allowed.context.close()
+    }
+  })
+
+  test('편집 화면: DM 의 DOCX 는 관리자도 404, 당사자인 감사는 연다', async ({ browser }) => {
+    const f = readFixtures()
+    const path = `/board-room/edit/${f.workDmDocxAttachmentId}`
+    const admin = await openPage(browser, 'admin', path)
+    const auditor = await openPage(browser, 'auditor', path)
+    try {
+      expect(admin.status).toBe(404)
+      await expect(admin.page.getByText('authz-e2e DM 초안.docx')).toHaveCount(0)
+      if (editorOn) {
+        expect(auditor.status).toBe(200)
+        await expect(
+          auditor.page.getByRole('heading', { name: /authz-e2e DM 초안\.docx/ })
+        ).toBeVisible({ timeout: 20000 })
+      } else {
+        expect(auditor.status).toBe(404)
+      }
+    } finally {
+      await admin.context.close()
+      await auditor.context.close()
+    }
+  })
+
+  test('편집 화면·새 문서: 일반 조합원은 /board 로 돌아간다(같은 주소를 감사는 연다)', async ({
+    browser,
+  }) => {
+    const f = readFixtures()
+    for (const path of [
+      `/board-room/edit/${f.workPrivateHwpAttachmentId}`,
+      `/board-room/edit/new?channel=${f.workPrivateChannelId}&type=docx&name=x`,
+    ]) {
+      const member = await openPage(browser, 'other', path)
+      try {
+        await expect(member.page, path).toHaveURL(/\/board$/, { timeout: 15000 })
+      } finally {
+        await member.context.close()
+      }
+    }
+    // 새 문서: 비공개 채널에 이사(비멤버)는 404, owner인 감사는 편집 화면(env 있을 때)
+    const newDoc = `/board-room/edit/new?channel=${f.workPrivateChannelId}&type=docx&name=authz-e2e%20새%20문서`
+    const director = await openPage(browser, 'director', newDoc)
+    const auditor = await openPage(browser, 'auditor', newDoc)
+    try {
+      expect(director.status).toBe(404)
+      expect(auditor.status).toBe(editorOn ? 200 : 404)
+      if (editorOn) {
+        await expect(
+          auditor.page.getByRole('heading', { name: /authz-e2e 새 문서\.docx/ })
+        ).toBeVisible({ timeout: 20000 })
+      }
+    } finally {
+      await director.context.close()
+      await auditor.context.close()
+    }
+  })
+
+  test('문서 편집 라우트(form·blocks·draft): 이사는 404, 감사는 권한을 지난다 — 관리자는 남의 DM 파일에 404', async ({
+    browser,
+  }) => {
+    const f = readFixtures()
+    const base = `/api/board-room/work/files/${f.workPrivateHwpAttachmentId}`
+    for (const sub of ['form', 'blocks']) {
+      const denied = await getAs(browser, 'director', `${base}/${sub}`)
+      expect(denied.status, `이사 ${sub}`).toBe(404)
+      expect(denied.body).toContain(NOT_FOUND_MESSAGE)
+      const allowed = await getAs(browser, 'auditor', `${base}/${sub}`)
+      expect(allowed.status, `감사 ${sub} → ${allowed.body}`).toBe(503)
+      expect(allowed.body).toContain('원본 파일을 읽지 못했습니다')
+      // 관리자는 비공개 채널을 읽지만(0037) 멤버가 아니라 편집 권한이 없다 → 403
+      const admin = await getAs(browser, 'admin', `${base}/${sub}`)
+      expect(admin.status, `관리자 ${sub}`).toBe(403)
+    }
+    // 초안: 권한을 지나면 본문 검사(JSON 스키마)에서 400
+    const draftDenied = await postAs(browser, 'director', `${base}/draft`, { mode: 'nope' })
+    expect(draftDenied.status).toBe(404)
+    const draftAllowed = await postAs(browser, 'auditor', `${base}/draft`, { mode: 'nope' })
+    expect(draftAllowed.status, draftAllowed.body).toBe(400)
+
+    // DM 의 DOCX: 관리자는 404(DM 은 멤버만), 당사자 이사는 권한을 지나 형식 검사에서 415(HWP·HWPX 만)
+    const dmBase = `/api/board-room/work/files/${f.workDmDocxAttachmentId}`
+    expect((await getAs(browser, 'admin', `${dmBase}/form`)).status).toBe(404)
+    expect((await getAs(browser, 'director', `${dmBase}/form`)).status).toBe(415)
+  })
+
+  test('저장본 검증·초안 미리보기(drafts/<uploadId>/…·new-drafts/…): 이사는 404, 감사는 자기 임시 업로드까지 간다', async ({
+    browser,
+  }) => {
+    const f = readFixtures()
+    const base = `/api/board-room/work/files/${f.workPrivateHwpAttachmentId}`
+    const pending = f.workAuditorPendingId
+    const verify = `${base}/drafts/${pending}/verify`
+    const denied = await postAs(browser, 'director', verify, {})
+    expect(denied.status).toBe(404)
+    expect(denied.body).toContain(NOT_FOUND_MESSAGE)
+    // 감사: 원본 읽기·편집 권한을 지나 내 임시 업로드(같은 채널)를 찾고, 그 객체가 없어 저장본 문구의 404
+    const allowed = await postAs(browser, 'auditor', verify, {})
+    expect(allowed.status, allowed.body).toBe(404)
+    expect(allowed.body).toContain('저장본')
+
+    // 남의 임시 업로드는 감사에게도 없는 것(이사가 공개 채널에 준비한 것)
+    const theirs = await postAs(
+      browser,
+      'auditor',
+      `${base}/drafts/${f.workDirectorPendingId}/verify`,
+      {}
+    )
+    expect(theirs.status).toBe(404)
+    expect(theirs.body).not.toContain('저장본')
+
+    // 초안 미리보기: 내 초안이 아니면 404(초안 메타가 없는 임시 업로드도 초안이 아니다)
+    for (const role of ['director', 'auditor']) {
+      const r = await getAs(browser, role, `${base}/drafts/${pending}/render?view=layout`)
+      expect(r.status, role).toBe(404)
+    }
+
+    // 새 문서 저장본 검증: 이사는 남의 임시 업로드라 404, 감사는 만들기 권한(비공개 채널 owner)을 지나 저장본 문구의 404
+    const newVerify = `/api/board-room/work/files/new-drafts/${pending}/verify`
+    const nd = await postAs(browser, 'director', newVerify, {})
+    expect(nd.status).toBe(404)
+    expect(nd.body).not.toContain('저장본')
+    const na = await postAs(browser, 'auditor', newVerify, {})
+    expect(na.status, na.body).toBe(404)
+    expect(na.body).toContain('저장본')
+  })
+
+  test('문서 편집 라우트: 일반 조합원은 403, 비로그인은 401', async ({
+    browser,
+    playwright,
+    baseURL,
+  }) => {
+    const f = readFixtures()
+    const base = `/api/board-room/work/files/${f.workPrivateHwpAttachmentId}`
+    expect((await getAs(browser, 'other', `${base}/form`)).status).toBe(403)
+    expect((await postAs(browser, 'other', `${base}/draft`, {})).status).toBe(403)
+    expect(
+      (
+        await postAs(
+          browser,
+          'other',
+          `/api/board-room/work/files/new-drafts/${f.workAuditorPendingId}/verify`,
+          {}
+        )
+      ).status
+    ).toBe(403)
+    const anon = await playwright.request.newContext({ baseURL })
+    try {
+      expect((await anon.get(`${base}/blocks`, { maxRedirects: 0 })).status()).toBe(401)
+    } finally {
+      await anon.dispose()
+    }
+  })
+})

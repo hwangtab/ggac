@@ -56,6 +56,9 @@ export type Fixtures = {
   workPublicAttachmentId: string
   workPrivateAttachmentId: string
   workDmAttachmentId: string
+  /** 3단계 편집 경계: 비공개 채널(감사 owner)의 HWP 첨부·이사–감사 DM 의 DOCX 첨부(객체 없음) */
+  workPrivateHwpAttachmentId: string
+  workDmDocxAttachmentId: string
   workPublicFileName: string
   workPrivateFileName: string
   workDmFileName: string

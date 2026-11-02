@@ -55,6 +55,7 @@ export type DocEditFailCode =
   | 'bad_request'
   | 'conflict'
   | 'rate_limited'
+  | 'unavailable'
   | 'server'
 
 const FAIL_STATUS: Record<DocEditFailCode, number> = {
@@ -65,6 +66,7 @@ const FAIL_STATUS: Record<DocEditFailCode, number> = {
   bad_request: 400,
   conflict: 409,
   rate_limited: 429,
+  unavailable: 503,
   server: 500,
 }
 
@@ -76,6 +78,7 @@ const FAIL_MESSAGE: Record<DocEditFailCode, string> = {
   bad_request: '요청 내용을 확인해 주세요.',
   conflict: '문서 내용이 달라졌습니다. 새로 고친 뒤 다시 시도해 주세요.',
   rate_limited: '너무 자주 요청했습니다. 잠시 뒤 다시 시도해 주세요.',
+  unavailable: '원본 파일을 읽지 못했습니다. 잠시 뒤 다시 시도해 주세요.',
   server: '처리하지 못했습니다. 잠시 뒤 다시 시도해 주세요.',
 }
 
@@ -209,7 +212,9 @@ export async function readOriginal(
   try {
     bytes = await downloadObject(ctx.attachment.bucket_path)
   } catch {
-    return { ok: false, response: docEditFail('not_found') }
+    // ggac 이식: 원본은 404 로 접었지만, 권한 판정은 이미 끝났다 — 저장소 문제(미설정·일시 오류·객체 없음)를
+    // "권한 없음"과 같은 404 로 내면 원인을 가린다. 503 으로 구분한다(문서 내용은 싣지 않는다).
+    return { ok: false, response: docEditFail('unavailable') }
   }
   if (bytes.length > DOC_EDIT_MAX_BYTES) return { ok: false, response: docEditFail('too_large') }
   return { ok: true, bytes }

@@ -1476,6 +1476,28 @@ async function main() {
     safeName: 'authz-e2e_dm.pdf',
     mime: 'application/pdf',
   })
+  // 3단계(버전·앱 안 편집) 경계용 — 편집 대상 형식(HWP·DOCX)이어야 편집 화면·문서 편집 라우트가 형식 검사 앞의
+  // 권한 판정까지 간다. 객체는 역시 만들지 않는다(허용 쪽은 원본을 읽는 단계에서 503 "원본 파일을 읽지 못했습니다"로 끝난다).
+  const WORK_PRIVATE_HWP_NAME = 'authz-e2e 비공개 감사의견.hwp'
+  const WORK_DM_DOCX_NAME = 'authz-e2e DM 초안.docx'
+  const workPrivateHwpAttachmentId = await workFile({
+    uploadId: '00000000-0000-4000-8000-00000000c024',
+    channelId: WORK_PRIVATE_CHANNEL_ID,
+    messageId: WORK_PRIVATE_MESSAGE_ID,
+    uploaderId: ids.auditor,
+    name: WORK_PRIVATE_HWP_NAME,
+    safeName: 'authz-e2e_private.hwp',
+    mime: 'application/x-hwp',
+  })
+  const workDmDocxAttachmentId = await workFile({
+    uploadId: '00000000-0000-4000-8000-00000000c025',
+    channelId: WORK_DM_CHANNEL_ID,
+    messageId: WORK_DM_MESSAGE_ID,
+    uploaderId: ids.auditor,
+    name: WORK_DM_DOCX_NAME,
+    safeName: 'authz-e2e_dm.docx',
+    mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  })
   // 업로드 토큰 경계용 임시 업로드(승격하지 않는다): 감사가 비공개 채널에, 이사가 공개 채널에 준비해 둔 것
   const WORK_AUDITOR_PENDING_ID = '00000000-0000-4000-8000-00000000c031'
   const WORK_DIRECTOR_PENDING_ID = '00000000-0000-4000-8000-00000000c032'
@@ -1525,6 +1547,8 @@ async function main() {
     workPublicAttachmentId,
     workPrivateAttachmentId,
     workDmAttachmentId,
+    workPrivateHwpAttachmentId,
+    workDmDocxAttachmentId,
     workPublicFileName: WORK_PUBLIC_FILE_NAME,
     workPrivateFileName: WORK_PRIVATE_FILE_NAME,
     workDmFileName: WORK_DM_FILE_NAME,
@@ -1587,7 +1611,7 @@ async function main() {
       `이사회 회의 2(scheduled·completed)·회의록 2·안건 1·안건 의견 3, ` +
       `펀딩 캠페인 6(draft·submitted 3·closed·active)·리워드 6·후원 2(회원·비회원), ` +
       `system_settings ${settingRows.length}행, default_settings ${DEFAULT_SETTINGS.length}행, ` +
-      `업무툴 채널 3(공개·비공개·탭)·DM 1·메시지 3·첨부 3·임시 업로드 2·탭 6(메모 3·할 일 3)·할 일 2 (전부 Turso)`
+      `업무툴 채널 3(공개·비공개·탭)·DM 1·메시지 3·첨부 5(PDF 3·HWP·DOCX)·임시 업로드 2·탭 6(메모 3·할 일 3)·할 일 2 (전부 Turso)`
   )
 }
 
