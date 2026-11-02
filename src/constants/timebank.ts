@@ -56,6 +56,10 @@ export type TimebankRefType = (typeof TIMEBANK_REF_TYPES)[number]
 export const TIMEBANK_LISTING_KINDS = ['offer', 'request', 'coop_task'] as const
 export type TimebankListingKind = (typeof TIMEBANK_LISTING_KINDS)[number]
 
+/** 게시판 글의 상태(스펙 §3 `timebank_listings.status`). */
+export const TIMEBANK_LISTING_STATUSES = ['open', 'closed'] as const
+export type TimebankListingStatus = (typeof TIMEBANK_LISTING_STATUSES)[number]
+
 /** 조합 계좌 센티널. 회원 id와 겹치지 않는다(FK 없음). */
 export const COOP_ACCOUNT = 'coop'
 
