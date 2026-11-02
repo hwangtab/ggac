@@ -18,7 +18,7 @@ CREATE TABLE `work_member_prefs` (
 	`quiet_start` integer DEFAULT 1320 NOT NULL,
 	`quiet_end` integer DEFAULT 480 NOT NULL,
 	`quiet_weekends` integer DEFAULT true NOT NULL,
-	`digest_mode` text DEFAULT 'normal' NOT NULL,
+	`digest_mode` text DEFAULT 'off' NOT NULL,
 	`onboarded_at` integer,
 	`channel_sort` text DEFAULT 'section' NOT NULL,
 	`chat_sort` text DEFAULT 'recent' NOT NULL,

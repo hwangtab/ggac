@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { requireWorkStaff } from '@/lib/server/boardWorkAuth'
+import { ensureWorkspaceEntry } from '@work/lib/channels/bootstrap'
 import '@work/styles.css'
 
 /**
@@ -24,7 +25,9 @@ export const metadata: Metadata = {
 
 export default async function BoardWorkLayout({ children }: { children: React.ReactNode }) {
   // 미들웨어가 먼저 막지만(이사·감사·관리자만), 서버에서 한 번 더 판정한다.
-  await requireWorkStaff()
+  const ctx = await requireWorkStaff()
+  // 처음 들어온 사람을 #전체 채널에 넣는다(설계 §3, 멱등). 가드가 아니라 레이아웃 로더에서 한다.
+  await ensureWorkspaceEntry(ctx)
 
   return (
     <div data-work-app className="flex h-dvh min-h-0 flex-col font-sans">

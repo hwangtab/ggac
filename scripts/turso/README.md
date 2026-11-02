@@ -218,7 +218,7 @@ TURSO_DATABASE_URL=http://127.0.0.1:8901 \
   node --experimental-strip-types scripts/testing/seed-authz-fixtures.mjs
 ```
 
-계정 **9개**(Better Auth `user`/`account` + `member_profiles`)와 글 1·댓글
+계정 **10개**(Better Auth `user`/`account` + `member_profiles`)와 글 1·댓글
 1·알림 1·좋아요 1·이사회 회의 2(scheduled·completed)·회의록 2·안건 1·안건 의견 3, 그리고 **`system_settings` 8행**(`site/maintenance_mode`,
 `site/registration_enabled`, `features/funding_features`,
 `security/email_verification`, 그리고 기능 스위치
@@ -233,6 +233,7 @@ TURSO_DATABASE_URL=http://127.0.0.1:8901 \
 | `other`          | 승인된 일반 조합원 — "남"               | O      |
 | `pending`        | 미승인                                  | O      |
 | `director`       | 관리자가 **아닌** 이사                  | O      |
+| `auditor`        | 감사(이사·관리자 아님) — 업무툴 비공개 채널 owner·이사와 DM | O |
 | `approvalTarget` | 관리자 승인 액션의 대상(미승인)         | X      |
 | `withdrawalRequested` | 탈퇴 **신청** 중(여전히 승인·활성) | O |
 | `unverified`     | 승인·활성이지만 이메일 미인증           | X      |

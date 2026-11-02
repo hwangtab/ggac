@@ -1,4 +1,9 @@
 {
+  "src/work/components/layout/channel-items.ts": {
+    "source": "src/components/layout/channel-items.ts",
+    "commit": "8ae8dd5",
+    "sha256": "8aef3160778bb32c"
+  },
   "src/work/components/ui/auto-tooltip.tsx": {
     "source": "src/components/ui/auto-tooltip.tsx",
     "commit": "8ae8dd5",
@@ -84,6 +89,141 @@
     "commit": "8ae8dd5",
     "sha256": "f838a9e50313b7d9"
   },
+  "src/work/lib/auth/profile-schema.ts": {
+    "source": "src/lib/auth/profile-schema.ts",
+    "commit": "8ae8dd5",
+    "sha256": "f83d31480d18579e"
+  },
+  "src/work/lib/auth/staff.ts": {
+    "source": "src/lib/auth/staff.ts",
+    "commit": "8ae8dd5",
+    "sha256": "c1f78d3b54da07d9"
+  },
+  "src/work/lib/channels/action-result.ts": {
+    "source": "src/lib/channels/action-result.ts",
+    "commit": "8ae8dd5",
+    "sha256": "b02bea137b39c411"
+  },
+  "src/work/lib/channels/badge-snapshot.ts": {
+    "source": "src/lib/channels/badge-snapshot.ts",
+    "commit": "8ae8dd5",
+    "sha256": "59e1ca3ccb040fd4"
+  },
+  "src/work/lib/channels/dm-peers.ts": {
+    "source": "src/lib/channels/dm-peers.ts",
+    "commit": "8ae8dd5",
+    "sha256": "25161b3ab3c3b8fb"
+  },
+  "src/work/lib/channels/dm.ts": {
+    "source": "src/lib/channels/dm.ts",
+    "commit": "8ae8dd5",
+    "sha256": "408ec7c7c2a24591"
+  },
+  "src/work/lib/channels/group.ts": {
+    "source": "src/lib/channels/group.ts",
+    "commit": "8ae8dd5",
+    "sha256": "0bf93d4932e2d877"
+  },
+  "src/work/lib/channels/post-policy.ts": {
+    "source": "src/lib/channels/post-policy.ts",
+    "commit": "8ae8dd5",
+    "sha256": "48ff9f8c7a22f6c3"
+  },
+  "src/work/lib/channels/schema.ts": {
+    "source": "src/lib/channels/schema.ts",
+    "commit": "8ae8dd5",
+    "sha256": "8e46db75c5972f7f"
+  },
+  "src/work/lib/channels/sections.ts": {
+    "source": "src/lib/channels/sections.ts",
+    "commit": "8ae8dd5",
+    "sha256": "bb8f18121eb7cb7b"
+  },
+  "src/work/lib/channels/sort.ts": {
+    "source": "src/lib/channels/sort.ts",
+    "commit": "8ae8dd5",
+    "sha256": "94fa4754e1f313cd"
+  },
+  "src/work/lib/channels/types.ts": {
+    "source": "src/lib/channels/types.ts",
+    "commit": "8ae8dd5",
+    "sha256": "49d424c01f265789"
+  },
+  "src/work/lib/format/datetime.ts": {
+    "source": "src/lib/format/datetime.ts",
+    "commit": "8ae8dd5",
+    "sha256": "a4f8c3704aa89cb8"
+  },
+  "src/work/lib/markdown/sanitize-markdown.ts": {
+    "source": "src/lib/markdown/sanitize-markdown.ts",
+    "commit": "8ae8dd5",
+    "sha256": "4795bcb2b2cc040a"
+  },
+  "src/work/lib/messages/anchor.ts": {
+    "source": "src/lib/messages/anchor.ts",
+    "commit": "8ae8dd5",
+    "sha256": "526a38b8eae0b3c2"
+  },
+  "src/work/lib/messages/author-label.ts": {
+    "source": "src/lib/messages/author-label.ts",
+    "commit": "8ae8dd5",
+    "sha256": "0f7b566263213861"
+  },
+  "src/work/lib/messages/forward.ts": {
+    "source": "src/lib/messages/forward.ts",
+    "commit": "8ae8dd5",
+    "sha256": "9fc7c469107eba88"
+  },
+  "src/work/lib/messages/mentions.ts": {
+    "source": "src/lib/messages/mentions.ts",
+    "commit": "8ae8dd5",
+    "sha256": "0da3dea44404be25"
+  },
+  "src/work/lib/messages/push-triggers.ts": {
+    "source": "src/lib/messages/push-triggers.ts",
+    "commit": "8ae8dd5",
+    "sha256": "8e9c6090f3b6e9fa"
+  },
+  "src/work/lib/messages/schema.ts": {
+    "source": "src/lib/messages/schema.ts",
+    "commit": "8ae8dd5",
+    "sha256": "e9208bd8f8f84299"
+  },
+  "src/work/lib/messages/types.ts": {
+    "source": "src/lib/messages/types.ts",
+    "commit": "8ae8dd5",
+    "sha256": "4d28defe632aaac4"
+  },
+  "src/work/lib/notifications/levels.ts": {
+    "source": "src/lib/notifications/levels.ts",
+    "commit": "8ae8dd5",
+    "sha256": "f6d1c79afe00fcb4"
+  },
+  "src/work/lib/notifications/quiet-hours.ts": {
+    "source": "src/lib/notifications/quiet-hours.ts",
+    "commit": "8ae8dd5",
+    "sha256": "9e490aa489b97961"
+  },
+  "src/work/lib/notifications/schema.ts": {
+    "source": "src/lib/notifications/schema.ts",
+    "commit": "8ae8dd5",
+    "sha256": "83cb4aeda1c31c1f"
+  },
+  "src/work/lib/notifications/status.ts": {
+    "source": "src/lib/notifications/status.ts",
+    "commit": "8ae8dd5",
+    "sha256": "605842fb4fc5ec84"
+  },
+  "src/work/lib/search/text.ts": {
+    "source": "src/lib/search/text.ts",
+    "commit": "8ae8dd5",
+    "sha256": "e5c0f6dff60dd5d2"
+  },
+  "src/work/lib/tabs/schema.ts": {
+    "source": "src/lib/tabs/schema.ts",
+    "commit": "8ae8dd5",
+    "sha256": "19088bef836a3e23"
+  },
   "src/work/lib/ui/auto-tooltip.ts": {
     "source": "src/lib/ui/auto-tooltip.ts",
     "commit": "8ae8dd5",
@@ -94,5 +234,10 @@
     "commit": "7ec4e9f",
     "sha256": "9304a861c8673bee",
     "modified": "tailwind-merge 2 + rounded-w-* 확장(손으로 고침 — --force로 덮지 말 것)"
+  },
+  "src/work/lib/validation/bounded-array.ts": {
+    "source": "src/lib/validation/bounded-array.ts",
+    "commit": "8ae8dd5",
+    "sha256": "a669dce608b0705c"
   }
 }

@@ -120,7 +120,12 @@ const {
 const { marketListings: tursoMarketListings, marketComments: tursoMarketComments } = await import(
   '@/db/schema/market'
 )
-const { eq } = await import('drizzle-orm')
+const { eq, inArray } = await import('drizzle-orm')
+const { workChannels: tursoWorkChannels } = await import('@/db/schema/work')
+const { createChannelRow, addChannelMemberRows, openDmRow } = await import(
+  '@/db/queries/work/channels'
+)
+const { insertMessage } = await import('@/db/queries/work/messages')
 
 // id는 전부 고정값이다. 예전에는 Supabase가 만들어준 uuid를 그대로 받아
 // 썼는데, 그쪽이 사라진 지금 매번 새로 뽑으면 재실행마다 계정이 늘고
@@ -171,6 +176,22 @@ export const ACCOUNTS = [
       is_active: true,
       is_director: true,
       director_title: '이사',
+    },
+  },
+  // 감사(auditor) — 이사회 업무툴 경계(`e2e/authz-board-work.spec.ts`)의 **허용 쪽**.
+  // 관리자도 이사도 아니라 `is_auditor`만으로 업무툴에 들어온다(`canAccessBoardRoom`).
+  // 비공개 채널의 owner이고, 이사(`director`)와 DM을 나눈다 — 이사는 그 비공개 채널을,
+  // 관리자는 그 DM을 읽지 못해야 한다(원본 can_read_channel 0037).
+  {
+    key: 'auditor',
+    id: '00000000-0000-4000-8000-00000000b00a',
+    email: 'authz-auditor@test.local',
+    password: 'Authz!Audit2026',
+    profile: {
+      is_admin: false,
+      registration_status: 'approved',
+      is_active: true,
+      is_auditor: true,
     },
   },
   // 관리자 전용 **쓰기** 경계(회원 승인)의 대상. `pending` 계정을 그대로
@@ -1272,8 +1293,71 @@ async function main() {
       })
   }
 
+  // ── 이사회 업무툴(채팅) — `e2e/authz-board-work.spec.ts` ──────────────────
+  // 쓰기는 쿼리 계층 함수로 한다(생성자 owner 등록·rev 올리기가 앱과 같은 경로로 생긴다).
+  // 재실행에 안전하도록 고정 id의 채널을 먼저 지운다(멤버·메시지는 cascade).
+  const WORK_PUBLIC_CHANNEL_ID = '00000000-0000-4000-8000-00000000c001'
+  const WORK_PRIVATE_CHANNEL_ID = '00000000-0000-4000-8000-00000000c002'
+  const WORK_PUBLIC_MESSAGE_ID = '00000000-0000-4000-8000-00000000c011'
+  const WORK_PRIVATE_MESSAGE_ID = '00000000-0000-4000-8000-00000000c012'
+  const WORK_DM_MESSAGE_ID = '00000000-0000-4000-8000-00000000c013'
+  const workDmKey = [ids.director, ids.auditor]
+    .map(v => v.toLowerCase())
+    .sort()
+    .join(':')
+  await db
+    .delete(tursoWorkChannels)
+    .where(inArray(tursoWorkChannels.id, [WORK_PUBLIC_CHANNEL_ID, WORK_PRIVATE_CHANNEL_ID]))
+  await db.delete(tursoWorkChannels).where(eq(tursoWorkChannels.dmKey, workDmKey))
+
+  const seededPublic = await createChannelRow({
+    id: WORK_PUBLIC_CHANNEL_ID,
+    kind: 'public',
+    name: 'authz-e2e 공개',
+    slug: 'authz-e2e-public',
+    topic: null,
+    categoryId: null,
+    creatorId: ids.admin,
+  })
+  const seededPrivate = await createChannelRow({
+    id: WORK_PRIVATE_CHANNEL_ID,
+    kind: 'private',
+    name: 'authz-e2e 비공개',
+    slug: 'authz-e2e-private',
+    topic: null,
+    categoryId: null,
+    creatorId: ids.auditor,
+  })
+  if (seededPublic.status !== 'created' || seededPrivate.status !== 'created') {
+    throw new Error(
+      `업무툴 채널 시드 실패: public=${seededPublic.status} private=${seededPrivate.status}`
+    )
+  }
+  await addChannelMemberRows(WORK_PUBLIC_CHANNEL_ID, [ids.director, ids.auditor])
+  const { id: WORK_DM_CHANNEL_ID } = await openDmRow({
+    key: workDmKey,
+    creatorId: ids.director,
+    memberIds: [ids.director, ids.auditor],
+  })
+  for (const [id, channelId, authorId, body] of [
+    [WORK_PUBLIC_MESSAGE_ID, WORK_PUBLIC_CHANNEL_ID, ids.director, 'authz-e2e 공개 채널 글'],
+    [WORK_PRIVATE_MESSAGE_ID, WORK_PRIVATE_CHANNEL_ID, ids.auditor, 'authz-e2e 비공개 채널 글'],
+    [WORK_DM_MESSAGE_ID, WORK_DM_CHANNEL_ID, ids.auditor, 'authz-e2e 이사와 감사의 DM'],
+  ]) {
+    const r = await insertMessage({ id, channelId, authorId, body, canPostRestricted: true })
+    if (r.status !== 'created') throw new Error(`업무툴 메시지 시드 실패: ${id} ${r.status}`)
+  }
+
   const fixtures = {
     users: ids,
+    workPublicChannelId: WORK_PUBLIC_CHANNEL_ID,
+    workPublicChannelSlug: 'authz-e2e-public',
+    workPrivateChannelId: WORK_PRIVATE_CHANNEL_ID,
+    workPrivateChannelSlug: 'authz-e2e-private',
+    workDmChannelId: WORK_DM_CHANNEL_ID,
+    workPublicMessageId: WORK_PUBLIC_MESSAGE_ID,
+    workPrivateMessageId: WORK_PRIVATE_MESSAGE_ID,
+    workDmMessageId: WORK_DM_MESSAGE_ID,
     postId: POST_ID,
     commentId: COMMENT_ID,
     notificationId: NOTIFICATION_ID,
@@ -1328,7 +1412,8 @@ async function main() {
     `  계정 ${Object.keys(ids).length}개, 글 1, 댓글 1, 알림 1, 좋아요 1, ` +
       `이사회 회의 2(scheduled·completed)·회의록 2·안건 1·안건 의견 3, ` +
       `펀딩 캠페인 6(draft·submitted 3·closed·active)·리워드 6·후원 2(회원·비회원), ` +
-      `system_settings ${settingRows.length}행, default_settings ${DEFAULT_SETTINGS.length}행 (전부 Turso)`
+      `system_settings ${settingRows.length}행, default_settings ${DEFAULT_SETTINGS.length}행, ` +
+      `업무툴 채널 2(공개·비공개)·DM 1·메시지 3 (전부 Turso)`
   )
 }
 
