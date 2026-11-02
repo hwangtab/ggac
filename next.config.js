@@ -24,7 +24,40 @@ const KORDOC_VIEWER_EXCLUDES = [
  * (빠지면 운영에서 "Cannot find module 'cfb'"로 HWP·XLS 변환이 전부 실패하고, 제외가 빠지면 번들이 250MB를 넘는다).
  */
 // 키는 picomatch 글롭이라 동적 구간의 대괄호를 이스케이프한다(문자 집합으로 읽히지 않게).
-const KORDOC_ROUTES = ['/api/board-room/work/files/\\[id\\]/render']
+const KORDOC_ROUTES = [
+  '/api/board-room/work/files/\\[id\\]/render',
+  // 이사회 업무툴 문서 편집(3단계 — HWP 양식 칸·문구 블록·초안·편집기 저장본 검증·초안 미리보기)
+  '/api/board-room/work/files/\\[id\\]/form',
+  '/api/board-room/work/files/\\[id\\]/blocks',
+  '/api/board-room/work/files/\\[id\\]/draft',
+  '/api/board-room/work/files/\\[id\\]/drafts/\\[uploadId\\]/verify',
+  '/api/board-room/work/files/\\[id\\]/drafts/\\[uploadId\\]/render',
+  '/api/board-room/work/files/new-drafts/\\[uploadId\\]/verify',
+  '/api/board-room/work/files/new-drafts/\\[uploadId\\]/render',
+]
+
+/**
+ * 이사회 업무툴 앱 안 편집기 출처(설계 §8-1) — `NEXT_PUBLIC_OFFICE_EDITOR_ORIGIN`(예 https://ggac-office.vercel.app).
+ * 비었거나 https(로컬은 http://localhost·127.0.0.1)가 아니면 빈 값 — frame-src 에 아무것도 더하지 않는다(편집 기능도 숨는다).
+ * 판정은 src/work/lib/files/office-edit.ts getOfficeEditorOrigin 과 같다(미들웨어 CSP 는 그 함수를 쓴다).
+ */
+function officeEditorFrameOrigin(raw) {
+  const value = (raw || '').trim()
+  if (!value) return ''
+  try {
+    const u = new URL(value)
+    const local = u.hostname === 'localhost' || u.hostname === '127.0.0.1'
+    if (u.protocol === 'https:' || (u.protocol === 'http:' && local)) return u.origin
+  } catch {
+    // 잘못된 주소
+  }
+  return ''
+}
+const OFFICE_EDITOR_FRAME_SRC = officeEditorFrameOrigin(
+  process.env.NEXT_PUBLIC_OFFICE_EDITOR_ORIGIN
+)
+  ? ` ${officeEditorFrameOrigin(process.env.NEXT_PUBLIC_OFFICE_EDITOR_ORIGIN)}`
+  : ''
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -505,7 +538,9 @@ const nextConfig = {
                 : "media-src 'self' https://www.youtube.com https://r8qnr9c7mestxusj.public.blob.vercel-storage.com",
               // 토스 결제창·Turnstile 위젯은 iframe으로 뜬다. 이 항목이 없으면 결제
               // 버튼이나 가입 화면의 사람 확인이 먹통이 된다(콘솔에만 CSP 위반이 찍힌다).
-              "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://*.tosspayments.com https://challenges.cloudflare.com",
+              // 이사회 업무툴 편집기(ONLYOFFICE·rhwp 정적 사이트)도 iframe이다 — 출처는 env에서 온다(OFFICE_EDITOR_FRAME_SRC).
+              // src/middleware/csp.ts와 함께 고친다.
+              `frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://*.tosspayments.com https://challenges.cloudflare.com${OFFICE_EDITOR_FRAME_SRC}`,
               // dev 분기의 로컬 호스트 허용은 로컬 API/HMR용이다.
               // https://vercel.com: 이사회 업무툴 첨부의 브라우저 직접 업로드(@vercel/blob/client — 본문은
               // vercel.com/api/blob). src/middleware/csp.ts·src/utils/security.ts와 함께 고친다(설계 §7-5).

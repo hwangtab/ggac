@@ -18,7 +18,9 @@ async function consume(
     | (typeof RATE_LIMITS)['WORK_WRITE']
     | (typeof RATE_LIMITS)['WORK_SYNC']
     | (typeof RATE_LIMITS)['WORK_RENDER']
-    | (typeof RATE_LIMITS)['WORK_RENDER_THUMB'],
+    | (typeof RATE_LIMITS)['WORK_RENDER_THUMB']
+    | (typeof RATE_LIMITS)['WORK_DOC_EDIT_READ']
+    | (typeof RATE_LIMITS)['WORK_DOC_EDIT_DRAFT'],
   userId: string,
   request?: NextRequest
 ): Promise<WorkRateLimitResult> {
@@ -55,5 +57,22 @@ export function consumeWorkRender(
     purpose === 'thumb' ? RATE_LIMITS.WORK_RENDER_THUMB : RATE_LIMITS.WORK_RENDER,
     userId,
     new NextRequest('https://board-work.internal/render', { method: 'GET' })
+  )
+}
+
+/**
+ * 문서 편집(HWP 양식 채우기·문구 고치기·편집기 저장본 검증) — 읽기(WORK_DOC_EDIT_READ 분당 20)와 초안·검증
+ * (WORK_DOC_EDIT_DRAFT 분당 10). 원본 doc-edit-route의 프로세스 메모리 리미터 자리. 초안은 쓰기라 장애 때 fail-closed 다.
+ */
+export function consumeWorkDocEdit(
+  userId: string,
+  kind: 'read' | 'draft'
+): Promise<WorkRateLimitResult> {
+  return consume(
+    kind === 'draft' ? RATE_LIMITS.WORK_DOC_EDIT_DRAFT : RATE_LIMITS.WORK_DOC_EDIT_READ,
+    userId,
+    new NextRequest('https://board-work.internal/doc-edit', {
+      method: kind === 'draft' ? 'POST' : 'GET',
+    })
   )
 }

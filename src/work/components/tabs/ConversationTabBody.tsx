@@ -1,4 +1,4 @@
-import { FileQuestionIcon, FileTextIcon } from 'lucide-work'
+import { FileQuestionIcon } from 'lucide-work'
 import { EmptyState, NoticeBanner } from '@work/components/layout/page'
 import TasksView from '@work/components/tasks/TasksView'
 import NoteTabView from '@work/components/notes/NoteTabView'
@@ -8,7 +8,8 @@ import type { ChannelDetail } from '@work/lib/channels/types'
 import { todaySeoul } from '@work/lib/tasks/due'
 import { listTaskChannelMembers, listTaskStaffOptions } from '@work/lib/tasks/queries'
 import { getNote } from '@work/lib/notes/queries'
-import { listChannelTasks } from '@work/lib/tabs/queries'
+import { listChannelTasks, loadFileTabData } from '@work/lib/tabs/queries'
+import FileTabView from './FileTabView'
 import { parseTabConfig } from '@work/lib/tabs/schema'
 import type { ConversationTabItem } from '@work/lib/tabs/types'
 import WebsiteTabView from './WebsiteTabView'
@@ -18,7 +19,7 @@ import WebsiteTabView from './WebsiteTabView'
  * - note: 대화 공용 메모(NoteTabView — 보기·편집·이력, 낙관적 잠금)
  * - website: 링크 카드(WebsiteTabView — ggac 이식: 탭 안 표시는 CSP 허용 목록 전까지 끔)
  * - tasks: TasksView 를 이 채널로 고정
- * - file: TODO(이사회 업무툴 2a) — 파일 뷰어(FileTabView)는 첨부·미리보기와 함께 옮긴다. 그 전에는 파일 탭을 만들 수 없다.
+ * - file: 형식별 뷰어 + 이전 버전(FileTabView, 3단계 — 계보 최신을 보여 준다)
  * 원본의 wiki·timeline 종류는 가져오지 않았다.
  */
 export default async function ConversationTabBody({
@@ -37,14 +38,18 @@ export default async function ConversationTabBody({
   const { user, staff } = auth
 
   if (tab.kind === 'file') {
-    return (
-      <EmptyState
-        icon={FileTextIcon}
-        as="p"
-        title="파일 탭은 아직 열 수 없습니다"
-        description="파일 미리보기는 자료실과 함께 준비 중입니다."
-      />
-    )
+    const config = parseTabConfig('file', tab.config)
+    if (!config) {
+      return (
+        <div className="p-4">
+          <NoticeBanner tone="destructive" role="alert">
+            이 탭의 설정을 읽을 수 없습니다. 탭을 제거하고 다시 추가해 주세요.
+          </NoticeBanner>
+        </div>
+      )
+    }
+    const data = await loadFileTabData(auth, channel.id, config)
+    return <FileTabView current={data.current} history={data.history} />
   }
 
   if (tab.kind === 'note') {

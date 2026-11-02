@@ -49,16 +49,20 @@ export class PromoteRejected extends Error {
   }
 }
 
+export type PreparedPromotion = {
+  size: number
+  width: number | null
+  height: number | null
+  /** 행을 만들지 못했을 때 방금 만든 썸네일을 지운다(원본 객체는 호출자가 판단한다) */
+  rollback: () => Promise<void>
+}
+
 /**
- * 임시 업로드 1건을 메시지 첨부로 승격한다. 검사에 실패하면 PromoteRejected 를 던진다(호출자가 임시 객체를 지운다).
- * 저장소 일시 오류는 StorageUnavailableError 로 그대로 던진다(호출자가 임시 객체를 남긴다).
+ * 승격 전 저장소 단계(원본 promoteOne 의 stat·검사·이미지 처리) — 객체 크기·형식을 `head()`로 확인하고 이미지면 썸네일을
+ * 만든다. 검사에 실패하면 PromoteRejected, 저장소 일시 오류는 StorageUnavailableError 를 그대로 던진다.
+ * 버전 저장·새 문서(version-actions·create-actions)는 이 결과로 게시물 + 첨부를 한 트랜잭션에서 만든다.
  */
-export async function promoteOne(
-  row: PendingRow,
-  message: { id: string; channel_id: string },
-  userId: string
-): Promise<Attachment> {
-  if (row.channelId !== message.channel_id) throw new PromoteRejected('다른 채널의 업로드입니다.')
+export async function preparePromotion(row: PendingRow): Promise<PreparedPromotion> {
   const stat = await statObject(row.blobPath)
   const check = checkPromotable(row, stat, MAX_FILE_BYTES)
   if (!check.ok) throw new PromoteRejected(PROMOTE_FAILURE_MESSAGE[check.reason])
@@ -85,23 +89,41 @@ export async function promoteOne(
       console.error('[attachUploads] 이미지 처리 실패(원본만 저장):', e)
     }
   }
+  return {
+    size: stat.size,
+    width,
+    height,
+    rollback: async () => {
+      if (!thumbWritten) return
+      await removeObjects([thumbPath]).catch(err =>
+        console.error('[attachUploads] 썸네일 롤백 삭제 실패:', err)
+      )
+    },
+  }
+}
 
+/**
+ * 임시 업로드 1건을 메시지 첨부로 승격한다. 검사에 실패하면 PromoteRejected 를 던진다(호출자가 임시 객체를 지운다).
+ * 저장소 일시 오류는 StorageUnavailableError 로 그대로 던진다(호출자가 임시 객체를 남긴다).
+ */
+export async function promoteOne(
+  row: PendingRow,
+  message: { id: string; channel_id: string },
+  userId: string
+): Promise<Attachment> {
+  if (row.channelId !== message.channel_id) throw new PromoteRejected('다른 채널의 업로드입니다.')
+  const prepared = await preparePromotion(row)
   try {
     return await promotePendingUpload({
       uploadId: row.id,
       messageId: message.id,
       actorId: userId,
-      size: stat.size,
-      width,
-      height,
+      size: prepared.size,
+      width: prepared.width,
+      height: prepared.height,
     })
   } catch (e) {
-    // 행을 만들지 못했으면 방금 만든 썸네일은 고아다 — 원본 객체는 호출자가 판단한다
-    if (thumbWritten) {
-      await removeObjects([thumbPath]).catch(err =>
-        console.error('[attachUploads] 썸네일 롤백 삭제 실패:', err)
-      )
-    }
+    await prepared.rollback()
     throw e
   }
 }

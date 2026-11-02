@@ -7,6 +7,14 @@ import { loadChannelAccess, readableChannelIds, viewerOf } from '@/lib/server/bo
 import { getChannelRecordById } from '@/db/queries/work/channels'
 import { getTabRow, listTabRows, type WorkTabRecord } from '@/db/queries/work/tabs'
 import { listTaskRecordsByChannel } from '@/db/queries/work/tasks'
+import { listFileRecords } from '@/db/queries/work/files'
+import { listChannelAttachmentsByIds, listLineageVersions } from '@/db/queries/work/versions'
+import {
+  lineageRootId,
+  mergeHistoryIds,
+  pickLatest,
+  sortVersionsDesc,
+} from '@work/lib/files/version-rules'
 import { APP_TAB_KINDS, type AppTabKind, type FileConfig } from './schema'
 import type { ConversationTabItem, TabBarData } from './types'
 
@@ -133,16 +141,83 @@ export type FileTabData = {
 }
 
 /**
- * 파일 탭의 현재·이전 버전 첨부.
- * TODO(이사회 업무툴 2a): 첨부 표·계보(`work_attachments`)는 2a가 옮긴다. 그 전에는 파일 탭이 만들어지지 않으므로
- * (쿼리 층 `attachmentBelongsToChannel`이 늘 거절) 빈 결과를 돌려준다. 2a가 합쳐지면 원본 본문(계보 + config.history)으로 바꾼다.
+ * 파일 탭의 현재·이전 버전 첨부를 한 번에 읽는다(읽기 범위 = 원본 can_read_channel, 이 채널 소속만).
+ * 탭이 가리키는 첨부(config.attachmentId)의 **계보 최신**을 보여 준다(docs/09 §3-3). 이전 버전은 계보에서 읽고,
+ * 백필 전 데이터를 위해 config.history 도 합친다(중복 제거). 메시지가 소프트 삭제된 첨부는 deleted=true 로 돌려줘
+ * 화면이 "원본 파일이 삭제됐습니다"를 보여 준다. 원본 kosmart-work `loadFileTabData`(file_lineage_versions RPC) 자리.
  */
 export async function loadFileTabData(
-  _supabase: WorkServerClient,
-  _channelId: string,
-  _config: FileConfig
+  supabase: WorkServerClient,
+  channelId: string,
+  config: FileConfig
 ): Promise<FileTabData> {
-  return { current: null, history: [] }
+  if (!(await canRead(supabase, channelId))) return { current: null, history: [] }
+  const readable = new Set([channelId])
+  // 1) 탭이 가리키는 첨부의 계보 전체 — 지워진 게시물의 버전까지. 이 채널 소속만 쓴다
+  const lineageRows = (await listLineageVersions(config.attachmentId, readable)).filter(
+    r => r.channel_id === channelId
+  )
+  const rootId = lineageRows.length > 0 ? lineageRootId(lineageRows[0]) : null
+  const all: (FileTabAttachment & { root: string })[] = lineageRows.map(r => ({
+    id: r.id,
+    name: r.name,
+    mime: r.mime,
+    size: r.size,
+    createdAt: r.created_at,
+    deleted: r.message_deleted,
+    versionNo: r.version_no,
+    root: lineageRootId(r),
+  }))
+
+  // 2) 계보에 없는 config.history 의 옛 첨부(백필 전 데이터)
+  const known = new Set(all.map(a => a.id.toLowerCase()))
+  const extraIds = [config.attachmentId, ...config.history].filter(
+    id => !known.has(id.toLowerCase())
+  )
+  for (const r of await listChannelAttachmentsByIds(extraIds, channelId, readable)) {
+    all.push({
+      id: r.id,
+      name: r.name,
+      mime: r.mime,
+      size: r.size,
+      createdAt: r.created_at,
+      deleted: r.message_deleted,
+      versionNo: r.version_no,
+      root: lineageRootId(r),
+    })
+  }
+  const byId = new Map(all.map(a => [a.id.toLowerCase(), a]))
+
+  const lineage = rootId
+    ? sortVersionsDesc(
+        all.filter(a => a.root === rootId).map(a => ({ ...a, version_no: a.versionNo ?? 1 }))
+      )
+    : []
+  const latest = pickLatest(lineage)
+  const configured = byId.get(config.attachmentId.toLowerCase()) ?? null
+  const current = latest ?? configured
+
+  const historyIds = mergeHistoryIds(
+    lineage.map(a => a.id),
+    config.history,
+    current?.id ?? config.attachmentId
+  )
+  const toTab = (a: FileTabAttachment): FileTabAttachment => ({
+    id: a.id,
+    name: a.name,
+    mime: a.mime,
+    size: a.size,
+    createdAt: a.createdAt,
+    deleted: a.deleted,
+    versionNo: a.versionNo,
+  })
+  return {
+    current: current ? toTab(current) : null,
+    history: historyIds.flatMap(id => {
+      const a = byId.get(id.toLowerCase())
+      return a ? [toTab(a)] : []
+    }),
+  }
 }
 
 export type FileOption = {
@@ -153,14 +228,26 @@ export type FileOption = {
   createdAt: string
 }
 
-/**
- * ＋ 대화상자의 "이 대화의 파일에서 고르기" 목록.
- * TODO(이사회 업무툴 2a): 첨부 표가 들어오면 원본 본문(삭제되지 않은 첨부, 최신순, 이름 검색)으로 바꾼다. 지금은 빈 목록.
- */
+/** ＋ 대화상자의 "이 대화의 파일에서 고르기" 목록 — 삭제되지 않은 첨부(이전 버전 포함), 최신순, 이름 검색 */
 export async function listConversationFileOptions(
-  _supabase: WorkServerClient,
-  _channelId: string,
-  _q?: string
+  supabase: WorkServerClient,
+  channelId: string,
+  q?: string
 ): Promise<FileOption[]> {
-  return []
+  if (!(await canRead(supabase, channelId))) return []
+  const rows = await listFileRecords({
+    readable: new Set([channelId]),
+    channelId,
+    q: q || undefined,
+    allVersions: true,
+    offset: 0,
+    limit: 50,
+  })
+  return rows.map(r => ({
+    id: r.id,
+    name: r.name,
+    mime: r.mime,
+    size: r.size,
+    createdAt: r.created_at,
+  }))
 }

@@ -7,10 +7,16 @@
  * **데이터 정합성**(작성자 강제·답글 수 재계산·보관 채널 쓰기 금지 …)은 여기 쓰기 함수가 같은
  * 트랜잭션 안에서 지킨다 — 호출부가 무엇을 넘기든 깨지지 않아야 하는 규칙이라서다.
  */
-import { eq, sql } from 'drizzle-orm'
+import { and, desc, eq, isNull, sql } from 'drizzle-orm'
 
 import { db } from '../../client.ts'
-import { workChannelMembers, workChannels, workMemberPrefs } from '../../schema/index.ts'
+import {
+  workAttachments,
+  workChannelMembers,
+  workChannels,
+  workMemberPrefs,
+  workMessages,
+} from '../../schema/index.ts'
 
 export type WorkDb = typeof db
 export type WorkTx = Parameters<Parameters<typeof db.transaction>[0]>[0]
@@ -132,4 +138,42 @@ export async function channelMemberIds(tx: WorkExecutor, channelId: string): Pro
     .from(workChannelMembers)
     .where(eq(workChannelMembers.channelId, channelId))
   return rows.map(r => r.userId)
+}
+
+/** 계보 키 coalesce(version_root_id, id) — 0026 유일 인덱스와 같은 식 */
+export const lineageKeySql = sql`coalesce(${workAttachments.versionRootId}, ${workAttachments.id})`
+
+/**
+ * 원본 recompute_attachment_latest(0032): 계보 안에서 **메시지가 지워지지 않은 가장 높은 번호** 행만 is_latest.
+ * 첨부를 넣은 뒤·게시물을 지운 뒤 같은 트랜잭션에서 부른다. 살아 있는 버전이 하나도 없으면 전부 false.
+ */
+export async function recomputeAttachmentLatest(tx: WorkExecutor, rootId: string): Promise<void> {
+  const [latest] = await tx
+    .select({ id: workAttachments.id })
+    .from(workAttachments)
+    .innerJoin(workMessages, eq(workMessages.id, workAttachments.messageId))
+    .where(and(sql`${lineageKeySql} = ${rootId}`, isNull(workMessages.deletedAt)))
+    .orderBy(desc(workAttachments.versionNo))
+    .limit(1)
+  const latestId = latest?.id ?? null
+  await tx
+    .update(workAttachments)
+    .set({
+      isLatest: latestId
+        ? sql`case when ${workAttachments.id} = ${latestId} then 1 else 0 end`
+        : false,
+    })
+    .where(sql`${lineageKeySql} = ${rootId}`)
+}
+
+/** 원본 recompute_latest_after_message_delete: 그 메시지 첨부가 속한 계보마다 재계산 */
+export async function recomputeLatestForMessage(
+  tx: WorkExecutor,
+  messageId: string
+): Promise<void> {
+  const roots = await tx
+    .selectDistinct({ root: sql<string>`${lineageKeySql}` })
+    .from(workAttachments)
+    .where(eq(workAttachments.messageId, messageId))
+  for (const r of roots) await recomputeAttachmentLatest(tx, r.root)
 }

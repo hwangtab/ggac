@@ -7,6 +7,8 @@ import FilesBrowser from '@work/components/files/FilesBrowser'
 import FolderSearchNotice from '@work/components/files/FolderSearchNotice'
 import FilesFilters, { filesHref } from '@work/components/files/FilesFilters'
 import VersionsToggle from '@work/components/files/versions/VersionsToggle'
+import NewDocumentMenu from '@work/components/files/create-document/NewDocumentMenu'
+import { loadCreateDocActor } from '@work/lib/files/create-access'
 import { buttonVariants } from '@work/components/ui/button'
 import {
   filesFolderHref,
@@ -29,7 +31,7 @@ export const dynamic = 'force-dynamic'
  * 폴더 행 + 그 폴더 직속 파일, `?path=`). 필터나 검색어가 있으면 폴더(path)를 무시한 평면 목록이다.
  *
  * ggac 이식: 게스트(서브관리자)는 1단계부터 쓰지 않아 원본의 게스트 분기(채널 지정 링크만·올린 사람 후보 한정)를 뺐다.
- * 새 문서 만들기(NewDocumentMenu·loadCreateDocActor)는 3단계라 단추를 그리지 않는다.
+ * 폴더 탐색일 때 새 문서 만들기(NewDocumentMenu — 편집기 출처 env·PC 일 때만 보인다, 3단계).
  * `data-testid="board-work-files"`는 권한 E2E 표식이다.
  */
 export default async function FilesPage({
@@ -48,11 +50,12 @@ export default async function FilesPage({
       : null
   const folderSearch = parseChannelFilesSearch(raw)
 
-  const [list, allOptions] = await Promise.all([
+  const [list, allOptions, createDocActor] = await Promise.all([
     folderChannel
       ? loadChannelFiles(supabase, folderChannel, folderSearch)
       : listFiles(supabase, search).then((l): ChannelFilesData => ({ ...l, folders: [] })),
     getFilterOptions(supabase),
+    folderChannel ? loadCreateDocActor(supabase, folderChannel) : null,
   ])
   const { items, total, hasMore, folders } = list
   const channelName = allOptions.channels.find(c => c.id === folderChannel)?.name ?? '채널'
@@ -82,6 +85,13 @@ export default async function FilesPage({
         <FilesFilters search={search} options={options} />
 
         <div className="flex items-center justify-end gap-2">
+          {folderChannel && createDocActor && (
+            <NewDocumentMenu
+              channelId={folderChannel}
+              folderPath={folderSearch.path || null}
+              actor={createDocActor}
+            />
+          )}
           <VersionsToggle
             active={search.versions === 'all'}
             href={

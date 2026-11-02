@@ -8,7 +8,7 @@ import {
   FieldLegend,
   FieldChoice,
 } from '@work/components/ui/field'
-import { useId, useState, type FormEvent } from 'react'
+import { useEffect, useId, useState, type FormEvent } from 'react'
 import { useRouter } from '@work/lib/nav/navigation'
 import { Button } from '@work/components/ui/button'
 import {
@@ -20,7 +20,11 @@ import {
   DialogTitle,
 } from '@work/components/ui/dialog'
 import { Input } from '@work/components/ui/input'
-import { addTab } from '@work/lib/tabs/actions'
+import { addTab, listFileOptions } from '@work/lib/tabs/actions'
+import { formatBytes } from '@work/lib/files/mime'
+import type { FileOption } from '@work/lib/tabs/queries'
+import TabFileUploader from './TabFileUploader'
+import { useTabFileUpload } from './use-tab-file-upload'
 import {
   APP_TAB_KINDS,
   TAB_KIND_DEFAULT_TITLE,
@@ -38,15 +42,11 @@ const KIND_HINT: Record<AppTabKind, string> = {
   note: '대화 공용 메모입니다. 멤버 누구나 고칠 수 있고, 저장할 때마다 이력이 남습니다.',
 }
 
-/**
- * ggac 이식(2b): 파일 탭은 첨부·업로드(2a)가 들어온 뒤 켠다. 원본의 "이 대화의 파일에서 고르기/새로 올리기"
- * (TabFileUploader·use-tab-file-upload·listFileOptions)는 그때 원본에서 다시 옮긴다. 서버 쪽도 2a 전에는
- * 파일 탭을 늘 거절한다(`attachmentBelongsToChannel`).
- */
-const ENABLED_KINDS: readonly AppTabKind[] = APP_TAB_KINDS.filter(k => k !== 'file')
+/** ggac 이식: 위키·연혁 탭 종류는 가져오지 않았다(APP_TAB_KINDS 에 없다). 파일 탭은 3단계(버전)와 함께 켰다 */
+const ENABLED_KINDS: readonly AppTabKind[] = APP_TAB_KINDS
 
 /**
- * "＋ 탭 추가" 대화상자(docs/05 §3). 종류(웹사이트·할 일·메모 — ggac 이식: 위키 없음, 파일은 2a 뒤)와 종류별 설정,
+ * "＋ 탭 추가" 대화상자(docs/05 §3). 종류(파일·웹사이트·할 일·메모 — ggac 이식: 위키 없음)와 종류별 설정,
  * "게시물에 알리기"(기본 켬). 성공하면 새 탭으로 이동한다.
  */
 export default function AddTabDialog({
@@ -77,12 +77,52 @@ export default function AddTabDialog({
   const [url, setUrl] = useState('')
   // ggac 이식: 탭 안 표시를 켜 두고 저장한다(CSP가 허용 목록을 열면 바로 동작) — 화면 선택지는 숨겼다
   const embed = true
+  const [fileMode, setFileMode] = useState<'pick' | 'upload'>('pick')
+  const [fileFilter, setFileFilter] = useState('')
+  const [fileOptions, setFileOptions] = useState<FileOption[] | null>(null)
+  const [fileId, setFileId] = useState('')
+  const tabUpload = useTabFileUpload(channelId)
   const [announce, setAnnounce] = useState(true)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // 파일 종류: 이 대화의 파일 목록(이름 검색은 입력이 멈춘 뒤 서버에서)
+  useEffect(() => {
+    if (!open || kind !== 'file' || fileMode !== 'pick') return
+    let cancelled = false
+    const timer = setTimeout(
+      () => {
+        void listFileOptions({ channelId, q: fileFilter })
+          .then(res => {
+            if (cancelled) return
+            if (res.ok) {
+              setFileOptions(res.data)
+              setError(null)
+            } else setError(res.error)
+          })
+          .catch(() => {
+            if (!cancelled) setError('파일 목록을 불러오지 못했습니다.')
+          })
+      },
+      fileOptions ? 250 : 0
+    )
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+    // fileOptions 는 첫 로드 지연 판단에만 쓴다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, kind, fileMode, channelId, fileFilter])
+
   const effectiveTitle = titleEdited ? title : defaultTitle()
   function defaultTitle(): string {
+    if (kind === 'file') {
+      const name =
+        fileMode === 'upload'
+          ? tabUpload.uploads.items[0]?.name
+          : fileOptions?.find(f => f.id === fileId)?.name
+      return (name ?? TAB_KIND_DEFAULT_TITLE.file).slice(0, TAB_TITLE_MAX)
+    }
     if (kind === 'website') return suggestWebsiteTitle(url) || TAB_KIND_DEFAULT_TITLE.website
     return TAB_KIND_DEFAULT_TITLE[kind]
   }
@@ -92,11 +132,32 @@ export default function AddTabDialog({
     if (pending) return
     setPending(true)
     setError(null)
-    const config = kind === 'website' ? { url, embed } : ({} as Record<string, never>)
+    let attachmentId = fileId
+    if (kind === 'file' && fileMode === 'upload') {
+      try {
+        const up = await tabUpload.commit('tab')
+        if (!up.ok) {
+          setError(up.error)
+          setPending(false)
+          return
+        }
+        attachmentId = up.attachmentId
+      } catch {
+        setError('네트워크 문제로 파일을 올리지 못했습니다. 잠시 후 다시 시도해 주세요.')
+        setPending(false)
+        return
+      }
+    }
+    const config =
+      kind === 'file'
+        ? { attachmentId }
+        : kind === 'website'
+          ? { url, embed }
+          : ({} as Record<string, never>)
     try {
       const res = await addTab({
         channelId,
-        kind: kind as Exclude<AppTabKind, 'file'>,
+        kind,
         title: effectiveTitle,
         config,
         announce,
@@ -115,13 +176,20 @@ export default function AddTabDialog({
   }
 
   function closeDialog(next: boolean) {
+    if (!next) tabUpload.uploads.clear()
     onOpenChange(next)
   }
 
   const canSubmit =
     !pending &&
     effectiveTitle.trim().length > 0 &&
-    (kind === 'website' ? url.trim().length > 0 : true)
+    (kind === 'file'
+      ? fileMode === 'upload'
+        ? tabUpload.ready
+        : fileId.length > 0
+      : kind === 'website'
+        ? url.trim().length > 0
+        : true)
 
   return (
     <Dialog open={open} onOpenChange={closeDialog}>
@@ -160,6 +228,79 @@ export default function AddTabDialog({
               })}
             </div>
           </FieldSet>
+
+          {kind === 'file' && (
+            <div className="grid gap-2">
+              <div role="group" aria-label="파일 가져오는 방법" className="flex gap-2">
+                {(['pick', 'upload'] as const).map(m => (
+                  <Button
+                    key={m}
+                    type="button"
+                    size="sm"
+                    variant={fileMode === m ? 'default' : 'outline'}
+                    aria-pressed={fileMode === m}
+                    onClick={() => {
+                      setFileMode(m)
+                      setError(null)
+                    }}
+                  >
+                    {m === 'pick' ? '이 대화의 파일에서 고르기' : '새로 올리기'}
+                  </Button>
+                ))}
+              </div>
+              {fileMode === 'pick' ? (
+                <Field>
+                  <FieldLabel htmlFor={`${uid}-filef`}>파일 이름 검색</FieldLabel>
+                  <Input
+                    id={`${uid}-filef`}
+                    type="search"
+                    value={fileFilter}
+                    placeholder="파일 이름으로 찾기"
+                    onChange={e => setFileFilter(e.target.value)}
+                  />
+                  <fieldset className="max-h-48 overflow-y-auto rounded-w-lg border">
+                    <legend className="sr-only">파일 선택</legend>
+                    {fileOptions === null ? (
+                      <p role="status" className="p-3 text-sm text-muted-foreground">
+                        불러오는 중…
+                      </p>
+                    ) : fileOptions.length === 0 ? (
+                      <p className="p-3 text-sm text-muted-foreground">
+                        이 대화에 올라온 파일이 없습니다. “새로 올리기”를 이용하세요.
+                      </p>
+                    ) : (
+                      <ul>
+                        {fileOptions.map(f => (
+                          <li key={f.id}>
+                            <label className="flex cursor-pointer items-center gap-2 px-4 py-2 text-sm hover:bg-muted has-[:checked]:bg-muted has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring">
+                              <input
+                                type="radio"
+                                name={`${uid}-file`}
+                                value={f.id}
+                                checked={fileId === f.id}
+                                onChange={() => setFileId(f.id)}
+                                className="size-4 accent-[var(--primary)]"
+                              />
+                              <span className="min-w-0 flex-1 truncate">{f.name}</span>
+                              <span className="shrink-0 text-xs text-muted-foreground">
+                                {formatBytes(f.size)}
+                              </span>
+                            </label>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </fieldset>
+                </Field>
+              ) : (
+                <TabFileUploader uploads={tabUpload.uploads} disabled={pending} />
+              )}
+              <p role="note" className="text-xs text-muted-foreground">
+                같이 고쳐야 하는 표는 파일 대신 “웹사이트” 탭에 구글 시트 주소를 붙이세요. 파일 탭은
+                읽기용이며, 고친 파일은 탭 메뉴의 “새 버전 올리기”로 바꿉니다.
+              </p>
+            </div>
+          )}
 
           {kind === 'website' && (
             <>

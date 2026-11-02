@@ -1,12 +1,39 @@
+import Link from '@work/lib/nav/link'
+import { CheckIcon, CopyIcon } from 'lucide-work'
+import { cn } from '@work/lib/utils'
+
 /**
- * ggac 이식 2a 자리표시 — 자료실·채널 파일 탭의 "이전 버전 포함" 토글(원본 `versions/VersionsToggle.tsx`)은
- * 3단계(버전)다. 2a 의 첨부는 모두 v1 이라 토글할 것이 없어 그리지 않는다. `?versions=all` 주소는 그대로 동작한다.
- * 3단계에서 원본을 옮길 때는 `port-from-kosmart.mjs --force`로 이 파일을 덮어쓴다.
+ * 자료실·채널 파일 탭의 "이전 버전 포함" 토글(링크라 JS 없이 동작, 서버 컴포넌트에서 쓴다).
+ * 기본은 계보당 최신 1개만 보인다. `href` 는 토글한 뒤의 주소(호출부가 versions=all 을 켜고 끈 주소를 만든다).
  */
-export default function VersionsToggle(_props: {
+export default function VersionsToggle({
+  active,
+  href,
+  className,
+}: {
+  /** 지금 이전 버전을 포함해 보고 있나 */
   active: boolean
   href: string
   className?: string
 }) {
-  return null
+  return (
+    <Link
+      href={href}
+      aria-current={active ? 'true' : undefined}
+      data-tooltip={active ? '최신 버전만 보기' : '이전 버전도 함께 보기'}
+      className={cn(
+        'inline-flex h-7 items-center gap-1.5 rounded-w-lg border px-3 text-xs outline-none hover:bg-muted focus-visible:ring focus-visible:ring-ring/50',
+        active && 'border-primary bg-muted font-medium',
+        className
+      )}
+    >
+      {active ? (
+        <CheckIcon aria-hidden="true" className="size-3.5" />
+      ) : (
+        <CopyIcon aria-hidden="true" className="size-3.5" />
+      )}
+      이전 버전 포함
+      <span className="sr-only">{active ? ' (켜짐 — 누르면 최신 버전만 봅니다)' : ' (꺼짐)'}</span>
+    </Link>
+  )
 }

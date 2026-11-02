@@ -150,7 +150,7 @@ export function assertWebsiteConfig(config: Record<string, unknown>): void {
 /**
  * 파일 탭의 첨부가 이 대화의 것인가(원본 `exists (select 1 from work.attachments a where a.id = … and a.channel_id = …)`).
  * 2a(첨부 표)가 합쳐져 실제로 본다. 지워진 메시지의 첨부는 원본 `*_live` 정책처럼 없는 것으로 친다.
- * 화면(AddTabDialog)의 파일 탭 선택지는 아직 숨겨 둔다 — FileTabView 이식은 3단계(버전·편집)와 함께 한다.
+ * 화면(AddTabDialog)의 파일 탭 선택지·FileTabView 는 3단계(버전)와 함께 켰다.
  */
 export async function attachmentBelongsToChannel(
   tx: WorkExecutor,

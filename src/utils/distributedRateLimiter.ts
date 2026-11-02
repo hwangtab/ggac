@@ -682,6 +682,23 @@ export const DISTRIBUTED_RATE_LIMIT_CONFIGS = {
     message: '미리보기 변환 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
   },
 
+  // 이사회 업무툴 문서 편집 읽기(HWP 양식 칸·문구 블록 — kordoc 파싱, 사용자 단위 분당 20회).
+  // 원본 kosmart-work doc-edit-route의 프로세스 메모리 리미터 자리(readLimiter = 분당 10 × 2).
+  WORK_DOC_EDIT_READ: {
+    name: 'work_doc_edit_read',
+    windowMs: 60 * 1000,
+    maxRequests: 20,
+    message: '너무 자주 요청했습니다. 잠시 뒤 다시 시도해 주세요.',
+  },
+
+  // 같은 영역의 초안 만들기·저장본 검증(kordoc 변환 + 쪽 렌더, 사용자 단위 분당 10회 — 원본 draftLimiter).
+  WORK_DOC_EDIT_DRAFT: {
+    name: 'work_doc_edit_draft',
+    windowMs: 60 * 1000,
+    maxRequests: 10,
+    message: '너무 자주 요청했습니다. 잠시 뒤 다시 시도해 주세요.',
+  },
+
   // 대량 작업 (시간당 5회)
   BULK_OPERATIONS: {
     name: 'bulk_operations',

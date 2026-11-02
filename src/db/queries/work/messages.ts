@@ -32,7 +32,14 @@ import {
   workReactions,
 } from '../../schema/index.ts'
 
-import { bumpChannelRev, iso, isoNN, WorkWriteError, type WorkExecutor } from './_shared.ts'
+import {
+  bumpChannelRev,
+  iso,
+  isoNN,
+  recomputeLatestForMessage,
+  WorkWriteError,
+  type WorkExecutor,
+} from './_shared.ts'
 import { extractMessageUrls } from './links.ts'
 
 export type WorkMessageKind = 'text' | 'system' | 'bot'
@@ -561,27 +568,46 @@ export async function insertMessage(input: {
       .where(eq(workMessages.id, input.id))
       .limit(1)
     if (existing) return { status: 'duplicate', ...existing } as const
-
-    const channel = await loadChannelForWrite(tx, input.channelId)
-    if (!channel) throw new WorkWriteError('not_found', '채널이 없습니다')
-    if (channel.archivedAt) throw new WorkWriteError('archived', '보관된 채널에는 쓸 수 없습니다')
-    await assertAuthorIsMember(tx, input.channelId, input.authorId)
-    const parentId = input.parentId ?? null
-    if (!parentId && channel.postPolicy === 'owners' && !input.canPostRestricted) {
-      throw new WorkWriteError('owners_only', '이 채널은 소유자만 글을 올릴 수 있습니다')
-    }
-    const { rev } = await insertCore(tx, {
-      id: input.id,
-      channelId: input.channelId,
-      authorId: input.authorId,
-      kind: 'text',
-      body: input.body,
-      parentId,
-      quotedMessageId: input.quotedMessageId ?? null,
-      forwardedFromId: null,
-      sensitive: false,
-    })
+    const { rev } = await insertUserMessageInTx(tx, input)
     return { status: 'created', rev } as const
+  })
+}
+
+/**
+ * 사용자 메시지 한 행을 **호출부의 트랜잭션 안에서** 넣는다 — insertMessage와 같은 데이터 규칙(보관 채널 금지·작성자는
+ * 채널 멤버·공지 채널 최상위 제한·답글/인용 검사·rev·답글 수·링크). 같은 id 검사는 호출부 몫이다.
+ * 파일 버전·새 문서처럼 "게시물 + 첨부"를 한 트랜잭션으로 묶는 쓰기(files.ts commitFileMessage)가 쓴다.
+ */
+export async function insertUserMessageInTx(
+  tx: WorkExecutor,
+  input: {
+    id: string
+    channelId: string
+    authorId: string
+    body: string
+    parentId?: string | null
+    quotedMessageId?: string | null
+    canPostRestricted: boolean
+  }
+): Promise<{ rev: number }> {
+  const channel = await loadChannelForWrite(tx, input.channelId)
+  if (!channel) throw new WorkWriteError('not_found', '채널이 없습니다')
+  if (channel.archivedAt) throw new WorkWriteError('archived', '보관된 채널에는 쓸 수 없습니다')
+  await assertAuthorIsMember(tx, input.channelId, input.authorId)
+  const parentId = input.parentId ?? null
+  if (!parentId && channel.postPolicy === 'owners' && !input.canPostRestricted) {
+    throw new WorkWriteError('owners_only', '이 채널은 소유자만 글을 올릴 수 있습니다')
+  }
+  return insertCore(tx, {
+    id: input.id,
+    channelId: input.channelId,
+    authorId: input.authorId,
+    kind: 'text',
+    body: input.body,
+    parentId,
+    quotedMessageId: input.quotedMessageId ?? null,
+    forwardedFromId: null,
+    sensitive: false,
   })
 }
 
@@ -739,6 +765,9 @@ export async function softDeleteMessage(input: {
       createdAt: m.createdAt,
       deleted: true,
     })
+    // recompute_latest_after_message_delete(0032): 지운 게시물의 첨부가 속한 계보마다 최신을 다시 정한다 —
+    // 최신 버전 게시물이 지워지면 그 앞 버전이 다시 최신이 된다
+    await recomputeLatestForMessage(tx, m.id)
     return { status: 'deleted', channelId: m.channelId, authorId: m.authorId } as const
   })
 }
