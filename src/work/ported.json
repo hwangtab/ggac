@@ -44,6 +44,21 @@
     "commit": "eaafbfa",
     "sha256": "21c5c37daea9247a"
   },
+  "src/work/components/chat/ConversationPageHeader.tsx": {
+    "source": "src/components/chat/ConversationPageHeader.tsx",
+    "commit": "22a6bdc",
+    "sha256": "6b6dd0c855f38015"
+  },
+  "src/work/components/chat/ConversationTabBar.tsx": {
+    "source": "src/components/chat/ConversationTabBar.tsx",
+    "commit": "22a6bdc",
+    "sha256": "9f56c83dded4fb2c"
+  },
+  "src/work/components/chat/ConversationTabs.tsx": {
+    "source": "src/components/chat/ConversationTabs.tsx",
+    "commit": "22a6bdc",
+    "sha256": "46fced256ce86d0f"
+  },
   "src/work/components/chat/CreateChannelDialog.tsx": {
     "source": "src/components/chat/CreateChannelDialog.tsx",
     "commit": "eaafbfa",
@@ -269,6 +284,11 @@
     "commit": "eaafbfa",
     "sha256": "4bf988a7f5b06d1e"
   },
+  "src/work/components/layout/TasksPaneContent.tsx": {
+    "source": "src/components/layout/TasksPaneContent.tsx",
+    "commit": "22a6bdc",
+    "sha256": "1f2c883d3e51d0d2"
+  },
   "src/work/components/layout/TopBar.tsx": {
     "source": "src/components/layout/TopBar.tsx",
     "commit": "eaafbfa",
@@ -299,6 +319,31 @@
     "commit": "eaafbfa",
     "sha256": "4342e1fed758d63f"
   },
+  "src/work/components/notes/NoteDiff.tsx": {
+    "source": "src/components/notes/NoteDiff.tsx",
+    "commit": "22a6bdc",
+    "sha256": "be2cddb27b4486c5"
+  },
+  "src/work/components/notes/NoteEditor.tsx": {
+    "source": "src/components/notes/NoteEditor.tsx",
+    "commit": "22a6bdc",
+    "sha256": "02c8fd8e482d536a"
+  },
+  "src/work/components/notes/NoteHistoryPanel.tsx": {
+    "source": "src/components/notes/NoteHistoryPanel.tsx",
+    "commit": "22a6bdc",
+    "sha256": "455605ae3a897322"
+  },
+  "src/work/components/notes/NoteTableEditing.tsx": {
+    "source": "src/components/notes/NoteTableEditing.tsx",
+    "commit": "22a6bdc",
+    "sha256": "1d97868d69d03364"
+  },
+  "src/work/components/notes/NoteTabView.tsx": {
+    "source": "src/components/notes/NoteTabView.tsx",
+    "commit": "22a6bdc",
+    "sha256": "2542d6b6a12c1c08"
+  },
   "src/work/components/notifications/NotificationPrefsForm.tsx": {
     "source": "src/components/notifications/NotificationPrefsForm.tsx",
     "commit": "eaafbfa",
@@ -318,6 +363,56 @@
     "source": "src/app/(app)/settings/ProfileForm.tsx",
     "commit": "eaafbfa",
     "sha256": "a1c92352c4060959"
+  },
+  "src/work/components/tabs/AddTabDialog.tsx": {
+    "source": "src/components/tabs/AddTabDialog.tsx",
+    "commit": "22a6bdc",
+    "sha256": "5aff419df14eff2b"
+  },
+  "src/work/components/tabs/ConversationTabBody.tsx": {
+    "source": "src/components/tabs/ConversationTabBody.tsx",
+    "commit": "22a6bdc",
+    "sha256": "edc96fb902673a29"
+  },
+  "src/work/components/tabs/ConversationTabPage.tsx": {
+    "source": "src/components/tabs/ConversationTabPage.tsx",
+    "commit": "22a6bdc",
+    "sha256": "51cf205ba9f4e888"
+  },
+  "src/work/components/tabs/TabMenu.tsx": {
+    "source": "src/components/tabs/TabMenu.tsx",
+    "commit": "22a6bdc",
+    "sha256": "dab5d0dc48ae1340"
+  },
+  "src/work/components/tabs/WebsiteTabView.tsx": {
+    "source": "src/components/tabs/WebsiteTabView.tsx",
+    "commit": "22a6bdc",
+    "sha256": "92a519b579b793c9"
+  },
+  "src/work/components/tasks/NewTaskForm.tsx": {
+    "source": "src/components/tasks/NewTaskForm.tsx",
+    "commit": "22a6bdc",
+    "sha256": "44f6472bbe74a127"
+  },
+  "src/work/components/tasks/TaskRow.tsx": {
+    "source": "src/components/tasks/TaskRow.tsx",
+    "commit": "22a6bdc",
+    "sha256": "b2234ad58ebd9fce"
+  },
+  "src/work/components/tasks/TasksPageView.tsx": {
+    "source": "src/components/tasks/TasksPageView.tsx",
+    "commit": "22a6bdc",
+    "sha256": "20bf412a41f4deb7"
+  },
+  "src/work/components/tasks/TasksView.tsx": {
+    "source": "src/components/tasks/TasksView.tsx",
+    "commit": "22a6bdc",
+    "sha256": "484d3d32eff50000"
+  },
+  "src/work/components/tasks/use-today.ts": {
+    "source": "src/components/tasks/use-today.ts",
+    "commit": "22a6bdc",
+    "sha256": "69b34970acf0c6b9"
   },
   "src/work/components/theme/ThemeToggle.tsx": {
     "source": "src/components/theme/ThemeToggle.tsx",
@@ -559,6 +654,36 @@
     "commit": "8ae8dd5",
     "sha256": "4d28defe632aaac4"
   },
+  "src/work/lib/notes/actions.ts": {
+    "source": "src/lib/notes/actions.ts",
+    "commit": "22a6bdc",
+    "sha256": "896748a16abe71bd"
+  },
+  "src/work/lib/notes/diff.ts": {
+    "source": "src/lib/notes/diff.ts",
+    "commit": "22a6bdc",
+    "sha256": "fdbf7f7ad6b36f77"
+  },
+  "src/work/lib/notes/format.ts": {
+    "source": "src/lib/notes/format.ts",
+    "commit": "22a6bdc",
+    "sha256": "9fbb310017534745"
+  },
+  "src/work/lib/notes/queries.ts": {
+    "source": "src/lib/notes/queries.ts",
+    "commit": "22a6bdc",
+    "sha256": "6b5fd69f7ad15d83"
+  },
+  "src/work/lib/notes/schema.ts": {
+    "source": "src/lib/notes/schema.ts",
+    "commit": "22a6bdc",
+    "sha256": "012d4334826de9b5"
+  },
+  "src/work/lib/notes/tables.ts": {
+    "source": "src/lib/notes/tables.ts",
+    "commit": "22a6bdc",
+    "sha256": "e52849b36010e3e8"
+  },
   "src/work/lib/notifications/levels.ts": {
     "source": "src/lib/notifications/levels.ts",
     "commit": "8ae8dd5",
@@ -589,10 +714,30 @@
     "commit": "8ae8dd5",
     "sha256": "e5c0f6dff60dd5d2"
   },
+  "src/work/lib/tabs/actions.ts": {
+    "source": "src/lib/tabs/actions.ts",
+    "commit": "22a6bdc",
+    "sha256": "f3f0d56cf1750656"
+  },
+  "src/work/lib/tabs/order.ts": {
+    "source": "src/lib/tabs/order.ts",
+    "commit": "22a6bdc",
+    "sha256": "59f6a845dfaa1e94"
+  },
   "src/work/lib/tabs/paths.ts": {
     "source": "src/lib/tabs/paths.ts",
     "commit": "eaafbfa",
     "sha256": "f7cda8d05f41f174"
+  },
+  "src/work/lib/tabs/permissions.ts": {
+    "source": "src/lib/tabs/permissions.ts",
+    "commit": "22a6bdc",
+    "sha256": "72890fcefe2bb78c"
+  },
+  "src/work/lib/tabs/queries.ts": {
+    "source": "src/lib/tabs/queries.ts",
+    "commit": "22a6bdc",
+    "sha256": "78ea99f35c2cbf8f"
   },
   "src/work/lib/tabs/schema.ts": {
     "source": "src/lib/tabs/schema.ts",
@@ -603,6 +748,66 @@
     "source": "src/lib/tabs/types.ts",
     "commit": "eaafbfa",
     "sha256": "7c096b6c6503b5a2"
+  },
+  "src/work/lib/tabs/website.ts": {
+    "source": "src/lib/tabs/website.ts",
+    "commit": "22a6bdc",
+    "sha256": "293089e72d31b0ee"
+  },
+  "src/work/lib/tasks/actions.ts": {
+    "source": "src/lib/tasks/actions.ts",
+    "commit": "22a6bdc",
+    "sha256": "d20e99551628b76c"
+  },
+  "src/work/lib/tasks/assignees.ts": {
+    "source": "src/lib/tasks/assignees.ts",
+    "commit": "22a6bdc",
+    "sha256": "b8cdd4370ab1018b"
+  },
+  "src/work/lib/tasks/due.ts": {
+    "source": "src/lib/tasks/due.ts",
+    "commit": "22a6bdc",
+    "sha256": "f18acd6bf8e9d54f"
+  },
+  "src/work/lib/tasks/limits.ts": {
+    "source": "src/lib/tasks/limits.ts",
+    "commit": "22a6bdc",
+    "sha256": "23aca4455e342142"
+  },
+  "src/work/lib/tasks/map.ts": {
+    "source": "src/lib/tasks/map.ts",
+    "commit": "22a6bdc",
+    "sha256": "2e104f02e47171c8"
+  },
+  "src/work/lib/tasks/permissions.ts": {
+    "source": "src/lib/tasks/permissions.ts",
+    "commit": "22a6bdc",
+    "sha256": "8ec112eddf034bf0"
+  },
+  "src/work/lib/tasks/queries.ts": {
+    "source": "src/lib/tasks/queries.ts",
+    "commit": "22a6bdc",
+    "sha256": "5818ee6a03523e7f"
+  },
+  "src/work/lib/tasks/reducer.ts": {
+    "source": "src/lib/tasks/reducer.ts",
+    "commit": "22a6bdc",
+    "sha256": "cc684ebca6668c04"
+  },
+  "src/work/lib/tasks/schema.ts": {
+    "source": "src/lib/tasks/schema.ts",
+    "commit": "22a6bdc",
+    "sha256": "4bfa4ef596ab967a"
+  },
+  "src/work/lib/tasks/types.ts": {
+    "source": "src/lib/tasks/types.ts",
+    "commit": "22a6bdc",
+    "sha256": "bed269c4f15a12a1"
+  },
+  "src/work/lib/tasks/views.ts": {
+    "source": "src/lib/tasks/views.ts",
+    "commit": "22a6bdc",
+    "sha256": "78b24979ad5a23c1"
   },
   "src/work/lib/text/josa.ts": {
     "source": "src/lib/text/josa.ts",

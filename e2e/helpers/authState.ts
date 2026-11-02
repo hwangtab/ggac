@@ -38,6 +38,20 @@ export type Fixtures = {
   workPublicMessageId: string
   workPrivateMessageId: string
   workDmMessageId: string
+  /** 2b 대화 탭 — 비공개 채널(감사 owner)·이사–감사 DM에 메모 탭·할 일 탭·할 일이 하나씩 있다 */
+  workPrivateNoteTabId: string
+  workPrivateNoteId: string
+  workPrivateTasksTabId: string
+  workPrivateTaskId: string
+  workDmNoteTabId: string
+  workDmNoteId: string
+  workDmTasksTabId: string
+  workDmTaskId: string
+  /** 2b 두 브라우저 E2E 전용 공개 채널(이사 owner, 감사 멤버) — 메모 탭·할 일 탭 */
+  workTabsChannelId: string
+  workTabsChannelSlug: string
+  workTabsNoteTabId: string
+  workTabsTasksTabId: string
   notificationId: string
   /** 이사회 안건 토론 경계용 — `director`가 작성자다. */
   boardMeetingId: string

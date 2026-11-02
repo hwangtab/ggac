@@ -4,19 +4,20 @@ import { boundedArray } from '@work/lib/validation/bounded-array'
 /**
  * 대화 탭 입력 스키마·상수(순수 — 'use server' 파일에서는 export 할 수 없어 여기 둔다).
  * DB(0023)는 kind 5종을 허용한다. 앱은 website·wiki·tasks(2단계)·file(3단계)·note(4단계) 전부 만든다.
+ *
+ * ggac 이식(2b): 위키는 가져오지 않았으므로 'wiki' 종류를 뺐다(쿼리 층 `WORK_TAB_KINDS`도 같은 4종).
  */
 
 export const TAB_TITLE_MAX = 40
 export const TAB_URL_MAX = 2000
 
 /** 이번 단계에서 앱이 만들 수 있는 탭 종류 */
-export const APP_TAB_KINDS = ['file', 'website', 'wiki', 'tasks', 'note'] as const
+export const APP_TAB_KINDS = ['file', 'website', 'tasks', 'note'] as const
 export type AppTabKind = (typeof APP_TAB_KINDS)[number]
 
 export const TAB_KIND_LABEL: Record<AppTabKind, string> = {
   file: '파일',
   website: '웹사이트',
-  wiki: '위키 문서',
   tasks: '할 일',
   note: '메모',
 }
@@ -25,7 +26,6 @@ export const TAB_KIND_DEFAULT_TITLE: Record<AppTabKind, string> = {
   file: '파일',
   note: '메모',
   website: '웹사이트',
-  wiki: '위키',
   tasks: '할 일',
 }
 
@@ -79,18 +79,6 @@ export const websiteConfigSchema = z.object({
 })
 export type WebsiteConfig = z.infer<typeof websiteConfigSchema>
 
-/** 위키 문서 slug — 폴더 구분자 `/`, 상위 이동(`..`)·역슬래시·제어문자 금지 */
-export const wikiSlugSchema = z
-  .string({ error: '위키 문서를 골라 주세요.' }) // ggac 이식: zod 4는 required_error 대신 error
-  .trim()
-  .min(1, '위키 문서를 골라 주세요.')
-  .max(200)
-  .refine(s => !s.split('/').some(p => p === '' || p === '.' || p === '..'), '잘못된 문서입니다.')
-  .refine(s => !/[\\\u0000-\u001f]/.test(s), '잘못된 문서입니다.')
-
-export const wikiConfigSchema = z.object({ slug: wikiSlugSchema })
-export type WikiConfig = z.infer<typeof wikiConfigSchema>
-
 export const tasksConfigSchema = z.object({}).strict()
 
 /** 메모 탭: 메모 행(work.conversation_notes) id — 탭을 만들 때 서버가 메모와 함께 만든다 */
@@ -121,7 +109,6 @@ export const addTabSchema = z.discriminatedUnion('kind', [
     config: z.object({ attachmentId: uuid }),
   }),
   z.object({ ...base, kind: z.literal('website'), config: websiteConfigSchema }),
-  z.object({ ...base, kind: z.literal('wiki'), config: wikiConfigSchema }),
   z.object({ ...base, kind: z.literal('tasks'), config: tasksConfigSchema.default({}) }),
   /** 메모 탭은 설정 없이 만든다 — 서버가 메모 행을 만들어 noteId 를 채운다 */
   z.object({ ...base, kind: z.literal('note'), config: tasksConfigSchema.default({}) }),
@@ -136,7 +123,6 @@ export const moveTabSchema = z.object({ tabId: uuid, direction: z.enum(['left', 
 export function parseTabConfig(kind: 'file', config: unknown): FileConfig | null
 export function parseTabConfig(kind: 'note', config: unknown): NoteConfig | null
 export function parseTabConfig(kind: 'website', config: unknown): WebsiteConfig | null
-export function parseTabConfig(kind: 'wiki', config: unknown): WikiConfig | null
 export function parseTabConfig(kind: 'tasks', config: unknown): Record<string, never> | null
 export function parseTabConfig(kind: AppTabKind, config: unknown): unknown {
   const schema =
@@ -146,9 +132,7 @@ export function parseTabConfig(kind: AppTabKind, config: unknown): unknown {
         ? noteConfigSchema
         : kind === 'website'
           ? websiteConfigSchema
-          : kind === 'wiki'
-            ? wikiConfigSchema
-            : tasksConfigSchema
+          : tasksConfigSchema
   const parsed = schema.safeParse(config ?? {})
   return parsed.success ? parsed.data : null
 }

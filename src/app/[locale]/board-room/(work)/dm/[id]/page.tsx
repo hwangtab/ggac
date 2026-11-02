@@ -6,13 +6,14 @@ import { getDmChannel } from '@work/lib/channels/queries'
 import { loadChannelViewData } from '@work/lib/channels/load-view'
 import { uuidSchema } from '@work/lib/channels/schema'
 import { threadIdFromSearch } from '@work/lib/messages/anchor'
+import { loadTabBarData } from '@work/lib/tabs/queries'
 import ChannelView from '@work/components/chat/ChannelView'
 
 export const metadata: Metadata = { title: '다이렉트 메시지' }
 
 /**
  * DM·그룹 — 원본 `app/(app)/dm/[id]/page.tsx`. 멤버가 아니면 404(관리자도 남의 DM은 못 본다).
- * ggac 이식: 대화 탭 바는 2단계라 읽지 않는다. `rev`(폴링 시작 커서)를 화면에 넘긴다.
+ * ggac 이식: `rev`(폴링 시작 커서)를 화면에 넘긴다. 대화 탭 바(`loadTabBarData`)는 2b에서 켰다.
  */
 export default async function BoardWorkDmPage({
   params,
@@ -28,7 +29,10 @@ export default async function BoardWorkDmPage({
   const { user, staff } = ctx
   const channel = await getDmChannel(ctx, parsed.data, user.id)
   if (!channel) notFound()
-  const data = await loadChannelViewData(ctx, channel.id, user.id)
+  const [data, tabBar] = await Promise.all([
+    loadChannelViewData(ctx, channel.id, user.id),
+    loadTabBarData(ctx, channel.id, { id: user.id, role: staff.role }),
+  ])
   if (!data.membership) notFound()
 
   const { peerId, ...detail } = channel
@@ -56,6 +60,7 @@ export default async function BoardWorkDmPage({
         peerId={peerId === user.id ? null : peerId}
         threadId={threadId}
         rev={data.rev}
+        tabBar={tabBar}
       />
     </div>
   )

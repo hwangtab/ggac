@@ -6,6 +6,7 @@ import { getChannelBySlug } from '@work/lib/channels/queries'
 import { loadChannelViewData } from '@work/lib/channels/load-view'
 import { SLUG_PATTERN } from '@work/lib/channels/schema'
 import { threadIdFromSearch } from '@work/lib/messages/anchor'
+import { loadTabBarData } from '@work/lib/tabs/queries'
 import ChannelView from '@work/components/chat/ChannelView'
 
 type Params = Promise<{ slug: string }>
@@ -28,7 +29,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
  * 공개·비공개 채널 — 원본 `app/(app)/c/[slug]/page.tsx`. 읽을 수 없거나(비공개 비멤버) 없으면 404 —
  * 존재 여부를 드러내지 않는다. 공개 채널은 멤버가 아니어도 읽기 전용으로 미리 볼 수 있다(원본 can_read_channel).
  *
- * ggac 이식: 대화 탭 바(`loadTabBarData`)는 2단계라 읽지 않는다. `rev`(폴링 시작 커서)를 화면에 넘긴다.
+ * ggac 이식: `rev`(폴링 시작 커서)를 화면에 넘긴다. 대화 탭 바(`loadTabBarData`)는 2b에서 켰다.
  * `data-testid="board-work-channel"`은 권한 E2E가 "본문이 그려졌다/안 그려졌다"를 보는 표식이다.
  */
 export default async function BoardWorkChannelPage({
@@ -46,7 +47,10 @@ export default async function BoardWorkChannelPage({
   const { user, staff } = ctx
   const channel = await getChannelBySlug(ctx, slug)
   if (!channel) notFound()
-  const data = await loadChannelViewData(ctx, channel.id, user.id)
+  const [data, tabBar] = await Promise.all([
+    loadChannelViewData(ctx, channel.id, user.id),
+    loadTabBarData(ctx, channel.id, { id: user.id, role: staff.role }),
+  ])
 
   return (
     <div
@@ -71,6 +75,7 @@ export default async function BoardWorkChannelPage({
         bookmarkedIds={data.bookmarkedIds}
         threadId={threadId}
         rev={data.rev}
+        tabBar={tabBar}
       />
     </div>
   )

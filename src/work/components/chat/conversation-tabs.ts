@@ -4,7 +4,6 @@ import {
   FolderIcon,
   GlobeIcon,
   ImageIcon,
-  BookOpenIcon,
   MessageSquareIcon,
   StickyNoteIcon,
   type LucideIcon,
@@ -19,7 +18,7 @@ export { conversationBasePath, conversationTabHref }
 /**
  * 대화(채널·DM·그룹) 상단 가로 탭 정의(순수). 탭 바는 이 목록만 보고 그린다.
  * 경로 규약은 `/c/<slug>/<tabKey>`, `/dm/<id>/<tabKey>`(게시물 탭 = 규약상 `<tabKey>` 없는 기본 경로).
- * 기본 탭(게시물·파일 / 채팅·공유됨)은 상수이고, 추가 탭(웹사이트·위키·할 일)은 DB(work.conversation_tabs)에서 와서
+ * 기본 탭(게시물·파일 / 채팅·공유됨)은 상수이고, 추가 탭(웹사이트·할 일·메모·파일 — ggac 이식: 위키 없음)은 DB(work.conversation_tabs)에서 와서
  * 그 뒤에 `t/<tabId>` 로 이어 붙는다(docs/05).
  */
 export type ConversationTab = {
@@ -43,7 +42,6 @@ const KIND_ICON: Record<AppTabKind, LucideIcon> = {
   file: FileTextIcon,
   note: StickyNoteIcon,
   website: GlobeIcon,
-  wiki: BookOpenIcon,
   tasks: CheckSquareIcon,
 }
 

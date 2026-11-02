@@ -8,6 +8,7 @@ import {
   listStaffDirectory,
 } from '@work/lib/channels/queries'
 import { countNewActivity, countUnreadMentions } from '@work/lib/inbox/queries'
+import { countMyOpenTasks } from '@work/lib/tasks/queries'
 import { getChannelSortPref, getChatSortPref } from '@work/lib/notifications/prefs'
 import { activeStatus } from '@work/lib/notifications/status'
 import { filterVisiblePeople, guestVisibleUserIds } from '@work/lib/staff/visibility'
@@ -23,7 +24,7 @@ import '@work/styles.css'
  *
  * 원본과 다른 점:
  * - 가드는 `requireWorkStaff`(ggac 이사회 권한, 설계 §3). 처음 들어온 사람은 `#전체`에 넣는다(`ensureWorkspaceEntry`).
- * - 할 일·결재(지출결의)·위키 데이터는 읽지 않는다(할 일은 2단계, 결재·위키는 가져오지 않는다).
+ * - 결재(지출결의)·위키 데이터는 읽지 않는다(가져오지 않는다). 할 일 배지(내 미완료 수)는 2b에서 켰다.
  * - 첫 사용 안내(OnboardingGate — 푸시 켜기 포함)는 5단계(웹 푸시)와 함께 옮긴다.
  * - 원본 `loading.tsx`는 두지 않는다 — 페이지가 스트리밍을 먼저 시작하면 `notFound()`가 404 상태 코드를 못 낸다
  *   (권한 E2E `authz-board-work.spec.ts`가 비공개 채널·남의 DM의 404를 본다).
@@ -58,6 +59,7 @@ export default async function BoardWorkLayout({ children }: { children: React.Re
     channelSort,
     chatSort,
     categories,
+    openTaskCount,
   ] = await Promise.all([
     listSidebarChannels(ctx, user.id),
     listStaffDirectory(ctx),
@@ -71,6 +73,7 @@ export default async function BoardWorkLayout({ children }: { children: React.Re
     getChannelSortPref(ctx, user.id),
     getChatSortPref(ctx, user.id),
     listChannelCategories(ctx),
+    countMyOpenTasks(ctx, user.id),
   ])
 
   // 1:1 DM 상대의 상태 메시지 — 만료된 것은 여기서 거른다
@@ -107,6 +110,7 @@ export default async function BoardWorkLayout({ children }: { children: React.Re
         isGuest={isGuest}
         mentionCount={mentionCount}
         activityCount={activityCount}
+        openTaskCount={openTaskCount}
         meId={user.id}
         dmPeers={isGuest ? {} : dmPeers}
         people={people}

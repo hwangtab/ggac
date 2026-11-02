@@ -27,6 +27,8 @@ export type WorkExecutor = WorkDb | WorkTx
  * - deleted        지워진 메시지에 대한 쓰기(원본 *_live_insert)
  * - conflict       유일성 충돌(원본 23505)
  * - invalid_target 대상이 그 채널 것이 아니다(원본 23514 '고정할 메시지가 이 채널에 없습니다')
+ * - invalid        원본 CHECK·하드닝이 거절한 값(23514 — 'https 주소만', 길이). 메시지는 사용자에게 보여도 된다
+ * - limit          개수 상한(23514 — '탭은 대화당 20개까지', '메모는 대화당 30개까지'). 메시지는 사용자에게 보여도 된다
  */
 export type WorkWriteErrorCode =
   | 'not_found'
@@ -38,6 +40,8 @@ export type WorkWriteErrorCode =
   | 'deleted'
   | 'conflict'
   | 'invalid_target'
+  | 'invalid'
+  | 'limit'
 
 export class WorkWriteError extends Error {
   readonly code: WorkWriteErrorCode

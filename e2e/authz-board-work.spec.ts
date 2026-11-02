@@ -267,3 +267,210 @@ test.describe('업무툴 입력 중 표시 — 멤버에게만', () => {
     expect(adminView.typing).toEqual([])
   })
 })
+
+/**
+ * 대화 탭·메모·할 일 읽기 경계(2b) — 원본 conversation_tabs_select·conversation_notes_select·tasks_select는 모두
+ * can_read_channel이었다. 시드: 비공개 채널(감사 owner, 이사 아님)과 이사–감사 DM에 메모 탭·할 일 탭·할 일이 하나씩.
+ * 짝 단정: 같은 주소를 **허용되는 사람이 열면 본문이 보인다**는 것도 함께 본다(경계가 "전원 404"로 퇴화해도 초록이 되지 않게).
+ */
+test.describe('업무툴 대화 탭·메모·할 일 — 읽기 경계', () => {
+  async function open(browser: import('@playwright/test').Browser, role: string, path: string) {
+    const context = await browser.newContext({ storageState: storageStatePath(role) })
+    const page = await context.newPage()
+    const res = await page.goto(path, { waitUntil: 'domcontentloaded' })
+    return { context, page, status: res?.status() ?? 0 }
+  }
+
+  test('비공개 채널의 메모 탭: 초대받지 않은 이사는 404, owner인 감사는 메모 본문을 본다', async ({
+    browser,
+  }) => {
+    const f = readFixtures()
+    const path = `/board-room/c/${f.workPrivateChannelSlug}/t/${f.workPrivateNoteTabId}`
+    const denied = await open(browser, 'director', path)
+    const allowed = await open(browser, 'auditor', path)
+    try {
+      expect(denied.status).toBe(404)
+      await expect(denied.page.getByTestId('board-work-tab')).toHaveCount(0)
+      await expect(denied.page.getByText('authz-e2e 비공개 메모 본문')).toHaveCount(0)
+
+      expect(allowed.status).toBe(200)
+      await expect(allowed.page.getByTestId('board-work-tab')).toBeVisible({ timeout: 15000 })
+      await expect(allowed.page.getByText('authz-e2e 비공개 메모 본문').first()).toBeVisible()
+    } finally {
+      await denied.context.close()
+      await allowed.context.close()
+    }
+  })
+
+  test('비공개 채널의 할 일 탭: 이사는 404, 감사는 할 일을 본다', async ({ browser }) => {
+    const f = readFixtures()
+    const path = `/board-room/c/${f.workPrivateChannelSlug}/t/${f.workPrivateTasksTabId}`
+    const denied = await open(browser, 'director', path)
+    const allowed = await open(browser, 'auditor', path)
+    try {
+      expect(denied.status).toBe(404)
+      await expect(denied.page.getByText('authz-e2e 비공개 할 일')).toHaveCount(0)
+
+      expect(allowed.status).toBe(200)
+      await expect(allowed.page.getByText('authz-e2e 비공개 할 일').first()).toBeVisible({
+        timeout: 15000,
+      })
+    } finally {
+      await denied.context.close()
+      await allowed.context.close()
+    }
+  })
+
+  test('다른 대화의 탭 id를 읽을 수 있는 채널 주소에 붙여도 404다(탭은 그 대화 소속만)', async ({
+    browser,
+  }) => {
+    const f = readFixtures()
+    // 이사는 공개 채널을 읽을 수 있다 — 거기에 비공개 채널의 메모 탭 id를 붙인다
+    const crossed = await open(
+      browser,
+      'director',
+      `/board-room/c/${f.workPublicChannelSlug}/t/${f.workPrivateNoteTabId}`
+    )
+    // 짝: 같은 이사가 자기 DM의 메모 탭은 연다
+    const own = await open(
+      browser,
+      'director',
+      `/board-room/dm/${f.workDmChannelId}/t/${f.workDmNoteTabId}`
+    )
+    try {
+      expect(crossed.status).toBe(404)
+      await expect(crossed.page.getByText('authz-e2e 비공개 메모 본문')).toHaveCount(0)
+      expect(own.status).toBe(200)
+      await expect(own.page.getByText('authz-e2e DM 메모 본문').first()).toBeVisible({
+        timeout: 15000,
+      })
+    } finally {
+      await crossed.context.close()
+      await own.context.close()
+    }
+  })
+
+  test('DM의 메모·할 일 탭: 관리자는 남의 DM이라 404, 당사자인 감사는 본다', async ({
+    browser,
+  }) => {
+    const f = readFixtures()
+    const notePath = `/board-room/dm/${f.workDmChannelId}/t/${f.workDmNoteTabId}`
+    const tasksPath = `/board-room/dm/${f.workDmChannelId}/t/${f.workDmTasksTabId}`
+    const deniedNote = await open(browser, 'admin', notePath)
+    const deniedTasks = await open(browser, 'admin', tasksPath)
+    const allowedNote = await open(browser, 'auditor', notePath)
+    const allowedTasks = await open(browser, 'auditor', tasksPath)
+    try {
+      expect(deniedNote.status).toBe(404)
+      await expect(deniedNote.page.getByText('authz-e2e DM 메모 본문')).toHaveCount(0)
+      expect(deniedTasks.status).toBe(404)
+      await expect(deniedTasks.page.getByText('authz-e2e DM 할 일')).toHaveCount(0)
+
+      expect(allowedNote.status).toBe(200)
+      await expect(allowedNote.page.getByText('authz-e2e DM 메모 본문').first()).toBeVisible({
+        timeout: 15000,
+      })
+      expect(allowedTasks.status).toBe(200)
+      await expect(allowedTasks.page.getByText('authz-e2e DM 할 일').first()).toBeVisible()
+    } finally {
+      for (const o of [deniedNote, deniedTasks, allowedNote, allowedTasks]) await o.context.close()
+    }
+  })
+
+  test('할 일 목록(/board-room/tasks): 이사에게는 비공개 채널 할 일이 없고 DM 할 일은 있다, 감사에게는 둘 다 있다', async ({
+    browser,
+  }) => {
+    const director = await open(browser, 'director', '/board-room/tasks?view=all')
+    const auditor = await open(browser, 'auditor', '/board-room/tasks?view=all')
+    try {
+      expect(director.status).toBe(200)
+      await expect(director.page.getByTestId('board-work-tasks')).toBeVisible({ timeout: 15000 })
+      await expect(director.page.getByText('authz-e2e DM 할 일').first()).toBeVisible()
+      await expect(director.page.getByText('authz-e2e 비공개 할 일')).toHaveCount(0)
+
+      expect(auditor.status).toBe(200)
+      await expect(auditor.page.getByText('authz-e2e 비공개 할 일').first()).toBeVisible({
+        timeout: 15000,
+      })
+      await expect(auditor.page.getByText('authz-e2e DM 할 일').first()).toBeVisible()
+    } finally {
+      await director.context.close()
+      await auditor.context.close()
+    }
+  })
+
+  test('관리자는 비공개 채널의 메모 탭을 읽지만(0037) 할 일 목록에 남의 DM 할 일은 없다', async ({
+    browser,
+  }) => {
+    const f = readFixtures()
+    const note = await open(
+      browser,
+      'admin',
+      `/board-room/c/${f.workPrivateChannelSlug}/t/${f.workPrivateNoteTabId}`
+    )
+    const tasks = await open(browser, 'admin', '/board-room/tasks?view=all')
+    try {
+      expect(note.status).toBe(200)
+      await expect(note.page.getByText('authz-e2e 비공개 메모 본문').first()).toBeVisible({
+        timeout: 15000,
+      })
+      // 멤버가 아니라 편집 단추가 없다(쓰기는 대화 멤버만)
+      await expect(note.page.getByRole('button', { name: '편집' })).toHaveCount(0)
+
+      expect(tasks.status).toBe(200)
+      await expect(tasks.page.getByText('authz-e2e 비공개 할 일').first()).toBeVisible({
+        timeout: 15000,
+      })
+      await expect(tasks.page.getByText('authz-e2e DM 할 일')).toHaveCount(0)
+    } finally {
+      await note.context.close()
+      await tasks.context.close()
+    }
+  })
+
+  test('일반 조합원은 탭·할 일 화면 모두 /board로 돌아가고, 같은 주소를 감사는 연다', async ({
+    browser,
+  }) => {
+    const f = readFixtures()
+    const paths = [
+      '/board-room/tasks',
+      `/board-room/c/${f.workPublicChannelSlug}/t/${f.workPrivateNoteTabId}`,
+      `/board-room/dm/${f.workDmChannelId}/t/${f.workDmNoteTabId}`,
+    ]
+    const member = await browser.newContext({ storageState: storageStatePath('other') })
+    try {
+      const page = await member.newPage()
+      for (const path of paths) {
+        await page.goto(path, { waitUntil: 'domcontentloaded' })
+        await expect(page).toHaveURL(/\/board$/, { timeout: 15000 })
+        await expect(page.getByTestId('board-work-tab')).toHaveCount(0)
+        await expect(page.getByTestId('board-work-tasks')).toHaveCount(0)
+      }
+    } finally {
+      await member.close()
+    }
+    const allowed = await open(browser, 'auditor', paths[2])
+    try {
+      expect(allowed.status).toBe(200)
+      await expect(allowed.page.getByTestId('board-work-tab')).toBeVisible({ timeout: 15000 })
+    } finally {
+      await allowed.context.close()
+    }
+  })
+
+  test('폴링: 비공개 채널의 메모 저장(tabs_rev)은 이사의 sync에 새지 않고 감사에게는 tabsChanged로 온다', async ({
+    browser,
+  }) => {
+    const f = readFixtures()
+    const req = { [f.workPrivateChannelId]: 0 }
+    const director = await syncAs(browser, 'director', req)
+    const auditor = await syncAs(browser, 'auditor', req)
+    expect(director.status).toBe(200)
+    expect(Object.keys(director.body!.data.changed)).not.toContain(f.workPrivateChannelId)
+    expect(auditor.status).toBe(200)
+    const change = auditor.body!.data.changed[f.workPrivateChannelId] as unknown as {
+      tabsChanged: boolean
+    }
+    expect(change.tabsChanged).toBe(true)
+  })
+})

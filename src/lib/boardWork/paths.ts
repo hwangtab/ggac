@@ -13,6 +13,7 @@ export const BOARD_WORK_SEGMENTS = [
   'c',
   'dm',
   'inbox',
+  'tasks',
   'files',
   'search',
   'settings',
