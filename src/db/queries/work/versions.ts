@@ -339,6 +339,30 @@ export async function resolveLatestLiveVersionParentId(
   return candidates.find(id => alive.has(id)) ?? null
 }
 
+/**
+ * 같은 게시물 id 로 이미 만들어진 내 첨부(새 문서·사본 재시도의 멱등 확인) — 게시물이 내 것·같은 채널일 때만 그 첫 첨부.
+ */
+export async function findOwnMessageAttachment(
+  messageId: string,
+  authorId: string,
+  channelId: string
+): Promise<{ id: string; name: string } | null> {
+  const [row] = await db
+    .select({ id: workAttachments.id, name: workAttachments.name })
+    .from(workMessages)
+    .innerJoin(workAttachments, eq(workAttachments.messageId, workMessages.id))
+    .where(
+      and(
+        eq(workMessages.id, messageId),
+        eq(workMessages.authorId, authorId),
+        eq(workMessages.channelId, channelId)
+      )
+    )
+    .orderBy(asc(workAttachments.createdAt))
+    .limit(1)
+  return row ?? null
+}
+
 // ── 수정 중(체크아웃)·최종본 ──────────────────────────────────────────────────
 
 export type CheckoutAcquireResult =

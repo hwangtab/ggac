@@ -1,4 +1,4 @@
-import { del, put } from '@vercel/blob'
+import { copy, del, put } from '@vercel/blob'
 import { getPrivateObject, headPrivateObject } from '@/lib/storage/blob'
 import { isSafeBoardWorkPath, rangeHeaderValue } from '@/lib/storage/boardWork'
 import { StorageUnavailableError } from './storage-errors'
@@ -151,4 +151,24 @@ export async function removeObjects(paths: string[]): Promise<void> {
   if (paths.length === 0) return
   for (const p of paths) guard(p)
   await del(paths, { token: token() })
+}
+
+/**
+ * 같은 저장소 안 복사(되돌리기·사본으로 새 문서 — 원본 Storage copy). 두 경로 모두 업무툴 경로여야 한다.
+ * 대상 키는 서버가 새 업로드 id 로 만든다(덮어쓰지 않는다). 저장소 오류는 StorageUnavailableError.
+ */
+export async function copyObject(from: string, to: string): Promise<void> {
+  guard(from)
+  guard(to)
+  const t = token()
+  try {
+    await copy(from, to, {
+      access: 'private',
+      token: t,
+      addRandomSuffix: false,
+      allowOverwrite: false,
+    })
+  } catch (e) {
+    throw new StorageUnavailableError(e instanceof Error ? e.message : String(e))
+  }
 }

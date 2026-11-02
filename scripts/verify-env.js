@@ -83,6 +83,12 @@ const optionalEnvVars = [
   // 깨진 크론·정체된 결제 선점·레이트리밋 메모리 폴백이 모두 그 한 줄로만
   // 남는다. 없어도 앱은 돈다.
   'SECURITY_ALERT_WEBHOOK_URL',
+  // 이사회 업무툴 앱 안 편집기(설계 §8-1). 빌드 시점에 인라인된다(설정 후 재배포).
+  // 출처(https://ggac-office.vercel.app)가 없으면 Word·Excel·PPT·HWP 앱 편집과 새 문서 만들기가 통째로 숨고
+  // CSP frame-src 에도 아무것도 더하지 않는다. HWP·HWPX 편집은 출처에 더해 각 플래그가 '1'일 때만 켜진다.
+  'NEXT_PUBLIC_OFFICE_EDITOR_ORIGIN',
+  'NEXT_PUBLIC_HWP_EDITOR_ENABLED',
+  'NEXT_PUBLIC_HWPX_EDITOR_ENABLED',
   'UPSTASH_REDIS_REST_URL',
   'UPSTASH_REDIS_REST_TOKEN',
   'KV_REST_API_URL',
