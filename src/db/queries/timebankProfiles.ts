@@ -357,6 +357,22 @@ export async function listDirectory(): Promise<
 // ── 탈퇴 키 ──────────────────────────────────────────────────────────────────
 
 /**
+ * 재가입 키(`rejoinKeysFor`)의 재료 — 그 회원의 현재 이메일·전화만 좁혀 읽는다.
+ * `getProfileById`는 계좌·실명 등 33칸을 전부 싣는다(`getProfileAuthzFields`와 같은
+ * 이유로 쓰지 않는다). 동의 라우트가 **세션 회원 본인 것만** 서버에서 읽는다.
+ */
+export async function getRejoinIdentity(
+  memberId: string
+): Promise<{ email: string | null; phone: string | null } | null> {
+  const [row] = await db
+    .select({ email: memberProfiles.email, phone: memberProfiles.phoneNumber })
+    .from(memberProfiles)
+    .where(eq(memberProfiles.id, memberId))
+    .limit(1)
+  return row ? { email: row.email ?? null, phone: row.phone ?? null } : null
+}
+
+/**
  * 탈퇴 트랜잭션(Task 10 `withdrawMember`) 안에서 재가입 키를 남긴다. 같은 키가
  * 이미 있으면(재가입 후 재탈퇴) 최신 잔액·일자로 덮는다. 여러 행은 한 INSERT로.
  */

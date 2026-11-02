@@ -1716,6 +1716,69 @@ const requiredAuthHelperCallCounts = [
     file: 'src/app/api/users/[id]/likes/route.ts',
     calls: [{ pattern: /requireUser\(\)/g, min: 1 }],
   },
+  // 타임뱅크(2026-11-02, 계획 Task 7). 조합원 라우트는 memberAuth를 직접 import하지
+  // 않고 `src/lib/server/timebankAuth.ts`의 헬퍼를 부른다 — 그 헬퍼 몸통이
+  // requireActiveMember()를 부르는지와, 라우트마다 헬퍼 호출 수를 함께 고정한다.
+  // 읽기(Reader)·명단(Peer)·동의(Agreer)·쓰기(Participant)가 서로 다른 등급이라
+  // 쓰기 핸들러의 Participant가 Reader로 퇴화하는 것도 개수로 잡는다.
+  {
+    file: 'src/lib/server/timebankAuth.ts',
+    calls: [{ pattern: /requireActiveMember\(\)/g, min: 1 }],
+  },
+  {
+    // GET은 Reader, POST는 Participant.
+    file: 'src/app/api/timebank/listings/route.ts',
+    calls: [
+      { pattern: /requireTimebankReader\(\)/g, min: 1 },
+      { pattern: /requireTimebankParticipant\(\)/g, min: 1 },
+    ],
+  },
+  {
+    // GET·DELETE는 Reader, PATCH는 Participant.
+    file: 'src/app/api/timebank/listings/[id]/route.ts',
+    calls: [
+      { pattern: /requireTimebankReader\(\)/g, min: 2 },
+      { pattern: /requireTimebankParticipant\(\)/g, min: 1 },
+    ],
+  },
+  {
+    file: 'src/app/api/timebank/listings/[id]/comments/route.ts',
+    calls: [
+      { pattern: /requireTimebankReader\(\)/g, min: 1 },
+      { pattern: /requireTimebankParticipant\(\)/g, min: 1 },
+    ],
+  },
+  {
+    file: 'src/app/api/timebank/listings/[id]/comments/[commentId]/route.ts',
+    calls: [{ pattern: /requireTimebankReader\(\)/g, min: 1 }],
+  },
+  {
+    // POST(자원)는 Participant, DELETE(철회)는 Reader.
+    file: 'src/app/api/timebank/listings/[id]/volunteer/route.ts',
+    calls: [
+      { pattern: /requireTimebankParticipant\(\)/g, min: 1 },
+      { pattern: /requireTimebankReader\(\)/g, min: 1 },
+    ],
+  },
+  {
+    file: 'src/app/api/timebank/agree/route.ts',
+    calls: [{ pattern: /requireTimebankAgreer\(\)/g, min: 1 }],
+  },
+  {
+    file: 'src/app/api/timebank/profile/route.ts',
+    calls: [
+      { pattern: /requireTimebankReader\(\)/g, min: 1 },
+      { pattern: /requireTimebankParticipant\(\)/g, min: 1 },
+    ],
+  },
+  {
+    file: 'src/app/api/timebank/participants/route.ts',
+    calls: [{ pattern: /requireTimebankPeer\(\)/g, min: 1 }],
+  },
+  {
+    file: 'src/app/api/timebank/directory/route.ts',
+    calls: [{ pattern: /requireTimebankPeer\(\)/g, min: 1 }],
+  },
 ]
 const requiredAuthHelperCallViolations = requiredAuthHelperCallCounts.flatMap(({ file, calls }) => {
   const fullPath = join(root, file)
