@@ -22,6 +22,12 @@ test('정규화: 이메일은 trim+lowercase, 전화는 숫자만, 비면 null',
   assert.equal(normalizeRejoinPhone('010-1234-5678'), '01012345678')
   assert.equal(normalizeRejoinPhone(' (010) 1234 5678 '), '01012345678')
   assert.equal(normalizeRejoinPhone('--- '), null)
+  // 국가번호 표기는 국내 형식과 같은 값이 된다
+  assert.equal(normalizeRejoinPhone('+82 10-1234-5678'), '01012345678')
+  assert.equal(normalizeRejoinPhone('+82 010-1234-5678'), '01012345678')
+  assert.equal(normalizeRejoinPhone('82-2-123-4567'), '021234567')
+  // 82로 시작하는 짧은 국내 번호(지역번호 없이 적은 경우 등)는 건드리지 않는다
+  assert.equal(normalizeRejoinPhone('8212345'), '8212345')
   assert.equal(normalizeRejoinPhone(null), null)
 })
 

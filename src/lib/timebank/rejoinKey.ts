@@ -24,7 +24,11 @@ export function normalizeRejoinEmail(email: string | null | undefined): string |
 /** 숫자만 남긴다(`010-1234-5678` = `01012345678`). 숫자가 없으면 null. */
 export function normalizeRejoinPhone(phone: string | null | undefined): string | null {
   if (typeof phone !== 'string') return null
-  const v = phone.replace(/\D+/g, '')
+  let v = phone.replace(/\D+/g, '')
+  // 국내 번호는 0으로 시작하므로 82로 시작하는 9자리 이상은 국가번호 표기다. 국가번호 82로 적은 국내 번호를 0으로 시작하는 국내 형식으로 맞춘다. 프로필 전화칸은
+  // 자유 형식(`+82 10-…`도 받는다)이라 맞추지 않으면 같은 번호가 다른 키가 되어
+  // 재가입 확인을 빠져나간다. `+82 010-…`처럼 0을 남겨 적은 경우도 같다.
+  if (v.startsWith('82') && v.length >= 9) v = '0' + v.slice(2).replace(/^0/, '')
   return v === '' ? null : v
 }
 
