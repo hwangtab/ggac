@@ -9,7 +9,7 @@ import { isSqliteUniqueViolation } from '@/db/queries/work/channels'
  * | 여기                                        | 원본 SQLSTATE |
  * | ------------------------------------------- | ------------- |
  * | WorkWriteError forbidden·archived·owners_only | 42501         |
- * | WorkWriteError invalid_parent·invalid_quote·invalid_target | 23514 |
+ * | WorkWriteError invalid_parent·invalid_quote·invalid_target·invalid·limit | 23514 |
  * | WorkWriteError not_found                    | 23503         |
  * | WorkWriteError conflict · SQLite UNIQUE/PK  | 23505         |
  * | SQLite FOREIGN KEY                          | 23503         |
@@ -25,6 +25,8 @@ export function getPostgresErrorCode(error: unknown): string | undefined {
       case 'invalid_parent':
       case 'invalid_quote':
       case 'invalid_target':
+      case 'invalid':
+      case 'limit':
         return '23514'
       case 'not_found':
         return '23503'
