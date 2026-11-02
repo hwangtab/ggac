@@ -344,7 +344,7 @@ test('listParticipants: 현재 판 동의자만, (id, display_name)만', async (
   assert.equal(list.find(r => r.id === current).display_name, `cur${current.split('-')[1]}`)
 })
 
-test('listDirectory: visible = true만, 공개 칸만', async () => {
+test('listDirectory: 현재 판 동의자 중 visible = true만, 공개 칸만', async () => {
   const shown = await newMember('shown')
   const hidden = await newMember('hidden')
   await agree(shown)
@@ -357,10 +357,16 @@ test('listDirectory: visible = true만, 공개 칸만', async () => {
   })
   await profiles.upsertTimebankProfile(hidden, { offers: '비밀', visible: false })
 
-  const dir = await profiles.listDirectory()
+  // 공개로 둔 채 옛 판에만 동의한 회원 — 지금 판에 동의하기 전에는 보이지 않는다
+  const stale = await newMember('stale')
+  await agree(stale, [], '2025-01')
+  await profiles.upsertTimebankProfile(stale, { offers: '옛 판', visible: true })
+
+  const dir = await profiles.listDirectory(TERMS)
   const ids = dir.map(r => r.id)
   assert.ok(ids.includes(shown))
   assert.ok(!ids.includes(hidden))
+  assert.ok(!ids.includes(stale), '현재 판 동의자만(listParticipants와 같은 기준)')
   const row = dir.find(r => r.id === shown)
   assert.deepEqual(Object.keys(row).sort(), ['categories', 'display_name', 'id', 'needs', 'offers'])
   assert.deepEqual(row.categories, ['production_help'])

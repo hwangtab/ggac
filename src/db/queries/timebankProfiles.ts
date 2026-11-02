@@ -317,8 +317,12 @@ export async function listParticipants(
   return rows.map(r => ({ id: r.id, display_name: r.displayName }))
 }
 
-/** 재능 디렉터리: `visible = true`이고 참여 자격이 있는 회원의 공개 칸만. */
-export async function listDirectory(): Promise<
+/**
+ * 재능 디렉터리: **현재 판**(`termsVersion`)에 동의했고 `visible = true`이며 참여
+ * 자격이 있는 회원의 공개 칸만. 판 기준은 `listParticipants`와 같다 — 이용규칙이
+ * 바뀐 뒤 아직 새 판에 동의하지 않은 회원을 디렉터리에 계속 내보이지 않는다.
+ */
+export async function listDirectory(termsVersion: string): Promise<
   Array<{
     id: string
     display_name: string
@@ -340,6 +344,7 @@ export async function listDirectory(): Promise<
     .where(
       and(
         eq(timebankProfiles.visible, true),
+        eq(timebankProfiles.termsVersion, termsVersion),
         isNotNull(timebankProfiles.agreedAt),
         memberEligible()
       )

@@ -16,11 +16,11 @@ export const dynamic = 'force-dynamic'
 export async function GET(_request: NextRequest) {
   const auth = await requireTimebankPeer()
   if (auth instanceof NextResponse) return auth
-  const { user } = auth
+  const { user, settings } = auth
 
   return apiGet(
     async () => {
-      const rows = await listDirectory()
+      const rows = await listDirectory(settings.terms_version)
       const directory = rows.map(r => ({
         id: r.id,
         display_name: r.display_name,
