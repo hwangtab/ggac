@@ -126,6 +126,9 @@ const { createChannelRow, addChannelMemberRows, openDmRow } = await import(
   '@/db/queries/work/channels'
 )
 const { insertMessage } = await import('@/db/queries/work/messages')
+const { insertTabRow } = await import('@/db/queries/work/tabs')
+const { saveNoteRow } = await import('@/db/queries/work/notes')
+const { insertTaskRow } = await import('@/db/queries/work/tasks')
 
 // id는 전부 고정값이다. 예전에는 Supabase가 만들어준 uuid를 그대로 받아
 // 썼는데, 그쪽이 사라진 지금 매번 새로 뽑으면 재실행마다 계정이 늘고
@@ -1301,13 +1304,21 @@ async function main() {
   const WORK_PUBLIC_MESSAGE_ID = '00000000-0000-4000-8000-00000000c011'
   const WORK_PRIVATE_MESSAGE_ID = '00000000-0000-4000-8000-00000000c012'
   const WORK_DM_MESSAGE_ID = '00000000-0000-4000-8000-00000000c013'
+  // 2b 대화 탭 동기화 E2E(`board-work-tabs.spec.ts`) 전용 공개 채널 — 채팅 E2E의 공개 채널과 섞이지 않게 따로 둔다
+  const WORK_TABS_CHANNEL_ID = '00000000-0000-4000-8000-00000000c003'
   const workDmKey = [ids.director, ids.auditor]
     .map(v => v.toLowerCase())
     .sort()
     .join(':')
   await db
     .delete(tursoWorkChannels)
-    .where(inArray(tursoWorkChannels.id, [WORK_PUBLIC_CHANNEL_ID, WORK_PRIVATE_CHANNEL_ID]))
+    .where(
+      inArray(tursoWorkChannels.id, [
+        WORK_PUBLIC_CHANNEL_ID,
+        WORK_PRIVATE_CHANNEL_ID,
+        WORK_TABS_CHANNEL_ID,
+      ])
+    )
   await db.delete(tursoWorkChannels).where(eq(tursoWorkChannels.dmKey, workDmKey))
 
   const seededPublic = await createChannelRow({
@@ -1348,6 +1359,75 @@ async function main() {
     if (r.status !== 'created') throw new Error(`업무툴 메시지 시드 실패: ${id} ${r.status}`)
   }
 
+  // ── 2b: 대화 탭·메모·할 일 — 비공개 채널(감사 owner)과 이사–감사 DM에 메모 탭·할 일 탭·할 일 하나씩 ──
+  // id는 쿼리 계층이 만든다(채널을 지우면 cascade로 함께 지워지므로 재실행에 안전하다).
+  async function seedTabs(channelId, authorId, label) {
+    const noteTab = await insertTabRow({
+      channelId,
+      kind: 'note',
+      title: `${label} 메모`,
+      config: {},
+      createdBy: authorId,
+      canWriteArchived: false,
+    })
+    const noteId = String(noteTab.config.noteId)
+    const saved = await saveNoteRow({
+      noteId,
+      expectedVersion: 1,
+      body: `authz-e2e ${label} 메모 본문`,
+      actorId: authorId,
+      canWriteArchived: false,
+    })
+    if (saved?.status !== 'saved') throw new Error(`업무툴 메모 시드 실패: ${label}`)
+    const tasksTab = await insertTabRow({
+      channelId,
+      kind: 'tasks',
+      title: '할 일',
+      config: {},
+      createdBy: authorId,
+      canWriteArchived: false,
+    })
+    const task = await insertTaskRow({
+      channelId,
+      createdBy: authorId,
+      actorIsAdmin: false,
+      title: `authz-e2e ${label} 할 일`,
+    })
+    return { noteTabId: noteTab.id, noteId, tasksTabId: tasksTab.id, taskId: task.id }
+  }
+  const privateTabs = await seedTabs(WORK_PRIVATE_CHANNEL_ID, ids.auditor, '비공개')
+  const dmTabs = await seedTabs(WORK_DM_CHANNEL_ID, ids.director, 'DM')
+
+  const seededTabsChannel = await createChannelRow({
+    id: WORK_TABS_CHANNEL_ID,
+    kind: 'public',
+    name: 'authz-e2e 탭',
+    slug: 'authz-e2e-tabs',
+    topic: null,
+    categoryId: null,
+    creatorId: ids.director,
+  })
+  if (seededTabsChannel.status !== 'created') {
+    throw new Error(`업무툴 탭 채널 시드 실패: ${seededTabsChannel.status}`)
+  }
+  await addChannelMemberRows(WORK_TABS_CHANNEL_ID, [ids.auditor])
+  const tabsNote = await insertTabRow({
+    channelId: WORK_TABS_CHANNEL_ID,
+    kind: 'note',
+    title: '회의 메모',
+    config: {},
+    createdBy: ids.director,
+    canWriteArchived: false,
+  })
+  const tabsTasks = await insertTabRow({
+    channelId: WORK_TABS_CHANNEL_ID,
+    kind: 'tasks',
+    title: '할 일',
+    config: {},
+    createdBy: ids.director,
+    canWriteArchived: false,
+  })
+
   const fixtures = {
     users: ids,
     workPublicChannelId: WORK_PUBLIC_CHANNEL_ID,
@@ -1358,6 +1438,18 @@ async function main() {
     workPublicMessageId: WORK_PUBLIC_MESSAGE_ID,
     workPrivateMessageId: WORK_PRIVATE_MESSAGE_ID,
     workDmMessageId: WORK_DM_MESSAGE_ID,
+    workPrivateNoteTabId: privateTabs.noteTabId,
+    workPrivateNoteId: privateTabs.noteId,
+    workPrivateTasksTabId: privateTabs.tasksTabId,
+    workPrivateTaskId: privateTabs.taskId,
+    workDmNoteTabId: dmTabs.noteTabId,
+    workDmNoteId: dmTabs.noteId,
+    workDmTasksTabId: dmTabs.tasksTabId,
+    workDmTaskId: dmTabs.taskId,
+    workTabsChannelId: WORK_TABS_CHANNEL_ID,
+    workTabsChannelSlug: 'authz-e2e-tabs',
+    workTabsNoteTabId: tabsNote.id,
+    workTabsTasksTabId: tabsTasks.id,
     postId: POST_ID,
     commentId: COMMENT_ID,
     notificationId: NOTIFICATION_ID,
@@ -1413,7 +1505,7 @@ async function main() {
       `이사회 회의 2(scheduled·completed)·회의록 2·안건 1·안건 의견 3, ` +
       `펀딩 캠페인 6(draft·submitted 3·closed·active)·리워드 6·후원 2(회원·비회원), ` +
       `system_settings ${settingRows.length}행, default_settings ${DEFAULT_SETTINGS.length}행, ` +
-      `업무툴 채널 2(공개·비공개)·DM 1·메시지 3 (전부 Turso)`
+      `업무툴 채널 3(공개·비공개·탭)·DM 1·메시지 3·탭 6(메모 3·할 일 3)·할 일 2 (전부 Turso)`
   )
 }
 
