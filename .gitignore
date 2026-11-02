@@ -10,6 +10,8 @@
 
 # next.js
 /.next/
+# NEXT_DIST_DIR로 가른 빌드 출력 — 권한 E2E의 `.next-e2e`(playwright.config.ts) 등
+/.next-*/
 /out/
 
 # production

@@ -111,3 +111,61 @@ test('fetchVerifiedSession 자체가 실패해도(네트워크 오류) fail-clos
     '폴백 자체의 실패는 여전히 null이어야 한다(fail-closed) — throw하면 미들웨어가 500을 낸다'
   )
 })
+
+/**
+ * 캐시 쿠키의 이름(`__Secure-` 접두사 유무)을 **요청의 프로토콜로** 고른다.
+ *
+ * better-auth의 `getCookieCache`는 `isSecure`를 주지 않으면 `NODE_ENV`만 보고
+ * 운영에서 `__Secure-better-auth.session_data`를 찾는다. 그런데 Better Auth
+ * 서버는 http 요청에는 접두사 없이 쿠키를 쓴다 — 운영 빌드를 http로 띄운 권한
+ * E2E에서 캐시가 한 번도 맞지 않아 모든 요청이 왕복으로 떨어졌다.
+ *
+ * 어느 이름을 읽었는지는 secret 누락 예외로 관찰한다: 이름이 맞으면 디코드를
+ * 시도하다 던지고(→ 경고 로그), 이름이 틀리면 쿠키를 못 찾아 조용히 넘어간다.
+ */
+async function cacheCookieWasRead(url, cookie) {
+  mock.method(
+    globalThis,
+    'fetch',
+    async () =>
+      new Response(JSON.stringify({ user: { id: 'user-from-fallback' } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+  )
+  const warn = mock.method(console, 'warn', () => {})
+  const { readMiddlewareSession } = await import(
+    `../../src/middleware/session.ts?t=${Date.now()}-${Math.random()}`
+  )
+  await readMiddlewareSession({
+    headers: new Headers({ cookie: `${cookie}; better-auth.session_token=real-token` }),
+    nextUrl: new URL(url),
+  })
+  return warn.mock.calls.some(call => String(call.arguments[0]).includes('getCookieCache 실패'))
+}
+
+// better-auth의 `isProduction`은 모듈을 읽을 때 한 번 정해져 테스트 안에서 NODE_ENV를
+// 바꿔도 따라오지 않는다. 그래서 "운영인데 http"는 직접 재현하지 못하고, 아래 https
+// 테스트가 "이름을 NODE_ENV가 아니라 프로토콜로 고른다"는 것을 잡는다(수정 전에는
+// 테스트 환경에서 https여도 접두사 없는 이름을 찾아 실패한다 — 실측).
+test('http 요청에서는 접두사 없는 캐시 쿠키를 읽는다', async () => {
+  assert.equal(
+    await cacheCookieWasRead('http://127.0.0.1:3104/board', 'better-auth.session_data=x'),
+    true
+  )
+  assert.equal(
+    await cacheCookieWasRead('http://127.0.0.1:3104/board', '__Secure-better-auth.session_data=x'),
+    false
+  )
+})
+
+test('https 요청에서는 __Secure- 캐시 쿠키를 읽는다(운영 배포의 모양)', async () => {
+  assert.equal(
+    await cacheCookieWasRead('https://ggac.kr/board', '__Secure-better-auth.session_data=x'),
+    true
+  )
+  assert.equal(
+    await cacheCookieWasRead('https://ggac.kr/board', 'better-auth.session_data=x'),
+    false
+  )
+})

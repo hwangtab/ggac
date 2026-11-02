@@ -1029,6 +1029,11 @@ async function main() {
   // readAt을 매 시드마다 null로 되돌린다 — e2e 스펙 안의
   // resetNotificationUnread()가 테스트 사이 상태를 되돌리는 것과 별개로,
   // 시드 자체도 항상 "안 읽음"에서 시작해야 최초 실행이 결정적이다.
+  //
+  // createdAt도 매번 지금으로 당긴다. 스위트 한 번이 `owner`에게 펀딩 알림을
+  // 열 개 남짓 새로 만들고(심사·승인·정산 경계), 알림 목록 API는 최신순
+  // 20건만 준다 — 같은 DB로 두세 번 돌리면 이 픽스처 알림이 첫 쪽에서 밀려나
+  // `authz-personal.spec.ts`의 "자기 알림이 있다"가 앱과 무관하게 실패했다(실측).
   const notificationValues = {
     id: NOTIFICATION_ID,
     userId: ids.owner,
@@ -1036,6 +1041,7 @@ async function main() {
     title: 'authz 픽스처 알림',
     message: '소유권 경계 테스트용',
     readAt: null,
+    createdAt: new Date(),
   }
   await db
     .insert(tursoNotifications)

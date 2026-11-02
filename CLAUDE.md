@@ -127,6 +127,13 @@ ffmpeg를 요구하는 것이고, 그래서 `video`는 CI에서만 켠다(`retai
 검증된 상태(2026-09-01): `PLAYWRIGHT_BROWSERS_PATH`를 빈 디렉터리로 두고 돌려
 **37건 전부 통과, 받은 바이너리 0개.**
 
+**권한 E2E(`test:e2e:authz`)는 dev가 아니라 운영 빌드(`next build` →
+`next start`, 출력은 `.next-e2e`)를 상대로 돈다** — `E2E_TURSO_DATABASE_URL`이
+있고 CI가 아닐 때. dev 서버의 첫 컴파일 대기가 만들던 타임아웃·`/login` 튕김이
+사라졌고 11~18분이 빌드 포함 3분 안쪽이 됐다. 예전 dev 경로는
+`PLAYWRIGHT_DEV_SERVER=1`. 운영 모드라 생기는 차이(가짜 Upstash·Better Auth
+레이트리밋 등)는 `scripts/turso/README.md` §3.
+
 MCP 두 개(aside·chrome-devtools)는 **스펙 파일을 대신 실행하지 못한다** —
 `e2e/*.spec.ts`는 Playwright 러너가 필요하다. 화면 확인·계측용이지 E2E 실행
 수단이 아니다.
@@ -352,14 +359,14 @@ noreply@ggac.kr로 가서 유실된다), `MAILBOX_BACKFILL_CRON_TOKEN`(메일함
   **앱 코드가 전부 판정한다**. "RLS 정책을 고친다"는 접근은 아무것도 바꾸지
   않으면서 경계가 지켜진다고 믿게 만든다.
 - **권한의 안전망은 E2E다. 정적 가드가 아니다.** 인가를 바꿨으면
-  `npm run test:e2e:authz`(기준선 **147 passed**, 총 148건 중 나머지 1건은
-  스킵이다 — 메일함 첨부 다운로드 기록 테스트가 실제 Blob 객체를 요구해서다
-  (운영 Blob 오염을 피하려고 만들지 않는다). 실행법은
-  `scripts/turso/README.md`)를 돌려라. **환경에 따라 하나 더 빨간불일 수 있다**:
-  `authz-mailbox.spec.ts`의 "관리자는 화면에 들어가 메일함을 본다"는 메일 본문
-  iframe이 뜨길 기다리는데, 로컬에서는 main 기준으로도 같은 자리에서
-  실패한다(2026-09-11 대조 실측). 인가 변경 탓인지 가릴 때는 main 워크트리에서
-  같은 스펙 하나만 돌려 비교해라.
+  `npm run test:e2e:authz`(기준선 **198 passed**, 총 200건 중 1건은 정책 36 —
+  `PUBLIC_BLOB_READ_WRITE_TOKEN` 없이 돌리면 실패한다 — 나머지 1건은 스킵이다 —
+  메일함 첨부 다운로드 기록 테스트가 실제 Blob 객체를 요구해서다 (운영 Blob
+  오염을 피하려고 만들지 않는다). 실행법은 `scripts/turso/README.md`)를 돌려라.
+  **환경에 따라 하나 더 빨간불일 수 있다**: `authz-mailbox.spec.ts`의 "관리자는
+  화면에 들어가 메일함을 본다"는 메일 본문 iframe이 뜨길 기다리는데, 로컬에서는
+  main 기준으로도 같은 자리에서 실패한다(2026-09-11 대조 실측). 인가 변경 탓인지
+  가릴 때는 main 워크트리에서 같은 스펙 하나만 돌려 비교해라.
 - **메일함 게이트(단계 5).** 관리자 메일함(`/api/admin/mailbox*`,
   `/admin/mailbox`·`/board-room/mailbox`)은 목록·상세·첨부 다운로드가
   `requireBoardMember()`(이사·감사·관리자)로 열리고, 상태 변경·답장은
