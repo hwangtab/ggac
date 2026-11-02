@@ -108,7 +108,8 @@ async function schedulePush(opts: {
 
 /**
  * 메시지 보내기. messageId는 클라이언트가 미리 만든 uuid(낙관 표시·폴링 중복 제거용).
- * attachmentIds는 검증만 하고 그대로 돌려준다(첨부 연결은 2단계 파일 영역).
+ * attachmentIds는 검증만 하고 그대로 돌려준다 — 첨부 연결은 입력창이 전송 직후 `attachUploads(messageId, ids)`로 한다
+ * (원본과 같다, src/work/lib/files/actions.ts). 승격이 메시지 첨부 수와 rev를 올려 다른 화면은 폴링으로 첨부를 다시 읽는다.
  */
 export async function sendMessage(input: unknown): Promise<
   ActionResult<{
@@ -402,7 +403,7 @@ export async function loadThread(
   }
 }
 
-/** 메시지들의 첨부 — 2단계 전까지는 메시지마다 빈 배열 */
+/** 메시지들의 첨부(실시간 갱신 재조회 — 읽을 수 있는 채널의 지워지지 않은 메시지만) */
 export async function loadMessageAttachments(
   input: unknown
 ): Promise<ActionResult<Record<string, AttachmentRow[]>>> {

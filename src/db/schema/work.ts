@@ -337,3 +337,103 @@ export const workTyping = sqliteTable(
   },
   table => [primaryKey({ columns: [table.channelId, table.scope, table.userId] })]
 )
+
+// ── 2단계(파일) — 설계 §4·§7 ─────────────────────────────────────────────────
+
+/**
+ * 메시지 전송 전 임시 업로드(원본 `pending_uploads`, 0003·0034). 원본은 `pending/` 객체를 최종 경로로 옮겼지만
+ * 여기서는 **처음부터 최종 키**(`board-work/files/<uploadId>/<asciiSafeName>`)에 올리고, 승격은 이 행을 지우고
+ * `work_attachments` 행을 만드는 DB 작업뿐이다(§7-1). 24시간 넘은 행과 그 객체는 정리 크론(5단계)이 지운다.
+ */
+export const workPendingUploads = sqliteTable(
+  'work_pending_uploads',
+  {
+    /** 업로드 id — 객체 키의 한 구간이기도 하다 */
+    id: uuidPk(),
+    channelId: text('channel_id')
+      .notNull()
+      .references(() => workChannels.id, { onDelete: 'cascade' }),
+    uploaderId: text('uploader_id')
+      .notNull()
+      .references(() => memberProfiles.id, { onDelete: 'cascade' }),
+    /** 비공개 Blob 키(`board-work/files/…`). 서버가 정하고, 업로드 토큰은 이 키로만 발급한다 */
+    blobPath: text('blob_path').notNull(),
+    /** 표시 이름(1~255자, 한글 유지) */
+    name: text('name').notNull(),
+    mime: text('mime').notNull().default('application/octet-stream'),
+    /** 브라우저가 알린 크기. 승격 때 `head()`의 실제 크기와 같아야 한다 */
+    size: integer('size').notNull(),
+    /** 문서 편집 초안 메타(원본 0034, 3단계). 일반 첨부는 null — 초안은 일반 첨부로 승격하지 않는다 */
+    draftMeta: text('draft_meta', { mode: 'json' }),
+    createdAt: createdAt(),
+  },
+  table => [
+    uniqueIndex('work_pending_uploads_blob_path_key').on(table.blobPath),
+    index('work_pending_uploads_created_idx').on(table.createdAt),
+    index('work_pending_uploads_uploader_idx').on(table.uploaderId),
+  ]
+)
+
+/**
+ * 메시지 첨부(원본 `attachments`, 0001·0022·0032). 원본의 harden_attachments_write·is_latest 재계산 트리거는
+ * 옮기지 않았다 — 쓰기 함수(`src/db/queries/work/files.ts`)가 같은 트랜잭션에서 메시지 첨부 수·rev를 맞춘다.
+ * 버전 열(`previous_attachment_id`·`version_root_id`·`version_no`·`is_latest`)은 3단계(버전)가 표를 바꾸지 않게
+ * 지금 만들어 둔다. 2단계에서는 모든 행이 v1(root null·no 1·latest true)이다.
+ */
+export const workAttachments = sqliteTable(
+  'work_attachments',
+  {
+    id: uuidPk(),
+    messageId: text('message_id')
+      .notNull()
+      .references(() => workMessages.id, { onDelete: 'cascade' }),
+    channelId: text('channel_id')
+      .notNull()
+      .references(() => workChannels.id, { onDelete: 'cascade' }),
+    uploaderId: text('uploader_id').references(() => memberProfiles.id, { onDelete: 'set null' }),
+    /** 비공개 Blob 키. 읽기·삭제 전마다 `isSafeBoardWorkPath`로 다시 본다(원본 bucket_path 자리) */
+    blobPath: text('blob_path').notNull(),
+    /** 표시 이름(1~255자) */
+    name: text('name').notNull(),
+    mime: text('mime').notNull().default('application/octet-stream'),
+    size: integer('size').notNull(),
+    width: integer('width'),
+    height: integer('height'),
+    /** 채널 파일 탭 폴더(원본 0022). null = 최상위. 규칙은 `src/work/lib/files/folders.ts` */
+    folderPath: text('folder_path'),
+    previousAttachmentId: text('previous_attachment_id').references(
+      (): AnySQLiteColumn => workAttachments.id,
+      { onDelete: 'set null' }
+    ),
+    versionRootId: text('version_root_id').references((): AnySQLiteColumn => workAttachments.id, {
+      onDelete: 'set null',
+    }),
+    versionNo: integer('version_no').notNull().default(1),
+    isLatest: integer('is_latest', { mode: 'boolean' }).notNull().default(true),
+    createdAt: createdAt(),
+  },
+  table => [
+    uniqueIndex('work_attachments_blob_path_key').on(table.blobPath),
+    index('work_attachments_message_idx').on(table.messageId),
+    index('work_attachments_channel_idx').on(table.channelId, sql`${table.createdAt} DESC`),
+    index('work_attachments_channel_latest_idx')
+      .on(table.channelId, sql`${table.createdAt} DESC`)
+      .where(sql`"is_latest" = 1`),
+    index('work_attachments_folder_idx').on(table.channelId, table.folderPath),
+    index('work_attachments_uploader_idx').on(table.uploaderId),
+    /**
+     * 같은 계보에 같은 번호는 하나(원본 attachments_lineage_version_uidx — 3단계의 동시 저장 경합 검출).
+     * 계보 키는 coalesce(version_root_id, id)인데, drizzle-kit이 식 안의 쉼표를 열 구분으로 잘라서 CASE로 쓴다.
+     */
+    uniqueIndex('work_attachments_lineage_version_uidx').on(
+      sql`(CASE WHEN ${table.versionRootId} IS NULL THEN ${table.id} ELSE ${table.versionRootId} END)`,
+      table.versionNo
+    ),
+    index('work_attachments_previous_idx')
+      .on(table.previousAttachmentId)
+      .where(sql`"previous_attachment_id" is not null`),
+    index('work_attachments_version_root_idx')
+      .on(table.versionRootId)
+      .where(sql`"version_root_id" is not null`),
+  ]
+)

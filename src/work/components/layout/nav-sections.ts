@@ -1,6 +1,7 @@
 import {
   BellIcon,
   CheckSquareIcon,
+  FolderIcon,
   HashIcon,
   MessageCircleIcon,
   type LucideIcon,
@@ -35,7 +36,7 @@ export type NavSection = {
 }
 
 /**
- * ggac 이식 1b: 활동·채팅·채널만 둔다. 할 일·자료실은 2단계에 다시 켠다(2b: 할 일을 켰다). 결재(지출결의)·위키·관리 화면은
+ * ggac 이식: 활동·채팅·채널·할 일(2b)·자료실(2a). 결재(지출결의)·위키·관리 화면은
  * 가져오지 않는다(설계 §1 — 구성원·채널 관리는 ggac 이사회 권한과 관리자 화면이 맡는다). SectionKey는 원본 그대로 둔다.
  */
 export const NAV_SECTIONS: readonly NavSection[] = [
@@ -43,6 +44,7 @@ export const NAV_SECTIONS: readonly NavSection[] = [
   { key: 'chat', label: '채팅', href: '/chat', icon: MessageCircleIcon, guest: true },
   { key: 'channels', label: '채널', href: '/c', icon: HashIcon, guest: true },
   { key: 'tasks', label: '할 일', href: '/tasks', icon: CheckSquareIcon, guest: true },
+  { key: 'files', label: '자료실', href: '/files', icon: FolderIcon, guest: false },
 ]
 
 export function sectionByKey(key: SectionKey): NavSection | undefined {
@@ -71,7 +73,8 @@ export function activeSection(pathname: string): SectionKey | null {
   if (under(pathname, '/dm') || under(pathname, '/chat')) return 'chat'
   if (under(pathname, '/c')) return 'channels'
   if (under(pathname, '/tasks')) return 'tasks'
-  // ggac 이식: 결재·자료실·위키·관리 섹션은 레일에 없다(NAV_SECTIONS)
+  if (under(pathname, '/files')) return 'files'
+  // ggac 이식: 결재·위키·관리 섹션은 레일에 없다(NAV_SECTIONS)
   return null
 }
 

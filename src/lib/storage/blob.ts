@@ -1,4 +1,4 @@
-import { del, get, list, put } from '@vercel/blob'
+import { BlobNotFoundError, del, get, head, list, put } from '@vercel/blob'
 
 type StoreKind = 'public' | 'private'
 
@@ -7,6 +7,22 @@ export type PrivateObjectResult = {
   stream: ReadableStream | null
   contentType: string
   etag: string
+  /**
+   * 저장소 응답의 `content-range`·`content-length`(Range를 넘겼을 때만 의미가 있다). `get()`의 statusCode는
+   * 부분 응답에도 200이라, 206 여부는 호출자가 `contentRange`로 판정한다(docs/board-work/01-설계.md §7-5).
+   */
+  contentRange: string | null
+  contentLength: string | null
+}
+
+export type PrivateObjectOptions = {
+  /** 저장소에 그대로 넘길 `Range` 헤더 값(정규화된 `bytes=a-b` 하나). 호출자가 먼저 검증한다 */
+  range?: string
+  /**
+   * 비공개 저장소 토큰을 바꿔 쓴다(이사회 업무툴 — `BOARD_WORK_BLOB_READ_WRITE_TOKEN`). 없으면
+   * `PRIVATE_BLOB_READ_WRITE_TOKEN`. 빈 문자열은 받지 않는다 — 호출자가 "설정 안 됨"을 먼저 판정한다.
+   */
+  token?: string
 }
 
 function requireEnv(name: string): string {
@@ -74,12 +90,14 @@ export function getPublicUrl(pathname: string): string {
  */
 export async function getPrivateObject(
   pathname: string,
-  ifNoneMatch?: string
+  ifNoneMatch?: string,
+  options: PrivateObjectOptions = {}
 ): Promise<PrivateObjectResult | null> {
   const result = await get(pathname, {
     access: 'private',
-    token: tokenFor('private'),
+    token: options.token || tokenFor('private'),
     ifNoneMatch,
+    ...(options.range ? { headers: { Range: options.range } } : {}),
   })
 
   if (!result) return null
@@ -89,6 +107,25 @@ export async function getPrivateObject(
     stream: result.stream,
     contentType: result.blob.contentType,
     etag: result.blob.etag,
+    contentRange: result.headers?.get('content-range') ?? null,
+    contentLength: result.headers?.get('content-length') ?? null,
+  }
+}
+
+/**
+ * 비공개 객체 메타(실제 크기·형식). 없으면 null — `head()`는 없는 객체에 `BlobNotFoundError`를 던지므로
+ * 그것만 null로 바꾸고 나머지(네트워크·5xx)는 그대로 던진다(없음으로 오해해 완료된 업로드를 지우지 않게).
+ */
+export async function headPrivateObject(
+  pathname: string,
+  options: Pick<PrivateObjectOptions, 'token'> = {}
+): Promise<{ size: number; contentType: string | null } | null> {
+  try {
+    const meta = await head(pathname, { token: options.token || tokenFor('private') })
+    return { size: meta.size, contentType: meta.contentType ?? null }
+  } catch (e) {
+    if (e instanceof BlobNotFoundError) return null
+    throw e
   }
 }
 

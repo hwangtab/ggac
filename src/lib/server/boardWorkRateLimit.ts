@@ -14,7 +14,11 @@ const ACTION_REQUEST_URL = 'https://board-work.internal/server-action'
 export type WorkRateLimitResult = { ok: boolean; message?: string }
 
 async function consume(
-  config: (typeof RATE_LIMITS)['WORK_WRITE'] | (typeof RATE_LIMITS)['WORK_SYNC'],
+  config:
+    | (typeof RATE_LIMITS)['WORK_WRITE']
+    | (typeof RATE_LIMITS)['WORK_SYNC']
+    | (typeof RATE_LIMITS)['WORK_RENDER']
+    | (typeof RATE_LIMITS)['WORK_RENDER_THUMB'],
   userId: string,
   request?: NextRequest
 ): Promise<WorkRateLimitResult> {
@@ -37,4 +41,19 @@ export function consumeWorkSync(
   request: NextRequest
 ): Promise<WorkRateLimitResult> {
   return consume(RATE_LIMITS.WORK_SYNC, userId, request)
+}
+
+/**
+ * 문서 미리보기 변환(WORK_RENDER 분당 20 / 썸네일 WORK_RENDER_THUMB 분당 30) — 캐시가 없어 kordoc 이 실제로 돌 때만 센다.
+ * 원본 render-guard의 프로세스 메모리 리미터 자리. 리미터 장애 때 GET 은 fail-open(읽기 기본값)이다.
+ */
+export function consumeWorkRender(
+  userId: string,
+  purpose: 'view' | 'thumb'
+): Promise<WorkRateLimitResult> {
+  return consume(
+    purpose === 'thumb' ? RATE_LIMITS.WORK_RENDER_THUMB : RATE_LIMITS.WORK_RENDER,
+    userId,
+    new NextRequest('https://board-work.internal/render', { method: 'GET' })
+  )
 }

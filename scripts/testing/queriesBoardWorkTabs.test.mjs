@@ -34,6 +34,7 @@ before(async () => {
     tabs: await import(url('work/tabs.ts')),
     notes: await import(url('work/notes.ts')),
     tasks: await import(url('work/tasks.ts')),
+    files: await import(url('work/files.ts')),
     client: await import(new URL('../../src/db/client.ts', import.meta.url).href),
   }
 })
@@ -174,18 +175,73 @@ test('웹사이트 탭은 https만 — http·javascript·호스트 끝점(.)은 
   assert.deepEqual(ok.config, { url: 'https://ggac.kr/about', embed: true })
 })
 
-test('파일 탭: 첨부 표(2a) 전에는 어떤 attachmentId도 이 대화의 것이 아니다(invalid_target)', async () => {
+test('파일 탭: 그 대화의, 지워지지 않은 메시지의 첨부만 — 짝: 같은 대화 첨부는 된다', async () => {
   const owner = await seedPerson()
   const ch = await seedChannel({ creatorId: owner })
-  await expectWriteError(
-    addTab(ch, owner, { kind: 'file', config: { attachmentId: crypto.randomUUID() } }),
-    'invalid_target'
-  )
-  await expectWriteError(
-    addTab(ch, owner, { kind: 'file', config: { attachmentId: 'not-a-uuid' } }),
-    'invalid_target'
-  )
+  const other = await seedChannel({ creatorId: owner })
+  // 첨부는 앱과 같은 경로(임시 업로드 → 승격)로 만든다. Blob 객체는 없어도 된다(행만 본다)
+  const attach = async channelId => {
+    const messageId = crypto.randomUUID()
+    const sent = await Q.messages.insertMessage({
+      id: messageId,
+      channelId,
+      authorId: owner,
+      body: '첨부',
+      canPostRestricted: false,
+    })
+    assert.equal(sent.status, 'created')
+    const uploadId = crypto.randomUUID()
+    assert.ok(
+      await Q.files.insertPendingUploads(
+        [
+          {
+            id: uploadId,
+            channelId,
+            uploaderId: owner,
+            blobPath: `board-work/files/${uploadId}/a.pdf`,
+            name: 'a.pdf',
+            mime: 'application/pdf',
+            size: 10,
+          },
+        ],
+        { maxPerUser: 100 }
+      )
+    )
+    const att = await Q.files.promotePendingUpload({
+      uploadId,
+      messageId,
+      actorId: owner,
+      size: 10,
+    })
+    return { attachmentId: att.id, messageId }
+  }
+  const mine = await attach(ch)
+  const elsewhere = await attach(other)
+  const deleted = await attach(ch)
+  await Q.messages.softDeleteMessage({
+    messageId: deleted.messageId,
+    actorId: owner,
+    actorIsAdmin: false,
+  })
+
+  for (const attachmentId of [
+    elsewhere.attachmentId,
+    deleted.attachmentId,
+    crypto.randomUUID(),
+    'not-a-uuid',
+  ]) {
+    await expectWriteError(
+      addTab(ch, owner, { kind: 'file', title: '파일', config: { attachmentId } }),
+      'invalid_target'
+    )
+  }
   assert.equal(await Q.tabs.countTabRows(ch), 0)
+  const ok = await addTab(ch, owner, {
+    kind: 'file',
+    title: '파일',
+    config: { attachmentId: mine.attachmentId },
+  })
+  assert.equal(ok.kind, 'file')
 })
 
 test('위키·타임라인 탭은 만들 수 없다(가져오지 않은 종류)', async () => {

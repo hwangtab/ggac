@@ -57,13 +57,18 @@ export function applyCSP(request: NextRequest, response: NextResponse) {
       // 토스 결제창·Turnstile 위젯 둘 다 iframe으로 뜬다. 빠지면 결제 버튼이나
       // 가입 화면의 사람 확인이 먹통이 된다.
       "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://*.tosspayments.com https://challenges.cloudflare.com",
+      // 이사회 업무툴 첨부는 브라우저가 비공개 Blob에 직접 올린다(`@vercel/blob/client` upload — 토큰은 같은 출처,
+      // 본문은 https://vercel.com/api/blob). 빠지면 업로드가 조용히 막힌다(docs/board-work/01-설계.md §7-5).
+      // next.config.js·src/utils/security.ts와 함께 고친다.
       process.env.NODE_ENV === 'development'
-        ? "connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:* https://*.tosspayments.com"
-        : "connect-src 'self' https://*.tosspayments.com",
+        ? "connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:* https://*.tosspayments.com https://vercel.com"
+        : "connect-src 'self' https://*.tosspayments.com https://vercel.com",
       "object-src 'none'",
       "base-uri 'self'",
       // 결제창이 카드사 인증 페이지로 폼을 제출한다(next.config.js의 같은 항목 참고).
       "form-action 'self' https://*.tosspayments.com",
+      // 업무툴 PDF 미리보기는 같은 출처 iframe에 뜬다 — 그 응답(/api/board-room/work/files/<id>/<name>)만 라우트가
+      // SAMEORIGIN·'self'를 직접 붙인다. /api/* 는 이 미들웨어 CSP와 next.config 전역 헤더 둘 다 타지 않는다.
       "frame-ancestors 'none'",
       "worker-src 'self' blob:",
       "manifest-src 'self'",

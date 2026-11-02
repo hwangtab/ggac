@@ -474,3 +474,319 @@ test.describe('업무툴 대화 탭·메모·할 일 — 읽기 경계', () => {
     expect(change.tabsChanged).toBe(true)
   })
 })
+
+/**
+ * 파일(2a) 경계 — 원본 getReadableAttachment: **읽을 수 있는 채널 + 지워지지 않은 메시지**의 첨부만.
+ * 시드는 각 채널 메시지에 첨부 행 하나씩을 만들지만 **Blob 객체는 만들지 않는다**(운영 저장소 오염 방지). 이 스위트의
+ * 업무툴 저장소 토큰은 빈 값이라(playwright.config.ts `BOARD_WORK_BLOB_READ_WRITE_TOKEN`), 파일 라우트는 권한을
+ * **지난 뒤에만** 503(저장소 미설정)을 낸다. 그래서 허용 쪽은 503, 거부 쪽은 404(읽을 수 없음 — 존재를 숨긴다)·
+ * 403(이사회 밖)으로 갈린다. 시험 저장소 토큰을 준 실행에서는 허용 쪽이 404(객체 없음)일 수 있어 둘 다 받는다.
+ */
+const ALLOWED_STORAGE_STATUSES = [503, 404]
+
+async function getAs(
+  browser: import('@playwright/test').Browser,
+  role: string,
+  path: string,
+  headers: Record<string, string> = {}
+): Promise<{ status: number; body: string; headers: Record<string, string> }> {
+  const context = await browser.newContext({ storageState: storageStatePath(role) })
+  try {
+    const res = await context.request.get(path, { headers, maxRedirects: 0 })
+    return { status: res.status(), body: await res.text(), headers: res.headers() }
+  } finally {
+    await context.close()
+  }
+}
+
+async function postAs(
+  browser: import('@playwright/test').Browser,
+  role: string,
+  path: string,
+  data: unknown
+): Promise<{ status: number; body: string }> {
+  const context = await browser.newContext({ storageState: storageStatePath(role) })
+  try {
+    const res = await context.request.post(path, { data })
+    return { status: res.status(), body: await res.text() }
+  } finally {
+    await context.close()
+  }
+}
+
+const fileRoutes = (id: string) => [
+  `/api/board-room/work/files/${id}`,
+  `/api/board-room/work/files/${id}?download=1`,
+  `/api/board-room/work/files/${id}?thumb=1`,
+  `/api/board-room/work/files/${id}/${encodeURIComponent('이름.pdf')}`,
+  `/api/board-room/work/files/${id}/render?view=layout`,
+]
+
+test.describe('업무툴 파일 경계 — 다운로드·미리보기·렌더 라우트', () => {
+  test('비공개 채널 첨부: 초대받지 않은 이사는 404, owner인 감사와 관리자는 권한을 지난다(503)', async ({
+    browser,
+  }) => {
+    const f = readFixtures()
+    for (const path of fileRoutes(f.workPrivateAttachmentId)) {
+      const denied = await getAs(browser, 'director', path)
+      expect(denied.status, `이사 ${path}`).toBe(404)
+      expect(denied.body).not.toContain(f.workPrivateFileName)
+      // 렌더(.pdf 는 레이아웃 대상이 아님 → 415 unsupported)도 권한을 지난 뒤의 응답이다 — 허용 쪽 표식으로 함께 받는다
+      const allowedStatuses = path.includes('/render') ? [415] : ALLOWED_STORAGE_STATUSES
+      const auditor = await getAs(browser, 'auditor', path)
+      expect(allowedStatuses, `감사 ${path} → ${auditor.status}`).toContain(auditor.status)
+      const admin = await getAs(browser, 'admin', path)
+      expect(allowedStatuses, `관리자 ${path} → ${admin.status}`).toContain(admin.status)
+    }
+  })
+
+  test('DM 첨부: 관리자도 404, 당사자인 이사는 권한을 지난다', async ({ browser }) => {
+    const f = readFixtures()
+    for (const path of fileRoutes(f.workDmAttachmentId).slice(0, 4)) {
+      expect((await getAs(browser, 'admin', path)).status, `관리자 ${path}`).toBe(404)
+      expect(ALLOWED_STORAGE_STATUSES).toContain((await getAs(browser, 'director', path)).status)
+    }
+  })
+
+  test('일반 조합원은 403, 비로그인은 401 — 없는 id 와 잘못된 id 는 이사에게도 404', async ({
+    browser,
+    playwright,
+    baseURL,
+  }) => {
+    const f = readFixtures()
+    for (const path of fileRoutes(f.workPublicAttachmentId)) {
+      expect((await getAs(browser, 'other', path)).status, path).toBe(403)
+    }
+    const anon = await playwright.request.newContext({ baseURL })
+    try {
+      const res = await anon.get(`/api/board-room/work/files/${f.workPublicAttachmentId}`, {
+        maxRedirects: 0,
+      })
+      expect(res.status()).toBe(401)
+    } finally {
+      await anon.dispose()
+    }
+    expect(ALLOWED_STORAGE_STATUSES).toContain(
+      (await getAs(browser, 'director', `/api/board-room/work/files/${f.workPublicAttachmentId}`))
+        .status
+    )
+    expect(
+      (await getAs(browser, 'director', `/api/board-room/work/files/${crypto.randomUUID()}`)).status
+    ).toBe(404)
+    expect((await getAs(browser, 'director', '/api/board-room/work/files/not-a-uuid')).status).toBe(
+      404
+    )
+  })
+
+  test('Range 가 크기 밖이면 권한을 지난 뒤 416(저장소를 부르지 않는다), 권한이 없으면 여전히 404', async ({
+    browser,
+  }) => {
+    const f = readFixtures()
+    const path = `/api/board-room/work/files/${f.workPrivateAttachmentId}`
+    const ok = await getAs(browser, 'auditor', path, { Range: 'bytes=999999-' })
+    expect(ok.status).toBe(416)
+    expect(ok.headers['content-range']).toBe('bytes */1234')
+    expect(ok.headers['cache-control']).toContain('no-store')
+    const denied = await getAs(browser, 'director', path, { Range: 'bytes=999999-' })
+    expect(denied.status).toBe(404)
+  })
+})
+
+test.describe('업무툴 파일 경계 — 목록 화면', () => {
+  test('자료실: 이사에게 비공개 채널·남의 DM 파일은 없고 공개 채널 파일은 보인다, 감사는 비공개 파일을 본다', async ({
+    browser,
+  }) => {
+    const f = readFixtures()
+    const directorContext = await browser.newContext({ storageState: storageStatePath('director') })
+    const auditorContext = await browser.newContext({ storageState: storageStatePath('auditor') })
+    const adminContext = await browser.newContext({ storageState: storageStatePath('admin') })
+    try {
+      const director = await directorContext.newPage()
+      await director.goto('/board-room/files', { waitUntil: 'domcontentloaded' })
+      await expect(director.getByTestId('board-work-files')).toBeVisible({ timeout: 15000 })
+      await expect(director.getByText(f.workPublicFileName).first()).toBeVisible()
+      await expect(director.getByText(f.workDmFileName).first()).toBeVisible()
+      await expect(director.getByText(f.workPrivateFileName)).toHaveCount(0)
+      // 채널을 직접 지정해도 새지 않는다
+      await director.goto(`/board-room/files?channel=${f.workPrivateChannelId}`, {
+        waitUntil: 'domcontentloaded',
+      })
+      await expect(director.getByTestId('board-work-files')).toBeVisible({ timeout: 15000 })
+      await expect(director.getByText(f.workPrivateFileName)).toHaveCount(0)
+
+      const auditor = await auditorContext.newPage()
+      await auditor.goto('/board-room/files', { waitUntil: 'domcontentloaded' })
+      await expect(auditor.getByText(f.workPrivateFileName).first()).toBeVisible({ timeout: 15000 })
+
+      // 관리자: 비공개 채널 파일은 보이고(0037), 남의 DM 파일은 안 보인다
+      const admin = await adminContext.newPage()
+      await admin.goto('/board-room/files', { waitUntil: 'domcontentloaded' })
+      await expect(admin.getByText(f.workPrivateFileName).first()).toBeVisible({ timeout: 15000 })
+      await expect(admin.getByText(f.workDmFileName)).toHaveCount(0)
+    } finally {
+      await directorContext.close()
+      await auditorContext.close()
+      await adminContext.close()
+    }
+  })
+
+  test('채널 파일 탭·DM 공유됨: 읽을 수 없으면 404, 읽을 수 있으면 파일이 보인다', async ({
+    browser,
+  }) => {
+    const f = readFixtures()
+    const directorContext = await browser.newContext({ storageState: storageStatePath('director') })
+    const auditorContext = await browser.newContext({ storageState: storageStatePath('auditor') })
+    const adminContext = await browser.newContext({ storageState: storageStatePath('admin') })
+    try {
+      const privatePath = `/board-room/c/${f.workPrivateChannelSlug}/files`
+      const denied = await directorContext.newPage()
+      expect((await denied.goto(privatePath, { waitUntil: 'domcontentloaded' }))?.status()).toBe(
+        404
+      )
+      await expect(denied.getByText(f.workPrivateFileName)).toHaveCount(0)
+
+      const allowed = await auditorContext.newPage()
+      expect((await allowed.goto(privatePath, { waitUntil: 'domcontentloaded' }))?.status()).toBe(
+        200
+      )
+      await expect(allowed.getByText(f.workPrivateFileName).first()).toBeVisible({ timeout: 15000 })
+
+      const dmShared = `/board-room/dm/${f.workDmChannelId}/shared`
+      const adminPage = await adminContext.newPage()
+      expect((await adminPage.goto(dmShared, { waitUntil: 'domcontentloaded' }))?.status()).toBe(
+        404
+      )
+      await expect(adminPage.getByText(f.workDmFileName)).toHaveCount(0)
+      const directorPage = await directorContext.newPage()
+      expect((await directorPage.goto(dmShared, { waitUntil: 'domcontentloaded' }))?.status()).toBe(
+        200
+      )
+      await expect(directorPage.getByText(f.workDmFileName).first()).toBeVisible({ timeout: 15000 })
+    } finally {
+      await directorContext.close()
+      await auditorContext.close()
+      await adminContext.close()
+    }
+  })
+
+  test('메시지 첨부: 비공개 채널 화면에서 owner는 첨부를 보고, 공개 채널 화면에서 이사는 첨부를 본다', async ({
+    browser,
+  }) => {
+    const f = readFixtures()
+    const auditorContext = await browser.newContext({ storageState: storageStatePath('auditor') })
+    const directorContext = await browser.newContext({ storageState: storageStatePath('director') })
+    try {
+      const auditor = await auditorContext.newPage()
+      await auditor.goto(`/board-room/c/${f.workPrivateChannelSlug}`, {
+        waitUntil: 'domcontentloaded',
+      })
+      await expect(auditor.getByText(f.workPrivateFileName).first()).toBeVisible({ timeout: 15000 })
+      const director = await directorContext.newPage()
+      await director.goto(`/board-room/c/${f.workPublicChannelSlug}`, {
+        waitUntil: 'domcontentloaded',
+      })
+      await expect(director.getByText(f.workPublicFileName).first()).toBeVisible({ timeout: 15000 })
+      await expect(director.getByText(f.workPrivateFileName)).toHaveCount(0)
+    } finally {
+      await auditorContext.close()
+      await directorContext.close()
+    }
+  })
+})
+
+test.describe('업무툴 파일 경계 — 업로드 준비·토큰(/api/board-room/work/uploads)', () => {
+  const UPLOADS = '/api/board-room/work/uploads'
+  const file = { name: 'e2e.pdf', size: 10, mime: 'application/pdf' }
+
+  test('준비: 이사는 글을 쓸 수 없는 비공개 채널에 403, 멤버인 공개 채널은 권한을 지난다', async ({
+    browser,
+  }) => {
+    const f = readFixtures()
+    const denied = await postAs(browser, 'director', UPLOADS, {
+      type: 'prepare',
+      channelId: f.workPrivateChannelId,
+      files: [file],
+    })
+    expect(denied.status).toBe(403)
+    // 관리자도 멤버가 아닌 비공개 채널에는 올리지 못한다(읽기만 — 원본 is_channel_member)
+    const adminDenied = await postAs(browser, 'admin', UPLOADS, {
+      type: 'prepare',
+      channelId: f.workPrivateChannelId,
+      files: [file],
+    })
+    expect(adminDenied.status).toBe(403)
+    // 허용 쪽: 저장소가 없으면 503(행을 만들지 않는다), 시험 저장소가 있으면 200
+    const allowed = await postAs(browser, 'director', UPLOADS, {
+      type: 'prepare',
+      channelId: f.workPublicChannelId,
+      files: [file],
+    })
+    expect([200, 503]).toContain(allowed.status)
+    expect(
+      (
+        await postAs(browser, 'other', UPLOADS, {
+          type: 'prepare',
+          channelId: f.workPublicChannelId,
+          files: [file],
+        })
+      ).status
+    ).toBe(403)
+  })
+
+  test('토큰: 남의 임시 업로드·다른 키로는 받을 수 없고, 내 행·같은 키면 권한을 지난다', async ({
+    browser,
+  }) => {
+    const f = readFixtures()
+    const tokenRequest = (pathname: string, uploadId: string) => ({
+      type: 'blob.generate-client-token',
+      payload: { pathname, multipart: false, clientPayload: uploadId },
+    })
+    // 이사가 감사의 비공개 채널 임시 업로드로 토큰을 받으려 하면 — 행이 본인 것이 아니라 404
+    const foreign = await postAs(
+      browser,
+      'director',
+      UPLOADS,
+      tokenRequest(f.workAuditorPendingPath, f.workAuditorPendingId)
+    )
+    expect(foreign.status).toBe(404)
+    expect(foreign.body).not.toContain('clientToken')
+    // 자기 행이라도 다른 키(비공개 저장소의 다른 영역)로는 403
+    for (const other of ['backups/ggac-prod.sql.gz', f.workAuditorPendingPath]) {
+      const res = await postAs(
+        browser,
+        'director',
+        UPLOADS,
+        tokenRequest(other, f.workDirectorPendingId)
+      )
+      expect(res.status, other).toBe(403)
+      expect(res.body).not.toContain('clientToken')
+    }
+    // 허용 쪽: 자기 행·같은 키 → 저장소가 없으면 503, 시험 저장소가 있으면 토큰
+    const mine = await postAs(
+      browser,
+      'director',
+      UPLOADS,
+      tokenRequest(f.workDirectorPendingPath, f.workDirectorPendingId)
+    )
+    expect([200, 503]).toContain(mine.status)
+    // 감사는 자기 비공개 채널 행으로 권한을 지난다
+    const auditor = await postAs(
+      browser,
+      'auditor',
+      UPLOADS,
+      tokenRequest(f.workAuditorPendingPath, f.workAuditorPendingId)
+    )
+    expect([200, 503]).toContain(auditor.status)
+    // 일반 조합원은 403
+    expect(
+      (
+        await postAs(
+          browser,
+          'other',
+          UPLOADS,
+          tokenRequest(f.workDirectorPendingPath, f.workDirectorPendingId)
+        )
+      ).status
+    ).toBe(403)
+  })
+})

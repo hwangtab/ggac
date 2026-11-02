@@ -10,7 +10,7 @@
  * | 〃 UPDATE(id·channel·kind·작성자 동결)   | 바꿀 수 있는 열만 받는 함수(`renameTabRow`·`reorderTabRows`)뿐이다 |
  * | 0025 v_recheck(설정이 그대로면 재검사 생략) | 이름·순서 바꾸기는 config를 건드리지 않으므로 종류별 검사를 다시 하지 않는다 |
  * | website `^https://` · 0033 호스트 끝점 거절 | `assertWebsiteConfig`                                      |
- * | file: 그 대화의 첨부만                  | `attachmentBelongsToChannel`(2a 첨부 표가 들어오기 전엔 늘 false — 아래) |
+ * | file: 그 대화의 첨부만                  | `attachmentBelongsToChannel`(지워진 메시지의 첨부 제외)      |
  * | note: 그 대화의 메모만 · 메모당 탭 1개    | `assertNoteInChannel` + 부분 유일 인덱스                    |
  * | 할 일 탭 대화당 1개                      | 미리 검사 + 부분 유일 인덱스                                |
  * | delete_note_with_tab(AFTER DELETE)     | `deleteTabRow`가 같은 트랜잭션에서 메모(와 이력 — FK cascade)를 지운다 |
@@ -21,7 +21,12 @@
 import { and, asc, count, eq, max, sql } from 'drizzle-orm'
 
 import { db } from '../../client.ts'
-import { workChannelMembers, workChannels } from '../../schema/index.ts'
+import {
+  workAttachments,
+  workChannelMembers,
+  workChannels,
+  workMessages,
+} from '../../schema/index.ts'
 import { workConversationNotes, workConversationTabs } from '../../schema/workTabs.ts'
 import { bumpChannelRev, isoNN, WorkWriteError, type WorkExecutor } from './_shared.ts'
 import { isSqliteUniqueViolation } from './channels.ts'
@@ -144,18 +149,28 @@ export function assertWebsiteConfig(config: Record<string, unknown>): void {
 
 /**
  * 파일 탭의 첨부가 이 대화의 것인가(원본 `exists (select 1 from work.attachments a where a.id = … and a.channel_id = …)`).
- *
- * TODO(이사회 업무툴 2a): 첨부 표(`work_attachments`)는 2a(파일·자료실)가 만든다. 그 표가 들어오기 전에는
- * **늘 false(찾을 수 없음)** — 파일 탭은 만들어지지 않는다(닫힌 쪽으로 실패). 2a가 합쳐지면 이 함수 본문만
- * `select 1 from work_attachments where id = ? and channel_id = ?`로 바꾼다. 화면(AddTabDialog)도 그때 파일 탭을 켠다.
+ * 2a(첨부 표)가 합쳐져 실제로 본다. 지워진 메시지의 첨부는 원본 `*_live` 정책처럼 없는 것으로 친다.
+ * 화면(AddTabDialog)의 파일 탭 선택지는 아직 숨겨 둔다 — FileTabView 이식은 3단계(버전·편집)와 함께 한다.
  */
 export async function attachmentBelongsToChannel(
-  _tx: WorkExecutor,
+  tx: WorkExecutor,
   attachmentId: string,
-  _channelId: string
+  channelId: string
 ): Promise<boolean> {
   if (!UUID_RE.test(attachmentId)) return false
-  return false
+  const [row] = await tx
+    .select({ id: workAttachments.id })
+    .from(workAttachments)
+    .innerJoin(workMessages, eq(workMessages.id, workAttachments.messageId))
+    .where(
+      and(
+        eq(workAttachments.id, attachmentId),
+        eq(workAttachments.channelId, channelId),
+        sql`${workMessages.deletedAt} is null`
+      )
+    )
+    .limit(1)
+  return row !== undefined
 }
 
 async function assertMember(tx: WorkExecutor, channelId: string, userId: string): Promise<void> {
