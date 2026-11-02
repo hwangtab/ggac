@@ -175,6 +175,7 @@ export async function forwardMessage(input: unknown): Promise<ActionResult<Forwa
     if (result.status === 'conflict') return dbFailure('forwardMessage', new Error('id 충돌'))
     duplicate = result.status === 'duplicate'
   } catch (e) {
+    if (isWorkWriteError(e, 'forbidden')) return fail('참여한 채널에서만 글을 쓸 수 있습니다.')
     if (isWorkWriteError(e, 'owners_only')) return fail('이 채널은 소유자만 글을 올릴 수 있습니다.')
     if (isWorkWriteError(e, 'archived')) return fail('보관된 채널에는 쓸 수 없습니다.')
     return dbFailure('forwardMessage', e)

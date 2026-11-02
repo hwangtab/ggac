@@ -161,6 +161,7 @@ export async function sendMessage(input: unknown): Promise<
       return fail('메시지를 보내지 못했습니다.')
     }
   } catch (e) {
+    if (isWorkWriteError(e, 'forbidden')) return fail('참여한 채널에서만 글을 쓸 수 있습니다.')
     if (isWorkWriteError(e, 'owners_only')) return fail('이 채널은 소유자만 글을 올릴 수 있습니다.')
     if (isWorkWriteError(e, 'archived') || isWorkWriteError(e, 'not_found')) {
       return fail('이 채널에 메시지를 쓸 수 없습니다.')

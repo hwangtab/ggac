@@ -977,38 +977,46 @@ export const EVERYONE_CHANNEL_NAME = '전체'
 /**
  * 처음 들어온 사람을 `#전체` 공개 채널에 넣는다(설계 §3 — 원본의 초대 수락 단계 자리). 채널이 없으면 만든다
  * (만든 사람 없음 → owner 없음, 관리자가 관리한다). prefs 행도 이때 생긴다 — 그 created_at이 "처음 들어온 시각"이고
- * 활동 확인 시각의 기본값으로 쓴다(inbox.ts). 이미 다 돼 있으면 쓰지 않는다(읽기 2번).
+ * 활동 확인 시각의 기본값으로 쓴다(inbox.ts). 이미 다 돼 있으면 쓰지 않는다(읽기 1번).
+ *
+ * 자동 가입은 두 조건을 모두 지킬 때만 한다(독립 권한 검토 2026-11-02):
+ * - **처음 들어올 때 한 번만**(prefs 행이 이번에 생겼을 때). 원본도 초대 수락 때 한 번 넣었다 — 스스로 나간
+ *   사람을 진입할 때마다 다시 넣지 않는다.
+ * - **보관되지 않은 공개 채널에만.** slug `전체`를 비공개 채널이 갖고 있으면(이관·관리자 실수) 그 채널에
+ *   모든 이사를 넣는 것이 곧 비공개 내용 공개다. 원본 `channel_members_insert`도 본인 가입은 공개 채널만 허용했다.
  */
 export async function ensureWorkspaceEntryRows(
   userId: string
 ): Promise<{ channelId: string | null }> {
+  /** slug `전체` 행. 있으면 자동 가입 대상인지(공개·보관 안 됨)도 함께 준다. */
   const findChannel = async (tx: WorkExecutor) => {
     const [bySlug] = await tx
-      .select({ id: workChannels.id })
+      .select({ id: workChannels.id, kind: workChannels.kind, archivedAt: workChannels.archivedAt })
       .from(workChannels)
       .where(and(eq(workChannels.slug, EVERYONE_CHANNEL_SLUG), ne(workChannels.kind, 'dm')))
       .limit(1)
-    return bySlug?.id ?? null
+    if (!bySlug) return { exists: false as const, id: null }
+    const eligible = bySlug.kind === 'public' && bySlug.archivedAt === null
+    return { exists: true as const, id: eligible ? bySlug.id : null }
   }
-  const channelId = await findChannel(db)
-  if (channelId) {
-    const [member] = await db
-      .select({ userId: workChannelMembers.userId })
-      .from(workChannelMembers)
-      .where(
-        and(eq(workChannelMembers.channelId, channelId), eq(workChannelMembers.userId, userId))
-      )
-      .limit(1)
-    const [prefs] = await db
-      .select({ userId: workMemberPrefs.userId })
-      .from(workMemberPrefs)
-      .where(eq(workMemberPrefs.userId, userId))
-      .limit(1)
-    if (member && prefs) return { channelId }
-  }
+  const [prefs] = await db
+    .select({ userId: workMemberPrefs.userId })
+    .from(workMemberPrefs)
+    .where(eq(workMemberPrefs.userId, userId))
+    .limit(1)
+  if (prefs) return { channelId: (await findChannel(db)).id }
   return db.transaction(async tx => {
-    await tx.insert(workMemberPrefs).values({ userId }).onConflictDoNothing()
-    let id = await findChannel(tx)
+    const created = await tx
+      .insert(workMemberPrefs)
+      .values({ userId })
+      .onConflictDoNothing()
+      .returning({ userId: workMemberPrefs.userId })
+    const found = await findChannel(tx)
+    // 동시에 들어온 같은 사람의 다른 요청이 먼저 처리했다 — 가입도 그쪽이 맡는다
+    if (created.length === 0) return { channelId: found.id }
+    // slug `전체`가 비공개·보관 채널에 있다 — 자동 가입하지 않는다(위 머리 주석)
+    if (found.exists && !found.id) return { channelId: null }
+    let id = found.id
     if (!id) {
       const clash = await hasActiveNameClash(tx, EVERYONE_CHANNEL_NAME)
       if (clash) {
@@ -1027,7 +1035,7 @@ export async function ensureWorkspaceEntryRows(
           createdBy: null,
         })
         .onConflictDoNothing()
-      id = await findChannel(tx)
+      id = (await findChannel(tx)).id
       if (!id) return { channelId: null }
     }
     const inserted = await tx

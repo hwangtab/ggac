@@ -45,7 +45,7 @@ export const dynamic = 'force-dynamic'
  * 3. 요청의 채널 id는 **읽기 범위(`readableChannelIds`, 원본 can_read_channel 0037)로 먼저 거른다.**
  *    읽을 수 없는 채널은 rev·메시지 id·고정 여부가 하나도 응답에 나오지 않는다(있는지조차 알리지 않는다).
  *    관리자도 자기가 없는 DM·그룹은 읽지 못한다.
- * 4. 입력 중 신호는 그 채널의 **멤버**일 때만 기록한다(원본 채널 토픽 쓰기 인가와 같다).
+ * 4. 입력 중 신호는 그 채널의 **멤버**일 때만 기록하고, **멤버에게만** 돌려준다(원본 채널 토픽 읽기·쓰기 인가와 같다).
  */
 export async function POST(request: NextRequest) {
   const auth = await requireBoardMember()
@@ -126,8 +126,16 @@ export async function POST(request: NextRequest) {
       const badges = await loadSidebarBadges({ user: { id: user.id }, staff })
 
       const visible = await visibleStaffIds(viewer)
-      const typingRows =
+      // 입력 중 표시는 그 채널의 **멤버**에게만 보인다. 원본은 채널 토픽(typing broadcast)을 멤버만 받았다
+      // (0001 work_channel_topic_read — is_channel_topic_member). 읽기 범위(readable)로만 거르면 멤버가 아닌
+      // 관리자가 비공개 채널의 입력 중 신호를 본다(독립 권한 검토 2026-11-02).
+      const focusIsMember =
         req.focus && readable.has(req.focus.channelId)
+          ? ((await loadChannelAccess(viewer, req.focus.channelId).catch(() => null))?.isMember ??
+            false)
+          : false
+      const typingRows =
+        req.focus && focusIsMember
           ? await listTyping(
               req.focus.channelId,
               new Date(now.getTime() - SYNC_TYPING_TTL_MS),

@@ -209,3 +209,61 @@ test.describe('업무툴 채널 읽기 경계 — 화면 로더', () => {
     }
   })
 })
+
+/**
+ * 입력 중 표시 경계 — 원본은 채널 토픽(typing broadcast)을 **멤버만** 받았다(0001 work_channel_topic_read).
+ * 관리자는 비공개 채널 메시지를 읽을 수 있지만(0037) 멤버가 아니면 입력 중 신호는 받지 않는다
+ * (독립 권한 검토 2026-11-02 — 처음 구현은 읽기 범위로만 걸러 관리자에게 보였다).
+ *
+ * 짝 단정: 같은 경로로 **멤버끼리는 보인다**는 것도 확인한다(DM: 이사가 입력 → 감사가 본다). 없으면 입력 중 표시가
+ * 통째로 죽은 상태도 초록이다.
+ */
+test.describe('업무툴 입력 중 표시 — 멤버에게만', () => {
+  async function postSync(
+    browser: import('@playwright/test').Browser,
+    role: string,
+    data: Record<string, unknown>
+  ): Promise<{ typing: { userId: string }[] }> {
+    const context = await browser.newContext({ storageState: storageStatePath(role) })
+    try {
+      const res = await context.request.post('/api/board-room/work/sync', { data })
+      expect(res.status()).toBe(200)
+      return (await res.json()).data
+    } finally {
+      await context.close()
+    }
+  }
+
+  test('DM 멤버끼리는 입력 중이 보이고, 비공개 채널의 입력 중은 멤버 아닌 관리자에게 안 보인다', async ({
+    browser,
+  }) => {
+    const f = readFixtures()
+    const base = { channels: {}, membershipRev: null }
+
+    // 허용 쪽: 이사가 DM에서 입력 → 같은 DM 멤버인 감사가 본다
+    await postSync(browser, 'director', {
+      ...base,
+      focus: null,
+      typing: { channelId: f.workDmChannelId, scope: '' },
+    })
+    const auditorView = await postSync(browser, 'auditor', {
+      ...base,
+      focus: { channelId: f.workDmChannelId, threadId: null },
+      typing: null,
+    })
+    expect(auditorView.typing.map(t => t.userId)).toContain(f.users.director)
+
+    // 금지 쪽: 감사가 비공개 채널(감사 owner, 관리자는 멤버 아님)에서 입력 → 관리자는 못 본다
+    await postSync(browser, 'auditor', {
+      ...base,
+      focus: null,
+      typing: { channelId: f.workPrivateChannelId, scope: '' },
+    })
+    const adminView = await postSync(browser, 'admin', {
+      ...base,
+      focus: { channelId: f.workPrivateChannelId, threadId: null },
+      typing: null,
+    })
+    expect(adminView.typing).toEqual([])
+  })
+})

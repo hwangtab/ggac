@@ -200,6 +200,8 @@ test('공지 채널(post_policy owners): 최상위 글은 canPostRestricted만, 
   const owner = await seedPerson()
   const member = await seedPerson()
   const ch = await seedChannel({ creatorId: owner })
+  // 멤버여야 한다 — 아니면 공지 규칙보다 먼저 멤버십(assertAuthorIsMember)에 걸려 이 테스트가 공지 규칙을 보지 못한다
+  await Q.channels.addChannelMemberRows(ch, [member])
   await Q.channels.setChannelPostPolicyRow(ch, 'owners')
   await assert.rejects(
     () =>
@@ -620,6 +622,42 @@ test('ensureWorkspaceEntryRows: #전체를 한 번만 만들고 처음 들어온
   assert.ok(await Q.channels.getMembershipRecord(a.channelId, p2))
 })
 
+test('ensureWorkspaceEntryRows: 스스로 나간 사람을 다음 진입 때 다시 넣지 않는다', async () => {
+  const p = await seedPerson()
+  const { channelId } = await Q.channels.ensureWorkspaceEntryRows(p)
+  assert.ok(channelId)
+  await setupClient.execute({
+    sql: 'delete from work_channel_members where channel_id = ? and user_id = ?',
+    args: [channelId, p],
+  })
+  await Q.channels.ensureWorkspaceEntryRows(p)
+  assert.equal(await Q.channels.getMembershipRecord(channelId, p), null)
+})
+
+// 독립 권한 검토(2026-11-02): slug `전체`를 비공개·보관 채널이 갖고 있으면 그 채널에 모든 이사를 넣는 것이
+// 곧 비공개 내용 공개다. 자동 가입은 보관되지 않은 공개 채널에만 한다.
+for (const [label, patch, restore] of [
+  ['비공개', "kind = 'private'", "kind = 'public'"],
+  ['보관된', 'archived_at = 1', 'archived_at = null'],
+]) {
+  test(`ensureWorkspaceEntryRows: slug 전체가 ${label} 채널이면 처음 들어온 사람도 넣지 않는다`, async () => {
+    await Q.channels.ensureWorkspaceEntryRows(await seedPerson()) // #전체가 없으면 만든다
+    await setupClient.execute({ sql: `update work_channels set ${patch} where slug = '전체'` })
+    try {
+      const fresh = await seedPerson()
+      const r = await Q.channels.ensureWorkspaceEntryRows(fresh)
+      assert.equal(r.channelId, null)
+      const rs = await setupClient.execute({
+        sql: "select count(*) as n from work_channel_members m join work_channels c on c.id = m.channel_id where c.slug = '전체' and m.user_id = ?",
+        args: [fresh],
+      })
+      assert.equal(Number(rs.rows[0].n), 0)
+    } finally {
+      await setupClient.execute({ sql: `update work_channels set ${restore} where slug = '전체'` })
+    }
+  })
+}
+
 // ── 그룹 ────────────────────────────────────────────────────────────────────
 
 test('그룹: 나가기는 시스템 메시지를 먼저 남기고 rev를 올린다. 남은 멤버의 membership_rev가 오른다', async () => {
@@ -640,4 +678,39 @@ test('그룹: 나가기는 시스템 메시지를 먼저 남기고 rev를 올린
     await Q.channels.getGroupMemberIds(id).then(ids => ids.sort()),
     [p[0], p[1]].sort()
   )
+})
+
+// ── 작성자 멤버십(트랜잭션 안) ────────────────────────────────────────────────
+
+// 독립 권한 검토(2026-11-02): 원본 messages_insert는 is_channel_member를 쓰는 문장 안에서 봤다. action이 먼저
+// 판정해도 그 사이 멤버십이 빠질 수 있어, 쓰기 트랜잭션 안에서 한 번 더 본다.
+test('insertMessage·insertForwardedMessage: 채널 멤버가 아니면 forbidden, 멤버면 된다(짝)', async () => {
+  const owner = await seedPerson()
+  const outsider = await seedPerson()
+  const ch = await seedChannel({ creatorId: owner })
+  await assert.rejects(
+    Q.messages.insertMessage({
+      id: crypto.randomUUID(),
+      channelId: ch,
+      authorId: outsider,
+      body: '멤버 아님',
+      canPostRestricted: false,
+    }),
+    e => e.code === 'forbidden'
+  )
+  const src = await send(ch, owner, '원본')
+  await assert.rejects(
+    Q.messages.insertForwardedMessage({
+      id: crypto.randomUUID(),
+      channelId: ch,
+      authorId: outsider,
+      body: '',
+      forwardedFromId: src,
+      sensitive: false,
+      canPostRestricted: false,
+    }),
+    e => e.code === 'forbidden'
+  )
+  await Q.channels.addChannelMemberRows(ch, [outsider])
+  await send(ch, outsider, '이제 멤버')
 })

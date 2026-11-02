@@ -400,6 +400,27 @@ async function loadMessageForWrite(tx: WorkExecutor, messageId: string) {
   return row ?? null
 }
 
+/**
+ * 작성자가 그 채널의 멤버인가 — 원본 `messages_insert` WITH CHECK의 `is_channel_member`는 **쓰는 문장 안에서**
+ * 평가됐다. 호출부(action)도 먼저 판정하지만, 그 사이 멤버십이 빠지는 경우(그룹에서 내보내짐·비공개 채널에서
+ * 빠짐)까지 막으려고 쓰기 트랜잭션 안에서 한 번 더 본다(독립 권한 검토 2026-11-02, TOCTOU).
+ * "메시지 작성자는 그 채널 멤버다"는 누가 부르든 같은 데이터 규칙이라 쿼리 층에 둔다.
+ */
+async function assertAuthorIsMember(
+  tx: WorkExecutor,
+  channelId: string,
+  authorId: string
+): Promise<void> {
+  const [member] = await tx
+    .select({ userId: workChannelMembers.userId })
+    .from(workChannelMembers)
+    .where(
+      and(eq(workChannelMembers.channelId, channelId), eq(workChannelMembers.userId, authorId))
+    )
+    .limit(1)
+  if (!member) throw new WorkWriteError('forbidden', '채널 멤버만 글을 쓸 수 있습니다')
+}
+
 /** sync_thread_counters: 부모의 답글 수·마지막 답글 시각을 지워지지 않은 답글로 다시 센다. 부모 rev도 같은 값으로 */
 async function recountThread(tx: WorkExecutor, parentId: string, rev: number): Promise<void> {
   const [agg] = await tx
@@ -522,7 +543,7 @@ export type InsertMessageResult =
  * 사용자 메시지 보내기(원본 클라이언트 INSERT + harden_messages_write).
  * 작성자는 `authorId`(행위자 — 호출부가 세션에서 얻은 값), kind는 항상 'text', 카운터·전달 원본은 비운다.
  * `canPostRestricted` = 이 채널 owner이거나 업무툴 관리자인가(공지 채널 최상위 글 판정 — 호출부 몫).
- * 채널 멤버인지는 호출부가 판정한다(원본 messages_insert 정책).
+ * 채널 멤버인지는 호출부가 먼저 판정하고, 트랜잭션 안에서 한 번 더 본다(`assertAuthorIsMember`).
  */
 export async function insertMessage(input: {
   id: string
@@ -544,6 +565,7 @@ export async function insertMessage(input: {
     const channel = await loadChannelForWrite(tx, input.channelId)
     if (!channel) throw new WorkWriteError('not_found', '채널이 없습니다')
     if (channel.archivedAt) throw new WorkWriteError('archived', '보관된 채널에는 쓸 수 없습니다')
+    await assertAuthorIsMember(tx, input.channelId, input.authorId)
     const parentId = input.parentId ?? null
     if (!parentId && channel.postPolicy === 'owners' && !input.canPostRestricted) {
       throw new WorkWriteError('owners_only', '이 채널은 소유자만 글을 올릴 수 있습니다')
@@ -596,6 +618,7 @@ export async function insertForwardedMessage(input: {
     const channel = await loadChannelForWrite(tx, input.channelId)
     if (!channel) throw new WorkWriteError('not_found', '채널이 없습니다')
     if (channel.archivedAt) throw new WorkWriteError('archived', '보관된 채널에는 쓸 수 없습니다')
+    await assertAuthorIsMember(tx, input.channelId, input.authorId)
     if (channel.postPolicy === 'owners' && !input.canPostRestricted) {
       throw new WorkWriteError('owners_only', '이 채널은 소유자만 글을 올릴 수 있습니다')
     }
