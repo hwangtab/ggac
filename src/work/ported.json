@@ -474,6 +474,36 @@
     "commit": "8ae8dd5",
     "sha256": "49d424c01f265789"
   },
+  "src/work/lib/files/render-document.ts": {
+    "source": "src/lib/files/render-document.ts",
+    "commit": "8ae8dd5",
+    "sha256": "6ebacfa11ccd80bf"
+  },
+  "src/work/lib/files/render-layout.ts": {
+    "source": "src/lib/files/render-layout.ts",
+    "commit": "8ae8dd5",
+    "sha256": "3aee72f61762103f"
+  },
+  "src/work/lib/files/render-pptx.ts": {
+    "source": "src/lib/files/render-pptx.ts",
+    "commit": "8ae8dd5",
+    "sha256": "7b9294cff9e48a4b"
+  },
+  "src/work/lib/files/render-size.ts": {
+    "source": "src/lib/files/render-size.ts",
+    "commit": "8ae8dd5",
+    "sha256": "20fe5c5bafa7d92c"
+  },
+  "src/work/lib/files/render-types.ts": {
+    "source": "src/lib/files/render-types.ts",
+    "commit": "8ae8dd5",
+    "sha256": "c8d316dacf321de8"
+  },
+  "src/work/lib/files/zip-guard.ts": {
+    "source": "src/lib/files/zip-guard.ts",
+    "commit": "8ae8dd5",
+    "sha256": "4c1957d5cfbc6683"
+  },
   "src/work/lib/format/datetime.ts": {
     "source": "src/lib/format/datetime.ts",
     "commit": "8ae8dd5",

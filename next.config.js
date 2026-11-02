@@ -6,6 +6,22 @@ const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts')
 
 const IMAGE_ALLOWED_QUALITIES = [50, 65, 75, 80, 85, 90, 100]
 
+/** kordoc이 createRequire로 런타임에 불러오는 모듈(+ 그 의존성) — kosmart-work next.config.ts와 같다 */
+const KORDOC_RUNTIME_REQUIRES = [
+  './node_modules/cfb/**',
+  './node_modules/adler-32/**',
+  './node_modules/crc-32/**',
+]
+const KORDOC_VIEWER_EXCLUDES = [
+  './node_modules/onnxruntime-node/**',
+  './node_modules/@hyzyla/**',
+  './node_modules/pdfjs-dist/**',
+  './node_modules/@napi-rs/**',
+  './node_modules/@huggingface/**',
+]
+/** kordoc을 쓰는 라우트(⚠️ 스파이크 라우트 — 실제 구현 때 교체) */
+const KORDOC_ROUTES = ['/api/internal/board-work-spike/render']
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -16,7 +32,17 @@ const nextConfig = {
   // (sitemap.xml의 artists/projects ENOENT 5개월 — 전 라우트에 명시 포함으로 해소)
   outputFileTracingIncludes: {
     '/**': ['./data/**/*'],
+    // kordoc은 cfb(HWP5·XLS의 OLE 컨테이너)를 createRequire로 불러 파일 추적이 놓친다
+    // (kosmart-work 운영에서 "Cannot find module 'cfb'"로 모든 변환이 실패했다). kordoc을 쓰는 라우트마다 넣는다.
+    ...Object.fromEntries(KORDOC_ROUTES.map(r => [r, KORDOC_RUNTIME_REQUIRES])),
   },
+  // kordoc의 선택 의존성(OCR·PDF 엔진) 중 쓰지 않는 무거운 것을 함수 번들에서 뺀다
+  // (onnxruntime-node만 약 300MB — 250MB 한도 초과). 뷰어는 OCR을 끄고 PDF는 변환하지 않는다.
+  outputFileTracingExcludes: {
+    ...Object.fromEntries(KORDOC_ROUTES.map(r => [r, KORDOC_VIEWER_EXCLUDES])),
+  },
+  // kordoc은 번들하지 않고 node_modules에서 그대로 로드한다(createRequire·동적 import 때문).
+  serverExternalPackages: ['kordoc'],
 
   env: {
     NEXT_PUBLIC_IMAGE_ALLOWED_QUALITIES: IMAGE_ALLOWED_QUALITIES.join(','),
