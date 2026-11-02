@@ -29,6 +29,10 @@ const KORDOC_ROUTES = ['/api/board-room/work/files/\\[id\\]/render']
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // 권한 E2E의 운영 빌드(`playwright.config.ts`)만 `.next-e2e`로 뺀다 — 같은 워크트리의
+  // `next dev`가 쓰는 `.next`를 빌드가 덮어 `Cannot find module './NNNN.js'`로 서로 깨뜨리지 않게.
+  // 배포·`npm run build`는 이 변수를 주지 않으므로 그대로 `.next`다.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
   // 파일 추적 루트를 이 저장소로 고정한다 — 홈 디렉터리의 다른 lockfile 때문에 Next가 루트를 잘못 짚어
   // 추적 경로(outputFileTracingIncludes)가 어긋났다(이사회 업무툴 0단계 스파이크 실측, 설계 §7-5).
   outputFileTracingRoot: __dirname,

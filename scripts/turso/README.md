@@ -278,6 +278,34 @@ export NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL="<공개 Blob 베이스 URL>"
 npm run test:e2e:authz
 ```
 
+**서버는 dev가 아니라 운영 빌드다(2026-11-02부터).** `E2E_TURSO_DATABASE_URL`이 있고
+CI가 아니면 `playwright.config.ts`의 webServer가 ① `seed-build-fixture.mjs`로 같은 로컬
+DB에 아티스트 최소 행을 심고(운영 빌드는 아티스트 0건이면 일부러 실패한다) ② `next build
+--no-lint`(출력은 `.next`가 아니라 `.next-e2e` — `NEXT_DIST_DIR`) ③ `next start` 순서로
+띄운다. 빌드도 같은 `env`를 받으므로 프리렌더가 읽는 DB도 로컬이다. dev 서버로 돌리던 때는
+처음 닿는 라우트의 컴파일 대기로 30초 타임아웃·로그인 중 `Unexpected end of JSON input`·
+뒤쪽 테스트의 `/login` 튕김이 섞여 나왔고 한 바퀴에 11~18분이 걸렸다. 지금은 빌드 포함
+**2분 20초~2분 50초**다. HMR로 화면을 고치며 돌릴 때는 `PLAYWRIGHT_DEV_SERVER=1`로 예전
+dev 서버 경로를 탄다.
+
+운영 모드라 생기는 차이와 대응(전부 실측으로 드러났다):
+
+- **레이트리밋.** 운영의 분산 리미터는 Upstash가 없으면 쓰기를 503으로 닫는다. webServer가
+  가짜 Upstash(`e2e/helpers/fakeUpstash.mjs`, 앱 포트 + 1000)를 함께 띄워 앱이 운영과 같은
+  Redis 경로를 타게 하되, **한도에는 걸리지 않게 답한다** — 스위트는 한 IP에서 분당 수백
+  건을 보내므로 정직하게 세면 인가 단정이 429를 받는다. 이 스위트는 한도를 검사하지 않는다.
+- **Better Auth 내장 레이트리밋**은 운영에서만 켜진다(로그인 IP당 10초 3회).
+  `authz.setup.ts`는 계정마다 다른 `X-Forwarded-For`로 로그인한다.
+- **세션 쿠키 캐시 이름.** better-auth의 `getCookieCache`는 `isSecure`를 주지 않으면 운영에서
+  `__Secure-` 이름만 찾는데, http로 띄운 서버는 접두사 없이 쿠키를 쓴다. 미들웨어가 캐시를
+  한 번도 못 맞혀 매 요청 `/api/auth/get-session`을 왕복하다 로그인된 세션이 `/login`으로
+  튕겼다. `src/middleware/session.ts`가 이제 요청 프로토콜로 이름을 고른다(운영 https는 그대로).
+- **strict CSP**는 그대로 끈다(`NEXT_STRICT_CSP=false`). 켜고 돌려도 권한 스위트 결과는
+  같았다(198 passed) — 같은 서버를 쓰는 `chromium` 프로젝트를 검증하지 않아 바꾸지 않았다.
+
+**돌리기 전마다 2단계 시드를 다시 돌린다.** 스위트가 "관리자 삭제" 픽스처(장터 매물·댓글
+등)를 실제로 소모하므로, 시드 없이 연달아 돌리면 그 테스트가 404로 실패한다(앱과 무관).
+
 `E2E_TURSO_DATABASE_URL`은 **일부러 이름이 다르다.** `playwright.config.ts`가
 그 값을 `process.env.TURSO_DATABASE_URL`로 옮겨 심고 dev 서버에도 같은 값을
 넘긴다 — 셸에 운영 `TURSO_DATABASE_URL`이 export돼 있어도 그 값으로는 절대
@@ -310,7 +338,13 @@ webServer에 `{...process.env, ...webServer.env}`를 넘긴다. e2e 전용 변�
   `authz-features`·`authz-email-verification` 9개 스펙
 - `authz-public`: `authz-boundaries` 21건
 
-**실측 기준선(2026-09-26, 비조합원 개설자를 화면까지 들여보낸 뒤):** 총 148건 중
+**실측 기준선(2026-11-02, 운영 빌드 서버로 옮긴 뒤):** 총 200건 중 **198 passed,
+1 failed, 1 skipped** — 연달아 두 번 같았다(빌드 포함 161초·168초). 같은 시드·같은 기계에서
+`PLAYWRIGHT_DEV_SERVER=1`(dev 서버)로 돌리면 1113초에 9건이 실패했다(타임아웃과 `/login` 튕김). 실패 1건은 정책 36(`PUBLIC_BLOB_READ_WRITE_TOKEN` 없이 돌림), 스킵 1건은 메일함
+첨부 다운로드 기록이다. 업무툴 실제 업로드(`board-work-files.spec.ts`)는 시험 저장소 토큰
+(`BOARD_WORK_TEST_BLOB_TOKEN`)을 줬을 때 실행되며, 주지 않으면 스킵이 하나 는다.
+
+**직전 기준선(2026-09-26, 비조합원 개설자를 화면까지 들여보낸 뒤):** 총 148건 중
 **147 passed, 0 failed, 1 skipped.** 정책 36(첨부 업로드)은 위 3단계의
 `PUBLIC_BLOB_READ_WRITE_TOKEN`을 준 경우다 — 토큰 없이 돌리면 그 1건이
 "토큰이 없으면 통과할 수 없다"로 실패하며, 이 저장소의 다른 변경과 무관하다.
@@ -1053,7 +1087,7 @@ EXPLAIN QUERY PLAN SELECT count(*) FROM notifications WHERE user_id = '<아무 �
 가드도 타입 검사도 통과한다. 가드는 **"이 문자열이 이 파일에 있는가"**만 보고
 도달 가능성·실행 순서·데이터 흐름을 보지 않는다.
 
-**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 147 passed, 실행 절차는
+**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 198 passed, 실행 절차는
 위 "권한 E2E" 절). 같은 감사에서 **E2E는 관리자 게이트 무력화를 실제로 잡았다.**
 
 `assert-runtime-risks.mjs`가 여전히 값을 하는 자리는 **지워진 것**(게이트를 통째로
@@ -1404,8 +1438,9 @@ grep -c 'ALTER ROLE' "$R"                        # 기대: 1 이상
 
 > 빌드 검증을 로컬에서 할 때, 다른 세션의 `next dev`가 같은 `.next`를 쓰고 있으면
 > `Cannot find module './NNNN.js'`로 실패한다. 코드 문제가 아니라 경합이다.
-> `distDir`은 환경변수로 못 바꾸니, 워킹트리를 저장소 밖으로 복사하고
-> `node_modules`를 심볼릭 링크해서 빌드해라.
+> 지금은 `NEXT_DIST_DIR=.next-verify npx next build`처럼 출력 디렉터리를 갈라 빌드하면
+> 된다(`next.config.js`의 `distDir`, 2026-11-02). 그 전에는 워킹트리를 저장소 밖으로
+> 복사하고 `node_modules`를 심볼릭 링크해서 빌드했다.
 
 ### 이 시점부터 되돌릴 수 없는 것
 
