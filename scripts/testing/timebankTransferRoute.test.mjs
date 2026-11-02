@@ -211,6 +211,7 @@ test('소스에서 사유를 제대로 뽑았다(표 검사의 전제)', () => {
   assert.ok(transferRejections.length >= 9)
   assert.ok(ledgerRejections.includes('pair_blocked'))
   assert.ok(ledgerRejections.includes('self_approval'))
+  assert.ok(ledgerRejections.includes('already_reversed'))
   assert.deepEqual([...stateCodes].sort(), [
     'not_counterparty',
     'not_found',
@@ -272,6 +273,14 @@ test('describeLedgerError: 하한 문구는 설정의 하한을 사람 말로', 
     describeLedgerError(new TransferRejectedError('below_floor'), { floorMinutes: -90 }).message,
     /한도\(−1시간 30분\)/
   )
+})
+
+test('describeLedgerError: 이미 되돌림이 있으면 409(원시 제약 오류가 500으로 새지 않는다)', async () => {
+  const { TransferRejectedError } = await ledgerErrors()
+  const d = describeLedgerError(new TransferRejectedError('already_reversed'))
+  assert.equal(d.status, 409)
+  assert.equal(d.code, 'already_reversed')
+  assert.match(d.message, /되돌/)
 })
 
 test('describeLedgerError: 모든 사유·상태 코드를 실제 오류 객체로 바꾼다', async () => {

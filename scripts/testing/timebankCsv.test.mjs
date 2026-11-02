@@ -108,6 +108,11 @@ test('toMyTransferView: 할 수 있는 동작은 내 역할로만', () => {
   assert.deepEqual([done.can_confirm, done.can_reject, done.can_cancel], [false, false, false])
   assert.equal(done.can_reverse, true, '확정 exchange는 되돌리기 요청 가능')
   assert.equal(toMyTransferView(row({ kind: 'coop_task' }), ME).can_reverse, false)
+  assert.equal(
+    toMyTransferView(row({ reversal_open: true }), ME).can_reverse,
+    false,
+    '열린 되돌림이 이미 있으면 다시 제안하지 않는다'
+  )
 })
 
 test('toMyTransferView: 오래된 pending은 stale', () => {

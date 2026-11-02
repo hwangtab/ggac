@@ -89,6 +89,12 @@ export interface TransferRow {
   approved_by: string | null
   created_at: string | null
   updated_at: string | null
+  /**
+   * 이 행을 되돌리는 열린(pending·confirmed) 되돌림이 있다. `listTransfersFor`만
+   * 채운다 — 그 밖의 경로에서는 없다(undefined). 화면이 "되돌리기 요청"을 다시
+   * 내놓지 않게 하는 표시일 뿐, 막는 것은 `createMemberTransfer`의 판정이다.
+   */
+  reversal_open?: boolean
 }
 
 /**
@@ -120,6 +126,8 @@ export type LedgerRejection =
   | 'resolution_required'
   /** 조정 승인자가 생성자이거나 대상이다. */
   | 'self_approval'
+  /** 그 이동을 되돌리는 pending·confirmed 되돌림이 이미 있다. */
+  | 'already_reversed'
 
 export class TransferRejectedError extends Error {
   readonly reason: LedgerRejection
@@ -429,6 +437,17 @@ function reversesOf(orig: RawTransfer | null): TransferDraft['reverses'] {
     : null
 }
 
+const OPEN_STATUSES: TimebankStatus[] = ['pending', 'confirmed']
+
+async function hasOpenReversal(q: Tx, reversesId: string): Promise<boolean> {
+  const [row] = await q
+    .select({ id: t.id })
+    .from(t)
+    .where(and(eq(t.reversesId, reversesId), inArray(t.status, OPEN_STATUSES)))
+    .limit(1)
+  return Boolean(row)
+}
+
 /**
  * 회원 간 기록. 항상 pending이고 상대(`counterparty_id`)가 확인한다.
  *
@@ -517,7 +536,15 @@ export async function createMemberTransfer(input: {
     })
     if (verdict.ok === false) throw reject('reason' in verdict ? verdict.reason : 'bad_minutes')
 
-    // 4. pending INSERT
+    // 4. 열린 되돌림은 원 이동당 하나다. 부분 유일 인덱스
+    //    (`timebank_transfers_reversal_uq`)가 최종 방어선이지만 그 제약 오류는 원장
+    //    오류가 아니라 500이 된다 — 같은 쓰기 트랜잭션 안에서 먼저 보고 사유로 던진다.
+    //    당사자 판정 뒤에 둔다(제3자에게 되돌림 존재 여부를 알리지 않는다).
+    if (input.kind === 'reversal' && (await hasOpenReversal(tx, input.reversesId as string))) {
+      throw reject('already_reversed')
+    }
+
+    // 5. pending INSERT
     const [row] = await tx
       .insert(t)
       .values({
@@ -1031,8 +1058,20 @@ export async function listTransfersFor(input: {
     .orderBy(desc(happenedAt), desc(t.createdAt), desc(t.id))
     .limit(input.limit + 1)
     .offset(input.offset)
+  const page = rows.slice(0, input.limit)
+  const reversible = page
+    .filter(r => r.status === 'confirmed' && includes(REVERSIBLE_KINDS, r.kind))
+    .map(r => r.id)
+  const reversed = new Set<string>()
+  if (reversible.length > 0) {
+    const open = await db
+      .select({ reversesId: t.reversesId })
+      .from(t)
+      .where(and(inArray(t.reversesId, reversible), inArray(t.status, OPEN_STATUSES)))
+    for (const r of open) if (r.reversesId) reversed.add(r.reversesId)
+  }
   return {
-    rows: rows.slice(0, input.limit).map(toTransferRow),
+    rows: page.map(r => ({ ...toTransferRow(r), reversal_open: reversed.has(r.id) })),
     has_next: rows.length > input.limit,
   }
 }

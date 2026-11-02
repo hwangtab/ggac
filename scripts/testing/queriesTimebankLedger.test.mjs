@@ -553,6 +553,64 @@ test('reversal: 거절된 되돌림 뒤 새 되돌림을 기록할 수 있다', 
   assert.notEqual(second.id, first.id)
 })
 
+test('reversal: 열린(pending·confirmed) 되돌림이 있으면 두 번째는 already_reversed', async () => {
+  const a = await newMember('rev4')
+  const b = await newMember('rev4')
+  const orig = await confirmedExchange(a, b)
+  const input = {
+    recorderId: a,
+    counterpartyId: b,
+    kind: 'reversal',
+    role: 'received',
+    minutes: 60,
+    reversesId: orig.id,
+    settings: SETTINGS,
+  }
+  const first = await ledger.createMemberTransfer(input)
+  // pending 되돌림이 있을 때 — 기록자든 상대든 같은 사유
+  await rejectsWith(ledger.createMemberTransfer(input), { reason: 'already_reversed' })
+  await rejectsWith(ledger.createMemberTransfer({ ...input, recorderId: b, counterpartyId: a }), {
+    reason: 'already_reversed',
+  })
+  // 확정된 되돌림이 있을 때
+  await confirm(first.id, b)
+  await rejectsWith(ledger.createMemberTransfer(input), { reason: 'already_reversed' })
+  const count = await client.execute({
+    sql: 'SELECT count(*) AS n FROM timebank_transfers WHERE reverses_id = ?',
+    args: [orig.id],
+  })
+  assert.equal(Number(count.rows[0].n), 1)
+})
+
+test('listTransfersFor: 열린 되돌림이 있는 원 이동은 reversal_open', async () => {
+  const a = await newMember('rev5')
+  const b = await newMember('rev5')
+  const orig = await confirmedExchange(a, b)
+  const other = await confirmedExchange(a, b)
+  const rev = await ledger.createMemberTransfer({
+    recorderId: a,
+    counterpartyId: b,
+    kind: 'reversal',
+    role: 'received',
+    minutes: 60,
+    reversesId: orig.id,
+    settings: SETTINGS,
+  })
+  const byId = async () =>
+    new Map(
+      (await ledger.listTransfersFor({ memberId: a, limit: 10, offset: 0 })).rows.map(r => [
+        r.id,
+        r,
+      ])
+    )
+  let rows = await byId()
+  assert.equal(rows.get(orig.id).reversal_open, true, 'pending 되돌림')
+  assert.equal(rows.get(other.id).reversal_open, false)
+  await ledger.rejectTransfer({ id: rev.id, actorId: b })
+  rows = await byId()
+  assert.equal(rows.get(orig.id).reversal_open, false, '거절된 되돌림은 닫힌 것')
+})
+
 test('reversal: 당사자가 아닌 사람·pending 원 이동·다른 분량은 거부', async () => {
   const a = await newMember('rev3')
   const b = await newMember('rev3')

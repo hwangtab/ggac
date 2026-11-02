@@ -101,6 +101,10 @@ export const LEDGER_REJECTION_RESPONSES: Record<LedgerRejection, LedgerErrorResp
     status: 403,
     message: '조정은 만든 사람도 대상도 아닌 다른 관리자가 승인해야 합니다.',
   },
+  already_reversed: {
+    status: 409,
+    message: '이 거래는 이미 되돌리기 요청이 있거나 되돌려졌습니다.',
+  },
 }
 
 /** 상태 전이 실패(`TransferStateError.code`) → 상태 코드·문구. */
@@ -217,7 +221,7 @@ export type MyTransferView = {
   can_confirm: boolean
   can_reject: boolean
   can_cancel: boolean
-  /** 확정된 교환·장터 거래 → "되돌리기 요청"(§8). */
+  /** 확정된 교환·장터 거래이고 열린 되돌림이 없다 → "되돌리기 요청"(§8). */
   can_reverse: boolean
   /** pending이 7일을 넘겼다. */
   stale: boolean
@@ -255,7 +259,9 @@ export function toMyTransferView(
     can_reject: pending && row.counterparty_id === memberId,
     can_cancel: pending && row.created_by === memberId,
     can_reverse:
-      row.status === 'confirmed' && (REVERSIBLE_KINDS as readonly string[]).includes(row.kind),
+      row.status === 'confirmed' &&
+      (REVERSIBLE_KINDS as readonly string[]).includes(row.kind) &&
+      row.reversal_open !== true,
     stale: pending && Number.isFinite(createdMs) && now - createdMs > STALE_PENDING_DAYS * DAY_MS,
     created_at: row.created_at,
     decided_at: row.decided_at,
