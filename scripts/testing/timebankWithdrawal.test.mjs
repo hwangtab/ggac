@@ -299,16 +299,27 @@ test('탈퇴 확정: pending 취소·정산·프로필·글·자원·이름 묘�
   // 양수 잔액은 이사회 보고 대상이 아니다.
   assert.equal(outcome.timebankNegativeMinutes, undefined)
 
-  // 1. 당사자인 pending(양쪽 + 조정) 전부 canceled, 무관한 pending은 그대로
+  // 1. 당사자인 pending(양쪽 + 조정) 전부 canceled, 무관한 pending은 그대로.
+  //    시스템 취소라 결정자는 비우고(null) — 특히 관리자 조정의 결정자로 탈퇴 회원이
+  //    남으면 안 된다 — memo에 "탈퇴로 취소"를 덧붙인다(원 memo가 있으면 뒤에).
+  //    pending 행은 트리거가 status·decided_*·memo 변경을 허용한다(마이그레이션 DB로 확인).
   for (const id of [s.pending.mine, s.pending.theirs, s.pending.adjustment]) {
     const r = await one(
-      'SELECT status, decided_by, decided_at FROM timebank_transfers WHERE id = ?',
+      'SELECT status, decided_by, decided_at, memo FROM timebank_transfers WHERE id = ?',
       [id]
     )
     assert.equal(r.status, 'canceled', id)
-    assert.equal(r.decided_by, s.me)
+    assert.equal(r.decided_by, null, `${id}: 탈퇴 회원을 결정자로 남기지 않는다`)
     assert.ok(r.decided_at != null)
   }
+  assert.equal(
+    (await one('SELECT memo FROM timebank_transfers WHERE id = ?', [s.pending.adjustment])).memo,
+    '조정 사유 / 탈퇴로 취소'
+  )
+  assert.equal(
+    (await one('SELECT memo FROM timebank_transfers WHERE id = ?', [s.pending.mine])).memo,
+    '탈퇴로 취소'
+  )
   assert.equal(
     (await one('SELECT status FROM timebank_transfers WHERE id = ?', [s.pending.unrelated])).status,
     'pending'

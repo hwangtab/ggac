@@ -34,6 +34,9 @@ const t = timebankTransfers
 /** 정산 행의 memo(정산은 memo 필수 — 스키마 주석). */
 export const WITHDRAWAL_SETTLEMENT_MEMO = '탈퇴 정산'
 
+/** 탈퇴로 시스템이 취소한 pending의 memo 꼬리. */
+export const WITHDRAWAL_CANCEL_NOTE = '탈퇴로 취소'
+
 /** 탈퇴 직전의 신원. 첫 묘비 UPDATE **전에** 읽은 값이어야 한다(§9.3 순서 주의). */
 export type TimebankWithdrawalPrior = { email: string | null; phone: string | null }
 
@@ -66,9 +69,19 @@ export async function withdrawTimebankTx(
 
   // 1. 그 회원이 당사자인 pending 전부 canceled — 보낸 쪽·받는 쪽·확인할 사람
   //    어느 쪽이든. 관리자가 기록한 조정(coop ↔ 회원)도 from/to로 잡힌다.
+  //    **시스템 취소다** — 결정자는 비운다(null). 탈퇴 회원을 결정자로 적으면 관리자
+  //    조정을 그 회원이 "취소했다"고 기록하게 된다. 사유는 memo 끝에 붙인다(원 memo가
+  //    있으면 `원 memo / 탈퇴로 취소`, `adminCancelPending`과 같은 꼴). pending 행이라
+  //    `timebank_transfers_final_immutable`(OLD가 pending이 아닐 때만)에 걸리지 않고,
+  //    `core_immutable`은 status·decided_*·memo를 잠그지 않는다.
   await tx
     .update(t)
-    .set({ status: 'canceled', decidedBy: memberId, decidedAt: now })
+    .set({
+      status: 'canceled',
+      decidedBy: null,
+      decidedAt: now,
+      memo: sql`case when ${t.memo} is null or ${t.memo} = '' then ${WITHDRAWAL_CANCEL_NOTE} else ${t.memo} || ' / ' || ${WITHDRAWAL_CANCEL_NOTE} end`,
+    })
     .where(
       and(
         eq(t.status, 'pending'),
