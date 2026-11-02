@@ -15,6 +15,7 @@ import {
 } from '@/lib/server/boardWorkTabAuth'
 import { isWorkWriteError } from '@/db/queries/work/_shared'
 import { getChannelRecordById } from '@/db/queries/work/channels'
+import { insertMessage } from '@/db/queries/work/messages'
 import {
   deleteTabRow,
   getTabRow,
@@ -43,6 +44,8 @@ import {
   listChannelFilesSchema,
   moveTabSchema,
   removeTabSchema,
+  fileUploadedMessage,
+  postFileUploadSchema,
   renameTabSchema,
   tabAddedMessage,
 } from './schema'
@@ -251,7 +254,7 @@ export async function removeTab(input: unknown): Promise<ActionResult> {
 
 /**
  * 파일 탭 추가 대화상자의 "이 대화의 파일에서 고르기" 목록(멤버·내부 staff).
- * 첨부 목록 자체는 2a 전까지 빈 목록이다(`listConversationFileOptions`).
+ * 삭제되지 않은 첨부(이전 버전 포함) 최신순 50개(`listConversationFileOptions`).
  */
 export async function listFileOptions(input: unknown): Promise<ActionResult<FileOption[]>> {
   const ctx = await requireWorkStaff()
@@ -265,6 +268,57 @@ export async function listFileOptions(input: unknown): Promise<ActionResult<File
   } catch (e) {
     return dbFailure('tabs:listFiles', e)
   }
+}
+
+/**
+ * 파일 탭용 업로드 게시물(＋ 대화상자 "새로 올리기") — "A님이 'x' 파일을 올렸습니다." 를 만들고 id 를 돌려준다.
+ * 이어서 클라이언트가 attachUploads(messageId, …)로 첨부를 확정한다(use-tab-file-upload). 원본 kosmart-work
+ * `postFileUploadMessage`(service_role 게시) — 멤버·내부 구성원·보관 아님·공지 채널은 owner·관리자만을 여기서 판정하고,
+ * 쿼리 층이 같은 데이터 규칙(작성자 = 멤버·보관·공지 채널)을 트랜잭션 안에서 다시 본다.
+ */
+export async function postFileUploadMessage(
+  input: unknown
+): Promise<ActionResult<{ messageId: string }>> {
+  const ctx = await requireWorkStaff()
+  const { user, staff } = ctx
+  const parsed = postFileUploadSchema.safeParse(input)
+  if (!parsed.success) return invalid(parsed.error)
+  const v = parsed.data
+  if (staff.role === 'guest') return fail(GUEST_MESSAGE)
+  const limited = await writeLimited(user.id)
+  if (limited) return limited
+  const viewer = viewerOf(ctx)
+  let access: ChannelAccessDecision | null
+  try {
+    access = await loadChannelAccess(viewer, v.channelId)
+  } catch (e) {
+    return dbFailure('tabs:upload:access', e)
+  }
+  if (!access || !access.isMember) return fail(FORBIDDEN_MESSAGE)
+  if (access.archived) return fail('보관된 채널에는 파일을 올릴 수 없습니다.')
+  const restricted = access.isOwner || isWorkAdmin(viewer)
+  if (
+    !canPostTopLevel({
+      policy: normalizePostPolicy(access.postPolicy),
+      isChannelOwner: access.isOwner,
+      isWorkAdmin: isWorkAdmin(viewer),
+    })
+  ) {
+    return fail('이 채널은 소유자와 관리자만 글을 올릴 수 있어, 파일을 올릴 수 없습니다.')
+  }
+  const messageId = crypto.randomUUID()
+  try {
+    await insertMessage({
+      id: messageId,
+      channelId: v.channelId,
+      authorId: user.id,
+      body: fileUploadedMessage(staff.display_name, v.fileName, v.purpose),
+      canPostRestricted: restricted,
+    })
+  } catch (e) {
+    return writeFailure('tabs:upload:message', e)
+  }
+  return ok({ messageId })
 }
 
 /**

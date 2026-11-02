@@ -27,7 +27,7 @@ export type CreateAccess = {
 }
 
 const CHANNEL_NOT_FOUND = '채널을 찾을 수 없거나 권한이 없습니다.'
-const PARENT_NOT_FOUND = '답글을 달 메시지를 찾을 수 없습니다.'
+export const PARENT_NOT_FOUND = '답글을 달 메시지를 찾을 수 없습니다.'
 
 /**
  * 새 문서 만들기 권한 판정(서버) — createDocument 와 같은 순서: 채널 읽기 → 멤버·서브관리자·보관·공지 채널(createDeniedMessage)

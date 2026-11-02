@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import dynamic from 'next/dynamic'
 import Link from '@work/lib/nav/link'
 import { usePathname, useSearchParams } from '@work/lib/nav/navigation'
 import { ChevronRightIcon, FolderIcon, HashIcon, LibraryIcon, LockIcon } from 'lucide-work'
@@ -15,7 +16,10 @@ import { ROW_ACTIVE_CLASS, ROW_CLASS, TREE_ROW_CLASS } from './pane-styles'
 import SubTitle from './SubTitle'
 import { EmptyState } from './page'
 
-// ggac 이식: 원본의 "내가 편집 중인 문서"(MyEditingSection, 체크아웃)는 3단계(버전·편집기)다.
+/** 셸 공통 청크에 SaveVersionDialog·업로드·마크다운이 딸려 들어가지 않게 지연 로드한다(목록 아래 보조 영역). */
+const MyEditingSection = dynamic(() => import('@work/components/files/versions/MyEditingSection'), {
+  ssr: false,
+})
 
 /** 펼친 노드 키 목록(JSON)을 탭 안에서만 기억한다. 저장소가 막힌 환경에서는 기억만 포기한다 */
 export const FILES_TREE_EXPANDED_KEY = 'kw-files-tree-expanded'
@@ -138,6 +142,7 @@ export default function FilesPaneContent({
 
   return (
     <nav aria-label="자료실 폴더">
+      {!isGuest && <MyEditingSection />}
       {!isGuest && (
         <ul className="space-y-px">
           <li>

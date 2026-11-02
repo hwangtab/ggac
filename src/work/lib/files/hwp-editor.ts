@@ -114,7 +114,10 @@ export function checkHwpVerify(v: unknown): string | null {
   return null
 }
 
-export type HwpExportCheck = { ok: true; file: File } | { ok: false; error: string }
+// ggac 이식: strict: false 라 ok 판별로 좁혀지지 않는다 — 양쪽에 상대 키를 `?: undefined`로 둔다(ActionResult 와 같은 처리)
+export type HwpExportCheck =
+  | { ok: true; file: File; error?: undefined }
+  | { ok: false; error: string; file?: undefined }
 
 /**
  * `exportHwp()` 바이트 검사: Uint8Array 인가 · 0 < 크기 ≤ 20MB · 매직 `D0 CF 11 E0 A1 B1 1A E1`.

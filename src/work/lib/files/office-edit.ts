@@ -101,7 +101,10 @@ export function officeEditorSrc(origin: string, parentOrigin: string): string {
 }
 
 /** 저장 파일 검사 결과 */
-export type SavedFileCheck = { ok: true; file: File } | { ok: false; error: string }
+// ggac 이식: strict: false 라 ok 판별로 좁혀지지 않는다 — 양쪽에 상대 키를 `?: undefined`로 둔다(ActionResult 와 같은 처리)
+export type SavedFileCheck =
+  | { ok: true; file: File; error?: undefined }
+  | { ok: false; error: string; file?: undefined }
 
 const ZIP_MAGIC = [0x50, 0x4b, 0x03, 0x04]
 

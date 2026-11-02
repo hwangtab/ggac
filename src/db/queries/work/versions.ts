@@ -340,6 +340,25 @@ export async function resolveLatestLiveVersionParentId(
 }
 
 /**
+ * 한 채널의 첨부들(id 목록, 지워진 게시물의 것도 삭제 표시와 함께) — 파일 탭의 옛 `config.history`(계보 백필 전 데이터)용.
+ * 그 채널을 읽을 수 없으면 빈 목록.
+ */
+export async function listChannelAttachmentsByIds(
+  ids: readonly string[],
+  channelId: string,
+  readable: ReadableScope
+): Promise<(WorkAttachmentRecord & { message_deleted: boolean })[]> {
+  const unique = [...new Set(ids)]
+  if (unique.length === 0 || !readable.has(channelId)) return []
+  const rows = await db
+    .select({ ...attachmentColumns, messageDeletedAt: workMessages.deletedAt })
+    .from(workAttachments)
+    .innerJoin(workMessages, eq(workMessages.id, workAttachments.messageId))
+    .where(and(eq(workAttachments.channelId, channelId), inArray(workAttachments.id, unique)))
+  return rows.map(r => ({ ...toAttachmentRecord(r), message_deleted: r.messageDeletedAt !== null }))
+}
+
+/**
  * 같은 게시물 id 로 이미 만들어진 내 첨부(새 문서·사본 재시도의 멱등 확인) — 게시물이 내 것·같은 채널일 때만 그 첫 첨부.
  */
 export async function findOwnMessageAttachment(

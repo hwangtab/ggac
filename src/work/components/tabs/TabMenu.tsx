@@ -25,6 +25,7 @@ import { Input } from '@work/components/ui/input'
 import { moveTab, removeTab, renameTab } from '@work/lib/tabs/actions'
 import { TAB_TITLE_MAX, type AppTabKind } from '@work/lib/tabs/schema'
 import { localeOfPathname, toWorkHref } from '@work/lib/nav/paths'
+import UploadVersionDialog from './UploadVersionDialog'
 
 /**
  * 추가한 탭 옆 ⋯ 메뉴(docs/05 §3): 이름 바꾸기 · 새 창에서 열기 · 링크 복사 · 제거.
@@ -38,11 +39,10 @@ export default function TabMenu({
   baseHref,
   active,
   canManage,
-  // ggac 이식: 파일 탭 새 버전 올리기는 2a 뒤에 켠다 — 받는 모양만 원본대로 둔다
   kind,
-  channelId: _channelId,
-  fileAttachmentId: _fileAttachmentId,
-  canUploadVersion: _canUploadVersion = false,
+  channelId,
+  fileAttachmentId,
+  canUploadVersion = false,
   canMoveLeft = false,
   canMoveRight = false,
 }: {
@@ -66,6 +66,7 @@ export default function TabMenu({
 }) {
   const router = useRouter()
   const uid = useId()
+  const [versionOpen, setVersionOpen] = useState(false)
   const [renameOpen, setRenameOpen] = useState(false)
   const [removeOpen, setRemoveOpen] = useState(false)
   const [name, setName] = useState(title)
@@ -181,6 +182,9 @@ export default function TabMenu({
               오른쪽으로 이동
             </DropdownMenuItem>
           )}
+          {canUploadVersion && kind === 'file' && channelId && fileAttachmentId && (
+            <DropdownMenuItem onClick={() => setVersionOpen(true)}>새 버전 올리기</DropdownMenuItem>
+          )}
           <DropdownMenuItem render={<Link href={href} target="_blank" rel="noopener noreferrer" />}>
             새 창에서 열기
           </DropdownMenuItem>
@@ -205,7 +209,15 @@ export default function TabMenu({
         {status}
       </span>
 
-      {/* TODO(이사회 업무툴 2a): 파일 탭 "새 버전 올리기"(UploadVersionDialog)는 업로드·버전과 함께 옮긴다 */}
+      {kind === 'file' && channelId && fileAttachmentId && (
+        <UploadVersionDialog
+          open={versionOpen}
+          onOpenChange={setVersionOpen}
+          attachmentId={fileAttachmentId}
+          tabTitle={title}
+          channelId={channelId}
+        />
+      )}
 
       <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
         <DialogContent>
