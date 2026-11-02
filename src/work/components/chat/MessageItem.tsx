@@ -24,6 +24,7 @@ import {
 import { emojiLabel } from '@work/lib/messages/emoji'
 import { formatClock, formatFullDateTime, formatMessageTime } from '@work/lib/messages/format'
 import { decodeMentions, encodeMentions } from '@work/lib/messages/mentions'
+import { newTaskHref } from '@work/lib/tasks/schema'
 import { groupReactions } from '@work/lib/messages/timeline'
 import type { ChatMessage } from '@work/lib/messages/types'
 import { cn } from '@work/lib/utils'
@@ -439,7 +440,11 @@ function MessageItem({
                     다른 대화로 전달
                   </DropdownMenuItem>
                 )}
-                {/* ggac 이식 1b: "할 일로 만들기"는 할 일(2단계)과 함께 켠다 */}
+                {message.kind === 'text' && (
+                  <DropdownMenuItem render={<Link href={newTaskHref(message)} />}>
+                    할 일로 만들기
+                  </DropdownMenuItem>
+                )}
                 {canEdit && (
                   <DropdownMenuItem onClick={() => onStartEdit?.(message)}>
                     메시지 고치기
@@ -481,8 +486,7 @@ function MessageItem({
             bookmarked={bookmarked}
             onTogglePin={onTogglePin && (() => onTogglePin(message))}
             pinned={pinned}
-            // ggac 이식 1b: 할 일(tasks)은 2단계 — 메시지 메뉴의 "할 일로 만들기"를 숨긴다
-            taskHref={undefined}
+            taskHref={message.kind === 'text' ? newTaskHref(message) : undefined}
             onEdit={canEdit ? () => onStartEdit?.(message) : undefined}
             onCopy={
               message.body

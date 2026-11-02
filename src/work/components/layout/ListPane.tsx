@@ -19,6 +19,7 @@ import ChannelAddMenu from './ChannelAddMenu'
 import CreateChannelDialog from '@work/components/chat/CreateChannelDialog'
 import ChannelSortMenu, { ChatSortMenu } from './ChannelSortMenu'
 import { useShellData } from './shell-context'
+import TasksPaneContent, { NewTaskPaneAction } from './TasksPaneContent'
 import { COUNT_BADGE_CLASS, PANE_ACTION_CLASS, ROW_ACTIVE_CLASS, ROW_CLASS } from './pane-styles'
 import SubTitle from './SubTitle'
 import { EmptyState } from './page'
@@ -29,8 +30,8 @@ import type { ChannelListItem } from './channel-items'
 export const LIST_PANE_ID = 'list-pane'
 
 /** 목록 패널이 항상 있는 섹션 (관리는 셸 밖 레이아웃이 따로 그린다, 위키는 트리를 받았을 때만) */
-// ggac 이식 1b: 할 일·자료실(2단계)·결재·위키(가져오지 않음)의 목록 패널은 없다
-const PANE_SECTIONS: readonly SectionKey[] = ['activity', 'chat', 'channels']
+// ggac 이식 1b: 자료실(2단계)·결재·위키(가져오지 않음)의 목록 패널은 없다. 할 일은 2b에서 켰다
+const PANE_SECTIONS: readonly SectionKey[] = ['activity', 'chat', 'channels', 'tasks']
 
 /** wikiAvailable: 위키 트리를 받았는가(게스트는 위키를 못 쓰므로 받지 않는다) */
 export function hasListPane(section: SectionKey | null, wikiAvailable = false): boolean {
@@ -303,6 +304,10 @@ export default function ListPane({
       </>
     )
     body = <ChannelsPaneContent channels={channels} activeId={activeId} />
+  } else if (section === 'tasks') {
+    header = { title: '할 일' }
+    actionSlot = <NewTaskPaneAction />
+    body = <TasksPaneContent channels={channels} />
   } else {
     header = { title: sectionByKey(section).label }
     body = (
