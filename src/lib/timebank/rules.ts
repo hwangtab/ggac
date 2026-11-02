@@ -152,7 +152,8 @@ export function validMinutes(
   }
 }
 
-function eligible(p: Party): boolean {
+/** 판정 1(참여 자격). 쿼리 계층이 회원 ↔ coop 이동(조정·조합 업무)에서도 같은 기준을 쓴다. */
+export function eligible(p: Party): boolean {
   return p.approved_active === true && p.withdrawal_requested !== true && p.terms_current === true
 }
 
