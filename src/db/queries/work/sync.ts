@@ -53,6 +53,22 @@ export async function upsertTyping(
     })
 }
 
+/**
+ * 입력 중 표시를 지운다 — 메시지를 보낸 직후. 원본은 typing 신호가 입력하는 동안만 왔지만, 폴링은 행이 5초 동안 남아
+ * 보낸 뒤에도 "입력 중…"이 다시 실린다. 보낸 입력창(scope)의 행만 지운다.
+ */
+export async function clearTyping(channelId: string, scope: string, userId: string): Promise<void> {
+  await db
+    .delete(workTyping)
+    .where(
+      and(
+        eq(workTyping.channelId, channelId),
+        eq(workTyping.scope, scope),
+        eq(workTyping.userId, userId)
+      )
+    )
+}
+
 /** 이 채널에서 since 이후 입력 중인 사람(나 제외) */
 export async function listTyping(
   channelId: string,

@@ -1,8 +1,328 @@
 {
+  "src/work/components/chat/ChannelBrowser.tsx": {
+    "source": "src/components/chat/ChannelBrowser.tsx",
+    "commit": "eaafbfa",
+    "sha256": "41904a14e221b790"
+  },
+  "src/work/components/chat/ChannelHeader.tsx": {
+    "source": "src/components/chat/ChannelHeader.tsx",
+    "commit": "eaafbfa",
+    "sha256": "ef5f7f36bbf44148"
+  },
+  "src/work/components/chat/ChannelInfoPanel.tsx": {
+    "source": "src/components/chat/ChannelInfoPanel.tsx",
+    "commit": "eaafbfa",
+    "sha256": "ff0f8bbce7346398"
+  },
+  "src/work/components/chat/ChannelView.tsx": {
+    "source": "src/components/chat/ChannelView.tsx",
+    "commit": "eaafbfa",
+    "sha256": "33903aec5a267373"
+  },
+  "src/work/components/chat/ChatHome.tsx": {
+    "source": "src/components/chat/ChatHome.tsx",
+    "commit": "eaafbfa",
+    "sha256": "c86ea78e55c78e25"
+  },
+  "src/work/components/chat/ChatMarkdown.tsx": {
+    "source": "src/components/chat/ChatMarkdown.tsx",
+    "commit": "eaafbfa",
+    "sha256": "3391929c3a88fc99"
+  },
+  "src/work/components/chat/ChatStatus.tsx": {
+    "source": "src/components/chat/ChatStatus.tsx",
+    "commit": "eaafbfa",
+    "sha256": "e74e1307ec3b4c2f"
+  },
+  "src/work/components/chat/CollapsibleBody.tsx": {
+    "source": "src/components/chat/CollapsibleBody.tsx",
+    "commit": "eaafbfa",
+    "sha256": "90dd38aef75c5d34"
+  },
+  "src/work/components/chat/conversation-tabs.ts": {
+    "source": "src/components/chat/conversation-tabs.ts",
+    "commit": "eaafbfa",
+    "sha256": "21c5c37daea9247a"
+  },
+  "src/work/components/chat/CreateChannelDialog.tsx": {
+    "source": "src/components/chat/CreateChannelDialog.tsx",
+    "commit": "eaafbfa",
+    "sha256": "93c65b90cebee525"
+  },
+  "src/work/components/chat/DraftMark.tsx": {
+    "source": "src/components/chat/DraftMark.tsx",
+    "commit": "eaafbfa",
+    "sha256": "31a7073b2a230de6"
+  },
+  "src/work/components/chat/ForwardDialog.tsx": {
+    "source": "src/components/chat/ForwardDialog.tsx",
+    "commit": "eaafbfa",
+    "sha256": "4fe86988a6e61473"
+  },
+  "src/work/components/chat/MemberPicker.tsx": {
+    "source": "src/components/chat/MemberPicker.tsx",
+    "commit": "eaafbfa",
+    "sha256": "b585998849518a76"
+  },
+  "src/work/components/chat/MessageActionSheet.tsx": {
+    "source": "src/components/chat/MessageActionSheet.tsx",
+    "commit": "eaafbfa",
+    "sha256": "8e0b7909fa978136"
+  },
+  "src/work/components/chat/MessageComposer.tsx": {
+    "source": "src/components/chat/MessageComposer.tsx",
+    "commit": "eaafbfa",
+    "sha256": "868f6a1f01afc74c"
+  },
+  "src/work/components/chat/MessageItem.tsx": {
+    "source": "src/components/chat/MessageItem.tsx",
+    "commit": "eaafbfa",
+    "sha256": "2af817d9229342a8"
+  },
+  "src/work/components/chat/MessageList.tsx": {
+    "source": "src/components/chat/MessageList.tsx",
+    "commit": "eaafbfa",
+    "sha256": "8c196e2609170e6f"
+  },
+  "src/work/components/chat/NewChatPicker.tsx": {
+    "source": "src/components/chat/NewChatPicker.tsx",
+    "commit": "eaafbfa",
+    "sha256": "61da1618ccf61438"
+  },
+  "src/work/components/chat/PinnedPanel.tsx": {
+    "source": "src/components/chat/PinnedPanel.tsx",
+    "commit": "eaafbfa",
+    "sha256": "eb53ee18bbc8b721"
+  },
+  "src/work/components/chat/QuoteCard.tsx": {
+    "source": "src/components/chat/QuoteCard.tsx",
+    "commit": "eaafbfa",
+    "sha256": "578c0c135bfa5e65"
+  },
+  "src/work/components/chat/QuotePreview.tsx": {
+    "source": "src/components/chat/QuotePreview.tsx",
+    "commit": "eaafbfa",
+    "sha256": "7d44437a7085a990"
+  },
+  "src/work/components/chat/ReactionPicker.tsx": {
+    "source": "src/components/chat/ReactionPicker.tsx",
+    "commit": "eaafbfa",
+    "sha256": "2bb07d6286323905"
+  },
+  "src/work/components/chat/SystemMessage.tsx": {
+    "source": "src/components/chat/SystemMessage.tsx",
+    "commit": "eaafbfa",
+    "sha256": "d97182994ab3caa0"
+  },
+  "src/work/components/chat/ThreadPanel.tsx": {
+    "source": "src/components/chat/ThreadPanel.tsx",
+    "commit": "eaafbfa",
+    "sha256": "0dcd52f4b33103ea"
+  },
+  "src/work/components/chat/use-attachment-sync.ts": {
+    "source": "src/components/chat/use-attachment-sync.ts",
+    "commit": "eaafbfa",
+    "sha256": "f028c63cdb054999"
+  },
+  "src/work/components/chat/use-channel-topic.ts": {
+    "source": "src/components/chat/use-channel-topic.ts",
+    "commit": "eaafbfa",
+    "sha256": "2e0424d7d71be1df"
+  },
+  "src/work/components/chat/use-forward.tsx": {
+    "source": "src/components/chat/use-forward.tsx",
+    "commit": "eaafbfa",
+    "sha256": "2e3ae1bb8e98f316"
+  },
+  "src/work/components/chat/use-long-press.ts": {
+    "source": "src/components/chat/use-long-press.ts",
+    "commit": "eaafbfa",
+    "sha256": "9bdd09e07707ab28"
+  },
+  "src/work/components/chat/use-message-ops.ts": {
+    "source": "src/components/chat/use-message-ops.ts",
+    "commit": "eaafbfa",
+    "sha256": "ed6b24704bf2731b"
+  },
+  "src/work/components/inbox/InboxView.tsx": {
+    "source": "src/components/inbox/InboxView.tsx",
+    "commit": "eaafbfa",
+    "sha256": "19159096fb5b6dad"
+  },
+  "src/work/components/layout/active-channel.ts": {
+    "source": "src/components/layout/active-channel.ts",
+    "commit": "eaafbfa",
+    "sha256": "a645220fb08bd842"
+  },
+  "src/work/components/layout/AppRail.tsx": {
+    "source": "src/components/layout/AppRail.tsx",
+    "commit": "eaafbfa",
+    "sha256": "4d6e62a8e5a36c4e"
+  },
+  "src/work/components/layout/AppShell.tsx": {
+    "source": "src/components/layout/AppShell.tsx",
+    "commit": "eaafbfa",
+    "sha256": "838d4a8408b34895"
+  },
+  "src/work/components/layout/BottomTabs.tsx": {
+    "source": "src/components/layout/BottomTabs.tsx",
+    "commit": "eaafbfa",
+    "sha256": "506e8ec60c28781c"
+  },
+  "src/work/components/layout/CategoryMenu.tsx": {
+    "source": "src/components/layout/CategoryMenu.tsx",
+    "commit": "eaafbfa",
+    "sha256": "3ad8f912b4b4e7ac"
+  },
   "src/work/components/layout/channel-items.ts": {
     "source": "src/components/layout/channel-items.ts",
     "commit": "8ae8dd5",
     "sha256": "8aef3160778bb32c"
+  },
+  "src/work/components/layout/ChannelAddMenu.tsx": {
+    "source": "src/components/layout/ChannelAddMenu.tsx",
+    "commit": "eaafbfa",
+    "sha256": "28d0d14c0e1a14f9"
+  },
+  "src/work/components/layout/ChannelList.tsx": {
+    "source": "src/components/layout/ChannelList.tsx",
+    "commit": "eaafbfa",
+    "sha256": "5ca3242169027045"
+  },
+  "src/work/components/layout/ChannelSections.tsx": {
+    "source": "src/components/layout/ChannelSections.tsx",
+    "commit": "eaafbfa",
+    "sha256": "633487c31852203b"
+  },
+  "src/work/components/layout/ChannelSortMenu.tsx": {
+    "source": "src/components/layout/ChannelSortMenu.tsx",
+    "commit": "eaafbfa",
+    "sha256": "bcb70d5e54b23106"
+  },
+  "src/work/components/layout/chips.tsx": {
+    "source": "src/components/layout/chips.tsx",
+    "commit": "eaafbfa",
+    "sha256": "d44eb6f785a9f56f"
+  },
+  "src/work/components/layout/drag-types.ts": {
+    "source": "src/components/layout/drag-types.ts",
+    "commit": "eaafbfa",
+    "sha256": "dea51f4fa04f9d31"
+  },
+  "src/work/components/layout/ListPane.tsx": {
+    "source": "src/components/layout/ListPane.tsx",
+    "commit": "eaafbfa",
+    "sha256": "13397cae6d06ff15"
+  },
+  "src/work/components/layout/nav-sections.ts": {
+    "source": "src/components/layout/nav-sections.ts",
+    "commit": "eaafbfa",
+    "sha256": "29dfc0879377c411"
+  },
+  "src/work/components/layout/page.tsx": {
+    "source": "src/components/layout/page.tsx",
+    "commit": "eaafbfa",
+    "sha256": "71cb66e68e1226de"
+  },
+  "src/work/components/layout/pane-styles.ts": {
+    "source": "src/components/layout/pane-styles.ts",
+    "commit": "eaafbfa",
+    "sha256": "99e9fa314232f8ac"
+  },
+  "src/work/components/layout/presence.ts": {
+    "source": "src/components/layout/presence.ts",
+    "commit": "eaafbfa",
+    "sha256": "1033d9bae2c8b019"
+  },
+  "src/work/components/layout/QuickSwitcher.tsx": {
+    "source": "src/components/layout/QuickSwitcher.tsx",
+    "commit": "eaafbfa",
+    "sha256": "0623de7191a5b0d4"
+  },
+  "src/work/components/layout/RightPanel.tsx": {
+    "source": "src/components/layout/RightPanel.tsx",
+    "commit": "eaafbfa",
+    "sha256": "13ae2d23e9ce79b9"
+  },
+  "src/work/components/layout/SectionBadgeMark.tsx": {
+    "source": "src/components/layout/SectionBadgeMark.tsx",
+    "commit": "eaafbfa",
+    "sha256": "72a3ebcf2c9347be"
+  },
+  "src/work/components/layout/shell-context.tsx": {
+    "source": "src/components/layout/shell-context.tsx",
+    "commit": "eaafbfa",
+    "sha256": "09c15bc4d63c00fd"
+  },
+  "src/work/components/layout/sidebar-badges.ts": {
+    "source": "src/components/layout/sidebar-badges.ts",
+    "commit": "eaafbfa",
+    "sha256": "99d6e14e2d50ec62"
+  },
+  "src/work/components/layout/sub-nav.tsx": {
+    "source": "src/components/layout/sub-nav.tsx",
+    "commit": "eaafbfa",
+    "sha256": "563cf9beda60c79a"
+  },
+  "src/work/components/layout/SubTitle.tsx": {
+    "source": "src/components/layout/SubTitle.tsx",
+    "commit": "eaafbfa",
+    "sha256": "4bf988a7f5b06d1e"
+  },
+  "src/work/components/layout/TopBar.tsx": {
+    "source": "src/components/layout/TopBar.tsx",
+    "commit": "eaafbfa",
+    "sha256": "0ae6879525fd7cc7"
+  },
+  "src/work/components/layout/use-last-location.ts": {
+    "source": "src/components/layout/use-last-location.ts",
+    "commit": "eaafbfa",
+    "sha256": "31ebc07c32df947c"
+  },
+  "src/work/components/layout/use-section-shortcuts.ts": {
+    "source": "src/components/layout/use-section-shortcuts.ts",
+    "commit": "eaafbfa",
+    "sha256": "13e0c086759a4a58"
+  },
+  "src/work/components/layout/use-unread-indicators.ts": {
+    "source": "src/components/layout/use-unread-indicators.ts",
+    "commit": "eaafbfa",
+    "sha256": "58b9fae45f475930"
+  },
+  "src/work/components/layout/use-workspace-presence.ts": {
+    "source": "src/components/layout/use-workspace-presence.ts",
+    "commit": "eaafbfa",
+    "sha256": "9bb120ef8d11fa02"
+  },
+  "src/work/components/markdown/MessageMarkdown.tsx": {
+    "source": "src/components/markdown/MessageMarkdown.tsx",
+    "commit": "eaafbfa",
+    "sha256": "4342e1fed758d63f"
+  },
+  "src/work/components/notifications/NotificationPrefsForm.tsx": {
+    "source": "src/components/notifications/NotificationPrefsForm.tsx",
+    "commit": "eaafbfa",
+    "sha256": "b44140043e8effff"
+  },
+  "src/work/components/notifications/NotifyLevelMenu.tsx": {
+    "source": "src/components/notifications/NotifyLevelMenu.tsx",
+    "commit": "eaafbfa",
+    "sha256": "e4dc949537864f91"
+  },
+  "src/work/components/notifications/StatusDialog.tsx": {
+    "source": "src/components/notifications/StatusDialog.tsx",
+    "commit": "eaafbfa",
+    "sha256": "aa2548c7b7a39eae"
+  },
+  "src/work/components/settings/ProfileForm.tsx": {
+    "source": "src/app/(app)/settings/ProfileForm.tsx",
+    "commit": "eaafbfa",
+    "sha256": "a1c92352c4060959"
+  },
+  "src/work/components/theme/ThemeToggle.tsx": {
+    "source": "src/components/theme/ThemeToggle.tsx",
+    "commit": "eaafbfa",
+    "sha256": "9ff98d9a7cf2c79f"
   },
   "src/work/components/ui/auto-tooltip.tsx": {
     "source": "src/components/ui/auto-tooltip.tsx",
@@ -99,6 +419,11 @@
     "commit": "8ae8dd5",
     "sha256": "c1f78d3b54da07d9"
   },
+  "src/work/lib/brand.ts": {
+    "source": "src/lib/brand.ts",
+    "commit": "eaafbfa",
+    "sha256": "da65a943214c708a"
+  },
   "src/work/lib/channels/action-result.ts": {
     "source": "src/lib/channels/action-result.ts",
     "commit": "8ae8dd5",
@@ -154,6 +479,11 @@
     "commit": "8ae8dd5",
     "sha256": "a4f8c3704aa89cb8"
   },
+  "src/work/lib/markdown/autolink.ts": {
+    "source": "src/lib/markdown/autolink.ts",
+    "commit": "eaafbfa",
+    "sha256": "e2dd32f6f2167d7f"
+  },
   "src/work/lib/markdown/sanitize-markdown.ts": {
     "source": "src/lib/markdown/sanitize-markdown.ts",
     "commit": "8ae8dd5",
@@ -168,6 +498,26 @@
     "source": "src/lib/messages/author-label.ts",
     "commit": "8ae8dd5",
     "sha256": "0f7b566263213861"
+  },
+  "src/work/lib/messages/coarse-pointer.ts": {
+    "source": "src/lib/messages/coarse-pointer.ts",
+    "commit": "eaafbfa",
+    "sha256": "01e27b57c500ed5a"
+  },
+  "src/work/lib/messages/drafts.ts": {
+    "source": "src/lib/messages/drafts.ts",
+    "commit": "eaafbfa",
+    "sha256": "c841c4815b59a88b"
+  },
+  "src/work/lib/messages/emoji.ts": {
+    "source": "src/lib/messages/emoji.ts",
+    "commit": "eaafbfa",
+    "sha256": "4b093132280de3fc"
+  },
+  "src/work/lib/messages/format.ts": {
+    "source": "src/lib/messages/format.ts",
+    "commit": "eaafbfa",
+    "sha256": "2f019427835ab1df"
   },
   "src/work/lib/messages/forward.ts": {
     "source": "src/lib/messages/forward.ts",
@@ -184,10 +534,25 @@
     "commit": "8ae8dd5",
     "sha256": "8e9c6090f3b6e9fa"
   },
+  "src/work/lib/messages/quote.ts": {
+    "source": "src/lib/messages/quote.ts",
+    "commit": "eaafbfa",
+    "sha256": "b13c1681a296e39b"
+  },
   "src/work/lib/messages/schema.ts": {
     "source": "src/lib/messages/schema.ts",
     "commit": "8ae8dd5",
     "sha256": "e9208bd8f8f84299"
+  },
+  "src/work/lib/messages/stale-deploy.ts": {
+    "source": "src/lib/messages/stale-deploy.ts",
+    "commit": "eaafbfa",
+    "sha256": "0f4ae7a270d7bce1"
+  },
+  "src/work/lib/messages/timeline.ts": {
+    "source": "src/lib/messages/timeline.ts",
+    "commit": "eaafbfa",
+    "sha256": "52fdf42cbe354621"
   },
   "src/work/lib/messages/types.ts": {
     "source": "src/lib/messages/types.ts",
@@ -214,15 +579,40 @@
     "commit": "8ae8dd5",
     "sha256": "605842fb4fc5ec84"
   },
+  "src/work/lib/ops/chunk-reload.ts": {
+    "source": "src/lib/ops/chunk-reload.ts",
+    "commit": "eaafbfa",
+    "sha256": "a8ae34dac811df22"
+  },
   "src/work/lib/search/text.ts": {
     "source": "src/lib/search/text.ts",
     "commit": "8ae8dd5",
     "sha256": "e5c0f6dff60dd5d2"
   },
+  "src/work/lib/tabs/paths.ts": {
+    "source": "src/lib/tabs/paths.ts",
+    "commit": "eaafbfa",
+    "sha256": "f7cda8d05f41f174"
+  },
   "src/work/lib/tabs/schema.ts": {
     "source": "src/lib/tabs/schema.ts",
     "commit": "8ae8dd5",
     "sha256": "19088bef836a3e23"
+  },
+  "src/work/lib/tabs/types.ts": {
+    "source": "src/lib/tabs/types.ts",
+    "commit": "eaafbfa",
+    "sha256": "7c096b6c6503b5a2"
+  },
+  "src/work/lib/text/josa.ts": {
+    "source": "src/lib/text/josa.ts",
+    "commit": "eaafbfa",
+    "sha256": "dab3b3597cfb300b"
+  },
+  "src/work/lib/theme.ts": {
+    "source": "src/lib/theme.ts",
+    "commit": "eaafbfa",
+    "sha256": "00ffb4912fa1af47"
   },
   "src/work/lib/ui/auto-tooltip.ts": {
     "source": "src/lib/ui/auto-tooltip.ts",

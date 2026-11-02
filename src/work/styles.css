@@ -40,6 +40,11 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  /* 원본 `@theme`의 레이아웃 폭 변수 — 앱 레일이 `w-[calc(var(--spacing-rail)+env(safe-area-inset-left))]`로 직접 쓴다.
+     값은 tailwind.config.js `spacing.rail·sidebar·panel`과 같다 */
+  --spacing-rail: 64px;
+  --spacing-sidebar: 260px;
+  --spacing-panel: 360px;
   --sidebar: oklch(0.975 0.004 250);
   --sidebar-foreground: oklch(0.25 0.02 250);
   --sidebar-primary: oklch(0.5 0.13 200);
@@ -143,6 +148,40 @@
 :where([data-work-app], [data-work-app] *) {
   border-color: var(--border);
   outline-color: color-mix(in oklch, var(--ring) 50%, transparent);
+}
+
+/*
+ * ggac 전역 포커스 윤곽(globals.css "Enhanced Focus Styles": `button|a|input|select|textarea:focus-visible`에
+ * 하늘색 outline !important + border-radius 4px)이 업무툴 안에서는 각 컴포넌트의 ring과 겹쳐 이중 테두리가 되고
+ * (입력창 안에 상자가 하나 더 보인다), 둥근 단추가 포커스 때 4px로 각진다. 업무툴 안에서만 되돌린다 —
+ * 포커스 표시는 원본처럼 각 컴포넌트의 `focus-visible:ring-*`이 맡는다. globals.css는 건드리지 않는다.
+ */
+[data-work-app] .focus-visible:focus,
+[data-work-app] :is(button, a, input, select, textarea):focus-visible {
+  outline: none !important;
+  outline-offset: 0 !important;
+}
+[data-work-app] .rounded-w-sm:focus-visible {
+  border-radius: var(--radius-sm);
+}
+[data-work-app] .rounded-w-md:focus-visible {
+  border-radius: var(--radius-md);
+}
+[data-work-app] .rounded-w-lg:focus-visible {
+  border-radius: var(--radius-lg);
+}
+[data-work-app] .rounded-w-xl:focus-visible {
+  border-radius: var(--radius-xl);
+}
+[data-work-app] .rounded-w-4xl:focus-visible {
+  border-radius: var(--radius-4xl);
+}
+[data-work-app] .rounded-full:focus-visible {
+  border-radius: 9999px;
+}
+[data-work-app] .rounded-none:focus-visible,
+[data-work-app] :is(input, textarea, select):not([class*='rounded']):focus-visible {
+  border-radius: 0;
 }
 
 /* v4 preflight는 버튼 커서를 default로 둔다 — 원본은 눌러지는 것을 손 모양으로 되돌렸다. v3도 같게 고정. */

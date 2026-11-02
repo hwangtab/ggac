@@ -129,6 +129,28 @@ Content-Type: application/json
 - 지워진 메시지는 하드 삭제가 아니라 소프트 삭제라 `loadMessagesByIds`가
   `deleted_at`이 찬 행을 돌려준다(원본 UPDATE와 같은 모양).
 
+### 1b 구현 메모(`src/work/lib/messages/realtime.ts`)
+
+- 원본 API에 **더한 것만** 있다: `subscribeBadges(listener)`(응답의 `badges`를
+  사이드바가 받는다 — 채널마다 구독하지 않는다), `requestSync({ sentIn? })`(보낸
+  직후 즉시 1회, 그 채널의 아직 싣지 않은 입력 중 신호는 버린다),
+  `subscribeChannelTopic`의 선택 인자 `rev`(화면 로더의 시작
+  커서)·`scope`(스레드 패널 → `focus.threadId`).
+- 순수 규칙(주기·새 글 판정·활동 순서)은 `src/work/lib/sync/poll.ts`, 단위
+  테스트는 `scripts/testing/boardWorkSyncClient.test.mjs`.
+- 재조회(`loadMessagesByIds`)가 실패하면 그 채널의 rev를 올리지 않는다 — 다음
+  폴이 같은 id를 다시 받는다(재시도). 4번 넘게 이어서 실패하면
+  `sync-lost`('failed'), 배포로 낡은 탭이면 바로 `sync-lost`('stale-deploy').
+- `resync`는 재연결 경로(`status` error → connected)로 알린다 — ChannelView는
+  `refetchLatest`, ThreadPanel은 `loadThread`를 다시 부른다.
+- 화면에 없던 id인지 클라이언트 허브는 모른다. 그래서 INSERT/UPDATE는 **지난
+  응답 시각 뒤에 만들어졌고 고친 적 없는가**로 가른다(`messageOp`). 받는 쪽은
+  둘을 같은 upsert로 처리한다.
+- 메시지를 보내면 서버가 보낸 사람의 입력 중 행을 지운다(`sendMessage` →
+  `clearTyping`). 행이 5초 남으면 보낸 뒤에도 "입력 중…"이 다시 실렸다. 화면의
+  표시 유지 시간은 3초 폴과 맞게 5초다(원본 3초).
+- 접속 수(채널 머리글)는 워크스페이스 접속자를 그 대화의 멤버로 좁혀 센다.
+
 ### 응답 → TopicEvent
 
 | 응답                     | 내보낼 TopicEvent                                                                                                                                                                                                                                    |

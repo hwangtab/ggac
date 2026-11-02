@@ -180,6 +180,36 @@ export async function listMyActiveMemberships(userId: string): Promise<Membershi
   }))
 }
 
+export type NotifyLevelOverride = {
+  channel_id: string
+  notify_level: string
+  channel: { name: string; slug: string | null; kind: WorkChannelKind }
+}
+
+/**
+ * 알림 수준을 기본값에서 바꾼(notify_level이 null이 아닌) 내 멤버십 — 원본 알림 설정 화면의
+ * `channel_members … .not('notify_level','is',null)` 조회. 보관 채널도 포함한다(원본과 같다).
+ */
+export async function listNotifyLevelOverrides(userId: string): Promise<NotifyLevelOverride[]> {
+  const rows = await db
+    .select({
+      channelId: workChannelMembers.channelId,
+      notifyLevel: workChannelMembers.notifyLevel,
+      name: workChannels.name,
+      slug: workChannels.slug,
+      kind: workChannels.kind,
+    })
+    .from(workChannelMembers)
+    .innerJoin(workChannels, eq(workChannels.id, workChannelMembers.channelId))
+    .where(and(eq(workChannelMembers.userId, userId), isNotNull(workChannelMembers.notifyLevel)))
+    .orderBy(asc(workChannels.name))
+  return rows.map(r => ({
+    channel_id: r.channelId,
+    notify_level: r.notifyLevel as string,
+    channel: { name: r.name, slug: r.slug, kind: r.kind as WorkChannelKind },
+  }))
+}
+
 /** 여러 채널의 멤버 id(그룹 이름 나열·같은 구성 그룹 찾기) */
 export async function listMemberIdsByChannel(channelIds: string[]): Promise<Map<string, string[]>> {
   const out = new Map<string, string[]>()

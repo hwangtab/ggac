@@ -18,6 +18,7 @@ import {
   toggleReactionRow,
 } from '@/db/queries/work/messages'
 import { isWorkWriteError } from '@/db/queries/work/_shared'
+import { clearTyping } from '@/db/queries/work/sync'
 import { logAudit } from '@work/lib/audit/log'
 import { sanitizeUserMarkdown } from '@work/lib/markdown/sanitize-markdown'
 import {
@@ -170,6 +171,10 @@ export async function sendMessage(input: unknown): Promise<
     return dbFailure('sendMessage', e)
   }
 
+  // ggac 이식(폴링): 보낸 사람의 "입력 중"을 바로 지운다(행이 5초 남아 다음 폴에 다시 실리지 않게). 곁가지라 실패는 로그만
+  await clearTyping(channelId, parentId ?? '', user.id).catch(e =>
+    console.error('[sendMessage] 입력 중 표시 지우기 실패:', e)
+  )
   const { ids: mentioned, failed: mentionsFailed } = await recordMentions({
     messageId,
     body,

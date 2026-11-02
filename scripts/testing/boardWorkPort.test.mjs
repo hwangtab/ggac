@@ -14,6 +14,9 @@ test('유틸리티 이름 변환', () => {
   assert.equal(convertToken('shadow-xs'), 'shadow-sm')
   assert.equal(convertToken('backdrop-blur-xs'), 'backdrop-blur-sm')
   assert.equal(convertToken('field-sizing-content'), '[field-sizing:content]')
+  // v4 underline-offset-<정수>: v3 눈금(0·1·2·4·8) 밖이면 임의 값
+  assert.equal(convertToken('underline-offset-3'), 'underline-offset-[3px]')
+  assert.equal(convertToken('underline-offset-4'), 'underline-offset-4')
   assert.equal(convertToken('w-(--anchor-width)'), 'w-[var(--anchor-width)]')
   assert.equal(convertToken('origin-(--transform-origin)'), 'origin-[var(--transform-origin)]')
 })
@@ -109,6 +112,10 @@ test('import 경로 변환', () => {
   assert.equal(rewriteSpecifier('lucide-react'), 'lucide-work')
   assert.equal(rewriteSpecifier('@/app/x'), '@/app/x')
   assert.equal(rewriteSpecifier('react'), 'react')
+  // 원본 루트 경로(/c/…) ↔ /board-room 경로 변환 래퍼(src/work/lib/nav)
+  assert.equal(rewriteSpecifier('next/link'), '@work/lib/nav/link')
+  assert.equal(rewriteSpecifier('next/navigation'), '@work/lib/nav/navigation')
+  assert.equal(rewriteSpecifier('next/cache'), 'next/cache')
 })
 
 test('소스 변환은 문자열·import만 바꾼다', () => {

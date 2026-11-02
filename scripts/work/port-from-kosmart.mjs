@@ -8,7 +8,8 @@
  * 하는 일(파일마다):
  *   1. 원본 `<KOSMART_WORK_DIR>/src/<경로>` → `src/work/<경로>`로 복사한다(`src/` 접두사를 뗀다).
  *   2. import 경로를 바꾼다: `@/lib|components|types|hooks/…` → `@work/…`, `lucide-react` → `lucide-work`
- *      (lucide 1.x를 별칭으로 따로 설치했다 — ggac 본체는 0.x를 그대로 쓴다).
+ *      (lucide 1.x를 별칭으로 따로 설치했다 — ggac 본체는 0.x를 그대로 쓴다), `next/link`·`next/navigation` →
+ *      `@work/lib/nav/{link,navigation}`(원본 루트 경로 ↔ `/board-room` 경로 변환).
  *   3. 문자열 리터럴 안의 Tailwind v4 클래스를 v3로 바꾼다(`convertToken`). 원본은 v4, ggac는 3.4다.
  *   4. `src/work/ported.json`에 원본 경로·커밋·원본 해시를 남긴다 — 원본이 바뀌었는지 나중에 대조한다.
  *
@@ -26,8 +27,18 @@ const LEDGER = path.join(ROOT, 'src/work/ported.json')
 
 // ── 1. import 경로 ────────────────────────────────────────────────────────────
 
+/**
+ * 원본은 앱이 사이트 루트에 있다고 보고 경로를 쓴다(`/c/<slug>`·`usePathname().startsWith('/inbox')`).
+ * ggac에서는 `/board-room` 아래(+ 영어면 `/en`)라 링크·라우터·경로 훅을 업무툴 래퍼로 돌린다(`src/work/lib/nav/*`).
+ */
+const NAV_WRAPPERS = {
+  'next/link': '@work/lib/nav/link',
+  'next/navigation': '@work/lib/nav/navigation',
+}
+
 export function rewriteSpecifier(spec) {
   if (spec === 'lucide-react') return 'lucide-work'
+  if (Object.hasOwn(NAV_WRAPPERS, spec)) return NAV_WRAPPERS[spec]
   const m = /^@\/(lib|components|types|hooks)(\/.*)?$/.exec(spec)
   if (m) return `@work/${m[1]}${m[2] ?? ''}`
   return spec
@@ -134,6 +145,9 @@ export function convertUtility(u) {
   else if (u === 'backdrop-blur-xs') u = 'backdrop-blur-sm'
   else if (u === 'blur-xs') u = 'blur-sm'
   else if ((m = /^field-sizing-(content|fixed)$/.exec(u))) u = `[field-sizing:${m[1]}]`
+  // v4는 underline-offset-<정수>를 모두 받는다(px). v3 기본 눈금은 0·1·2·4·8뿐이라 나머지는 임의 값으로
+  else if ((m = /^underline-offset-(\d+)$/.exec(u)) && !['0', '1', '2', '4', '8'].includes(m[1]))
+    u = `underline-offset-[${m[1]}px]`
   else if ((m = /^bg-linear-(to-[trbl]{1,2})$/.exec(u))) u = `bg-gradient-${m[1]}`
   else if ((m = /^rounded(-[trblse]{1,2})?-([a-z0-9]+)$/.exec(u)) && RADIUS_SIZES.has(m[2])) {
     u = `rounded${m[1] ?? ''}-w-${m[2]}`
