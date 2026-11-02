@@ -7362,7 +7362,7 @@ if (trackedFiles === null) {
 }
 
 // ---------------------------------------------------------------------------
-// 이사회 **전용 화면**(일정 투표·메일함)은 미들웨어 말고도 서버에서 한 번 더
+// 이사회 **전용 화면**(일정 투표·메일함·타임뱅크 보고)은 미들웨어 말고도 서버에서 한 번 더
 // 판정한다.
 //
 // 왜 검사하는가: 두 화면은 예전에 `'use client'`뿐이라 서버 인가가 전혀 없었고,
@@ -7377,6 +7377,7 @@ if (trackedFiles === null) {
   const guardedBoardPages = [
     'src/app/[locale]/board-room/schedule/page.tsx',
     'src/app/[locale]/board-room/mailbox/page.tsx',
+    'src/app/[locale]/board-room/timebank/page.tsx',
   ]
   const unguardedBoardPages = []
 

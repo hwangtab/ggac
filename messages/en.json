@@ -950,7 +950,8 @@
       "roleArtist": "Artist",
       "roleMember": "Member",
       "helpPrompt": "Need help?",
-      "helpBody": "Please contact an admin."
+      "helpBody": "Please contact an admin.",
+      "timebank": "Time Bank"
     },
     "calendar": {
       "title": "My Calendar",
@@ -979,7 +980,13 @@
         "fri": "Fri",
         "sat": "Sat"
       }
-    }
+    },
+    "timebankCardTitle": "Time Bank",
+    "timebankCardDesc": "Record the help you trade with fellow members in time, and manage your hours.",
+    "timebankCardButton": "Manage my time",
+    "timebankCardBalance": "Balance {balance}",
+    "timebankCardNeedsAgreement": "Agree to the terms to start using the Time Bank.",
+    "timebankCardPending": "{count} to confirm"
   },
   "board": {
     "heading": "Member Board",
@@ -1285,6 +1292,128 @@
       "author": "Author",
       "error": "Could not process the comment.",
       "readOnly": "Only time bank participants can comment."
+    },
+    "transferKind": {
+      "exchange": "Exchange",
+      "market": "Market",
+      "reversal": "Reversal",
+      "signup_grant": "Sign-up credit",
+      "carryover": "Rejoin carryover",
+      "coop_task": "Co-op task",
+      "redeem": "Co-op service use",
+      "redeem_refund": "Co-op service refund",
+      "adjustment": "Adjustment",
+      "withdrawal_settlement": "Withdrawal settlement"
+    },
+    "transferStatus": {
+      "pending": "Awaiting confirmation",
+      "confirmed": "Confirmed",
+      "rejected": "Rejected",
+      "canceled": "Canceled"
+    },
+    "my": {
+      "title": "My Time",
+      "description": "See your balance, pending records, new records and history in one place. One person records after the work is done; it is confirmed when the other person confirms.",
+      "loadError": "Could not load. Please try again shortly.",
+      "actionError": "Could not process the request.",
+      "coop": "Co-op",
+      "fromCounterparty": "Received from {name}",
+      "toCounterparty": "Given to {name}",
+      "recordedByMe": "Recorded by me",
+      "balance": {
+        "heading": "Balance",
+        "balance": "My balance",
+        "roomToFloor": "Time left above the floor",
+        "floor": "Floor {floor}",
+        "coopTask": "Co-op tasks received in {month} / monthly cap",
+        "pending": "Pending",
+        "toConfirm": "{count} for me to confirm",
+        "awaitingOther": "{count} waiting for the other person"
+      },
+      "pending": {
+        "heading": "Pending",
+        "toConfirm": "Records for me to confirm",
+        "awaitingOther": "My records (waiting for the other person)",
+        "emptyToConfirm": "Nothing to confirm.",
+        "emptyAwaiting": "No records waiting for the other person.",
+        "confirm": "Confirm",
+        "reject": "Reject",
+        "cancel": "Cancel",
+        "rejectConfirm": "Reject this record?",
+        "cancelConfirm": "Cancel this record?",
+        "confirmDone": "Record confirmed.",
+        "rejectDone": "Record rejected.",
+        "cancelDone": "Record canceled.",
+        "stale": "Over 7 days"
+      },
+      "record": {
+        "heading": "Record",
+        "help": "Record after the help has been given. It is confirmed when the other person confirms, and does not count toward balances until then.",
+        "noParticipants": "There are no other participants to record with yet.",
+        "role": "I",
+        "role_received": "received help",
+        "role_gave": "gave help",
+        "counterparty": "With",
+        "counterpartyPlaceholder": "Choose a participant",
+        "minutes": "Time",
+        "categoryNone": "No category",
+        "memo": "Memo (optional)",
+        "memoPlaceholder": "Briefly describe what was done. Do not include health information.",
+        "submit": "Save record",
+        "submitting": "Saving…",
+        "done": "Record saved. It is confirmed once the other person confirms it.",
+        "error": "Could not save the record."
+      },
+      "history": {
+        "heading": "History",
+        "csv": "Download {month} CSV",
+        "channel": "Channel",
+        "channelAll": "All channels",
+        "channels": {
+          "exchange": "Exchanges",
+          "reversal": "Reversals",
+          "coop_task": "Co-op tasks",
+          "signup": "Sign-up & carryover",
+          "adjustment": "Adjustments & settlements"
+        },
+        "month": "Month (KST)",
+        "allMonths": "All time",
+        "totals": "Confirmed in {month} — received {received}, given {given}",
+        "empty": "No records match.",
+        "relatedPost": "Related post",
+        "reverse": "Request reversal",
+        "reverseConfirm": "Record a reversal of this exchange? It is confirmed when the other person confirms.",
+        "reverseDone": "Reversal requested. It is confirmed when the other person confirms."
+      },
+      "posts": {
+        "heading": "My posts",
+        "viewAll": "See all on the board",
+        "mine": "My offers and requests",
+        "empty": "No posts yet.",
+        "volunteered": "Co-op tasks I joined",
+        "emptyVolunteered": "You have not joined any co-op tasks."
+      },
+      "profile": {
+        "heading": "Profile",
+        "readOnly": "You can edit this once you have agreed to the terms and the Time Bank is on.",
+        "offers": "What I can offer",
+        "needs": "What I need",
+        "visible": "Show in the participant directory",
+        "visibleHelp": "Other participants will see what you offer, what you need and your categories.",
+        "save": "Save profile",
+        "saving": "Saving…",
+        "saved": "Profile saved.",
+        "error": "Could not save the profile."
+      },
+      "agreement": {
+        "heading": "Terms agreement",
+        "current": "Current version",
+        "agreed": "My agreement",
+        "agreedValue": "Version {version} · {date}",
+        "none": "Not agreed yet.",
+        "needsAgreement": "You need to agree to the current version. Read and agree to the terms in the notice above.",
+        "unavailable": "You need to agree to the current version, but agreement is not available right now. See the notice above."
+      }
     }
   },
   "boardRoom": {

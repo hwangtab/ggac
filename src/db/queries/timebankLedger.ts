@@ -1118,6 +1118,40 @@ export interface OversightRow {
   }>
 }
 
+/** `endMs` 직전까지 확정된 조합 계좌 이동으로 본 발행잔액(= −coop 잔액). */
+async function outstandingBefore(endMs: number): Promise<number> {
+  const [row] = await db
+    .select({
+      v: sql<number>`coalesce(sum(case when ${t.fromAccount} = ${COOP_ACCOUNT} then ${t.minutes} else 0 end) - sum(case when ${t.toAccount} = ${COOP_ACCOUNT} then ${t.minutes} else 0 end), 0)`,
+    })
+    .from(t)
+    .where(
+      and(
+        eq(t.status, 'confirmed'),
+        or(eq(t.fromAccount, COOP_ACCOUNT), eq(t.toAccount, COOP_ACCOUNT)),
+        lt(t.decidedAt, new Date(endMs))
+      )
+    )
+  return Number(row?.v ?? 0)
+}
+
+/**
+ * 발행잔액 추이(스펙 §12) — 각 KST 월 말 기준 발행잔액. 이사회 보고 화면이
+ * 고른 달과 그 앞 몇 달을 함께 보인다. 받은 순서 그대로 돌려준다.
+ */
+export async function outstandingTrend(
+  monthKeys: string[]
+): Promise<Array<{ month: string; outstanding_minutes: number }>> {
+  const out: Array<{ month: string; outstanding_minutes: number }> = []
+  for (const month of monthKeys) {
+    out.push({
+      month,
+      outstanding_minutes: await outstandingBefore(kstMonthRange(month).endMs),
+    })
+  }
+  return out
+}
+
 /** 이사회·감사 월 보고(스펙 §7.4). */
 export async function monthlyOversight(monthKey: string): Promise<OversightRow> {
   const { endMs } = kstMonthRange(monthKey)
@@ -1163,18 +1197,7 @@ export async function monthlyOversight(monthKey: string): Promise<OversightRow> 
   retired.total =
     retired.redeem + retired.adjustment_debit + retired.carryover + retired.withdrawal_settlement
 
-  const [outstanding] = await db
-    .select({
-      v: sql<number>`coalesce(sum(case when ${t.fromAccount} = ${COOP_ACCOUNT} then ${t.minutes} else 0 end) - sum(case when ${t.toAccount} = ${COOP_ACCOUNT} then ${t.minutes} else 0 end), 0)`,
-    })
-    .from(t)
-    .where(
-      and(
-        eq(t.status, 'confirmed'),
-        or(eq(t.fromAccount, COOP_ACCOUNT), eq(t.toAccount, COOP_ACCOUNT)),
-        lt(t.decidedAt, new Date(endMs))
-      )
-    )
+  const outstanding = await outstandingBefore(endMs)
 
   const byMember = await db
     .select({
@@ -1213,7 +1236,7 @@ export async function monthlyOversight(monthKey: string): Promise<OversightRow> 
     month: monthKey,
     issued,
     retired,
-    outstanding_minutes: Number(outstanding?.v ?? 0),
+    outstanding_minutes: outstanding,
     coop_task_by_member: byMember.map(r => ({
       member_id: r.member_id,
       name: r.name ?? null,

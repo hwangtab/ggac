@@ -38,3 +38,12 @@ test('형식이 틀린 월 키는 던진다', () => {
     assert.throws(() => kstMonthRange(bad), RangeError, bad)
   }
 })
+
+test('shiftMonthKey는 해를 넘겨 앞뒤로 옮긴다', async () => {
+  const { shiftMonthKey } = await import('../../src/lib/timebank/month.ts')
+  assert.equal(shiftMonthKey('2026-11', 0), '2026-11')
+  assert.equal(shiftMonthKey('2026-11', 2), '2027-01')
+  assert.equal(shiftMonthKey('2026-01', -1), '2025-12')
+  assert.equal(shiftMonthKey('2026-03', -14), '2025-01')
+  assert.throws(() => shiftMonthKey('2026-13', 1), RangeError)
+})

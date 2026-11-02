@@ -1079,3 +1079,32 @@ test('participationStats: 인원 2명 구간은 null로 숨긴다', async () => 
   assert.equal(s.participants, null, '2명은 3명 미만')
   assert.equal(s.bidirectional_participants, null)
 })
+
+test('outstandingTrend: 각 달 말 기준 발행잔액을 받은 순서대로', async () => {
+  const m = await newMember('tr')
+  const base = await ledger.outstandingTrend(['2033-01', '2033-02', '2033-03'])
+  await insertRow({
+    from_account: 'coop',
+    to_account: m,
+    minutes: 120,
+    kind: 'signup_grant',
+    decided_at: Date.parse('2033-02-10T03:00:00Z'),
+  })
+  await insertRow({
+    from_account: m,
+    to_account: 'coop',
+    minutes: 30,
+    kind: 'redeem',
+    decided_at: Date.parse('2033-03-10T03:00:00Z'),
+  })
+  const trend = await ledger.outstandingTrend(['2033-01', '2033-02', '2033-03'])
+  assert.deepEqual(
+    trend.map(r => r.month),
+    ['2033-01', '2033-02', '2033-03']
+  )
+  assert.equal(trend[0].outstanding_minutes - base[0].outstanding_minutes, 0)
+  assert.equal(trend[1].outstanding_minutes - base[1].outstanding_minutes, 120)
+  assert.equal(trend[2].outstanding_minutes - base[2].outstanding_minutes, 90)
+  const o = await ledger.monthlyOversight('2033-03')
+  assert.equal(o.outstanding_minutes, trend[2].outstanding_minutes)
+})

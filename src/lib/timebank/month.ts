@@ -30,3 +30,13 @@ export function kstMonthRange(key: string): { startMs: number; endMs: number } {
     endMs: Date.UTC(year, monthIndex + 1, 1) - KST_OFFSET_MS,
   }
 }
+
+/** `'YYYY-MM'`을 `delta`달 옮긴다(음수면 앞 달). 형식이 틀리면 `RangeError`. */
+export function shiftMonthKey(key: string, delta: number): string {
+  const match = MONTH_KEY.exec(key)
+  if (!match) throw new RangeError(`잘못된 월 키: ${key}`)
+  const index = Number(match[1]) * 12 + (Number(match[2]) - 1) + Math.trunc(delta)
+  const y = Math.floor(index / 12)
+  const m = index - y * 12 + 1
+  return `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}`
+}

@@ -12,20 +12,23 @@
  * 응답은 snake_case. 임포트는 상대경로 + `.ts`(`node --test`가 직접 import한다).
  */
 
-import { and, asc, count, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, inArray, isNotNull, isNull, lt, sql } from 'drizzle-orm'
 
 import { db } from '../client.ts'
 import {
   memberProfiles,
   timebankComments,
   timebankListings,
+  timebankProfiles,
   timebankTaskVolunteers,
 } from '../schema/index.ts'
-import type {
-  TimebankCategory,
-  TimebankListingKind,
-  TimebankListingStatus,
+import {
+  STATS_MIN_BUCKET,
+  type TimebankCategory,
+  type TimebankListingKind,
+  type TimebankListingStatus,
 } from '../../constants/timebank.ts'
+import { kstMonthRange } from '../../lib/timebank/month.ts'
 
 import { toIso } from './_helpers.ts'
 
@@ -432,4 +435,96 @@ export async function listVolunteers(
     display_name: r.displayName,
     volunteered_at: toIso(r.volunteeredAt) as string,
   }))
+}
+
+// ── 내가 자원한 조합 업무 ─────────────────────────────────────────────────────
+
+/**
+ * 회원이 자원하고 철회하지 않은 조합 업무 글(마이페이지 "내 글", 스펙 §8). 지워진
+ * 글은 뺀다. 자원한 순서의 역순.
+ */
+export async function listVolunteeredTasks(
+  memberId: string,
+  limit = 20
+): Promise<
+  Array<{
+    id: string
+    title: string
+    status: TimebankListingStatus
+    task_date: string | null
+    volunteered_at: string
+  }>
+> {
+  const rows = await db
+    .select({
+      id: timebankListings.id,
+      title: timebankListings.title,
+      status: timebankListings.status,
+      taskDate: timebankListings.taskDate,
+      volunteeredAt: timebankTaskVolunteers.volunteeredAt,
+    })
+    .from(timebankTaskVolunteers)
+    .innerJoin(timebankListings, eq(timebankListings.id, timebankTaskVolunteers.listingId))
+    .where(
+      and(
+        eq(timebankTaskVolunteers.memberId, memberId),
+        isNull(timebankTaskVolunteers.withdrawnAt),
+        eq(timebankListings.kind, 'coop_task'),
+        eq(timebankListings.isDeleted, false)
+      )
+    )
+    .orderBy(desc(timebankTaskVolunteers.volunteeredAt), desc(timebankListings.id))
+    .limit(Math.max(1, Math.min(100, Math.trunc(limit) || 20)))
+  return rows.map(r => ({
+    id: r.id,
+    title: r.title,
+    status: r.status,
+    task_date: r.taskDate ?? null,
+    volunteered_at: toIso(r.volunteeredAt) as string,
+  }))
+}
+
+// ── 파일럿 지표(스펙 §12) ────────────────────────────────────────────────────
+
+/**
+ * "요청 글을 쓴 조합원 비율" — 그 KST 월 말까지 요청 글(지워진 것 제외)을 한 번
+ * 이상 쓴 사람 수 / 그때까지 이용규칙에 동의한 참여자 수. 지금 남아 있는 프로필만
+ * 센다(탈퇴하면 프로필이 지워진다).
+ *
+ * 사람 수 구간이 3명 미만이면 `request_authors`와 `ratio`를 null로 가린다 — 비율과
+ * 분모만으로 작은 수가 드러나지 않게 한다.
+ */
+export async function requestAuthorShare(monthKey: string): Promise<{
+  request_authors: number | null
+  participants: number
+  ratio: number | null
+}> {
+  const end = new Date(kstMonthRange(monthKey).endMs)
+  const [[authors], [people]] = await Promise.all([
+    db
+      .select({ n: sql<number>`count(distinct ${timebankListings.authorId})` })
+      .from(timebankListings)
+      .innerJoin(timebankProfiles, eq(timebankProfiles.memberId, timebankListings.authorId))
+      .where(
+        and(
+          eq(timebankListings.kind, 'request'),
+          eq(timebankListings.isDeleted, false),
+          lt(timebankListings.createdAt, end),
+          isNotNull(timebankProfiles.agreedAt),
+          lt(timebankProfiles.agreedAt, end)
+        )
+      ),
+    db
+      .select({ n: count() })
+      .from(timebankProfiles)
+      .where(and(isNotNull(timebankProfiles.agreedAt), lt(timebankProfiles.agreedAt, end))),
+  ])
+  const authorCount = Number(authors?.n ?? 0)
+  const participants = Number(people?.n ?? 0)
+  const shown = authorCount < STATS_MIN_BUCKET ? null : authorCount
+  return {
+    request_authors: shown,
+    participants,
+    ratio: shown !== null && participants > 0 ? shown / participants : null,
+  }
 }

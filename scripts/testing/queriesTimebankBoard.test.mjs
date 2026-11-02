@@ -238,3 +238,76 @@ test('getRejoinIdentity는 재가입 키 재료(email·phone)만 좁혀 읽는�
   assert.deepEqual(ident, { email: `${m}@test.local`, phone: '010-1111-2222' })
   assert.equal(await profiles.getRejoinIdentity('nobody'), null)
 })
+
+async function agree(memberId, at = Date.now()) {
+  await client.execute({
+    sql: `INSERT INTO timebank_profiles (member_id, terms_version, agreed_at, created_at, updated_at)
+          VALUES (?, '2026-11', ?, ?, ?)`,
+    args: [memberId, at, at, at],
+  })
+}
+
+test('listVolunteeredTasks: 철회·삭제·남의 자원은 빼고 내 조합 업무만', async () => {
+  const admin = await newMember('vadm')
+  const me = await newMember('vme')
+  const other = await newMember('voth')
+  const t1 = await board.createTimebankListing(admin, fields({ kind: 'coop_task', title: '하나' }))
+  const t2 = await board.createTimebankListing(admin, fields({ kind: 'coop_task', title: '둘' }))
+  const t3 = await board.createTimebankListing(admin, fields({ kind: 'coop_task', title: '셋' }))
+  await board.volunteer(t1.id, me)
+  await board.volunteer(t2.id, me)
+  await board.withdrawVolunteer(t2.id, me)
+  await board.volunteer(t3.id, me)
+  await board.softDeleteTimebankListing(t3.id)
+  await board.volunteer(t1.id, other)
+
+  const rows = await board.listVolunteeredTasks(me)
+  assert.deepEqual(
+    rows.map(r => r.title),
+    ['하나']
+  )
+  assert.equal(rows[0].id, t1.id)
+  assert.equal(rows[0].status, 'open')
+  assert.equal(typeof rows[0].volunteered_at, 'string')
+})
+
+test('requestAuthorShare: 3명 미만이면 가리고, 3명 이상이면 비율을 준다', async () => {
+  const month = '2032-04'
+  const inMonth = Date.parse('2032-04-10T03:00:00Z')
+  const afterMonth = Date.parse('2032-05-10T03:00:00Z')
+  const before = await board.requestAuthorShare(month)
+
+  const authors = []
+  for (let i = 0; i < 3; i++) {
+    const id = await newMember('ra')
+    await agree(id, inMonth)
+    authors.push(id)
+  }
+  const late = await newMember('ralate')
+  await agree(late, afterMonth)
+
+  const r1 = await board.createTimebankListing(authors[0], fields({ kind: 'request' }))
+  const r2 = await board.createTimebankListing(authors[1], fields({ kind: 'request' }))
+  await board.createTimebankListing(authors[1], fields({ kind: 'request' }))
+  await board.createTimebankListing(authors[2], fields({ kind: 'offer' }))
+  const setCreated = (id, at) =>
+    client.execute({
+      sql: 'UPDATE timebank_listings SET created_at = ? WHERE id = ?',
+      args: [at, id],
+    })
+  await setCreated(r1.id, inMonth)
+  await setCreated(r2.id, inMonth)
+
+  const two = await board.requestAuthorShare(month)
+  assert.equal(two.participants, before.participants + 3, '그달 말 뒤에 동의한 사람은 빠진다')
+  // 요청 작성자는 2명(같은 사람의 두 글은 한 명). 다른 테스트의 글쓴이는 동의
+  // 프로필이 없어 세지 않는다.
+  assert.equal(two.request_authors, null, '2명은 가린다')
+  assert.equal(two.ratio, null)
+
+  const r3 = await board.createTimebankListing(authors[2], fields({ kind: 'request' }))
+  await setCreated(r3.id, inMonth)
+  const three = await board.requestAuthorShare(month)
+  assert.equal(three.request_authors, 3)
+  assert.equal(three.ratio, 3 / three.participants)
+})
