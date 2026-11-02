@@ -194,3 +194,119 @@ test.describe('장터 — 관리자', () => {
     expect((await request.get(path)).status()).toBe(404)
   })
 })
+
+/**
+ * 경매 경계. 한 경매 위에서 순서대로 진행하는 시나리오라 `serial`이다 — 입찰이
+ * 들어오기 전/후로 판매자에게 열리는 동작이 달라지는 것을 보는 게 목적이다.
+ * 시드가 매번 입찰을 비우고 경매를 진행 중으로 되돌린다.
+ */
+test.describe.serial('장터 경매', () => {
+  const auction = () => `/api/market/${fixtures.marketAuctionId}`
+
+  test.describe('비로그인·미승인', () => {
+    test('비로그인은 입찰 이력도 401이다', async ({ playwright, baseURL }) => {
+      const anon = await playwright.request.newContext({ baseURL })
+      const res = await anon.get(`${auction()}/bids`)
+      expect(res.status()).toBe(401)
+      await anon.dispose()
+    })
+
+    test('미승인 회원은 입찰할 수 없다', async ({ playwright, baseURL }) => {
+      const pending = await playwright.request.newContext({
+        baseURL,
+        storageState: storageStatePath('pending'),
+      })
+      const res = await pending.post(`${auction()}/bids`, { data: { amount: 10000 } })
+      expect(res.status()).toBe(403)
+      expect((await res.json()).error).toBe('승인된 조합원만 이용할 수 있습니다.')
+      await pending.dispose()
+    })
+  })
+
+  test.describe('판매자 — 입찰 전', () => {
+    test.use({ storageState: storageStatePath('owner') })
+
+    test('판매자는 자기 경매에 입찰하지 못한다', async ({ request }) => {
+      const res = await request.post(`${auction()}/bids`, { data: { amount: 50000 } })
+      expect(res.status()).toBe(403)
+      expect((await res.json()).error).toBe('내 경매에는 입찰할 수 없습니다.')
+    })
+
+    test('진행 중 경매는 거래 상태를 바꿀 수 없다', async ({ request }) => {
+      const res = await request.patch(`${auction()}/status`, { data: { status: 'done' } })
+      expect(res.status()).toBe(400)
+      expect((await res.json()).error).toBe('경매가 진행 중일 때는 거래 상태를 바꿀 수 없습니다.')
+    })
+  })
+
+  test.describe('다른 조합원 — 입찰', () => {
+    test.use({ storageState: storageStatePath('other') })
+
+    test('시작가 미만은 400, 시작가 이상은 201이고 이름은 활동명으로 보인다', async ({
+      request,
+    }) => {
+      const low = await request.post(`${auction()}/bids`, { data: { amount: 9999 } })
+      expect(low.status()).toBe(400)
+      expect((await low.json()).error).toContain('10,000원 이상')
+
+      const ok = await request.post(`${auction()}/bids`, { data: { amount: 10000 } })
+      expect(ok.status()).toBe(201)
+
+      const { data } = await (await request.get(`${auction()}/bids`)).json()
+      expect(data.auction.current_price).toBe(10000)
+      expect(data.auction.current_bidder_name).toBe('authz-other')
+      expect(data.bids.map((b: { bidder_name: string }) => b.bidder_name)).toEqual(['authz-other'])
+      // 실명·이메일 같은 칸은 응답에 실리지 않는다.
+      expect(JSON.stringify(data)).not.toContain('@test.local')
+    })
+
+    test('입찰자는 자기 입찰도 무효로 하지 못한다', async ({ request }) => {
+      const { data } = await (await request.get(`${auction()}/bids`)).json()
+      const res = await request.delete(`${auction()}/bids/${data.bids[0].id}`)
+      expect(res.status()).toBe(403)
+      expect((await res.json()).error).toBe('입찰 무효 권한이 없습니다.')
+    })
+  })
+
+  test.describe('판매자 — 입찰 후', () => {
+    test.use({ storageState: storageStatePath('owner') })
+
+    test('입찰이 들어온 경매는 판매자가 고치지도 내리지도 못한다', async ({ request }) => {
+      const edit = await request.patch(auction(), {
+        data: {
+          title: '바꾼 제목',
+          description: '바꾼 설명',
+          deal_type: 'auction',
+          item_category: 'audio',
+        },
+      })
+      expect(edit.status()).toBe(400)
+      expect((await edit.json()).error).toBe('입찰이 들어온 경매는 수정할 수 없습니다.')
+
+      const del = await request.delete(auction())
+      expect(del.status()).toBe(400)
+      expect((await del.json()).error).toContain('입찰이 들어온 경매는 내릴 수 없습니다')
+    })
+
+    test('판매자도 입찰을 무효로 하지 못한다', async ({ request }) => {
+      const { data } = await (await request.get(`${auction()}/bids`)).json()
+      const res = await request.delete(`${auction()}/bids/${data.bids[0].id}`)
+      expect(res.status()).toBe(403)
+    })
+  })
+
+  test.describe('관리자', () => {
+    test.use({ storageState: storageStatePath('admin') })
+
+    test('관리자는 입찰을 무효로 할 수 있고, 최고가가 다시 계산된다', async ({ request }) => {
+      const before = (await (await request.get(`${auction()}/bids`)).json()).data
+      const res = await request.delete(`${auction()}/bids/${before.bids[0].id}`)
+      expect(res.status()).toBe(200)
+
+      const after = (await (await request.get(`${auction()}/bids`)).json()).data
+      expect(after.auction.current_price).toBeNull()
+      expect(after.auction.bid_count).toBe(0)
+      expect(after.bids[0].voided).toBe(true)
+    })
+  })
+})

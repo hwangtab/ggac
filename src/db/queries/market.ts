@@ -14,8 +14,9 @@
 import { and, asc, count, desc, eq, inArray, ne, sql } from 'drizzle-orm'
 
 import { db } from '../client.ts'
-import { marketComments, marketListings, memberProfiles } from '../schema/index.ts'
+import { marketAuctions, marketComments, marketListings, memberProfiles } from '../schema/index.ts'
 import type {
+  MarketAuctionState,
   MarketCondition,
   MarketDealType,
   MarketItemCategory,
@@ -40,9 +41,19 @@ export interface MarketListingRow {
   region: string | null
   images: string[]
   comment_count: number
+  /** 경매 매물이면 경매 요약, 아니면 `null`. 자세한 칸은 `getAuction`이 준다. */
+  auction: MarketListingAuctionSummary | null
   status_changed_at: string | null
   created_at: string
   updated_at: string
+}
+
+export interface MarketListingAuctionSummary {
+  state: MarketAuctionState
+  start_price: number
+  current_price: number | null
+  bid_count: number
+  ends_at: string
 }
 
 /** 목록 카드에 필요한 만큼. 본문 대신 사진 한 장만 싣는다. */
@@ -70,6 +81,11 @@ const listingColumns = {
   region: marketListings.region,
   images: marketListings.images,
   commentCount: liveCommentCount,
+  auctionState: marketAuctions.state,
+  auctionStartPrice: marketAuctions.startPrice,
+  auctionCurrentPrice: marketAuctions.currentPrice,
+  auctionBidCount: marketAuctions.bidCount,
+  auctionEndsAt: marketAuctions.endsAt,
   statusChangedAt: marketListings.statusChangedAt,
   createdAt: marketListings.createdAt,
   updatedAt: marketListings.updatedAt,
@@ -95,6 +111,15 @@ function toListingRow(row: ListingSelectRow): MarketListingRow {
     region: (row.region as string | null) ?? null,
     images: Array.isArray(row.images) ? (row.images as string[]) : [],
     comment_count: Number(row.commentCount ?? 0),
+    auction: row.auctionState
+      ? {
+          state: row.auctionState as MarketAuctionState,
+          start_price: row.auctionStartPrice as number,
+          current_price: (row.auctionCurrentPrice as number | null) ?? null,
+          bid_count: Number(row.auctionBidCount ?? 0),
+          ends_at: toIso(row.auctionEndsAt as Date) as string,
+        }
+      : null,
     status_changed_at: toIso(row.statusChangedAt as Date | null),
     created_at: toIso(row.createdAt as Date) as string,
     updated_at: toIso(row.updatedAt as Date) as string,
@@ -129,6 +154,7 @@ export async function listMarketListings(
     .select(listingColumns)
     .from(marketListings)
     .innerJoin(memberProfiles, eq(memberProfiles.id, marketListings.sellerId))
+    .leftJoin(marketAuctions, eq(marketAuctions.listingId, marketListings.id))
     .where(and(...conditions))
     .orderBy(desc(marketListings.createdAt), desc(marketListings.id))
     .limit(filter.limit + 1)
@@ -150,25 +176,48 @@ export async function getMarketListing(id: string): Promise<MarketListingRow | n
     .select(listingColumns)
     .from(marketListings)
     .innerJoin(memberProfiles, eq(memberProfiles.id, marketListings.sellerId))
+    .leftJoin(marketAuctions, eq(marketAuctions.listingId, marketListings.id))
     .where(and(eq(marketListings.id, id), eq(marketListings.isDeleted, false)))
     .limit(1)
   return row ? toListingRow(row) : null
 }
 
-/** 소유권 판정용. 삭제된 매물은 `null`(이미 없는 것과 같게 404). */
-export async function getMarketListingOwner(
-  id: string
-): Promise<{ seller_id: string; title: string; status: MarketStatus } | null> {
+/**
+ * 소유권·쓰기 규칙 판정용. 삭제된 매물은 `null`(이미 없는 것과 같게 404).
+ * 경매 매물이면 경매 상태와 입찰 수를 함께 준다 — 입찰이 들어온 경매는 고치거나
+ * 내리지 못한다는 규칙을 라우트가 여기서 읽는다.
+ */
+export async function getMarketListingOwner(id: string): Promise<{
+  seller_id: string
+  title: string
+  status: MarketStatus
+  deal_type: MarketDealType
+  auction_state: MarketAuctionState | null
+  auction_bid_count: number
+} | null> {
   const [row] = await db
     .select({
       sellerId: marketListings.sellerId,
       title: marketListings.title,
       status: marketListings.status,
+      dealType: marketListings.dealType,
+      auctionState: marketAuctions.state,
+      auctionBidCount: marketAuctions.bidCount,
     })
     .from(marketListings)
+    .leftJoin(marketAuctions, eq(marketAuctions.listingId, marketListings.id))
     .where(and(eq(marketListings.id, id), eq(marketListings.isDeleted, false)))
     .limit(1)
-  return row ? { seller_id: row.sellerId, title: row.title, status: row.status } : null
+  return row
+    ? {
+        seller_id: row.sellerId,
+        title: row.title,
+        status: row.status,
+        deal_type: row.dealType,
+        auction_state: row.auctionState ?? null,
+        auction_bid_count: Number(row.auctionBidCount ?? 0),
+      }
+    : null
 }
 
 export interface MarketListingFields {

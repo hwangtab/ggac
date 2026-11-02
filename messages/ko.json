@@ -814,8 +814,8 @@
       "emailLabel": "이메일 주소",
       "passwordLabel": "비밀번호",
       "passwordPlaceholder": "최소 8자 이상",
-      "displayNameLabel": "표시 이름",
-      "displayNamePlaceholder": "게시판에서 사용할 이름",
+      "displayNameLabel": "활동명",
+      "displayNamePlaceholder": "게시판·장터에서 조합원에게 보이는 이름 (실명 또는 활동명)",
       "realNameLabel": "실명",
       "realNamePlaceholder": "본명",
       "phoneLabel": "전화번호",
@@ -848,7 +848,7 @@
       "validationRequired": "{field}을(를) 입력해주세요.",
       "fieldEmail": "이메일",
       "fieldPassword": "비밀번호",
-      "fieldDisplayName": "표시 이름",
+      "fieldDisplayName": "활동명",
       "fieldRealName": "실명",
       "fieldPhone": "전화번호",
       "fieldBirthDate": "생년월일",
@@ -1035,7 +1035,8 @@
     "deal": {
       "sell": "팝니다",
       "buy": "삽니다",
-      "free": "나눔"
+      "free": "나눔",
+      "auction": "경매"
     },
     "item": {
       "instrument": "악기",
@@ -1104,7 +1105,12 @@
       "save": "저장하기",
       "submitting": "저장 중…",
       "cancel": "취소",
-      "error": "저장하지 못했습니다."
+      "error": "저장하지 못했습니다.",
+      "startPrice": "시작가(원)",
+      "minIncrement": "호가 단위(원)",
+      "duration": "경매 기간",
+      "durationDays": "{count}일",
+      "auctionHelp": "시작가·호가 단위·기간은 올린 뒤 바꿀 수 없습니다. 조합은 결제에 관여하지 않으며, 낙찰자와는 댓글로 직접 거래합니다."
     },
     "detail": {
       "seller": "판매자",
@@ -1132,6 +1138,36 @@
       "seller": "판매자",
       "error": "댓글을 처리하지 못했습니다.",
       "loadError": "댓글을 불러오지 못했습니다."
+    },
+    "auction": {
+      "startPrice": "시작가",
+      "currentPrice": "현재가",
+      "winningPrice": "낙찰가",
+      "remaining": "남은 시간",
+      "endsAt": "마감",
+      "closing": "마감 처리 중",
+      "leftMinutes": "{count}분 남음",
+      "leftHours": "{count}시간 남음",
+      "leftDays": "{count}일 남음",
+      "countdownDays": "{d}일 {hms}",
+      "bidCount": "입찰 {count}건",
+      "increment": "호가 단위 {amount}",
+      "amountLabel": "입찰 금액(원)",
+      "bidButton": "입찰하기",
+      "minimumHint": "{amount} 이상으로 입찰할 수 있습니다. 입찰은 취소할 수 없고, 마감 2분 안에 입찰이 들어오면 마감이 2분 늘어납니다.",
+      "sellerHint": "내 경매에는 입찰할 수 없습니다. 입찰이 들어오면 수정·삭제가 막힙니다.",
+      "history": "입찰 기록",
+      "noBids": "아직 입찰이 없습니다.",
+      "winnerLine": "{name} 님이 낙찰받았습니다. 아래 댓글로 거래를 이어가세요.",
+      "void": "무효",
+      "voidConfirm": "이 입찰을 무효로 할까요? 최고가가 다시 계산됩니다.",
+      "bidError": "입찰을 처리하지 못했습니다.",
+      "state": {
+        "live": "진행 중",
+        "ended": "낙찰",
+        "no_bids": "유찰",
+        "canceled": "취소된 경매"
+      }
     }
   },
   "boardRoom": {

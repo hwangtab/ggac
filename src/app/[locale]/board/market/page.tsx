@@ -4,7 +4,8 @@ import { Link } from '@/i18n/navigation'
 import type { Locale } from '@/i18n/routing'
 import PageHero from '@/components/PageHero'
 import MarketGate from '@/components/market/MarketGate'
-import { formatMarketPrice } from '@/components/market/marketFormat'
+import { formatAuctionRemaining, formatMarketPrice } from '@/components/market/marketFormat'
+import { sweepDueAuctions } from '@/lib/server/marketAuctionClose'
 import { resolveMarketViewer } from '@/lib/server/marketPage'
 import { parseMarketListQuery } from '@/lib/market/validate'
 import { listMarketListings } from '@/db/queries/market'
@@ -60,6 +61,8 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
 
   const query = parseMarketListQuery(rawParams)
   const mine = rawParams.get('mine') === '1'
+  // 마감이 지난 경매가 "진행 중"으로 보이지 않게 그리기 전에 닫는다.
+  await sweepDueAuctions(10)
   const { rows, hasNext } = await listMarketListings({
     hideDone: query.hideDone,
     dealType: query.dealType,
@@ -178,17 +181,34 @@ export default async function MarketPage({ params, searchParams }: MarketPagePro
                       >
                         {t(`status.${listing.status}`)}
                       </span>
-                      <span className="text-gray-500">{t(`deal.${listing.deal_type}`)}</span>
+                      {listing.deal_type === 'auction' ? (
+                        <span className="rounded bg-orange-100 px-1.5 py-0.5 font-medium text-orange-800">
+                          {listing.auction?.state === 'live'
+                            ? t('deal.auction')
+                            : t(`auction.state.${listing.auction?.state ?? 'ended'}`)}
+                        </span>
+                      ) : (
+                        <span className="text-gray-500">{t(`deal.${listing.deal_type}`)}</span>
+                      )}
                     </div>
                     <h2 className="line-clamp-2 font-medium text-gray-800">{listing.title}</h2>
                     <p className="mt-1 font-semibold text-gray-900">
                       {formatMarketPrice(t, locale, listing)}
                     </p>
-                    <p className="mt-1 text-xs text-gray-500">
-                      {[listing.region, t('commentCount', { count: listing.comment_count })]
-                        .filter(Boolean)
-                        .join(' · ')}
-                    </p>
+                    {listing.auction?.state === 'live' ? (
+                      <p className="mt-1 text-xs text-orange-700">
+                        {[
+                          formatAuctionRemaining(t, listing.auction.ends_at),
+                          t('auction.bidCount', { count: listing.auction.bid_count }),
+                        ].join(' · ')}
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-xs text-gray-500">
+                        {[listing.region, t('commentCount', { count: listing.comment_count })]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </p>
+                    )}
                   </div>
                 </Link>
               </li>

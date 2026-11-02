@@ -59,7 +59,7 @@ function assertValidProfileBody(body: Record<string, unknown>) {
   const accountHolder = normalizeOptionalText(body.account_holder, 80)
 
   if (!displayName) {
-    throw ApiError.badRequest('표시 이름은 필수입니다.')
+    throw ApiError.badRequest('활동명은 필수입니다.')
   }
 
   if (!phoneNumber) {

@@ -2,6 +2,10 @@
 // 이유) — `scripts/testing/marketValidate.test.mjs`가 plain
 // `node --experimental-strip-types --test`로 이 파일을 직접 import한다.
 import {
+  MARKET_AUCTION_DURATIONS,
+  MARKET_AUCTION_MAX_INCREMENT,
+  MARKET_AUCTION_MIN_INCREMENT,
+  MARKET_AUCTION_MIN_START,
   MARKET_CONDITIONS,
   MARKET_DEAL_TYPES,
   MARKET_DESCRIPTION_MAX,
@@ -12,11 +16,13 @@ import {
   MARKET_STATUSES,
   MARKET_TITLE_MAX,
   MARKET_TRADE_METHODS,
+  type MarketAuctionDuration,
   type MarketDealType,
   type MarketItemCategory,
   type MarketStatus,
 } from '../../constants/market.ts'
 import type { MarketListingFields } from '../../db/queries/market.ts'
+import type { AuctionInput } from '../../db/queries/marketAuction.ts'
 
 /**
  * 성공이면 `error`가 `null`이다. 판별 키를 `ok: true | false`로 두지 않는 이유:
@@ -102,7 +108,10 @@ export function parseMarketListingInput(
     return { value: null, error: '가격은 0 이상의 정수(원)로 입력해 주세요.' }
   }
   let price: number | null
-  if (dealType === 'free') {
+  if (dealType === 'auction') {
+    // 경매의 가격은 경매 칸(시작가·현재가)이 가진다. `parseAuctionInput`이 받는다.
+    price = null
+  } else if (dealType === 'free') {
     // 나눔은 가격이 없다. 입력칸에 뭐가 남아 있든 0으로 저장한다.
     price = 0
   } else if (dealType === 'sell') {
@@ -165,4 +174,48 @@ export function parseMarketListQuery(params: URLSearchParams): MarketListQuery {
     itemCategory: oneOf(MARKET_ITEM_CATEGORIES, params.get('item')) ?? undefined,
     page: Number.isInteger(pageRaw) && pageRaw >= 1 && pageRaw <= 1000 ? pageRaw : 1,
   }
+}
+
+/**
+ * 경매 칸(생성 시에만). 시작가 · 호가 단위 · 기간(일). 생성 뒤에는 바꿀 수 없다 —
+ * 바꾸려면 입찰이 없을 때 매물을 내리고 다시 연다.
+ */
+export function parseAuctionInput(body: Record<string, unknown>): ParseResult<AuctionInput> {
+  const start = parsePrice(body.start_price)
+  if (start === 'invalid' || start === null || start < MARKET_AUCTION_MIN_START) {
+    return {
+      value: null,
+      error: `시작가는 ${MARKET_AUCTION_MIN_START.toLocaleString('ko-KR')}원 이상으로 입력해 주세요.`,
+    }
+  }
+  const increment = parsePrice(body.min_increment)
+  if (
+    increment === 'invalid' ||
+    increment === null ||
+    increment < MARKET_AUCTION_MIN_INCREMENT ||
+    increment > MARKET_AUCTION_MAX_INCREMENT
+  ) {
+    return {
+      value: null,
+      error: `호가 단위는 ${MARKET_AUCTION_MIN_INCREMENT}원 ~ ${MARKET_AUCTION_MAX_INCREMENT.toLocaleString('ko-KR')}원 사이로 입력해 주세요.`,
+    }
+  }
+  const duration = Number(body.duration_days)
+  if (!(MARKET_AUCTION_DURATIONS as readonly number[]).includes(duration)) {
+    return { value: null, error: '경매 기간을 선택해 주세요.' }
+  }
+  return {
+    error: null,
+    value: {
+      start_price: start,
+      min_increment: increment,
+      duration_days: duration as MarketAuctionDuration,
+    },
+  }
+}
+
+/** 입찰 금액. 원 단위 정수, 상한 이하. 최소 호가 판정은 `placeBid`가 한다. */
+export function parseBidAmount(value: unknown): number | null {
+  const parsed = parsePrice(value)
+  return parsed === 'invalid' || parsed === null || parsed <= 0 ? null : parsed
 }

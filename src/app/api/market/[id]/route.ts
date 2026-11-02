@@ -6,6 +6,9 @@
  *   - 수정: **판매자 본인만.** 관리자도 남의 매물 문구·가격을 고치지 않는다 —
  *     고친 가격으로 거래가 이뤄지면 누가 한 약속인지가 흐려진다
  *   - 삭제: 판매자 본인 또는 관리자(부적절한 매물 내리기)
+ *
+ * 경매 매물에는 경매의 약속(`src/lib/market/auctionRules.ts`)이 더 걸린다 —
+ * 입찰이 들어오면 판매자도 고치거나 내리지 못한다.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -22,6 +25,9 @@ import {
   updateMarketListing,
 } from '@/db/queries/market'
 import { filterUploadsOwnedBy } from '@/db/queries/uploads'
+import { cancelLiveAuction, getAuction } from '@/db/queries/marketAuction'
+import { blockEdit, blockSellerDelete } from '@/lib/market/auctionRules'
+import { closeAuctionAndNotify } from '@/lib/server/marketAuctionClose'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -48,9 +54,12 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
   return apiGet(
     async () => {
+      // 마감이 지난 경매라면 읽기 전에 닫는다 — "진행 중"인 채로 보이면 안 된다.
+      await closeAuctionAndNotify(listingId)
       const listing = await getMarketListing(listingId)
       if (!listing) throw ApiError.notFound('매물을 찾을 수 없습니다.')
-      return ApiSuccess.ok({ listing })
+      const auction = listing.deal_type === 'auction' ? await getAuction(listingId) : null
+      return ApiSuccess.ok({ listing, auction })
     },
     `/api/market/${listingId}`,
     { userId: user.id }
@@ -78,12 +87,19 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       const parsed = parseMarketListingInput(body)
       if (parsed.error !== null) throw ApiError.badRequest(parsed.error)
 
+      const blocked = blockEdit(owner, parsed.value.deal_type)
+      if (blocked) throw ApiError.badRequest(blocked)
+
       const owned = await filterUploadsOwnedBy(parsed.value.images, user.id)
       if (owned.length !== parsed.value.images.length) {
         throw ApiError.badRequest('직접 올린 사진만 첨부할 수 있습니다.')
       }
 
-      await updateMarketListing(listingId, parsed.value)
+      // 경매의 가격 칸(시작가)은 경매 칸과 짝이라 수정으로 건드리지 않는다.
+      await updateMarketListing(
+        listingId,
+        parsed.value.deal_type === 'auction' ? { ...parsed.value, price: undefined } : parsed.value
+      )
       return ApiSuccess.ok({ id: listingId }, '매물이 수정되었습니다.')
     },
     `/api/market/${listingId}`,
@@ -107,7 +123,12 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
       if (!canRemoveMarketItem(profile, user.id, owner.seller_id)) {
         throw ApiError.forbidden('삭제 권한이 없습니다.')
       }
+      const blocked = blockSellerDelete(owner, profile?.is_admin === true)
+      if (blocked) throw ApiError.badRequest(blocked)
 
+      // 경매를 먼저 취소해 둔다 — 지운 매물의 경매가 크론에 "낙찰"로 닫히면
+      // 아무도 볼 수 없는 매물에 낙찰 알림이 나간다.
+      if (owner.deal_type === 'auction') await cancelLiveAuction(listingId, new Date())
       await softDeleteMarketListing(listingId)
       return ApiSuccess.ok({ id: listingId }, '매물이 삭제되었습니다.')
     },

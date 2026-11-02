@@ -12,12 +12,16 @@ import { MARKET_STATUSES, type MarketStatus } from '@/constants/market'
 export default function MarketOwnerControls({
   listingId,
   status,
-  isSeller,
+  canEdit,
+  canChangeStatus,
   canDelete,
 }: {
   listingId: string
   status: MarketStatus
-  isSeller: boolean
+  /** 판매자 본인이고, 경매라면 입찰 없이 진행 중일 때(`auctionRules.blockEdit`). */
+  canEdit: boolean
+  /** 판매자 본인이고, 경매가 진행 중이 아닐 때(`auctionRules.blockStatusChange`). */
+  canChangeStatus: boolean
   canDelete: boolean
 }) {
   const t = useTranslations('market')
@@ -72,30 +76,30 @@ export default function MarketOwnerControls({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {isSeller && (
-        <>
-          <label className="flex items-center gap-2 text-sm text-gray-700">
-            {t('detail.statusLabel')}
-            <select
-              value={current}
-              disabled={busy}
-              onChange={e => void changeStatus(e.target.value as MarketStatus)}
-              className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
-            >
-              {MARKET_STATUSES.map(value => (
-                <option key={value} value={value}>
-                  {t(`status.${value}`)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <Link
-            href={`/board/market/${listingId}/edit`}
-            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+      {canChangeStatus && (
+        <label className="flex items-center gap-2 text-sm text-gray-700">
+          {t('detail.statusLabel')}
+          <select
+            value={current}
+            disabled={busy}
+            onChange={e => void changeStatus(e.target.value as MarketStatus)}
+            className="rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
           >
-            {t('detail.edit')}
-          </Link>
-        </>
+            {MARKET_STATUSES.map(value => (
+              <option key={value} value={value}>
+                {t(`status.${value}`)}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {canEdit && (
+        <Link
+          href={`/board/market/${listingId}/edit`}
+          className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+        >
+          {t('detail.edit')}
+        </Link>
       )}
       {canDelete && (
         <button

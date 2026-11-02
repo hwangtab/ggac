@@ -38,6 +38,8 @@ const POST_CUTOVER_TABLES = new Set([
   'funding_settlements', // 0022
   'market_listings', // 0024 조합원 장터
   'market_comments', // 0024
+  'market_auctions', // 0025 장터 경매
+  'market_bids', // 0025
 ])
 
 export function comparePgToSqlite(pgSnapshot, sqliteSchema) {
