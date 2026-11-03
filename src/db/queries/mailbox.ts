@@ -291,6 +291,16 @@ export async function insertReply(input: InsertReplyInput): Promise<void> {
   })
 }
 
+/** 이 메일에 보낸 답장들. 오래된 것부터 — 스레드 순서 그대로 읽힌다. */
+export async function listRepliesForEmail(emailId: string): Promise<Record<string, unknown>[]> {
+  const rows = await db
+    .select()
+    .from(inboundEmailReplies)
+    .where(eq(inboundEmailReplies.emailId, emailId))
+    .orderBy(asc(inboundEmailReplies.createdAt))
+  return rows.map(rowToAttachment)
+}
+
 /** 이미 든 값이면 아무것도 하지 않는다(멱등). */
 export async function appendThreadReference(id: string, messageId: string): Promise<void> {
   const [row] = await db

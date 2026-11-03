@@ -34,6 +34,16 @@ interface InboundEmailDetail extends InboundEmail {
   headers: string | null
 }
 
+interface SentReply {
+  id: string
+  email_id: string
+  sent_by: string | null
+  subject: string
+  body_html: string
+  resend_message_id: string | null
+  created_at: string
+}
+
 interface Attachment {
   id: string
   email_id: string
@@ -229,6 +239,7 @@ export default function MailboxView({ className = '' }: { className?: string }) 
   // 메일의 추적 픽셀까지 열어 주면 안 된다.
   const [showRemoteImages, setShowRemoteImages] = useState(false)
   const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [replies, setReplies] = useState<SentReply[]>([])
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState<string | null>(null)
 
@@ -272,6 +283,7 @@ export default function MailboxView({ className = '' }: { className?: string }) 
       const json = await res.json()
       setDetail(json.data?.email ?? null)
       setAttachments(json.data?.attachments ?? [])
+      setReplies(json.data?.replies ?? [])
       setCanManage(json.data?.can_manage === true)
     } catch (err) {
       setDetailError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.')
@@ -284,6 +296,7 @@ export default function MailboxView({ className = '' }: { className?: string }) 
     setSelectedId(email.id)
     setDetail(null)
     setAttachments([])
+    setReplies([])
     setShowRemoteImages(false)
     fetchDetail(email.id)
 
@@ -301,6 +314,7 @@ export default function MailboxView({ className = '' }: { className?: string }) 
     setSelectedId(null)
     setDetail(null)
     setAttachments([])
+    setReplies([])
     setShowRemoteImages(false)
   }
 
@@ -681,6 +695,35 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                     srcDoc={buildBodySrcDoc(detail, showRemoteImages)}
                     className="w-full flex-1 min-h-0 bg-white"
                   />
+                  {replies.length > 0 && (
+                    <div className="shrink-0 max-h-64 overflow-y-auto border-t border-gray-100 bg-gray-50">
+                      <div className="px-4 pt-3 text-xs font-medium text-gray-500">
+                        보낸 답장 {replies.length}건
+                      </div>
+                      {replies.map(reply => (
+                        <div key={reply.id} className="px-4 py-3 border-b border-gray-100">
+                          <div className="flex items-center justify-between gap-2 text-xs text-gray-500">
+                            <span className="truncate font-medium text-gray-700">
+                              {reply.subject}
+                            </span>
+                            <span className="shrink-0">
+                              {new Date(reply.created_at).toLocaleString('ko-KR')}
+                            </span>
+                          </div>
+                          {/* 서버가 정화해 저장한 HTML이지만 수신 본문과 같은 sandbox에 가둔다. */}
+                          <iframe
+                            title={`보낸 답장 ${reply.subject}`}
+                            sandbox="allow-popups allow-popups-to-escape-sandbox"
+                            srcDoc={buildBodySrcDoc(
+                              { body_html: reply.body_html } as InboundEmailDetail,
+                              false
+                            )}
+                            className="mt-2 w-full h-28 bg-white rounded border border-gray-100"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </>
               )}
 
