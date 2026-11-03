@@ -45,12 +45,15 @@ import {
 } from '../../constants/timebank.ts'
 import {
   directionFor,
+  dualApprovalReasons,
   eligible,
   evaluateTransfer,
   floorFor,
   judgeCoopCredit,
   pairBlocked,
+  pendingAdjustmentReason,
   validMinutes,
+  type DualApprovalReason,
   type Party,
   type TransferDraft,
   type TransferRejection,
@@ -907,9 +910,11 @@ export async function createAdjustment(input: {
 
     const cumulative = await adjustmentVolume(tx, input.memberId, kstMonthKey(now))
     const needsApproval =
-      cumulative + input.minutes > settings.adjustment_dual_approval_minutes ||
-      Boolean(input.dispute) ||
-      input.targetIsAdmin === true
+      dualApprovalReasons({
+        dispute: Boolean(input.dispute),
+        targetIsAdmin: input.targetIsAdmin === true,
+        overCumulativeLimit: cumulative + input.minutes > settings.adjustment_dual_approval_minutes,
+      }).length > 0
 
     const [row] = await tx
       .insert(t)
@@ -1019,14 +1024,36 @@ export async function adminCancelPending(input: {
   })
 }
 
-/** 두 번째 관리자의 승인을 기다리는 조정 전부. 오래된 것부터. */
-export async function listPendingAdjustments(): Promise<TransferRow[]> {
+export type PendingAdjustmentRow = TransferRow & {
+  /** 승인이 필요한 이유(`pendingAdjustmentReason`). */
+  dual_approval_reason: DualApprovalReason
+}
+
+/**
+ * 두 번째 관리자의 승인을 기다리는 조정 전부. 오래된 것부터. 행마다 승인이 필요한
+ * 이유를 싣는다 — 대상이 관리자인지는 대상 프로필의 **지금** `is_admin`으로 본다
+ * (`createAdjustment`에 넘기는 `targetIsAdmin`과 같은 칸).
+ */
+export async function listPendingAdjustments(): Promise<PendingAdjustmentRow[]> {
   const rows = await db
-    .select()
+    .select({ transfer: t, targetIsAdmin: memberProfiles.isAdmin })
     .from(t)
+    .leftJoin(
+      memberProfiles,
+      eq(
+        memberProfiles.id,
+        sql`case when ${t.fromAccount} = ${COOP_ACCOUNT} then ${t.toAccount} else ${t.fromAccount} end`
+      )
+    )
     .where(and(eq(t.kind, 'adjustment'), eq(t.status, 'pending')))
     .orderBy(asc(t.createdAt), asc(t.id))
-  return rows.map(toTransferRow)
+  return rows.map(({ transfer, targetIsAdmin }) => {
+    const row = toTransferRow(transfer)
+    return {
+      ...row,
+      dual_approval_reason: pendingAdjustmentReason(row, targetIsAdmin === true),
+    }
+  })
 }
 
 // ── 목록 ─────────────────────────────────────────────────────────────────────

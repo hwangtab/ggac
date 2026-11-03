@@ -286,3 +286,46 @@ export function judgeCoopCredit(f: CoopCreditFacts): CoopCreditRejection | null 
   if (f.alreadyCredited) return 'already_credited'
   return null
 }
+
+// ── 조정 이중 승인 사유(스펙 §7.3) ──────────────────────────────────────────
+
+/**
+ * 관리자 조정이 두 번째 관리자의 승인을 기다리는 이유.
+ * - `dispute`: 분쟁 정리(`ref_type = 'dispute'`, `ref_id` = 이사회 결정 근거)
+ * - `admin_target`: 대상이 관리자 계정(관리자끼리 서로 조정 방지)
+ * - `cumulative_limit`: 그달(KST) 그 대상의 조정 누적 + 이번 건이 기준을 넘는다
+ */
+export type DualApprovalReason = 'dispute' | 'admin_target' | 'cumulative_limit'
+
+/**
+ * 조정을 만들 때의 판정(`createAdjustment`). 해당하는 이유를 **전부** 돌려준다 —
+ * 비어 있으면 즉시 확정, 하나라도 있으면 pending이다.
+ */
+export function dualApprovalReasons(input: {
+  dispute: boolean
+  targetIsAdmin: boolean
+  /** 그달 그 대상의 조정 누적 + 이번 건 > `adjustment_dual_approval_minutes`. */
+  overCumulativeLimit: boolean
+}): DualApprovalReason[] {
+  const reasons: DualApprovalReason[] = []
+  if (input.dispute) reasons.push('dispute')
+  if (input.targetIsAdmin) reasons.push('admin_target')
+  if (input.overCumulativeLimit) reasons.push('cumulative_limit')
+  return reasons
+}
+
+/**
+ * 이미 승인을 기다리는 조정 행에서 대표 이유 하나를 다시 끌어낸다(관리자 잔액표).
+ * 행에 남는 것은 `ref_type`뿐이라 `createAdjustment`의 판정 순서를 따른다:
+ * 분쟁 정리 → 대상이 관리자 → 그 밖(= 누적 기준 초과 — pending 조정이 되는 길은
+ * 이 셋뿐이다). 누적과 관리자 대상이 겹치면 관리자 대상을 말한다(누적은 행만으로
+ * 다시 셀 수 없다). `targetIsAdmin`은 **지금의** 프로필 값이다.
+ */
+export function pendingAdjustmentReason(
+  row: { ref_type: string | null },
+  targetIsAdmin: boolean
+): DualApprovalReason {
+  if (row.ref_type === 'dispute') return 'dispute'
+  if (targetIsAdmin) return 'admin_target'
+  return 'cumulative_limit'
+}

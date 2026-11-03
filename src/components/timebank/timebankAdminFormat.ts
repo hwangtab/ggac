@@ -36,6 +36,12 @@ export type TransferRow = {
   updated_at: string | null
 }
 
+/** `src/lib/timebank/rules.ts`의 `DualApprovalReason`과 같은 값. */
+export type DualApprovalReason = 'dispute' | 'admin_target' | 'cumulative_limit'
+
+/** `listPendingAdjustments`의 `PendingAdjustmentRow`와 같은 모양. */
+export type PendingAdjustmentRow = TransferRow & { dual_approval_reason: DualApprovalReason }
+
 /** `src/lib/timebank/settings.ts`의 `TimebankSettings`와 같은 모양. */
 export type TimebankSettings = {
   enabled: boolean
@@ -69,7 +75,7 @@ export type AccountsResponse = {
     stale_pending_days: number
   }
   stale_pending: TransferRow[]
-  pending_adjustments: TransferRow[]
+  pending_adjustments: PendingAdjustmentRow[]
 }
 
 export type SettingsHistoryRow = {

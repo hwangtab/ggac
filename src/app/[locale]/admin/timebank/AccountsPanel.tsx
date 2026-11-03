@@ -139,9 +139,11 @@ export default function AccountsPanel({
               const target = adjustmentTarget(row)
               const mine = myId !== null && (row.created_by === myId || target.memberId === myId)
               const reason =
-                row.ref_type === 'dispute'
+                row.dual_approval_reason === 'dispute'
                   ? `분쟁 정리 — 이사회 결정 근거: ${row.ref_id ?? '—'}`
-                  : '그달 조정 누적이 이중 승인 기준을 넘거나, 대상이 관리자 계정'
+                  : row.dual_approval_reason === 'admin_target'
+                    ? '대상이 관리자 계정'
+                    : '그달 그 대상의 조정 누적이 이중 승인 기준을 넘음'
               return (
                 <li
                   key={row.id}

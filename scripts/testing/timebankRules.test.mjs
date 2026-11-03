@@ -3,9 +3,11 @@ import assert from 'node:assert/strict'
 
 import {
   directionFor,
+  dualApprovalReasons,
   evaluateTransfer,
   floorFor,
   pairBlocked,
+  pendingAdjustmentReason,
   validMinutes,
 } from '../../src/lib/timebank/rules.ts'
 import { formatMinutes } from '../../src/lib/timebank/format.ts'
@@ -325,4 +327,46 @@ test('formatMinutes — 분을 "N시간 M분"으로', () => {
   assert.equal(formatMinutes(90), '1시간 30분')
   assert.equal(formatMinutes(-600), '−10시간')
   assert.equal(formatMinutes(-90), '−1시간 30분')
+})
+
+// ── 조정 이중 승인 사유(스펙 §7.3) ─────────────────────────────────────────
+
+test('dualApprovalReasons: 해당하는 이유를 전부, 없으면 빈 배열(즉시 확정)', () => {
+  const none = { dispute: false, targetIsAdmin: false, overCumulativeLimit: false }
+  assert.deepEqual(dualApprovalReasons(none), [])
+  assert.deepEqual(dualApprovalReasons({ ...none, dispute: true }), ['dispute'])
+  assert.deepEqual(dualApprovalReasons({ ...none, targetIsAdmin: true }), ['admin_target'])
+  assert.deepEqual(dualApprovalReasons({ ...none, overCumulativeLimit: true }), [
+    'cumulative_limit',
+  ])
+  assert.deepEqual(
+    dualApprovalReasons({ dispute: true, targetIsAdmin: true, overCumulativeLimit: true }),
+    ['dispute', 'admin_target', 'cumulative_limit']
+  )
+})
+
+test('pendingAdjustmentReason: 분쟁 → 관리자 대상 → 누적 순으로 하나', () => {
+  assert.equal(pendingAdjustmentReason({ ref_type: 'dispute' }, false), 'dispute')
+  // 분쟁 정리가 관리자 대상이어도 분쟁 근거를 말한다
+  assert.equal(pendingAdjustmentReason({ ref_type: 'dispute' }, true), 'dispute')
+  // 누적과 관리자 대상이 겹치면 관리자 대상(누적은 행만으로 다시 셀 수 없다)
+  assert.equal(pendingAdjustmentReason({ ref_type: null }, true), 'admin_target')
+  assert.equal(pendingAdjustmentReason({ ref_type: null }, false), 'cumulative_limit')
+})
+
+test('pendingAdjustmentReason은 createAdjustment가 pending으로 두는 모든 조합과 맞는다', () => {
+  for (const dispute of [false, true]) {
+    for (const targetIsAdmin of [false, true]) {
+      for (const overCumulativeLimit of [false, true]) {
+        const reasons = dualApprovalReasons({ dispute, targetIsAdmin, overCumulativeLimit })
+        if (reasons.length === 0) continue
+        const derived = pendingAdjustmentReason(
+          { ref_type: dispute ? 'dispute' : null },
+          targetIsAdmin
+        )
+        assert.ok(reasons.includes(derived), `${derived} ∉ ${reasons.join(',')}`)
+        assert.equal(derived, reasons[0])
+      }
+    }
+  }
 })

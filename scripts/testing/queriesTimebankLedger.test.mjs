@@ -1019,6 +1019,30 @@ test('listPendingAdjustments: 승인 대기 조정만, 오래된 것부터', asy
   assert.ok(list.every(r => r.kind === 'adjustment' && r.status === 'pending'))
 })
 
+test('listPendingAdjustments: 행마다 승인이 필요한 이유(분쟁·관리자 대상·누적)', async () => {
+  const admin = await newMember('adm', { admin: true })
+  const disputed = await adjust(admin, await newMember('dr'), 30, {
+    dispute: { resolution_ref: '안건 9' },
+  })
+  const adminTarget = await newMember('dra', { admin: true })
+  const toAdmin = await adjust(admin, adminTarget, 30, { targetIsAdmin: true })
+  // 기준 240분을 넘는 한 건
+  const big = await adjust(admin, await newMember('drc'), 270)
+  // 차감(회원 → coop)도 대상을 바르게 찾는다
+  const debitTarget = await newMember('drd', { admin: true })
+  await seedBalance(debitTarget, 600)
+  const debit = await adjust(admin, debitTarget, 30, { direction: 'debit', targetIsAdmin: true })
+  for (const row of [disputed, toAdmin, big, debit]) assert.equal(row.status, 'pending')
+
+  const reasons = new Map(
+    (await ledger.listPendingAdjustments()).map(r => [r.id, r.dual_approval_reason])
+  )
+  assert.equal(reasons.get(disputed.id), 'dispute')
+  assert.equal(reasons.get(toAdmin.id), 'admin_target')
+  assert.equal(reasons.get(big.id), 'cumulative_limit')
+  assert.equal(reasons.get(debit.id), 'admin_target')
+})
+
 // ── 목록·집계 ───────────────────────────────────────────────────────────────
 
 test('listPendingFor·listTransfersFor·listStalePending', async () => {
