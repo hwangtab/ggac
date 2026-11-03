@@ -18,8 +18,7 @@ import {
   ORPHAN_SCAN_PREFIX,
   pendingObjectPaths,
   purgeObjectPaths,
-  renderCachePathsFor,
-  renderPrefixOf,
+  removeRenderCachesWith,
   sweepOrphanObjects,
 } from '@work/lib/files/cleanup-plan'
 import { PURGE_AFTER_DAYS, PUSH_STALE_DAYS, daysAgo } from './retention'
@@ -219,34 +218,15 @@ async function purgeBatch(candidateIds: string[], total: PurgeResult): Promise<v
  * 메시지 삭제를 막지 않는다. 지운 수.
  */
 export async function removeRenderCaches(attachmentIds: readonly string[]): Promise<number> {
-  let removed = 0
-  for (const id of attachmentIds) {
-    try {
-      const paths: string[] = []
-      let cursor: string | undefined
-      for (let page = 0; page < 20; page++) {
-        const res = await listObjectsPage(renderPrefixOf(id), cursor)
-        paths.push(
-          ...renderCachePathsFor(
-            id,
-            res.objects.map(o => o.pathname)
-          )
-        )
-        if (!res.hasMore || !res.cursor) break
-        cursor = res.cursor
-      }
-      for (let i = 0; i < paths.length; i += 100) {
-        await removeObjects(paths.slice(i, i + 100))
-      }
-      removed += paths.length
-    } catch (e) {
+  return removeRenderCachesWith(attachmentIds, {
+    listPage: listObjectsPage,
+    remove: removeObjects,
+    onError: (_id, e) =>
       console.error(
         '[purge-deleted] 미리보기 캐시 정리 실패(건너뜀):',
         e instanceof Error ? e.name : e
-      )
-    }
-  }
-  return removed
+      ),
+  })
 }
 
 /** last_seen_at이 90일 지난 푸시 구독 삭제(원본 cleanupStalePushSubscriptions) */

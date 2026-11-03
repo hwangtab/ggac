@@ -75,6 +75,58 @@ export function renderCachePathsFor(attachmentId: string, listed: readonly strin
   )
 }
 
+export type RenderCacheRemovalDeps = {
+  /** 한 페이지 목록(`storage.ts` listObjectsPage — 접두는 `renderPrefixOf(id)`) */
+  listPage: (
+    prefix: string,
+    cursor?: string
+  ) => Promise<{ objects: { pathname: string }[]; cursor: string | null; hasMore: boolean }>
+  /** 지우기(호출부가 저장소 계층으로 — 거기서도 경로를 다시 본다) */
+  remove: (paths: string[]) => Promise<void>
+  /** id 하나의 정리가 실패했을 때(던지지 않는다 — 로그만) */
+  onError?: (id: string, error: unknown) => void
+  /** id 하나에 훑는 페이지 수 상한 */
+  maxPages?: number
+}
+
+/**
+ * id(첨부 또는 이사회 서류)마다 미리보기 캐시(`board-work/renders/<id>-…`)를 목록으로 찾아 지운다. 지우는 키는
+ * `renderCachePathsFor`를 지난 것뿐이다 — 다른 접두(`board-work/files/`·`board-documents/`·`backups/`)나 다른 id 의
+ * 캐시는 목록에 섞여 와도 건드리지 않는다. 어떤 단계가 실패해도 던지지 않는다(`onError`) — 호출자의 삭제를 막지 않는다.
+ * 지운 수.
+ */
+export async function removeRenderCachesWith(
+  ids: readonly string[],
+  deps: RenderCacheRemovalDeps
+): Promise<number> {
+  const maxPages = deps.maxPages ?? 20
+  let removed = 0
+  for (const id of ids) {
+    try {
+      const paths: string[] = []
+      let cursor: string | undefined
+      for (let page = 0; page < maxPages; page++) {
+        const res = await deps.listPage(renderPrefixOf(id), cursor)
+        paths.push(
+          ...renderCachePathsFor(
+            id,
+            res.objects.map(o => o.pathname)
+          )
+        )
+        if (!res.hasMore || !res.cursor) break
+        cursor = res.cursor
+      }
+      for (let i = 0; i < paths.length; i += 100) {
+        await deps.remove(paths.slice(i, i + 100))
+      }
+      removed += paths.length
+    } catch (e) {
+      deps.onError?.(id, e)
+    }
+  }
+  return removed
+}
+
 // ── 고아 객체(행 없이 저장소에만 남은 업로드) ────────────────────────────────
 
 export const ORPHAN_SCAN_PREFIX = 'board-work/files/'

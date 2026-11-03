@@ -23,6 +23,7 @@ const {
 const {
   pendingObjectPaths,
   purgeObjectPaths,
+  removeRenderCachesWith,
   renderCachePathsFor,
   renderPrefixOf,
   sweepOrphanObjects,
@@ -186,6 +187,90 @@ test('미리보기 캐시: 접두는 board-work/renders/<id>- 이고, 목록에�
     `board-work/renders/${U1}-v3.json`,
     `board-work/renders/${U1}-L2-layout-p2.svg`,
   ])
+})
+
+test('이사회 서류 미리보기 캐시: 그 서류 id 의 board-work/renders/ 키만 지우고 다른 접두·다른 id 는 건드리지 않는다', async () => {
+  const DOC = '44444444-4444-4444-8444-444444444444'
+  // 목록이 접두를 무시하고 섞어 돌려줘도(저장소 오동작·가짜) 고르는 쪽이 거른다
+  const listed = [
+    `board-work/renders/${DOC}-v3.json`,
+    `board-work/renders/${DOC}-L2-layout.json`,
+    `board-work/renders/${DOC}-L2-layout-p1.svg`,
+    `board-work/renders/${DOC}-L2-layout-p9-big.json`,
+    `board-work/renders/${DOC.toUpperCase()}-v3.json`,
+    `board-work/renders/${U1}-v3.json`,
+    `board-work/renders/${DOC.slice(0, -1)}5-v3.json`,
+    `board-work/renders/x${DOC}-v3.json`,
+    `board-work/renders/sub/${DOC}-v3.json`,
+    `board-work/renders/${DOC}-v3.txt`,
+    `board-work/renders/${DOC}-..json`,
+    `board-work/files/${DOC}/원본.docx`,
+    `board-documents/${U2}/${DOC}-v3.json`,
+    `backups/${DOC}-v3.json`,
+    `mailbox/${DOC}-v3.json`,
+  ]
+  const removed = []
+  const prefixes = []
+  const n = await removeRenderCachesWith([DOC], {
+    listPage: async (prefix, cursor) => {
+      prefixes.push(prefix)
+      return cursor
+        ? { objects: listed.slice(8).map(pathname => ({ pathname })), cursor: null, hasMore: false }
+        : {
+            objects: listed.slice(0, 8).map(pathname => ({ pathname })),
+            cursor: 'c2',
+            hasMore: true,
+          }
+    },
+    remove: async paths => {
+      removed.push(...paths)
+    },
+  })
+  assert.deepEqual(prefixes, [`board-work/renders/${DOC}-`, `board-work/renders/${DOC}-`])
+  assert.deepEqual(
+    removed.sort(),
+    [
+      `board-work/renders/${DOC.toUpperCase()}-v3.json`,
+      `board-work/renders/${DOC}-L2-layout-p1.svg`,
+      `board-work/renders/${DOC}-L2-layout-p9-big.json`,
+      `board-work/renders/${DOC}-L2-layout.json`,
+      `board-work/renders/${DOC}-v3.json`,
+    ].sort()
+  )
+  assert.equal(n, 5)
+  for (const p of removed) {
+    assert.ok(p.startsWith('board-work/renders/'), p)
+    assert.ok(p.slice('board-work/renders/'.length).toLowerCase().startsWith(`${DOC}-`), p)
+  }
+})
+
+test('미리보기 캐시 정리: 목록·지우기가 실패해도 던지지 않고 onError 로 알린다(다음 id 는 계속)', async () => {
+  const errors = []
+  const removed = []
+  const n = await removeRenderCachesWith([U1, U2], {
+    listPage: async prefix => {
+      if (prefix.includes(U1)) throw new Error('store down')
+      return {
+        objects: [{ pathname: `board-work/renders/${U2}-v3.json` }],
+        cursor: null,
+        hasMore: false,
+      }
+    },
+    remove: async paths => {
+      removed.push(...paths)
+    },
+    onError: (id, e) => errors.push([id, e.message]),
+  })
+  assert.deepEqual(errors, [[U1, 'store down']])
+  assert.deepEqual(removed, [`board-work/renders/${U2}-v3.json`])
+  assert.equal(n, 1)
+  const none = await removeRenderCachesWith([U3], {
+    listPage: async () => ({ objects: [], cursor: null, hasMore: false }),
+    remove: async () => {
+      throw new Error('remove must not be called with nothing')
+    },
+  })
+  assert.equal(none, 0)
 })
 
 // ── 고아 객체(가짜 목록) ──────────────────────────────────────────────────────
