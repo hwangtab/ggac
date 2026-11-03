@@ -2,7 +2,7 @@
 --
 -- 원본은 kosmart-work Postgres `work.conversation_tabs`(0023·0025·0026·0033), `work.conversation_notes`·
 -- `work.conversation_note_revisions`(0024·0039), `work.tasks`(0006·0036)다. 옮기면서:
--- - 0025와 같은 규칙: `work_` 접두사, 사람 FK는 `member_profiles`, enum·CHECK 없음(허용값·길이는 zod와 쓰기 함수).
+-- - 0026과 같은 규칙: `work_` 접두사, 사람 FK는 `member_profiles`, enum·CHECK 없음(허용값·길이는 zod와 쓰기 함수).
 -- - 원본의 RLS·BEFORE/AFTER 트리거는 **옮기지 않았다.** 탭 하드닝(제목 trim·대화당 20개·position max+1·
 --   https만·첨부/메모는 같은 대화의 것만)·메모 하드닝(대화당 30개·바뀐 저장만 version+1)·개정 기록(최근 200개)·
 --   메모 탭을 지우면 메모도 지움·할 일 하드닝(작성자 강제·완료 시각/완료자)은 `src/db/queries/work/{tabs,notes,tasks}.ts`
@@ -12,7 +12,7 @@
 -- - 원본 'wiki'·'timeline' 탭 종류는 가져오지 않았다.
 --
 -- DDL은 `src/db/schema/workTabs.ts`를 drizzle-kit push로 빈 로컬 DB에 밀어 넣고 sqlite_master에서 그대로 옮겼다.
--- BEGIN/COMMIT은 0018·0025와 같은 이유다(drizzle-kit migrate 금지 — scripts/turso/README.md).
+-- BEGIN/COMMIT은 0018·0026과 같은 이유다(drizzle-kit migrate 금지 — scripts/turso/README.md).
 BEGIN;
 
 CREATE TABLE `work_conversation_tabs` (

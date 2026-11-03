@@ -32,6 +32,9 @@ export type NotificationType =
   | 'funding_shipped' // 리워드 발송 알림
   | 'funding_settled' // 정산 내역 정리·정산금 지급 알림
   | 'market_comment' // 내 장터 글에 댓글이 달렸다는 알림
+  | 'market_outbid' // 내 입찰가를 누가 넘었다는 알림
+  | 'market_auction_won' // 경매 낙찰 알림(낙찰자)
+  | 'market_auction_ended' // 내 경매가 끝났다는 알림(판매자, 낙찰·유찰)
 
 /**
  * 알림 인터페이스

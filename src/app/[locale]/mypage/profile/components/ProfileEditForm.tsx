@@ -54,7 +54,7 @@ const ProfileEditForm: React.FC<ProfileEditFormProps> = ({ profile, onUpdate, lo
     const newErrors: Record<string, string> = {}
 
     if (!formData.display_name.trim()) {
-      newErrors.display_name = '표시 이름은 필수입니다.'
+      newErrors.display_name = '활동명은 필수입니다.'
     }
 
     if (!formData.phone_number.trim()) {

@@ -9,7 +9,7 @@
  * - harden_attachments_write: 앞 버전은 같은 채널의 첨부여야 한다 · version_root_id·version_no 는 넘어온 값을 믿지
  *   않고 계산한다(root = coalesce(앞.root, 앞.id), 번호 = 계보 최대 + 1) · 앞 버전이 지금 계보의 최신(게시물이 살아
  *   있는 가장 높은 번호)이 아니면 거부(원본 P0409 → `conflict`) · 객체 키는 업무툴 파일 키 모양만 · 업로더 = 행위자
- * - 같은 계보·같은 번호 경합: 0026 유일 인덱스(work_attachments_lineage_version_uidx)가 잡고 `conflict`로 바꾼다
+ * - 같은 계보·같은 번호 경합: 0027 유일 인덱스(work_attachments_lineage_version_uidx)가 잡고 `conflict`로 바꾼다
  * - recompute_attachment_latest: 첨부를 넣은 뒤 그 계보의 is_latest 를 다시 정한다(게시물 삭제 뒤 재계산은 messages.ts)
  * - 게시물과 첨부는 같은 트랜잭션에서 생긴다 — 원본은 게시물을 먼저 쓰고 실패하면 지웠다(여기서는 실패하면 둘 다 없다)
  * - 수정 중(체크아웃) 획득은 "비었거나·만료됐거나·내 것"일 때만(force 면 무조건) — 조건부 UPDATE 와 같은 판정을

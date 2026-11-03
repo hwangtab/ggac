@@ -38,26 +38,28 @@ const POST_CUTOVER_TABLES = new Set([
   'funding_settlements', // 0022
   'market_listings', // 0024 조합원 장터
   'market_comments', // 0024
-  'work_member_prefs', // 0025 이사회 업무툴 채팅
-  'work_channel_categories', // 0025
-  'work_channels', // 0025
-  'work_channel_members', // 0025
-  'work_messages', // 0025
-  'work_reactions', // 0025
-  'work_mentions', // 0025
-  'work_bookmarks', // 0025
-  'work_pins', // 0025
-  'work_message_links', // 0025
-  'work_activity_reads', // 0025
-  'work_presence', // 0025
-  'work_typing', // 0025
-  'work_pending_uploads', // 0026 이사회 업무툴 파일
-  'work_attachments', // 0026
-  'work_conversation_tabs', // 0027 이사회 업무툴 대화 탭·메모·할 일
-  'work_conversation_notes', // 0027
-  'work_note_revisions', // 0027
-  'work_tasks', // 0027
-  'work_file_lineages', // 0028 이사회 업무툴 문서 버전(최종본·수정 중)
+  'market_auctions', // 0025 장터 경매
+  'market_bids', // 0025
+  'work_member_prefs', // 0026 이사회 업무툴 채팅
+  'work_channel_categories', // 0026
+  'work_channels', // 0026
+  'work_channel_members', // 0026
+  'work_messages', // 0026
+  'work_reactions', // 0026
+  'work_mentions', // 0026
+  'work_bookmarks', // 0026
+  'work_pins', // 0026
+  'work_message_links', // 0026
+  'work_activity_reads', // 0026
+  'work_presence', // 0026
+  'work_typing', // 0026
+  'work_pending_uploads', // 0027 이사회 업무툴 파일
+  'work_attachments', // 0027
+  'work_conversation_tabs', // 0028 이사회 업무툴 대화 탭·메모·할 일
+  'work_conversation_notes', // 0028
+  'work_note_revisions', // 0028
+  'work_tasks', // 0028
+  'work_file_lineages', // 0029 이사회 업무툴 문서 버전(최종본·수정 중)
 ])
 
 export function comparePgToSqlite(pgSnapshot, sqliteSchema) {

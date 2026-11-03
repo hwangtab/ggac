@@ -808,3 +808,83 @@ test('확정은 탈퇴자의 장터 매물을 내리고(soft delete) 남의 매�
     await setupClient.execute('DELETE FROM market_listings')
   }
 })
+
+test('확정은 탈퇴자의 진행 중 경매를 취소하고, 진행 중 경매의 탈퇴자 입찰을 무효로 해 최고가를 다시 맞춘다', async () => {
+  await seedWithdrawalFixture(setupClient)
+  const now = Date.now()
+  const later = now + 24 * 60 * 60 * 1000
+  // ma1: m1이 판 경매(진행 중) — 취소돼야 한다.
+  // ma2: m2가 판 경매에 m1이 최고가로 입찰 — m1 입찰은 무효, 최고가는 대조 입찰자(m3)에게 돌아간다.
+  // ma3: 이미 끝난 경매의 m1 낙찰 — 기록이라 그대로.
+  for (const [id, seller, state] of [
+    ['ma1', 'm1', 'live'],
+    ['ma2', 'm2', 'live'],
+    ['ma3', 'm2', 'ended'],
+  ]) {
+    await setupClient.execute({
+      sql: `INSERT INTO market_listings
+              (id, seller_id, title, description, deal_type, item_category, price, created_at, updated_at)
+            VALUES (?, ?, '경매', '설명', 'auction', 'etc', 1000, ?, ?)`,
+      args: [id, seller, now, now],
+    })
+    await setupClient.execute({
+      sql: `INSERT INTO market_auctions
+              (listing_id, start_price, min_increment, ends_at, original_ends_at, state, created_at, updated_at)
+            VALUES (?, 1000, 100, ?, ?, ?, ?, ?)`,
+      args: [id, later, later, state, now, now],
+    })
+  }
+  // m2는 ma2의 판매자라 입찰할 수 없으니, 대조 입찰자로 관리자가 아닌 제3자를 심는다.
+  await setupClient.execute({
+    sql: `INSERT INTO member_profiles (id, email, display_name, registration_status, is_active, created_at, updated_at)
+          VALUES ('m3', 'm3@example.test', '회원 m3', 'approved', 1, ?, ?)`,
+    args: [now, now],
+  })
+  for (const [id, listing, bidder, amount] of [
+    ['b1', 'ma2', 'm3', 1000],
+    ['b2', 'ma2', 'm1', 2000],
+    ['b3', 'ma3', 'm1', 5000],
+  ]) {
+    await setupClient.execute({
+      sql: `INSERT INTO market_bids (id, listing_id, bidder_id, amount, created_at) VALUES (?, ?, ?, ?, ?)`,
+      args: [id, listing, bidder, amount, now],
+    })
+  }
+  await setupClient.execute(
+    "UPDATE market_auctions SET current_price = 2000, current_bidder_id = 'm1', bid_count = 2 WHERE listing_id = 'ma2'"
+  )
+  await setupClient.execute(
+    "UPDATE market_auctions SET current_price = 5000, current_bidder_id = 'm1', winner_id = 'm1', winning_price = 5000, bid_count = 1 WHERE listing_id = 'ma3'"
+  )
+
+  const { withdrawMember } = await import(WITHDRAWAL_MODULE_URL.href)
+  try {
+    assert.equal((await withdrawMember('m1')).ok, true)
+
+    const auctions = Object.fromEntries(
+      (
+        await setupClient.execute(
+          'SELECT listing_id, state, current_price, current_bidder_id, bid_count, winner_id FROM market_auctions'
+        )
+      ).rows.map(r => [r.listing_id, r])
+    )
+    assert.equal(auctions.ma1.state, 'canceled')
+    assert.equal(auctions.ma2.state, 'live')
+    assert.equal(Number(auctions.ma2.current_price), 1000, '최고가가 남은 입찰로 돌아간다')
+    assert.equal(auctions.ma2.current_bidder_id, 'm3')
+    assert.equal(Number(auctions.ma2.bid_count), 1)
+    assert.equal(auctions.ma3.winner_id, 'm1', '끝난 경매의 낙찰은 기록이다')
+
+    const voided = (
+      await setupClient.execute('SELECT id, voided_at IS NOT NULL v FROM market_bids ORDER BY id')
+    ).rows.map(r => [r.id, Number(r.v)])
+    assert.deepEqual(voided, [
+      ['b1', 0],
+      ['b2', 1],
+      ['b3', 0],
+    ])
+  } finally {
+    await setupClient.execute('DELETE FROM market_listings')
+    await setupClient.execute("DELETE FROM member_profiles WHERE id = 'm3'")
+  }
+})

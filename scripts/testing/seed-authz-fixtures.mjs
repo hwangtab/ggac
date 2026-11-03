@@ -117,9 +117,12 @@ const {
   fundingRewards: tursoFundingRewards,
   fundingPledges: tursoFundingPledges,
 } = await import('@/db/schema/funding')
-const { marketListings: tursoMarketListings, marketComments: tursoMarketComments } = await import(
-  '@/db/schema/market'
-)
+const {
+  marketListings: tursoMarketListings,
+  marketComments: tursoMarketComments,
+  marketAuctions: tursoMarketAuctions,
+  marketBids: tursoMarketBids,
+} = await import('@/db/schema/market')
 const { eq, inArray } = await import('drizzle-orm')
 const { workChannels: tursoWorkChannels } = await import('@/db/schema/work')
 const { createChannelRow, addChannelMemberRows, openDmRow } = await import(
@@ -549,6 +552,9 @@ async function main() {
   const MARKET_LISTING_DELETABLE_ID = '00000000-0000-4000-8000-00000000a031'
   const MARKET_COMMENT_ID = '00000000-0000-4000-8000-00000000a032'
   const MARKET_COMMENT_DELETABLE_ID = '00000000-0000-4000-8000-00000000a033'
+  // 경매 경계용 매물(판매자 `owner`, 진행 중, 7일 뒤 마감). 스펙이 입찰을 넣고
+  // 관리자가 무효 처리하므로 시드가 매번 입찰을 비우고 경매 칸을 되돌린다.
+  const MARKET_AUCTION_ID = '00000000-0000-4000-8000-00000000a034'
   const REGISTRATION_SETTING_ID = '00000000-0000-4000-8000-00000000a005'
   const FUNDING_SETTING_ID = '00000000-0000-4000-8000-00000000a00b'
   // 기능 스위치 넷(`e2e/authz-features.spec.ts`가 껐다 켠다). 시드가 이 행을
@@ -770,6 +776,47 @@ async function main() {
       .insert(tursoMarketComments)
       .values(values)
       .onConflictDoUpdate({ target: tursoMarketComments.id, set: values })
+  }
+
+  {
+    const listingValues = {
+      id: MARKET_AUCTION_ID,
+      sellerId: ids.owner,
+      title: 'authz 픽스처 경매',
+      description: '경매 경계 테스트용',
+      dealType: 'auction',
+      itemCategory: 'audio',
+      price: 10000,
+      status: 'open',
+      images: [],
+      isDeleted: false,
+    }
+    await db
+      .insert(tursoMarketListings)
+      .values(listingValues)
+      .onConflictDoUpdate({ target: tursoMarketListings.id, set: listingValues })
+    // 입찰을 먼저 비운다 — 남아 있으면 "입찰 없는 경매"라는 전제가 깨지고 최고가가
+    // 앞 실행의 값으로 시작한다.
+    await db.delete(tursoMarketBids).where(eq(tursoMarketBids.listingId, MARKET_AUCTION_ID))
+    const endsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+    const auctionValues = {
+      listingId: MARKET_AUCTION_ID,
+      startPrice: 10000,
+      minIncrement: 1000,
+      currentPrice: null,
+      currentBidderId: null,
+      bidCount: 0,
+      endsAt,
+      originalEndsAt: endsAt,
+      state: 'live',
+      winnerId: null,
+      winningPrice: null,
+      closedAt: null,
+    }
+    await db
+      .insert(tursoMarketAuctions)
+      .values(auctionValues)
+      .onConflictDoUpdate({ target: tursoMarketAuctions.listingId, set: auctionValues })
   }
 
   // 펀딩 초안 캠페인. `status`·`submittedAt`·`reviewNote`를 매번 set에
@@ -1575,6 +1622,7 @@ async function main() {
     marketListingDeletableId: MARKET_LISTING_DELETABLE_ID,
     marketCommentId: MARKET_COMMENT_ID,
     marketCommentDeletableId: MARKET_COMMENT_DELETABLE_ID,
+    marketAuctionId: MARKET_AUCTION_ID,
     fundingDraftCampaignId: FUNDING_DRAFT_CAMPAIGN_ID,
     fundingDraftRewardId: FUNDING_DRAFT_REWARD_ID,
     fundingReviewCampaignId: FUNDING_REVIEW_CAMPAIGN_ID,

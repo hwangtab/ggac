@@ -181,28 +181,35 @@
       "idx": 25,
       "version": "6",
       "when": 1789300000000,
-      "tag": "0025_board_work_chat",
+      "tag": "0025_market_auction",
       "breakpoints": true
     },
     {
       "idx": 26,
       "version": "6",
       "when": 1789400000000,
-      "tag": "0026_board_work_files",
+      "tag": "0026_board_work_chat",
       "breakpoints": true
     },
     {
       "idx": 27,
       "version": "6",
       "when": 1789500000000,
-      "tag": "0027_board_work_tabs",
+      "tag": "0027_board_work_files",
       "breakpoints": true
     },
     {
       "idx": 28,
       "version": "6",
       "when": 1789600000000,
-      "tag": "0028_board_work_versions",
+      "tag": "0028_board_work_tabs",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "6",
+      "when": 1789700000000,
+      "tag": "0029_board_work_versions",
       "breakpoints": true
     }
   ]

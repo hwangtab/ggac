@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl'
 import { useRouter } from '@/i18n/navigation'
 import { useImageUpload } from '@/hooks/useImageUpload'
 import {
+  MARKET_AUCTION_DURATIONS,
   MARKET_CONDITIONS,
   MARKET_DEAL_TYPES,
   MARKET_DESCRIPTION_MAX,
@@ -53,6 +54,11 @@ export default function MarketForm({ initial }: { initial?: MarketFormInitial })
   const [tradeMethod, setTradeMethod] = useState<string>(initial?.trade_method ?? '')
   const [region, setRegion] = useState(initial?.region ?? '')
   const [images, setImages] = useState<string[]>(initial?.images ?? [])
+  // 경매 칸은 **새로 올릴 때만** 받는다. 열린 경매의 시작가·호가·기간은 바꾸지
+  // 않는다 — 입찰자가 믿고 들어온 조건이다(`auctionRules.blockEdit`).
+  const [startPrice, setStartPrice] = useState('')
+  const [minIncrement, setMinIncrement] = useState('1000')
+  const [durationDays, setDurationDays] = useState('3')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -88,6 +94,9 @@ export default function MarketForm({ initial }: { initial?: MarketFormInitial })
           trade_method: tradeMethod || null,
           region,
           images,
+          ...(dealType === 'auction' && !initial
+            ? { start_price: startPrice, min_increment: minIncrement, duration_days: durationDays }
+            : {}),
         }),
       })
       const json = await response.json().catch(() => null)
@@ -109,8 +118,11 @@ export default function MarketForm({ initial }: { initial?: MarketFormInitial })
     <form onSubmit={handleSubmit} className="space-y-5 rounded-lg bg-white p-6 shadow-sm">
       <div>
         <span className="mb-2 block text-sm font-medium text-gray-700">{t('form.dealType')}</span>
-        <div className="flex gap-2">
-          {MARKET_DEAL_TYPES.map(deal => (
+        <div className="flex flex-wrap gap-2">
+          {/* 경매와 일반 거래는 서로 바꿀 수 없다 — 수정 화면에서는 같은 쪽만 보인다. */}
+          {MARKET_DEAL_TYPES.filter(
+            deal => !initial || (deal === 'auction') === (initial.deal_type === 'auction')
+          ).map(deal => (
             <button
               key={deal}
               type="button"
@@ -158,7 +170,54 @@ export default function MarketForm({ initial }: { initial?: MarketFormInitial })
           </select>
         </label>
 
-        {dealType !== 'free' && (
+        {dealType === 'auction' && !initial && (
+          <>
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-gray-700">
+                {t('form.startPrice')}
+              </span>
+              <input
+                className={inputClass}
+                inputMode="numeric"
+                value={startPrice}
+                onChange={e => setStartPrice(e.target.value.replace(/[^\d]/g, ''))}
+                placeholder={t('form.pricePlaceholder')}
+                required
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-gray-700">
+                {t('form.minIncrement')}
+              </span>
+              <input
+                className={inputClass}
+                inputMode="numeric"
+                value={minIncrement}
+                onChange={e => setMinIncrement(e.target.value.replace(/[^\d]/g, ''))}
+                required
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-gray-700">
+                {t('form.duration')}
+              </span>
+              <select
+                className={inputClass}
+                value={durationDays}
+                onChange={e => setDurationDays(e.target.value)}
+              >
+                {MARKET_AUCTION_DURATIONS.map(days => (
+                  <option key={days} value={days}>
+                    {t('form.durationDays', { count: days })}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="text-xs text-gray-500 sm:col-span-2">{t('form.auctionHelp')}</p>
+          </>
+        )}
+
+        {dealType !== 'free' && dealType !== 'auction' && (
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-gray-700">{t('form.price')}</span>
             <input

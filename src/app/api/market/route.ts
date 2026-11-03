@@ -13,7 +13,13 @@ import { requireActiveMember } from '@/lib/server/memberAuth'
 import { applyRouteRateLimit, createIPKeyGenerator, RATE_LIMITS } from '@/lib/server/rateLimit'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { FEATURE_DISABLED_MESSAGES, isBoardEnabled } from '@/lib/features/settings'
-import { parseMarketListingInput, parseMarketListQuery } from '@/lib/market/validate'
+import {
+  parseAuctionInput,
+  parseMarketListingInput,
+  parseMarketListQuery,
+} from '@/lib/market/validate'
+import { createAuctionListing } from '@/db/queries/marketAuction'
+import { sweepDueAuctions } from '@/lib/server/marketAuctionClose'
 import {
   countOpenListingsBySeller,
   createMarketListing,
@@ -35,6 +41,8 @@ export async function GET(request: NextRequest) {
 
   return apiGet(
     async () => {
+      // 마감이 지난 경매를 목록이 "진행 중"으로 보여 주지 않게 먼저 닫는다.
+      await sweepDueAuctions(10)
       const query = parseMarketListQuery(request.nextUrl.searchParams)
       const mine = request.nextUrl.searchParams.get('mine') === '1'
       const { rows, hasNext } = await listMarketListings({
@@ -91,6 +99,13 @@ export async function POST(request: NextRequest) {
         throw ApiError.badRequest(
           `판매중·예약중인 매물은 ${MAX_OPEN_LISTINGS_PER_SELLER}개까지 걸어 둘 수 있습니다. 거래가 끝난 매물을 정리해 주세요.`
         )
+      }
+
+      if (parsed.value.deal_type === 'auction') {
+        const auction = parseAuctionInput(body)
+        if (auction.error !== null) throw ApiError.badRequest(auction.error)
+        const { id } = await createAuctionListing(user.id, parsed.value, auction.value, new Date())
+        return ApiSuccess.created({ id }, '경매가 시작되었습니다.')
       }
 
       const { id } = await createMarketListing(user.id, parsed.value)

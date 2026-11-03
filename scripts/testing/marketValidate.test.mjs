@@ -58,7 +58,7 @@ test('가격: 음수·소수·상한 초과·숫자 아님은 거절한다', () 
 })
 
 test('허용 목록 밖의 거래 유형·품목·상태·거래방식은 거절한다', () => {
-  assert.ok(parseMarketListingInput({ ...base, deal_type: 'auction' }).error)
+  assert.ok(parseMarketListingInput({ ...base, deal_type: 'barter' }).error)
   assert.ok(parseMarketListingInput({ ...base, item_category: 'car' }).error)
   assert.ok(parseMarketListingInput({ ...base, condition: 'broken' }).error)
   assert.ok(parseMarketListingInput({ ...base, trade_method: 'drone' }).error)

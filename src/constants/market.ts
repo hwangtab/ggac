@@ -7,8 +7,8 @@
  * 네임스페이스에 있다.
  */
 
-/** 팝니다 · 삽니다 · 나눔 */
-export const MARKET_DEAL_TYPES = ['sell', 'buy', 'free'] as const
+/** 팝니다 · 삽니다 · 나눔 · 경매 */
+export const MARKET_DEAL_TYPES = ['sell', 'buy', 'free', 'auction'] as const
 export type MarketDealType = (typeof MARKET_DEAL_TYPES)[number]
 
 export const MARKET_ITEM_CATEGORIES = ['instrument', 'audio', 'stage', 'books', 'etc'] as const
@@ -38,3 +38,23 @@ export const MARKET_STATUS_STYLES: Record<MarketStatus, string> = {
   reserved: 'bg-amber-100 text-amber-800',
   done: 'bg-gray-200 text-gray-600',
 }
+
+/**
+ * 경매 (2026-10-29). 판매자가 여는 오름차순 공개 경매 하나뿐이다 — 역경매·
+ * 자동입찰은 없다. 조합은 결제하지 않는다: 낙찰은 "그 가격으로 직거래할
+ * 우선권"이고, 그 뒤는 일반 매물처럼 댓글로 이어진다.
+ */
+export const MARKET_AUCTION_STATES = ['live', 'ended', 'no_bids', 'canceled'] as const
+export type MarketAuctionState = (typeof MARKET_AUCTION_STATES)[number]
+
+/** 고를 수 있는 경매 기간(일). */
+export const MARKET_AUCTION_DURATIONS = [1, 3, 5, 7] as const
+export type MarketAuctionDuration = (typeof MARKET_AUCTION_DURATIONS)[number]
+
+/** 마감 이 시간 안에 입찰이 들어오면 마감을 이만큼 뒤로 민다(막판 낚아채기 방지). */
+export const MARKET_AUCTION_EXTEND_MS = 2 * 60 * 1000
+
+export const MARKET_AUCTION_MIN_INCREMENT = 100
+export const MARKET_AUCTION_MAX_INCREMENT = 1_000_000
+/** 시작가 하한. 0원 경매는 나눔과 구분되지 않는다. */
+export const MARKET_AUCTION_MIN_START = 1_000
