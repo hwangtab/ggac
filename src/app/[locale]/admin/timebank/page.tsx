@@ -72,21 +72,25 @@ export default function AdminTimebankPage() {
 
   const coopOpen =
     settings?.settings.enabled === true && settings?.settings.coop_tasks_enabled === true
+  // 조합 업무 탭은 스위치가 켜졌을 때만 보인다(설정 탭의 스위치는 그대로 둔다). 보던
+  // 중에 꺼지면 첫 탭으로 돌린다.
+  const visibleTabs = TABS.filter(item => item.key !== 'tasks' || coopOpen)
+  const activeTab: TabKey = tab === 'tasks' && !coopOpen ? 'accounts' : tab
 
   return (
     <AdminLayout
       title="타임뱅크"
-      description="잔액표·대기·조합 업무 지급·조정·설정. 모든 쓰기는 활동 기록과 보안 로그에 남습니다."
+      description={`잔액표·대기·${coopOpen ? '조합 업무 지급·' : ''}조정·설정. 모든 쓰기는 활동 기록과 보안 로그에 남습니다.`}
     >
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        {TABS.map(item => (
+        {visibleTabs.map(item => (
           <button
             key={item.key}
             type="button"
             onClick={() => setTab(item.key)}
-            aria-pressed={tab === item.key}
+            aria-pressed={activeTab === item.key}
             className={`rounded-full border px-4 py-1.5 text-sm ${
-              tab === item.key
+              activeTab === item.key
                 ? 'border-primary-600 bg-primary-600 text-white'
                 : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
             }`}
@@ -119,13 +123,13 @@ export default function AdminTimebankPage() {
         </p>
       )}
 
-      {tab === 'accounts' && accounts && (
+      {activeTab === 'accounts' && accounts && (
         <AccountsPanel data={accounts} myId={myId} onChanged={() => void load()} />
       )}
-      {tab === 'tasks' && (
+      {activeTab === 'tasks' && coopOpen && (
         <CoopTasksPanel open={coopOpen} myId={myId} onChanged={() => void load()} />
       )}
-      {tab === 'adjust' && (
+      {activeTab === 'adjust' && (
         <AdjustPanel
           accounts={accounts?.accounts ?? []}
           dualApprovalMinutes={settings?.settings.adjustment_dual_approval_minutes ?? null}
@@ -133,12 +137,12 @@ export default function AdminTimebankPage() {
           onChanged={() => void load()}
         />
       )}
-      {tab === 'settings' && saved && (
+      {activeTab === 'settings' && saved && (
         <p role="status" className="mb-4 rounded-lg bg-green-50 p-3 text-sm text-green-800">
           {saved}
         </p>
       )}
-      {tab === 'settings' && settings && (
+      {activeTab === 'settings' && settings && (
         <SettingsPanel
           key={JSON.stringify(settings.settings)}
           settings={settings.settings}

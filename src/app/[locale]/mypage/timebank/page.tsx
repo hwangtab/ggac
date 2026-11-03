@@ -56,12 +56,21 @@ export default async function MyTimebankPage({ params }: { params: Promise<{ loc
   // 게시판 새 글 스위치가 꺼졌으면 글쓰기 화면이 `boardOff` 게이트라 링크를 숨긴다.
   const canPost = canWrite && (await isBoardEnabled()) !== false
 
+  // 조합 업무 스위치(전체 + `coop_tasks_enabled`, 둘 다 `=== true`)가 꺼져 있으면
+  // "참여한 조합 업무" 영역을 숨기고, 내 글에서도 조합 업무 글을 뺀다.
+  const coopOn = viewer.coopTasksEnabled
+
   let myPosts: Awaited<ReturnType<typeof listTimebankListings>>['rows'] = []
   let volunteered: Awaited<ReturnType<typeof listVolunteeredTasks>> = []
   try {
     ;[{ rows: myPosts }, volunteered] = await Promise.all([
-      listTimebankListings({ authorId: viewer.userId, offset: 0, limit: MY_POSTS_LIMIT }),
-      listVolunteeredTasks(viewer.userId, MY_POSTS_LIMIT),
+      listTimebankListings({
+        authorId: viewer.userId,
+        excludeKinds: coopOn ? undefined : ['coop_task'],
+        offset: 0,
+        limit: MY_POSTS_LIMIT,
+      }),
+      coopOn ? listVolunteeredTasks(viewer.userId, MY_POSTS_LIMIT) : Promise.resolve([]),
     ])
   } catch (error) {
     log.error('내 타임뱅크 글 조회 실패', { error: (error as Error)?.message })
@@ -102,7 +111,7 @@ export default async function MyTimebankPage({ params }: { params: Promise<{ loc
             )}
           </div>
         </div>
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className={`grid gap-6 ${coopOn ? 'md:grid-cols-2' : ''}`}>
           <div>
             <h3 className="mb-2 text-sm font-medium text-gray-700">{t('my.posts.mine')}</h3>
             {myPosts.length === 0 ? (
@@ -132,33 +141,37 @@ export default async function MyTimebankPage({ params }: { params: Promise<{ loc
               </ul>
             )}
           </div>
-          <div>
-            <h3 className="mb-2 text-sm font-medium text-gray-700">{t('my.posts.volunteered')}</h3>
-            {volunteered.length === 0 ? (
-              <p className="text-sm text-gray-500">{t('my.posts.emptyVolunteered')}</p>
-            ) : (
-              <ul className="space-y-2">
-                {volunteered.map(task => (
-                  <li key={task.id}>
-                    <Link
-                      href={`/board/timebank/${task.id}`}
-                      className="flex flex-wrap items-center gap-1.5 rounded-lg border border-gray-200 p-3 text-sm hover:border-primary-300"
-                    >
-                      <span
-                        className={`rounded px-1.5 py-0.5 text-xs ${TIMEBANK_STATUS_STYLES[task.status]}`}
+          {coopOn && (
+            <div data-testid="timebank-my-volunteered">
+              <h3 className="mb-2 text-sm font-medium text-gray-700">
+                {t('my.posts.volunteered')}
+              </h3>
+              {volunteered.length === 0 ? (
+                <p className="text-sm text-gray-500">{t('my.posts.emptyVolunteered')}</p>
+              ) : (
+                <ul className="space-y-2">
+                  {volunteered.map(task => (
+                    <li key={task.id}>
+                      <Link
+                        href={`/board/timebank/${task.id}`}
+                        className="flex flex-wrap items-center gap-1.5 rounded-lg border border-gray-200 p-3 text-sm hover:border-primary-300"
                       >
-                        {t(`status.${task.status}`)}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-gray-800">{task.title}</span>
-                      {task.task_date && (
-                        <span className="text-xs text-gray-500">{task.task_date}</span>
-                      )}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+                        <span
+                          className={`rounded px-1.5 py-0.5 text-xs ${TIMEBANK_STATUS_STYLES[task.status]}`}
+                        >
+                          {t(`status.${task.status}`)}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-gray-800">{task.title}</span>
+                        {task.task_date && (
+                          <span className="text-xs text-gray-500">{task.task_date}</span>
+                        )}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
       </section>
 

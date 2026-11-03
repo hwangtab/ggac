@@ -57,9 +57,13 @@ export default async function TimebankDetailPage({
   const listing = await getTimebankListing(listingId)
   if (!listing) notFound()
   const isCoopTask = listing.kind === 'coop_task'
+  // 조합 업무 스위치가 꺼져 있으면(전체 + `coop_tasks_enabled`, 둘 다 `=== true`가
+  // 아니면) 조합 업무 글은 읽기 전용이다 — 참여 단추를 그리지 않는다. 목록에서는 이미
+  // 빠지지만 주소로 바로 들어올 수 있다.
+  const showVolunteer = isCoopTask && viewer.coopTasksEnabled
   const [comments, myVolunteered] = await Promise.all([
     listTimebankComments(listingId),
-    isCoopTask ? isVolunteering(listingId, viewer.userId) : Promise.resolve(false),
+    showVolunteer ? isVolunteering(listingId, viewer.userId) : Promise.resolve(false),
   ])
 
   const canWrite = viewer.access === 'ok'
@@ -83,9 +87,9 @@ export default async function TimebankDetailPage({
   ])
 
   // 조합 업무에 새로 손들 수 있는가(`POST …/volunteer`와 같은 조건). 참여 자격이
-  // 없으면 위의 게이트가 이유를 말하므로 여기서는 이유를 따로 달지 않는다.
-  const volunteerUnavailable: 'closed' | 'off' | null =
-    listing.status !== 'open' ? 'closed' : !viewer.coopTasksEnabled ? 'off' : null
+  // 없으면 위의 게이트가 이유를 말하므로 여기서는 이유를 따로 달지 않는다. 스위치가
+  // 꺼진 경우는 단추 자체를 그리지 않는다(`showVolunteer`).
+  const volunteerUnavailable: 'closed' | null = listing.status !== 'open' ? 'closed' : null
   const canVolunteer = canWrite && volunteerUnavailable === null
 
   return (
@@ -144,7 +148,16 @@ export default async function TimebankDetailPage({
             {listing.description}
           </p>
 
-          {isCoopTask && (
+          {isCoopTask && !showVolunteer && (
+            <p
+              data-testid="timebank-coop-off"
+              className="mt-6 border-t border-gray-100 pt-4 text-sm text-gray-500"
+            >
+              {t('volunteer.off')}
+            </p>
+          )}
+
+          {showVolunteer && (
             <div className="mt-6 border-t border-gray-100 pt-4">
               <VolunteerButton
                 listingId={listing.id}

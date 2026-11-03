@@ -3,6 +3,7 @@ import { loadParty } from '@/db/queries/timebankLedger'
 import { getTimebankProfile } from '@/db/queries/timebankProfiles'
 import { classifyTimebankAccess, type TimebankAccess } from '@/lib/timebank/access'
 import { TIMEBANK_DEFAULTS, getTimebankSettings } from '@/lib/timebank/settings'
+import { coopTasksOpen } from '@/lib/timebank/adminRules'
 import type { Locale } from '@/i18n/routing'
 import { createLogger } from '@/utils/logger'
 
@@ -19,6 +20,7 @@ export type TimebankViewer =
        */
       access: TimebankAccess
       enabled: boolean
+      /** 전체 스위치와 조합 업무 스위치가 둘 다 `=== true`(`coopTasksOpen`). 꺼지면 조합 업무 UI를 숨긴다. */
       coopTasksEnabled: boolean
       termsVersion: string
       /** 어느 판이든 동의한 적이 있으면 그 판·일자. */
@@ -73,7 +75,7 @@ export async function resolveTimebankViewer(
     isAdmin: viewer.isAdmin,
     access: classifyTimebankAccess({ settings, party, agreed, mode: 'write' }),
     enabled: settings.enabled === true,
-    coopTasksEnabled: settings.coop_tasks_enabled === true,
+    coopTasksEnabled: coopTasksOpen(settings),
     termsVersion: settings.terms_version,
     agreedVersion: agreed ? (profile?.terms_version ?? null) : null,
     agreedAt: agreed ? (profile?.agreed_at ?? null) : null,
