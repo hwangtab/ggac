@@ -35,7 +35,11 @@ export type PendingExtractionRow = {
   bucket_path: string
   /** 지금까지의 시도 횟수(행이 없으면 0) */
   attempts: number
+  /** 첨부 시각(epoch ms) — 추출 대기열이 이사회 서류와 섞어 최신 순으로 줄 세울 때(extract-store fetchPending) */
+  created_at: number
 }
+
+const epochMs = (d: Date | number) => (d instanceof Date ? d.getTime() : Number(d))
 
 /** 확장자 목록 → `lower(name) like '%.<ext>'` OR 식. 확장자는 상수 목록(사용자 입력이 아니다)이지만 모양을 다시 본다 */
 function extensionFilter(exts: readonly string[]) {
@@ -64,6 +68,7 @@ export async function listPendingExtractionRows(opts: {
       size: workAttachments.size,
       blobPath: workAttachments.blobPath,
       attempts: workAttachmentTexts.attempts,
+      createdAt: workAttachments.createdAt,
     })
     .from(workAttachments)
     .innerJoin(
@@ -93,6 +98,7 @@ export async function listPendingExtractionRows(opts: {
     size: r.size,
     bucket_path: r.blobPath,
     attempts: r.attempts ?? 0,
+    created_at: epochMs(r.createdAt),
   }))
 }
 
@@ -111,6 +117,7 @@ export async function getExtractionCandidates(
       blobPath: workAttachments.blobPath,
       textId: workAttachmentTexts.attachmentId,
       attempts: workAttachmentTexts.attempts,
+      createdAt: workAttachments.createdAt,
     })
     .from(workAttachments)
     .innerJoin(
@@ -126,6 +133,7 @@ export async function getExtractionCandidates(
     size: r.size,
     bucket_path: r.blobPath,
     attempts: r.attempts ?? 0,
+    created_at: epochMs(r.createdAt),
     done: r.textId !== null,
   }))
 }

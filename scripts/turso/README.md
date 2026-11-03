@@ -346,8 +346,14 @@ webServer에 `{...process.env, ...webServer.env}`를 넘긴다. e2e 전용 변�
   11개 스펙
 - `authz-public`: `authz-boundaries` 21건
 
-**실측 기준선(2026-11-03, 통합 재설계 R4 — 이사 메뉴 재편·업무툴 직함·자료실 이사회 서류 뒤, 운영 빌드 서버):**
-총 276건 중 **274 passed, 1 failed, 1 skipped**(4.4분). 실패 1건은 정책 36(`PUBLIC_BLOB_READ_WRITE_TOKEN` 없이 돌림),
+**실측 기준선(2026-11-03, R4 마무리 — 이사회 서류 삭제 시 미리보기 캐시 정리·파일 속 글자 검색(0034) 뒤, 운영 빌드 서버):**
+총 277건 중 **275 passed, 1 failed, 1 skipped**(4.5분). 실패 1건은 정책 36(`PUBLIC_BLOB_READ_WRITE_TOKEN` 없이 돌림),
+스킵 1건은 메일함 첨부 다운로드 기록이다. 늘어난 1건은 `board-work-library.spec.ts`의 파일 속 글자 검색(DOCX 올리기 →
+추출 크론 → 업무 검색 스니펫 → 삭제 뒤 본문 행 없음)이고, 기존 올리기 테스트는 삭제 뒤 미리보기 캐시 키가 0개인지도 본다.
+시험 Blob 저장소 토큰과 편집기 env를 준 실행이다.
+
+**이전 기준선(2026-11-03, 통합 재설계 R4 — 이사 메뉴 재편·업무툴 직함·자료실 이사회 서류 뒤, 운영 빌드 서버):**
+총 276건 중 274건 통과, 1 failed, 1 skipped(4.4분). 실패 1건은 정책 36(`PUBLIC_BLOB_READ_WRITE_TOKEN` 없이 돌림),
 스킵 1건은 메일함 첨부 다운로드 기록이다. 늘어난 6건은 `board-work-library.spec.ts`(직함·자료실 이사회 서류·조합원 차단·
 미리보기 라우트·시험 저장소 올리기/미리보기/지우기·스크린숏)다. 시험 Blob 저장소 토큰과 편집기 env를 준 실행이다.
 
@@ -1128,7 +1134,7 @@ EXPLAIN QUERY PLAN SELECT count(*) FROM notifications WHERE user_id = '<아무 �
 가드도 타입 검사도 통과한다. 가드는 **"이 문자열이 이 파일에 있는가"**만 보고
 도달 가능성·실행 순서·데이터 흐름을 보지 않는다.
 
-**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 274 passed, 실행 절차는
+**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 275 passed, 실행 절차는
 위 "권한 E2E" 절). 같은 감사에서 **E2E는 관리자 게이트 무력화를 실제로 잡았다.**
 
 `assert-runtime-risks.mjs`가 여전히 값을 하는 자리는 **지워진 것**(게이트를 통째로

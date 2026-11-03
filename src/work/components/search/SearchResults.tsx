@@ -22,6 +22,10 @@ export type BoardDocumentHit = {
   visibility: string
   createdAt: string
   bodyMatched: boolean
+  /** 파일 속 글자(PDF·HWP·DOCX 등 추출 본문)에서 맞은 검색어가 있다 */
+  contentMatched?: boolean
+  /** 첫 일치 주변 평문(파일 속 글자가 맞았으면 그쪽, 아니면 웹 본문) */
+  snippet?: string
 }
 
 const linkClass = 'block px-4 py-3 outline-none hover:bg-accent'
@@ -220,16 +224,26 @@ export default function SearchResults({
                     {d.size !== null && <span>{formatBytes(d.size)}</span>}
                     <span>{BOARD_VISIBILITY_LABEL[d.visibility] ?? d.visibility}</span>
                     <time dateTime={d.createdAt}>{formatDateTime(d.createdAt, now)}</time>
-                    {d.bodyMatched && <span>본문 일치</span>}
+                    {d.contentMatched ? (
+                      <span>파일 내용 일치</span>
+                    ) : (
+                      d.bodyMatched && <span>본문 일치</span>
+                    )}
                   </span>
+                  {d.snippet && (
+                    <span className="mt-1 block text-sm break-words text-muted-foreground">
+                      <Highlight text={d.snippet} terms={terms} />
+                    </span>
+                  )}
                 </Link>
               </li>
             ))}
           </ul>
           <MoreNote show={boardDocumentsMore} />
           <p className="text-xs text-muted-foreground">
-            서류함·정기총회 자료의 제목·파일 이름·본문(정관처럼 본문을 둔 서류)에서 찾았습니다. 첨부
-            파일 속 글자는 찾지 않습니다.
+            서류함·정기총회 자료의 제목·파일 이름·본문(정관처럼 본문을 둔 서류)과 파일 속
+            글자(PDF·HWP·DOCX 등)에서 찾았습니다. 방금 올린 서류의 파일 내용은 잠시 뒤에 찾을 수
+            있습니다.
           </p>
         </section>
       )}

@@ -32,6 +32,7 @@ import {
   boardMeetingDateVotes,
   boardMeetings,
   boardMinutes,
+  workBoardDocumentTexts,
 } from '../schema/index.ts'
 
 import type { BoardMeetingStatus } from '@/constants/boardRoom'
@@ -882,34 +883,117 @@ export async function getDocumentForPreview(id: string): Promise<DocumentPreview
   }
 }
 
+/** 스니펫 창 — 첫 일치 앞쪽 글자 수와 창 길이(업무 검색의 문서 본문 창 `DOCUMENT_WINDOW_*`와 같은 값) */
+const SEARCH_WINDOW_BEFORE = 120
+const SEARCH_WINDOW_CHARS = 600
+/** "이 글에는 일치가 없다"를 나타내는 위치(SQLite 스칼라 min 이 NULL 을 퍼뜨리지 않게 0 대신 쓴다) */
+const NO_MATCH = 2_147_483_647
+
+/** 첫 일치 주변의 원문 창 — 화면 스니펫은 호출부가 makeSnippet(`documentSnippet`)으로 다듬는다 */
+export type DocumentMatchWindow = {
+  /** 'file' = 파일 속 글자(추출 본문), 'body' = 웹 본문(`body_markdown`) */
+  source: 'file' | 'body'
+  window: string
+  window_at_start: boolean
+  window_has_more: boolean
+}
+
+export type DocumentSearchRow = DocumentRow & {
+  /** 제목·파일 이름만으로는 다 맞지 않았다(본문이나 파일 속 글자에서 맞은 검색어가 있다) */
+  body_matched: boolean
+  /** 파일 속 글자(추출 본문)에 든 검색어가 있다 */
+  content_matched: boolean
+  /** 스니펫 창 — 파일 속 글자가 맞았으면 그쪽, 아니면 웹 본문. 둘 다 아니면 null */
+  match_window: DocumentMatchWindow | null
+}
+
 /**
  * 업무 검색의 '이사회 서류' 묶음(03 §10). 검색어(호출부가 `splitTerms`로 나눈 것)마다 제목·파일 이름·본문
- * (`body_markdown` — 정관처럼 본문을 둔 서류) 중 하나에 들어 있어야 한다(AND). `instr(lower(…))`라 `%`·`_`가 와일드카드가
- * 아니다(업무 검색과 같은 일치 규칙). 첨부 파일 속 글자(PDF·HWP 본문)는 찾지 않는다 — 본문 추출은 업무툴 첨부만 한다.
+ * (`body_markdown` — 정관처럼 본문을 둔 서류)·**파일 속 글자**(`work_board_document_texts` — 추출 상태 ok 만, 0034)
+ * 중 하나에 들어 있어야 한다(AND). `instr(lower(…))`라 `%`·`_`가 와일드카드가 아니다(업무 검색과 같은 일치 규칙).
+ * 스니펫은 SQL 이 첫 일치 주변 창만 잘라 돌려준다(2,000,000자 본문 전체를 앱으로 끌어오지 않는다).
  *
- * `visibility`는 **필수다**(`listDocuments`와 같은 이유). 권한 판정은 호출부 몫이다.
+ * `visibility`는 **필수다**(`listDocuments`와 같은 이유). 권한 판정은 호출부 몫이다 — 추출 본문도 서류 행의
+ * 등급을 따른다(결과 행에는 등급이 없다).
  */
 export async function searchDocuments(filter: {
   terms: readonly string[]
   visibility: readonly string[]
   limit: number
-}): Promise<(DocumentRow & { body_matched: boolean })[]> {
+}): Promise<DocumentSearchRow[]> {
   if (filter.terms.length === 0 || filter.visibility.length === 0) return []
+  const t = workBoardDocumentTexts
+  const content = sql`coalesce(case when ${t.status} = 'ok' then ${t.content} end, '')`
+  const body = sql`coalesce(${boardDocuments.bodyMarkdown}, '')`
   const termWhere = filter.terms.map(
-    t =>
-      sql`(instr(lower(${boardDocuments.title}), lower(${t})) > 0 or instr(lower(coalesce(${boardDocuments.fileName}, '')), lower(${t})) > 0 or instr(lower(coalesce(${boardDocuments.bodyMarkdown}, '')), lower(${t})) > 0)`
+    term =>
+      sql`(instr(lower(${boardDocuments.title}), lower(${term})) > 0 or instr(lower(coalesce(${boardDocuments.fileName}, '')), lower(${term})) > 0 or instr(lower(${body}), lower(${term})) > 0 or instr(lower(${content}), lower(${term})) > 0)`
   )
+  // 검색어마다 그 글에서의 위치(없으면 NO_MATCH) → 가장 앞선 일치. 인자가 하나면 min 이 집계 함수라 그대로 쓴다
+  const firstIn = (text: ReturnType<typeof sql>) => {
+    const positions = filter.terms.map(
+      term =>
+        sql`(case when instr(lower(${text}), lower(${term})) > 0 then instr(lower(${text}), lower(${term})) else ${NO_MATCH} end)`
+    )
+    return positions.length === 1 ? positions[0] : sql`min(${sql.join(positions, sql`, `)})`
+  }
+  const windowOf = (text: ReturnType<typeof sql>) => {
+    const first = firstIn(text)
+    const start = sql`max((${first}) - ${SEARCH_WINDOW_BEFORE}, 1)`
+    return {
+      first: sql<number>`${first}`,
+      start: sql<number>`(case when (${first}) = ${NO_MATCH} then 1 else ${start} end)`,
+      window: sql<string>`(case when (${first}) = ${NO_MATCH} then '' else substr(${text}, ${start}, ${SEARCH_WINDOW_CHARS}) end)`,
+      length: sql<number>`length(${text})`,
+    }
+  }
+  const file = windowOf(content)
+  const web = windowOf(body)
   const rows = await db
-    .select()
+    .select({
+      doc: boardDocuments,
+      fileFirst: file.first,
+      fileStart: file.start,
+      fileWindow: file.window,
+      fileLength: file.length,
+      bodyFirst: web.first,
+      bodyStart: web.start,
+      bodyWindow: web.window,
+      bodyLength: web.length,
+    })
     .from(boardDocuments)
+    .leftJoin(t, eq(t.documentId, boardDocuments.id))
     .where(and(inArray(boardDocuments.visibility, [...filter.visibility]), ...termWhere))
     .orderBy(desc(boardDocuments.createdAt))
     .limit(filter.limit)
-  return rows.map(row => {
+  return rows.map(r => {
+    const row = r.doc
     const head = `${row.title}\n${row.fileName ?? ''}`.toLowerCase()
+    const contentMatched = Number(r.fileFirst) !== NO_MATCH
+    const bodyHit = Number(r.bodyFirst) !== NO_MATCH
+    const pick = (
+      source: 'file' | 'body',
+      start: number,
+      window: string | null,
+      length: number
+    ): DocumentMatchWindow => {
+      const text = window ?? ''
+      return {
+        source,
+        window: text,
+        window_at_start: Number(start) <= 1,
+        window_has_more: Number(start) - 1 + text.length < Number(length),
+      }
+    }
     return {
       ...rowToDocument(row),
-      body_matched: filter.terms.some(t => !head.includes(t.toLowerCase())),
+      body_matched: filter.terms.some(term => !head.includes(term.toLowerCase())),
+      content_matched: contentMatched,
+      match_window: contentMatched
+        ? pick('file', r.fileStart, r.fileWindow, r.fileLength)
+        : bodyHit
+          ? pick('body', r.bodyStart, r.bodyWindow, r.bodyLength)
+          : null,
     }
   })
 }

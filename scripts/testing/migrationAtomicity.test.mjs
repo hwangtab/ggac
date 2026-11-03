@@ -92,7 +92,8 @@ test('트랜잭션을 씌운 뒤에도 처음부터 적용이 정상이다', asy
     // +1 = 0030의 파일 계보(work_file_lineages — 최종본·수정 중).
     // +1 = 0031의 첨부 본문 추출(work_attachment_texts — 검색).
     // +3 = 0032의 푸시 구독·다이제스트 상태·크론 장부(work_push_subscriptions·work_digest_state·work_cron_runs).
-    assert.equal(Number(tables.rows[0].n), 80, '운영과 같은 표 수여야 한다')
+    // +1 = 0034의 이사회 서류 본문 추출(work_board_document_texts — 검색).
+    assert.equal(Number(tables.rows[0].n), 81, '운영과 같은 표 수여야 한다')
     // 23(0004·0005) + 4(0017: 결제 원장·회비 청구월·회의 목록·세션 로그인 시각).
     assert.equal(Number(indexes.rows[0].n), 27, '운영과 같은 성능 인덱스 수여야 한다')
     assert.equal(Number(junk.rows[0].n), 0, '임시 표가 남으면 안 된다')

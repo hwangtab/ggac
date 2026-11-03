@@ -1,8 +1,10 @@
 import { test, expect, type Browser } from '@playwright/test'
 import { createClient } from '@libsql/client'
+import { list } from '@vercel/blob'
 import JSZip from 'jszip'
 
 import { assertLocalTurso, readFixtures, storageStatePath } from './helpers/authState'
+import { cronHeaders } from './helpers/cron'
 
 assertLocalTurso()
 
@@ -14,6 +16,8 @@ assertLocalTurso()
  * - 자료실: 이사에게 '이사회 서류'(분류 5개) + '대화 첨부'가 보이고, 분류를 고르면 서류함 자료가 등급 칩과 함께 나온다.
  *   업무 검색이 서류를 찾는다. 조합원은 자료실·미리보기 라우트 모두 막히고, 'board' 자료는 조합원 목록 어디에도 없다.
  * - 실제 바이트(올리기·미리보기·지우기)는 시험용 Blob 저장소 토큰(`BOARD_WORK_TEST_BLOB_TOKEN`)이 있을 때만 돈다.
+ *   거기서 서류 파일 속 글자 검색(추출 크론 → 업무 검색 스니펫)과, 서류를 지우면 미리보기 캐시
+ *   (`board-work/renders/<서류 id>-…`)와 추출 본문 행이 함께 사라지는지도 본다.
  *
  * 화면 확인용 스크린숏을 `test-results/board-work-library-*.png`로 남긴다.
  */
@@ -75,6 +79,32 @@ async function removeDocuments(): Promise<void> {
       sql: 'DELETE FROM board_documents WHERE id IN (?, ?)',
       args: [BOARD_ONLY_ID, MEMBERS_ID],
     })
+  } finally {
+    client.close()
+  }
+}
+
+/** 시험 저장소에서 그 서류의 미리보기 캐시 키(`board-work/renders/<id>-…`) — 운영 저장소는 절대 보지 않는다 */
+async function renderCacheKeys(documentId: string): Promise<string[]> {
+  const token = process.env.BOARD_WORK_TEST_BLOB_TOKEN as string
+  const keys: string[] = []
+  let cursor: string | undefined
+  do {
+    const page = await list({ prefix: `board-work/renders/${documentId}-`, cursor, token })
+    keys.push(...page.blobs.map(b => b.pathname))
+    cursor = page.hasMore ? page.cursor : undefined
+  } while (cursor)
+  return keys
+}
+
+async function documentTextStatus(documentId: string): Promise<string | null> {
+  const client = db()
+  try {
+    const rs = await client.execute({
+      sql: 'SELECT status FROM work_board_document_texts WHERE document_id = ?',
+      args: [documentId],
+    })
+    return rs.rows[0] ? String(rs.rows[0].status) : null
   } finally {
     client.close()
   }
@@ -424,6 +454,16 @@ test.describe('자료실 — 이사회 서류 올리기·미리보기·지우기
       await expect(page.getByRole('dialog').getByText(docxText)).toBeVisible({ timeout: 30_000 })
       await page.screenshot({ path: 'test-results/board-work-library-preview-docx-desktop.png' })
       await page.keyboard.press('Escape')
+
+      // 미리보기가 변환 결과를 업무툴 캐시(시험 저장소)에 남겼다
+      const docId = docxId as string
+      await expect.poll(async () => (await renderCacheKeys(docId)).length).toBeGreaterThan(0)
+
+      // 지우면 행·원본과 함께 미리보기 캐시(`board-work/renders/<서류 id>-…`)도 사라진다
+      const removed = await director.context.request.delete(`/api/board-room/documents/${docId}`)
+      expect(removed.status()).toBe(200)
+      docxId = null
+      await expect.poll(() => renderCacheKeys(docId), { timeout: 15_000 }).toEqual([])
     } finally {
       for (const id of [uploadedId, docxId]) {
         if (!id) continue
@@ -431,6 +471,75 @@ test.describe('자료실 — 이사회 서류 올리기·미리보기·지우기
       }
       await director.context.close()
       await member.context.close()
+    }
+  })
+
+  test('서류 파일 속 글자를 추출 크론이 뽑으면 업무 검색이 스니펫과 함께 찾고, 서류를 지우면 본문 행도 사라진다', async ({
+    browser,
+  }) => {
+    test.setTimeout(120_000)
+    const stamp = Date.now()
+    const title = `R4 파일 속 검색 ${stamp}`
+    const word = `파일속검색${stamp}`
+    const director = await newPage(browser, 'director')
+    let documentId: string | null = null
+    try {
+      const { page, context } = director
+      const uploaded = await context.request.post('/api/board-room/documents', {
+        multipart: {
+          file: {
+            name: `r4-search-${stamp}.docx`,
+            mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            buffer: await tinyDocx(`board document search ${stamp} ${word} 끝`),
+          },
+          title,
+          category: '기타',
+        },
+      })
+      expect(uploaded.status()).toBe(201)
+      const json = await uploaded.json()
+      documentId = (json.data?.id ?? json.id) as string
+      expect(documentId).toMatch(/^[0-9a-f-]{36}$/)
+      const id = documentId
+
+      // 추출 크론(로컬 CRON_SECRET) — 올리기 직후 훅이 먼저 끝냈을 수도 있다(그래도 크론은 200, 결과는 같다)
+      await expect(async () => {
+        const cron = await context.request.get('/api/internal/board-work/extract-texts', {
+          headers: cronHeaders(),
+        })
+        expect(cron.status()).toBe(200)
+        expect(await documentTextStatus(id)).toBe('ok')
+      }).toPass({ timeout: 60_000 })
+
+      // 제목·파일 이름에 없는 낱말로 찾는다 — 파일 속 글자에서만 맞는다
+      await page.goto(`/board-room/search?q=${encodeURIComponent(word)}`, {
+        waitUntil: 'domcontentloaded',
+      })
+      const hit = page
+        .locator('section[aria-labelledby="search-board-documents"]')
+        .getByRole('link')
+        .filter({ hasText: title })
+      await expect(hit).toBeVisible({ timeout: 20_000 })
+      await expect(hit).toHaveAttribute('href', new RegExp(`doc=${id}`))
+      await expect(hit).toContainText('파일 내용 일치')
+      await expect(hit).toContainText(`board document search ${stamp} ${word}`)
+      await expect(hit.locator('mark').filter({ hasText: word }).first()).toBeVisible()
+      await page.screenshot({ path: 'test-results/board-work-library-search-file-text.png' })
+
+      // 지우면 추출 본문 행도 함께 지워진다(ON DELETE CASCADE) — 검색에서도 사라진다
+      const removed = await context.request.delete(`/api/board-room/documents/${id}`)
+      expect(removed.status()).toBe(200)
+      documentId = null
+      expect(await documentTextStatus(id)).toBeNull()
+      await page.reload({ waitUntil: 'domcontentloaded' })
+      await expect(page.getByText(title)).toHaveCount(0)
+    } finally {
+      if (documentId) {
+        await director.context.request
+          .delete(`/api/board-room/documents/${documentId}`)
+          .catch(() => {})
+      }
+      await director.context.close()
     }
   })
 })

@@ -20,6 +20,7 @@ import {
 } from '@/utils/fileUploadValidation'
 import { deleteBoardDocument, putBoardDocument } from '@/lib/storage/privateProvider'
 import { createDocument, listDocuments } from '@/db/queries/board'
+import { scheduleBoardDocumentTextExtraction } from '@work/lib/files/extract-schedule'
 
 const log = createLogger('boardRoom/documents')
 
@@ -197,6 +198,10 @@ export async function POST(request: NextRequest) {
         }
         throw ApiError.internalServerError('서류 등록에 실패했습니다.')
       }
+
+      // 업무 검색이 파일 속 글자도 찾도록 본문 추출을 예약한다(03 §10). 응답 뒤에 돌고 던지지 않는다 —
+      // 실패해도 업로드는 성공이고, 추출 크론이 최신 순으로 따라잡는다.
+      scheduleBoardDocumentTextExtraction([doc.id])
 
       return ApiSuccess.created({ id: doc.id }, '서류가 등록되었습니다.')
     },

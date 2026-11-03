@@ -8,6 +8,7 @@ import { EmptyState, NoticeBanner, PageBody, PageHeader } from '@work/components
 import SearchForm from '@work/components/search/SearchForm'
 import SearchResults, { type BoardDocumentHit } from '@work/components/search/SearchResults'
 import { splitTerms } from '@work/lib/search/text'
+import { documentSnippet } from '@work/lib/search/documents'
 import { searchDocuments } from '@/db/queries/board'
 import { visibilityScopeFor } from '@/lib/server/boardRoomAuth'
 
@@ -17,7 +18,8 @@ const BOARD_DOCUMENT_LIMIT = 20
 /**
  * 자료실 '이사회 서류'(03 §10)도 함께 찾는다 — 검색어만 있고 채널·작성자 필터가 없을 때(서류는 채널·작성자가 없다).
  * 이 화면은 `requireWorkStaff()`를 지났으므로 이사·감사·관리자다 → 열람 범위 `visibilityScopeFor(true)`.
- * 기간 필터는 올린 날(KST)로 거른다.
+ * 기간 필터는 올린 날(KST)로 거른다. 파일 속 글자(추출 본문, 0034)나 웹 본문이 맞으면 첫 일치 주변 스니펫을 붙인다
+ * (평문 — 화면은 Highlight 로만 그린다).
  */
 async function searchBoardDocuments(params: {
   q: string
@@ -50,6 +52,8 @@ async function searchBoardDocuments(params: {
       visibility: r.visibility,
       createdAt: r.created_at,
       bodyMatched: r.body_matched,
+      contentMatched: r.content_matched,
+      snippet: r.match_window ? documentSnippet(r.match_window, terms) || undefined : undefined,
     })),
     more: inRange.length > BOARD_DOCUMENT_LIMIT,
   }
