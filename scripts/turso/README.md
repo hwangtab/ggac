@@ -317,11 +317,11 @@ webServer에 `{...process.env, ...webServer.env}`를 넘긴다. e2e 전용 변�
   11개 스펙
 - `authz-public`: `authz-boundaries` 21건
 
-**실측 기준선(2026-11-02, 타임뱅크 인가 스펙을 넣은 뒤):** 총 202건 중
-**201 passed, 0 failed, 1 skipped.** 스킵 1건은 메일함 첨부 다운로드 기록
+**실측 기준선(2026-11-03, 타임뱅크 인가 스펙과 장터 경매를 합친 뒤):** 총 211건 중
+**210 passed, 0 failed, 1 skipped.** 스킵 1건은 메일함 첨부 다운로드 기록
 테스트다(실제 Blob 객체가 있어야 검증된다). Blob 토큰·토스 키 없이 돌리면 4건이
 **환경 탓으로** 더 빨간불이다 — 정책 36(첨부 업로드), 메일함 다운로드 2, 펀딩
-settle(같은 날 실측 197 passed·4 failed·1 skipped). 이 4건은 인가 변경과
+settle(같은 날 실측 206 passed·4 failed·1 skipped). 이 4건은 인가 변경과
 무관하므로, 197을 보면 회귀로 읽기 전에 위 3단계의 토큰부터 확인해라. 늘어난
 것은 `authz-timebank.spec.ts`(조합원 자격·동의 판·정지·탈퇴 신청 중의 읽기/쓰기,
 기록 위조, 확인·거절·취소 권한, 관리자 지급·조정·이중 승인, 이사회 보고,
@@ -1070,7 +1070,7 @@ EXPLAIN QUERY PLAN SELECT count(*) FROM notifications WHERE user_id = '<아무 �
 가드도 타입 검사도 통과한다. 가드는 **"이 문자열이 이 파일에 있는가"**만 보고
 도달 가능성·실행 순서·데이터 흐름을 보지 않는다.
 
-**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 201 passed — 토큰 없는
+**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 210 passed — 토큰 없는
 환경 의존 실패 4건은 위 "권한 E2E" 절 참고, 실행 절차도 그 절). 같은 감사에서 **E2E는 관리자 게이트 무력화를 실제로 잡았다.**
 
 `assert-runtime-risks.mjs`가 여전히 값을 하는 자리는 **지워진 것**(게이트를 통째로
