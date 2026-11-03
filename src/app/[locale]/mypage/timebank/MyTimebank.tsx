@@ -13,7 +13,14 @@ import HistoryPanel from './HistoryPanel'
  * `canWrite`는 화면 판정(`resolveTimebankViewer`의 쓰기 판정)이다 — 단추를 숨길
  * 뿐이고, 경계는 API(`requireTimebankParticipant`)가 지킨다.
  */
-export default function MyTimebank({ canWrite }: { canWrite: boolean }) {
+export default function MyTimebank({
+  canWrite,
+  coopTasksEnabled,
+}: {
+  canWrite: boolean
+  /** 조합 업무 스위치(`coopTasksOpen`). 꺼져 있으면 내역 필터에서 조합 업무를 뺀다. */
+  coopTasksEnabled: boolean
+}) {
   const [refreshKey, setRefreshKey] = useState(0)
   const bump = useCallback(() => setRefreshKey(k => k + 1), [])
 
@@ -22,7 +29,12 @@ export default function MyTimebank({ canWrite }: { canWrite: boolean }) {
       <BalancePanel refreshKey={refreshKey} />
       <PendingPanel refreshKey={refreshKey} canConfirm={canWrite} onChanged={bump} />
       {canWrite && <RecordForm onRecorded={bump} />}
-      <HistoryPanel refreshKey={refreshKey} canRecord={canWrite} onChanged={bump} />
+      <HistoryPanel
+        refreshKey={refreshKey}
+        canRecord={canWrite}
+        coopTasksEnabled={coopTasksEnabled}
+        onChanged={bump}
+      />
     </div>
   )
 }

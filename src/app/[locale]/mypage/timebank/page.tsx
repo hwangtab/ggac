@@ -90,7 +90,7 @@ export default async function MyTimebankPage({ params }: { params: Promise<{ loc
         />
       )}
 
-      <MyTimebank canWrite={canWrite} />
+      <MyTimebank canWrite={canWrite} coopTasksEnabled={coopOn} />
 
       <section aria-labelledby="tb-posts-heading" className="mt-10" data-testid="timebank-my-posts">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
