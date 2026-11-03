@@ -10,7 +10,7 @@ import {
 
 /**
  * 재가입 승계 키(스펙 §3 `timebank_withdrawn_keys`, §9.3). 비밀값은 테스트가
- * 직접 넘긴다 — 실제 `BETTER_AUTH_SECRET`에 기대지 않는다.
+ * 직접 넘긴다 — 실제 `TIMEBANK_REJOIN_SECRET`에 기대지 않는다.
  */
 
 const SECRET = 'test-secret-not-real-0123456789abcdef'
@@ -79,17 +79,29 @@ test('빈 secret은 거부한다(키가 공개 함수가 되는 것을 막는다
   assert.throws(() => rejoinKeysFor({ email: 'a@b.c', phone: null }, ''), /secret/i)
 })
 
-test('rejoinSecretFromEnv: BETTER_AUTH_SECRET을 읽고, 없으면 던진다', () => {
-  const prev = process.env.BETTER_AUTH_SECRET
+test('rejoinSecretFromEnv: TIMEBANK_REJOIN_SECRET만 읽는다 — 없거나 짧으면 던지고, BETTER_AUTH_SECRET으로 떨어지지 않는다', () => {
+  const prev = process.env.TIMEBANK_REJOIN_SECRET
+  const prevAuth = process.env.BETTER_AUTH_SECRET
   try {
-    process.env.BETTER_AUTH_SECRET = SECRET
+    process.env.TIMEBANK_REJOIN_SECRET = SECRET
     assert.equal(rejoinSecretFromEnv(), SECRET)
-    delete process.env.BETTER_AUTH_SECRET
-    assert.throws(() => rejoinSecretFromEnv(), /BETTER_AUTH_SECRET/)
-    process.env.BETTER_AUTH_SECRET = '   '
-    assert.throws(() => rejoinSecretFromEnv(), /BETTER_AUTH_SECRET/)
+
+    // 폴백 없음: 로그인 비밀값이 있어도 전용 값이 없으면 던진다
+    delete process.env.TIMEBANK_REJOIN_SECRET
+    process.env.BETTER_AUTH_SECRET = 'auth-secret-present-0123456789abcdef'
+    assert.throws(() => rejoinSecretFromEnv(), /TIMEBANK_REJOIN_SECRET/)
+
+    process.env.TIMEBANK_REJOIN_SECRET = '   '
+    assert.throws(() => rejoinSecretFromEnv(), /TIMEBANK_REJOIN_SECRET/)
+    // 32자 미만은 거부한다
+    process.env.TIMEBANK_REJOIN_SECRET = 'x'.repeat(31)
+    assert.throws(() => rejoinSecretFromEnv(), /at least 32/)
+    process.env.TIMEBANK_REJOIN_SECRET = 'x'.repeat(32)
+    assert.equal(rejoinSecretFromEnv(), 'x'.repeat(32))
   } finally {
-    if (prev === undefined) delete process.env.BETTER_AUTH_SECRET
-    else process.env.BETTER_AUTH_SECRET = prev
+    if (prev === undefined) delete process.env.TIMEBANK_REJOIN_SECRET
+    else process.env.TIMEBANK_REJOIN_SECRET = prev
+    if (prevAuth === undefined) delete process.env.BETTER_AUTH_SECRET
+    else process.env.BETTER_AUTH_SECRET = prevAuth
   }
 })

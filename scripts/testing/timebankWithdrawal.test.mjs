@@ -23,8 +23,8 @@ import { applyMigrations } from './apply-migrations.mjs'
 const DB_PATH = 'scripts/testing/.timebank-withdrawal-test.db'
 const INV_DB_PATH = 'scripts/testing/.timebank-withdrawal-invariants-test.db'
 process.env.TURSO_DATABASE_URL = `file:${DB_PATH}`
-const SECRET = 'test-secret-not-real-withdrawal'
-process.env.BETTER_AUTH_SECRET = SECRET
+const SECRET = 'test-secret-not-real-withdrawal-0123456789'
+process.env.TIMEBANK_REJOIN_SECRET = SECRET
 
 const TOMBSTONE = '탈퇴한 조합원'
 const TERMS = '2026-11'
@@ -460,14 +460,14 @@ test('음수 잔액 −300 탈퇴 → timebankNegativeMinutes 300, 조합이 떠
 test('타임뱅크에 참여하지 않은 회원(프로필·잔액 없음)은 키를 남기지 않고, 비밀값 없이도 탈퇴된다', async () => {
   const me = await seedMember(client, { label: 'plain', requested: true })
   const keysBefore = await count('SELECT count(*) n FROM timebank_withdrawn_keys')
-  const saved = process.env.BETTER_AUTH_SECRET
-  delete process.env.BETTER_AUTH_SECRET
+  const saved = process.env.TIMEBANK_REJOIN_SECRET
+  delete process.env.TIMEBANK_REJOIN_SECRET
   try {
     const outcome = await withdrawal.withdrawMember(me)
     assert.equal(outcome.ok, true)
     assert.equal(outcome.timebankNegativeMinutes, undefined)
   } finally {
-    process.env.BETTER_AUTH_SECRET = saved
+    process.env.TIMEBANK_REJOIN_SECRET = saved
   }
   assert.equal(await count('SELECT count(*) n FROM timebank_withdrawn_keys'), keysBefore)
 })
@@ -540,15 +540,15 @@ test('타임뱅크 단계 **뒤**에서 실패해도 타임뱅크 변경이 전�
   assert.equal(before.status, 'approved')
 })
 
-test('BETTER_AUTH_SECRET이 없으면 참여자의 탈퇴는 실패하고(키를 건너뛰지 않는다) 전부 롤백된다', async () => {
+test('TIMEBANK_REJOIN_SECRET이 없으면 참여자의 탈퇴는 실패하고(키를 건너뛰지 않는다) 전부 롤백된다', async () => {
   const s = await seedParticipant({ balance: 60 })
   const before = await snapshot(s.me)
-  const saved = process.env.BETTER_AUTH_SECRET
-  delete process.env.BETTER_AUTH_SECRET
+  const saved = process.env.TIMEBANK_REJOIN_SECRET
+  delete process.env.TIMEBANK_REJOIN_SECRET
   try {
-    await assert.rejects(() => withdrawal.withdrawMember(s.me), /BETTER_AUTH_SECRET/)
+    await assert.rejects(() => withdrawal.withdrawMember(s.me), /TIMEBANK_REJOIN_SECRET/)
   } finally {
-    process.env.BETTER_AUTH_SECRET = saved
+    process.env.TIMEBANK_REJOIN_SECRET = saved
   }
   assert.deepEqual(await snapshot(s.me), before)
   assert.equal(await ledger.balanceOf(s.me), 60)

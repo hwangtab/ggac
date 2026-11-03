@@ -3,7 +3,7 @@
  * `node:crypto`를 쓰고 비밀값을 다루므로 클라이언트 컴포넌트에서 임포트하지 않는다.
  *
  * 키 = HMAC-SHA256(파생 키, `'email:' | 'phone:'` + 정규화값)의 hex.
- * 파생 키 = HMAC-SHA256(`BETTER_AUTH_SECRET`, `'ggac-timebank-rejoin-v1'`).
+ * 파생 키 = HMAC-SHA256(`TIMEBANK_REJOIN_SECRET`, `'ggac-timebank-rejoin-v1'`).
  * 원문(이메일·전화)은 어디에도 남기지 않는다. 비밀값을 바꾸면 기존 키는 전부
  * 일치하지 않게 된다(승계가 끊긴다) — 회전할 때는 이 점을 감안한다.
  *
@@ -56,14 +56,26 @@ export function rejoinKeysFor(
   return parts.map(p => createHmac('sha256', key).update(p).digest('hex'))
 }
 
+/** 전용 비밀값의 최소 길이. `openssl rand -base64 48`은 64자다. */
+export const REJOIN_SECRET_MIN_LENGTH = 32
+
 /**
- * `BETTER_AUTH_SECRET`. 없으면 던진다 — 운영에서 비면 앱이 뜨지 않는 필수값이고,
- * 조용히 건너뛰면 탈퇴·재가입 승계가 무력화된다(스펙 §9.3).
+ * `TIMEBANK_REJOIN_SECRET` — 재가입 키 전용 비밀값. **교체하지 않는다.**
+ *
+ * 예전에는 `BETTER_AUTH_SECRET`을 썼다. 그 값은 세션 보안 사고 때 급히 바꿔야
+ * 하는 값인데, 바꾸는 순간 저장된 `timebank_withdrawn_keys`가 전부 안 맞게 되어
+ * 음수 잔액 탈퇴자가 재가입하면 가입 크레딧을 새로 받는다(원문을 저장하지 않으니
+ * 다시 계산할 수도 없다). 그래서 회전 주기가 다른 두 값을 떼어 냈다. 폴백은 두지
+ * 않는다 — `BETTER_AUTH_SECRET`으로 떨어지면 같은 함정이 그대로 돌아온다.
+ *
+ * 없거나 짧으면 던진다. 조용히 건너뛰면 탈퇴·재가입 승계가 무력화된다(스펙 §9.3).
  */
 export function rejoinSecretFromEnv(): string {
-  const secret = process.env.BETTER_AUTH_SECRET
-  if (typeof secret !== 'string' || secret.trim() === '') {
-    throw new Error('BETTER_AUTH_SECRET is required for timebank rejoin keys')
+  const secret = process.env.TIMEBANK_REJOIN_SECRET
+  if (typeof secret !== 'string' || secret.trim().length < REJOIN_SECRET_MIN_LENGTH) {
+    throw new Error(
+      `TIMEBANK_REJOIN_SECRET is required for timebank rejoin keys (at least ${REJOIN_SECRET_MIN_LENGTH} characters)`
+    )
   }
   return secret
 }

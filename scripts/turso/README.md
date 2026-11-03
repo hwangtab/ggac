@@ -275,6 +275,8 @@ TURSO_DATABASE_URL=http://127.0.0.1:8901 \
 ```bash
 export E2E_TURSO_DATABASE_URL="http://127.0.0.1:8901"
 export BETTER_AUTH_SECRET="<아무 로컬 문자열>"
+# 타임뱅크 동의 성공 경로를 손으로 확인할 때 필요하다(32자 이상).
+export TIMEBANK_REJOIN_SECRET="<아무 로컬 문자열 32자 이상>"
 # 정책 36(첨부 업로드)만 필요로 한다. 공개 스토어 토큰만 쓴다.
 export PUBLIC_BLOB_READ_WRITE_TOKEN="<공개 Blob 스토어 토큰>"
 export NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL="<공개 Blob 베이스 URL>"

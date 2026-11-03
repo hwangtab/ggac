@@ -9,7 +9,7 @@ import { applyMigrations } from './apply-migrations.mjs'
  * 타임뱅크 프로필·동의·재가입 승계(`src/db/queries/timebankProfiles.ts`, 스펙 §3·§9.3·§9.4)를
  * **마이그레이션을 적용한 파일 DB**로 검증한다. 테스트마다 새 회원을 만든다.
  *
- * 재가입 키는 테스트 전용 비밀값으로 만든다 — 실제 `BETTER_AUTH_SECRET`에 기대지 않는다.
+ * 재가입 키는 테스트 전용 비밀값으로 만든다 — 실제 `TIMEBANK_REJOIN_SECRET`에 기대지 않는다.
  */
 
 const DB_PATH = 'scripts/testing/.queries-timebank-profiles-test.db'
