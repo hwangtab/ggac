@@ -218,12 +218,7 @@ function ActivityPaneContent({
             <Icon aria-hidden="true" className="size-4 shrink-0" />
             {label}
             {badge > 0 && (
-              <span
-                className={cn(
-                  COUNT_BADGE_CLASS,
-                  'ml-auto bg-mention-solid text-mention-solid-foreground'
-                )}
-              >
+              <span data-badge="mention" className={cn(COUNT_BADGE_CLASS, 'ml-auto')}>
                 <span aria-hidden="true">{badge > 99 ? '99+' : badge}</span>
                 <span className="sr-only">
                   {href === '/inbox' && activityCount > 0
@@ -276,7 +271,7 @@ function PaneFind({
         router.push(q ? `/search?q=${encodeURIComponent(q)}` : '/search')
       }}
     >
-      <label className="flex h-8 items-center gap-2 rounded-w-md border bg-background px-2 text-sm pointer-coarse:h-11">
+      <label className="flex h-8 items-center gap-2 rounded-w-lg border bg-background px-2 text-sm pointer-coarse:h-11">
         <SearchIcon aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
         <span className="sr-only">{label}</span>
         <input
@@ -286,7 +281,7 @@ function PaneFind({
           placeholder={placeholder}
           className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
         />
-        <kbd className="hidden shrink-0 rounded-w-md border px-1 font-sans text-[10px] text-muted-foreground lg:inline">
+        <kbd className="hidden shrink-0 rounded-w-lg border px-1 font-sans text-[10px] text-muted-foreground lg:inline">
           ⌘K
         </kbd>
       </label>

@@ -22,7 +22,7 @@ export default function LinkList({ items, now }: { items: LinkItem[]; now?: Date
             target="_blank"
             rel="noopener noreferrer nofollow ugc"
             data-tooltip={l.url}
-            className="flex min-w-0 flex-1 items-center gap-1.5 text-sm outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex min-w-0 flex-1 items-center gap-1.5 text-sm outline-none hover:underline"
           >
             <ExternalLinkIcon
               aria-hidden="true"
@@ -39,7 +39,7 @@ export default function LinkList({ items, now }: { items: LinkItem[]; now?: Date
             <time dateTime={l.createdAt}>{formatDateTime(l.createdAt, now)}</time>
             <Link
               href={l.messageHref}
-              className="text-foreground underline outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="text-foreground underline outline-none"
               aria-label={`${linkHost(l.url) || '링크'} 가 든 메시지로 이동`}
             >
               메시지로 이동

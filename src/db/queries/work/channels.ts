@@ -1061,7 +1061,7 @@ export async function ensureWorkspaceEntryRows(
           kind: 'public',
           name: EVERYONE_CHANNEL_NAME,
           slug: EVERYONE_CHANNEL_SLUG,
-          topic: '이사회 업무툴 전체 공지와 이야기',
+          topic: '이사회 전체 공지와 이야기',
           createdBy: null,
         })
         .onConflictDoNothing()

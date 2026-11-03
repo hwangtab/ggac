@@ -194,7 +194,7 @@ export function RightPanelSlot({ className }: { className?: string }) {
       aria-label={view.title}
       className={cn(
         // 2xl 미만: 대화 칸(셸의 relative 상자)을 덮는다 — lg 미만은 전체, lg 이상은 오른쪽 360px. 2xl부터는 세 번째 칸.
-        'absolute inset-0 z-30 flex flex-col bg-background lg:left-auto lg:w-[360px] lg:border-l 2xl:static 2xl:z-auto 2xl:shrink-0',
+        'absolute inset-0 z-30 flex flex-col bg-card lg:left-auto lg:w-[360px] lg:border-l 2xl:static 2xl:z-auto 2xl:shrink-0',
         className
       )}
     >
@@ -203,7 +203,7 @@ export function RightPanelSlot({ className }: { className?: string }) {
           <button
             type="button"
             onClick={close}
-            className="inline-flex shrink-0 items-center gap-1 rounded-w-md px-2 py-1 text-sm text-muted-foreground hover:text-foreground lg:hidden"
+            className="inline-flex shrink-0 items-center gap-1 rounded-w-lg px-2 py-1 text-sm text-muted-foreground hover:text-foreground lg:hidden"
           >
             <ArrowLeftIcon aria-hidden="true" className="size-4" />
             대화

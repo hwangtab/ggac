@@ -18,7 +18,7 @@ import DraftMark from '@work/components/chat/DraftMark'
 import { channelHref, type ChannelListItem } from './channel-items'
 import { CHANNEL_DRAG_TYPE } from './drag-types'
 import { EmptyState } from './page'
-import { COUNT_BADGE_CLASS, ROW_ACTIVE_CLASS, ROW_CLASS } from './pane-styles'
+import { COUNT_BADGE_CLASS, ROW_ACTIVE_CLASS, ROW_CLASS, UNREAD_DOT_CLASS } from './pane-styles'
 
 export type { ChannelListItem } from './channel-items'
 
@@ -141,6 +141,11 @@ export default function ChannelList({
                 ? LockIcon
                 : HashIcon
           const mentions = item.mentions ?? 0
+          // 배지(§8-4, 메뉴 '대화' 배지와 같은 규칙 — menuBadges.ts): 나를 부른 것 = 앰버 숫자.
+          // 채널은 멘션, 뮤트 아닌 DM·그룹은 안 읽은 글 전부가 나를 부른 것이다. 그 밖의 안 읽음은 굵은 글자 + 앰버 점
+          const urgent =
+            item.kind === 'dm' && !item.muted ? Math.max(item.unread, mentions) : mentions
+          const showDot = hasUnread && urgent === 0
           // 상태 메시지는 1:1 DM 상대에게만 붙는다(0027)
           const statusLabel =
             item.kind === 'dm' && !item.group
@@ -251,20 +256,26 @@ export default function ChannelList({
                   <span
                     aria-hidden="true"
                     data-presence="online"
-                    className="size-2 shrink-0 rounded-full bg-online"
+                    className="size-2 shrink-0 rounded-w-lg bg-online"
                   />
                 )}
                 {srState && <span className="sr-only">({srState})</span>}
-                {mentions > 0 && (
+                {urgent > 0 ? (
                   <span
                     aria-hidden="true"
-                    className={cn(
-                      COUNT_BADGE_CLASS,
-                      'ml-auto bg-mention-solid text-mention-solid-foreground'
-                    )}
+                    data-badge="mention"
+                    className={cn(COUNT_BADGE_CLASS, 'ml-auto')}
                   >
-                    {mentions > 99 ? '99+' : mentions}
+                    {urgent > 99 ? '99+' : urgent}
                   </span>
+                ) : (
+                  showDot && (
+                    <span
+                      aria-hidden="true"
+                      data-badge="dot"
+                      className={cn(UNREAD_DOT_CLASS, 'ml-auto')}
+                    />
+                  )
                 )}
               </Link>
               {onTogglePin && (
@@ -273,8 +284,8 @@ export default function ChannelList({
                   onClick={() => onTogglePin(item, !item.starred)}
                   aria-label={`${item.name} ${item.starred ? '고정 해제' : '상단에 고정'}`}
                   className={cn(
-                    'absolute top-1 right-1 flex size-6 items-center justify-center rounded-w-md text-sidebar-foreground/70 outline-none pointer-coarse:top-0 pointer-coarse:right-0 pointer-coarse:size-11',
-                    'hover:bg-sidebar-border hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring',
+                    'absolute top-1 right-1 flex size-6 items-center justify-center rounded-w-lg text-sidebar-foreground/70 outline-none pointer-coarse:top-0 pointer-coarse:right-0 pointer-coarse:size-11',
+                    'hover:bg-sidebar-border hover:text-sidebar-accent-foreground',
                     'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100',
                     item.starred && 'text-sidebar-foreground'
                   )}
@@ -321,7 +332,7 @@ export default function ChannelList({
             }}
             aria-label={`${menu.item.name} 메뉴`}
             style={{ left: menu.x, top: menu.y }}
-            className="fixed z-50 min-w-36 rounded-w-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10"
+            className="fixed z-50 min-w-36 rounded-w-lg bg-popover p-1 text-popover-foreground border border-border"
           >
             {onTogglePin && (
               <button
@@ -331,7 +342,7 @@ export default function ChannelList({
                   onTogglePin(menu.item, !menu.item.starred)
                   closeMenu(true, menu.item.id)
                 }}
-                className="flex h-8 pointer-coarse:h-11 w-full items-center gap-2 rounded-w-md px-2 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground"
+                className="flex h-8 pointer-coarse:h-11 w-full items-center gap-2 rounded-w-lg px-2 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground"
               >
                 {menu.item.starred ? (
                   <ArrowDownToLineIcon aria-hidden="true" className="size-4" />
@@ -358,7 +369,7 @@ export default function ChannelList({
                         if (!current) categoryMenu.onMove(menu.item, opt.id)
                         closeMenu(true, menu.item.id)
                       }}
-                      className="flex h-8 pointer-coarse:h-11 w-full items-center gap-2 rounded-w-md px-2 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground"
+                      className="flex h-8 pointer-coarse:h-11 w-full items-center gap-2 rounded-w-lg px-2 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground"
                     >
                       <span className="flex size-4 items-center justify-center">
                         {current && <CheckIcon aria-hidden="true" className="size-4" />}

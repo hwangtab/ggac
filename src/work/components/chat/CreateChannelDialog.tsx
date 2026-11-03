@@ -241,7 +241,7 @@ function CreateChannelForm({
             checked={kind === 'public'}
             onChange={() => setKind('public')}
           />
-          <span>공개 — 내부 직원 누구나 찾아 들어올 수 있습니다.</span>
+          <span>공개 — 이사회 구성원(이사·감사)과 관리자 누구나 찾아 들어올 수 있습니다.</span>
         </FieldChoice>
         <FieldChoice>
           <input
@@ -251,7 +251,7 @@ function CreateChannelForm({
             checked={kind === 'private'}
             onChange={() => setKind('private')}
           />
-          <span>비공개 — 초대한 사람과 업무툴 관리자가 볼 수 있습니다.</span>
+          <span>비공개 — 초대한 사람과 관리자만 볼 수 있습니다.</span>
         </FieldChoice>
       </FieldSet>
 
@@ -283,7 +283,7 @@ function CreateChannelForm({
         </p>
       )}
       {/* 멤버 목록이 길어 대화상자가 스크롤돼도 버튼은 늘 보이게 바닥에 붙인다(바탕은 muted/50 을 불투명하게) */}
-      <DialogFooter className="sticky -bottom-6 z-10 bg-[color-mix(in_oklch,var(--muted)_50%,var(--background))]">
+      <DialogFooter className="sticky -bottom-6 z-10 bg-popover">
         <Button type="button" variant="outline" onClick={onClose} disabled={pending}>
           취소
         </Button>

@@ -31,7 +31,7 @@ import type {
   MentionItem,
 } from '@work/lib/inbox/queries'
 import { formatDateTime } from '@work/lib/format/datetime'
-import { COUNT_BADGE_CLASS } from '@work/components/layout/pane-styles'
+import { COUNT_BADGE_CLASS, UNREAD_DOT_CLASS } from '@work/components/layout/pane-styles'
 import { SubNav, SubNavLink } from '@work/components/layout/sub-nav'
 import { cn } from '@work/lib/utils'
 
@@ -93,14 +93,12 @@ function MentionRow({
       href={m.href}
       onClick={() => onOpen(m)}
       className={cn(
-        'block px-4 py-3 outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring',
-        m.readAt ? 'border-l-2 border-transparent' : 'border-l-2 border-primary bg-primary/5'
+        'block px-4 py-3 outline-none hover:bg-accent',
+        m.readAt ? 'border-l-2 border-transparent' : 'border-l-2 border-unread-dot bg-subtle'
       )}
     >
       <span className="flex items-start gap-2">
-        {!m.readAt && (
-          <span aria-hidden="true" className="mt-1.5 size-2 shrink-0 rounded-full bg-mention" />
-        )}
+        {!m.readAt && <span aria-hidden="true" className={cn(UNREAD_DOT_CLASS, 'mt-2')} />}
         <span className="min-w-0 flex-1">
           <ItemMeta item={m} now={now} />
           <span className="mt-1 block text-sm break-words">{m.preview}</span>
@@ -118,14 +116,12 @@ function ActivityRow({ item, now }: { item: ActivityItem; now?: Date }) {
     <Link
       href={item.href}
       className={cn(
-        'block px-4 py-3 outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring',
-        item.isNew ? 'border-l-2 border-primary bg-primary/5' : 'border-l-2 border-transparent'
+        'block px-4 py-3 outline-none hover:bg-accent',
+        item.isNew ? 'border-l-2 border-unread-dot bg-subtle' : 'border-l-2 border-transparent'
       )}
     >
       <span className="flex items-start gap-2">
-        {item.isNew && (
-          <span aria-hidden="true" className="mt-1.5 size-2 shrink-0 rounded-full bg-primary" />
-        )}
+        {item.isNew && <span aria-hidden="true" className={cn(UNREAD_DOT_CLASS, 'mt-2')} />}
         <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
@@ -302,12 +298,7 @@ export default function InboxView({
               <SubNavLink key={t.id} href={t.href} active={tab === t.id}>
                 {t.label}
                 {t.id === 'mentions' && tab === 'mentions' && unread > 0 && (
-                  <span
-                    className={cn(
-                      COUNT_BADGE_CLASS,
-                      'ml-1.5 bg-mention-solid text-mention-solid-foreground'
-                    )}
-                  >
+                  <span data-badge="mention" className={cn(COUNT_BADGE_CLASS, 'ml-1.5')}>
                     {unread}
                   </span>
                 )}
@@ -342,7 +333,7 @@ export default function InboxView({
                   <li key={b.messageId} className="flex items-start gap-2 px-4 py-3">
                     <Link
                       href={b.href}
-                      className="min-w-0 flex-1 rounded outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+                      className="min-w-0 flex-1 rounded-w-lg outline-none hover:underline"
                     >
                       <ItemMeta item={b} now={now} />
                       <span className="mt-1 block text-sm break-words">{b.preview}</span>

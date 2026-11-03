@@ -155,14 +155,14 @@ export default function ForwardDialog({
 
         {step === 'confirm' ? (
           <div className="space-y-2 text-sm">
-            <p role="alert" className="rounded-w-md bg-muted px-3 py-2">
+            <p role="alert" className="rounded-w-lg bg-subtle px-3 py-2">
               원래 대화에 없는 사람도 보게 됩니다. 전달하면 원문이 <strong>{selected?.name}</strong>
               에 복사됩니다.
             </p>
           </div>
         ) : (
           <div className="flex flex-col gap-4">
-            <blockquote className="min-w-0 overflow-hidden rounded-w-md border-l-2 border-primary bg-muted/50 px-3 py-1.5 text-xs">
+            <blockquote className="min-w-0 overflow-hidden rounded-w-lg border-l-2 border-primary bg-subtle px-3 py-1.5 text-xs">
               <span className="block font-semibold">{authorName}</span>
               {preview.lines.length > 0 ? (
                 preview.lines.map((l, i) => (
@@ -210,7 +210,7 @@ export default function ForwardDialog({
                 maxLength={FORWARD_COMMENT_MAX_CHARS}
                 onChange={e => setComment(e.target.value)}
                 placeholder="전달과 함께 남길 말"
-                className="block [field-sizing:fixed] min-h-0 resize-y rounded-w-md bg-background px-2 py-1.5"
+                className="block [field-sizing:fixed] min-h-0 resize-y rounded-w-lg bg-background px-2 py-1.5"
               />
             </Field>
           </div>
@@ -281,7 +281,7 @@ function TargetList({
   return (
     <ul
       aria-label="보낼 대화"
-      className="max-h-52 space-y-px overflow-y-auto rounded-w-md border p-1"
+      className="max-h-52 space-y-px overflow-y-auto rounded-w-lg border p-1"
     >
       {shown.map(t => {
         const Icon: (p: { className?: string; 'aria-hidden'?: 'true' }) => ReactNode =
@@ -301,7 +301,7 @@ function TargetList({
               disabled={t.restricted}
               onClick={() => onSelect(t.id)}
               className={cn(
-                'flex h-9 w-full items-center gap-2 rounded px-2 text-left text-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
+                'flex h-9 w-full items-center gap-2 rounded-w-lg px-2 text-left text-sm outline-none hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50',
                 selected && 'bg-primary/10 font-medium text-primary'
               )}
             >
@@ -331,7 +331,7 @@ export function ForwardNotice({ done, onDismiss }: { done: ForwardDone; onDismis
   return (
     <p
       role="status"
-      className="mx-4 mb-1 flex flex-wrap items-center gap-x-2 rounded-w-md bg-muted px-3 py-1.5 text-xs"
+      className="mx-4 mb-1 flex flex-wrap items-center gap-x-2 rounded-w-lg bg-subtle px-3 py-1.5 text-xs"
     >
       <span>{done.targetName}에 전달했습니다.</span>
       <Link href={done.href} className="font-medium text-primary hover:underline">

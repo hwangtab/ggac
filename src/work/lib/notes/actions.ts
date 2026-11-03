@@ -34,7 +34,7 @@ import {
  */
 
 const NOT_FOUND_OR_FORBIDDEN = '메모를 찾을 수 없거나 권한이 없습니다.'
-const GUEST_MESSAGE = '서브관리자는 메모를 고칠 수 없습니다.'
+const GUEST_MESSAGE = '외부 참여자는 메모를 고칠 수 없습니다.'
 const ARCHIVED_MESSAGE = '보관된 채널의 메모는 고칠 수 없습니다.'
 
 /**

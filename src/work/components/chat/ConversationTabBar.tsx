@@ -133,7 +133,7 @@ function InteractiveTabBar({
       />
       {/* 게시물 탭은 입력창 자리에 "보관된 채널입니다" 안내가 이미 있어 띠를 겹쳐 두지 않는다 — 다른 탭(파일·할 일·메모 등)에서만 */}
       {frozen && activeKey !== 'posts' && (
-        <p role="status" className="border-b bg-muted/50 px-4 py-1 text-xs text-muted-foreground">
+        <p role="status" className="border-b bg-subtle px-4 py-1 text-xs text-muted-foreground">
           보관된 채널이라 탭을 바꿀 수 없습니다.
         </p>
       )}

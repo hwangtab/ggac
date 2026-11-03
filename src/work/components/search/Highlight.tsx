@@ -6,7 +6,10 @@ export default function Highlight({ text, terms }: { text: string; terms: string
     <>
       {highlightSegments(text, terms).map((seg, i) =>
         seg.match ? (
-          <mark key={i} className="rounded-w-sm bg-highlight px-0.5 font-semibold text-foreground">
+          <mark
+            key={i}
+            className="rounded-w-lg bg-highlight px-0.5 font-semibold text-highlight-foreground"
+          >
             {seg.text}
           </mark>
         ) : (

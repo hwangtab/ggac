@@ -92,7 +92,7 @@ export default function DraftPreviewPane({
       </p>
 
       {outcome.unmatched.length > 0 && (
-        <div className="rounded-w-md border p-2 text-sm">
+        <div className="rounded-w-lg border p-2 text-sm">
           <p className="font-medium">못 채운 칸</p>
           <ul className="list-inside list-disc text-muted-foreground">
             {outcome.unmatched.map(u => (
@@ -146,7 +146,9 @@ export default function DraftPreviewPane({
               }
               alt={`미리보기 ${p}쪽`}
               loading="lazy"
-              className="w-full rounded-w-md border bg-white"
+              // 종이 면(흰 바탕)은 의도다 — 포스터의 `bg-white` 재매핑을 비켜 간다
+              data-poster-keep=""
+              className="w-full rounded-w-lg border bg-white"
             />
           ))}
           {totalPages > pages && shown >= pages && (

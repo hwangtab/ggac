@@ -244,7 +244,7 @@ export default function NoteTabView({ note, canEdit }: { note: NoteData; canEdit
           </div>
 
           {staleWhileEditing && (
-            <p role="alert" className="rounded-w-md bg-muted px-3 py-2 text-sm">
+            <p role="alert" className="rounded-w-lg bg-subtle px-3 py-2 text-sm">
               편집하는 동안 다른 사람이 저장했습니다(현재 버전 {note.version}). 지금 저장하면 충돌을
               확인하는 화면이 나옵니다.
             </p>

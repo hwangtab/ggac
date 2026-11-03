@@ -105,7 +105,7 @@ export default function VersionHistoryPanel({
                 key={v.id}
                 className={cn(
                   'grid gap-1.5 rounded-w-lg border px-4 py-3 text-sm',
-                  v.id === state.attachmentId && 'border-primary bg-muted/50',
+                  v.id === state.attachmentId && 'border-primary bg-subtle',
                   v.deleted && 'text-muted-foreground'
                 )}
               >

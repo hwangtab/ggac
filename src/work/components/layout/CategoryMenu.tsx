@@ -166,7 +166,7 @@ export default function CategoryMenu({
           ref={triggerRef}
           aria-label={`${name} 카테고리 메뉴`}
           className={cn(
-            'flex size-6 items-center justify-center rounded-w-md text-sidebar-foreground/70 outline-none hover:bg-sidebar-border hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring pointer-coarse:size-11',
+            'flex size-6 items-center justify-center rounded-w-lg text-sidebar-foreground/70 outline-none hover:bg-sidebar-border hover:text-sidebar-accent-foreground pointer-coarse:size-11',
             className
           )}
         >

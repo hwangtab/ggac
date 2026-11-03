@@ -28,7 +28,7 @@ function DialogOverlay({ className, ...props }: DialogPrimitive.Backdrop.Props) 
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
       className={cn(
-        'fixed inset-0 isolate z-50 bg-black/10 duration-100 supports-[backdrop-filter]:backdrop-blur-sm data-open:wa-in data-open:wa-fade-in-0 data-closed:wa-out data-closed:wa-fade-out-0',
+        'fixed inset-0 isolate z-50 bg-black/50 duration-100 data-open:wa-in data-open:wa-fade-in-0 data-closed:wa-out data-closed:wa-fade-out-0',
         className
       )}
       {...props}
@@ -51,7 +51,7 @@ function DialogContent({
         data-slot="dialog-content"
         data-close={showCloseButton ? '' : undefined}
         className={cn(
-          'group/dialog-content fixed top-1/2 left-1/2 z-50 grid w-full grid-cols-[minmax(0,1fr)] max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 max-h-[calc(100dvh-2rem)] gap-4 overflow-y-auto rounded-w-xl bg-popover p-6 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-md data-open:wa-in data-open:wa-fade-in-0 data-open:wa-zoom-in-95 data-closed:wa-out data-closed:wa-fade-out-0 data-closed:wa-zoom-out-95',
+          'group/dialog-content fixed top-1/2 left-1/2 z-50 grid w-full grid-cols-[minmax(0,1fr)] max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 max-h-[calc(100dvh-2rem)] gap-4 overflow-y-auto rounded-w-lg border border-border bg-popover p-6 text-sm text-popover-foreground duration-100 outline-none sm:max-w-md data-open:wa-in data-open:wa-fade-in-0 data-open:wa-zoom-in-95 data-closed:wa-out data-closed:wa-fade-out-0 data-closed:wa-zoom-out-95',
           className
         )}
         {...props}
@@ -94,10 +94,12 @@ function DialogFooter({
   showCloseButton?: boolean
 }) {
   return (
+    // 바닥 띠는 좌우 패딩(-mx-6)까지 넓힌다. ggac 전역 `max-width: 100%`(globals.css)가 넓어진 폭을 부모 폭으로 다시 잘라
+    // 오른쪽 끝에 닿지 않았다 — `max-w-none`으로 푼다. 바탕색은 두지 않는다(포스터: 머리·바닥은 헤어라인으로만 나눈다)
     <div
       data-slot="dialog-footer"
       className={cn(
-        '-mx-6 -mb-6 flex flex-col-reverse gap-2 rounded-b-w-xl border-t bg-muted/50 px-6 py-4 sm:flex-row sm:justify-end',
+        '-mx-6 -mb-6 flex max-w-none flex-col-reverse gap-2 border-t px-6 py-4 sm:flex-row sm:justify-end',
         className
       )}
       {...props}
@@ -114,7 +116,7 @@ function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn('font-heading text-base leading-none font-semibold break-words', className)}
+      className={cn('text-base leading-snug font-semibold text-foreground break-words', className)}
       {...props}
     />
   )

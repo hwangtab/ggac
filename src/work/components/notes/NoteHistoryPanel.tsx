@@ -115,7 +115,7 @@ export default function NoteHistoryPanel({
                   aria-pressed={active}
                   disabled={loadingVersion !== null}
                   onClick={() => void open(r.version)}
-                  className={`flex w-full flex-wrap items-center gap-2 min-h-10 rounded-w-md border px-4 py-1.5 text-left text-sm outline-none hover:bg-muted focus-visible:ring focus-visible:ring-ring/50 ${active ? 'border-primary bg-muted' : ''}`}
+                  className={`flex w-full flex-wrap items-center gap-2 min-h-10 rounded-w-lg border px-4 py-1.5 text-left text-sm outline-none hover:bg-accent ${active ? 'border-primary bg-subtle' : ''}`}
                 >
                   <span className="font-medium">버전 {r.version}</span>
                   {current && <Badge variant="secondary">현재</Badge>}

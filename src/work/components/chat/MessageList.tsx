@@ -190,7 +190,7 @@ export default function MessageList({
         // overflow-anchor: none — 이전 페이지를 붙일 때 위 useLayoutEffect 가 scrollHeight 차이를 직접 더해
         // 위치를 지킨다. 브라우저 스크롤 앵커링(Chrome·Firefox 기본 켜짐)까지 켜져 있으면 같은 보정이 두 번
         // 적용돼 보던 자리가 아래로 밀린다(Safari 는 앵커링이 없어 수동 보정만 동작). 한쪽(수동)만 쓴다.
-        className="h-full overflow-y-auto [overflow-anchor:none] pb-2 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+        className="h-full overflow-y-auto [overflow-anchor:none] pb-2 outline-none"
       >
         {hasMore ? (
           <div className="flex justify-center py-3">
@@ -227,7 +227,7 @@ export default function MessageList({
                 <div aria-hidden="true" className="h-px flex-1 bg-border" />
                 <span
                   aria-hidden="true"
-                  className="mx-3 rounded-full border bg-background px-3 py-0.5 text-xs font-medium text-muted-foreground"
+                  className="mx-3 rounded-w-lg border bg-background px-3 py-0.5 text-xs font-medium text-muted-foreground"
                 >
                   {formatDayDivider(item.day)}
                 </span>

@@ -22,8 +22,8 @@ export default function VersionsToggle({
       aria-current={active ? 'true' : undefined}
       data-tooltip={active ? '최신 버전만 보기' : '이전 버전도 함께 보기'}
       className={cn(
-        'inline-flex h-7 items-center gap-1.5 rounded-w-lg border px-3 text-xs outline-none hover:bg-muted focus-visible:ring focus-visible:ring-ring/50',
-        active && 'border-primary bg-muted font-medium',
+        'inline-flex h-7 items-center gap-1.5 rounded-w-lg border px-3 text-xs outline-none hover:bg-accent',
+        active && 'border-primary bg-subtle font-medium',
         className
       )}
     >

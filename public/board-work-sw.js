@@ -38,7 +38,7 @@ self.addEventListener('push', event => {
   } catch {
     data = {}
   }
-  const title = typeof data.title === 'string' && data.title ? data.title : '이사회 업무툴'
+  const title = typeof data.title === 'string' && data.title ? data.title : '이사회 업무'
   const tag = typeof data.tag === 'string' && data.tag ? data.tag : undefined
   event.waitUntil(
     self.registration.showNotification(title, {

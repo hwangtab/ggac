@@ -16,7 +16,7 @@ import { MOBILE_SORT_CLASS } from '@work/components/layout/pane-styles'
  */
 export default function ChatHome({
   title = '대화를 고르세요',
-  description = '목록에서 대화를 고르거나 새 채팅으로 동료에게 말을 걸어 보세요.',
+  description = '목록에서 대화를 고르거나 새 채팅으로 다른 이사·감사에게 말을 걸어 보세요.',
 }: {
   /** ggac 이식: 업무툴 첫 화면(`/board-room/chat`)이 원본 홈 자리를 겸해서 제목·설명을 바꿀 수 있게 했다 */
   title?: ReactNode

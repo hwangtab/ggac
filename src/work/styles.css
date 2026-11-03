@@ -48,14 +48,14 @@ body:has([data-work-app]) {
   --ring: #0ea5e9;
   --radius: 2px;
   /* 원본 `@theme`가 만들던 반경 변수 — `rounded-[min(var(--radius-md),10px)]`처럼 클래스 안에서 직접 쓴다.
-     --radius가 2px라 전부 1~5px 안이다 */
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
+     포스터 모서리는 한 값(2px)뿐이라 전부 --radius다(R3) */
+  --radius-sm: var(--radius);
+  --radius-md: var(--radius);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  --radius-xl: var(--radius);
+  --radius-2xl: var(--radius);
+  --radius-3xl: var(--radius);
+  --radius-4xl: var(--radius);
   /* 원본 `@theme`의 레이아웃 폭 변수 — 앱 레일이 `w-[calc(var(--spacing-rail)+env(safe-area-inset-left))]`로 직접 쓴다.
      값은 tailwind.config.js `spacing.rail·sidebar·panel`과 같다 */
   --spacing-rail: 64px;
@@ -79,6 +79,14 @@ body:has([data-work-app]) {
   --online: #86efac;
   --highlight: #fbd9a5;
   --highlight-foreground: #000000;
+  /* R3 컴포넌트 재스킨(§4-5) — 토큰 클래스로만 쓴다. 업무 화면은 `data-poster` 안이라 `bg-white/7` 같은 원시
+     클래스는 포스터 재매핑(`[class*=' bg-white']` → #101014)에 먹힌다.
+     subtle = 선택 행·칩 바탕(흰 7%), subtle-foreground = 보조 본문(흰 72%),
+     disabled = 비활성 버튼(흰 14% 바탕·흰 45% 글자 — 포스터의 비활성 모양) */
+  --subtle: rgba(255, 255, 255, 0.07);
+  --subtle-foreground: rgba(255, 255, 255, 0.72);
+  --disabled: rgba(255, 255, 255, 0.14);
+  --disabled-foreground: rgba(255, 255, 255, 0.45);
 
   background-color: var(--background);
   color: var(--foreground);
@@ -125,14 +133,6 @@ body:has([data-work-app]) [data-slot='sheet-content'] {
   box-shadow: none;
 }
 
-/*
- * 검색 일치(`<mark class="bg-highlight … text-foreground">`) — 바탕이 앰버라 흰 글자가 읽히지 않는다.
- * 컴포넌트 클래스(search/Highlight.tsx)는 R3에서 `text-highlight-foreground`로 바꾼다. 그때까지 여기서 고정한다.
- */
-body:has([data-work-app]) mark.bg-highlight {
-  color: var(--highlight-foreground);
-}
-
 /* v4 preflight는 버튼 커서를 default로 둔다 — 원본은 눌러지는 것을 손 모양으로 되돌렸다. v3도 같게 고정. */
 :where(body:has([data-work-app]))
   :where(button:not(:disabled), [role='button']:not([aria-disabled='true'])) {
@@ -145,7 +145,8 @@ body:has([data-work-app]) mark.bg-highlight {
  * 그래서 prose 변수를 여기서 전부 다크 값으로 정한다. 공개 사이트 포스터의 `[data-poster] .prose` 규칙과 같은 값이다.
  */
 body:has([data-work-app]) .post-markdown {
-  --tw-prose-body: var(--foreground);
+  /* 본문은 보조 글자(흰 72%) — 이사회실 안건 토론(AgendaCommentThread)·포스터 `.prose p`와 같다. 제목·굵게는 92% */
+  --tw-prose-body: var(--subtle-foreground);
   --tw-prose-headings: var(--foreground);
   --tw-prose-lead: var(--muted-foreground);
   --tw-prose-bold: var(--foreground);

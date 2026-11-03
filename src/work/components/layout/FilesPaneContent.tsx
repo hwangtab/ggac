@@ -47,8 +47,7 @@ function writeExpanded(keys: string[]): void {
   }
 }
 
-const linkClass =
-  'flex h-full min-w-0 flex-1 items-center gap-2 rounded-w-md pr-2 outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring'
+const linkClass = 'flex h-full min-w-0 flex-1 items-center gap-2 rounded-w-lg pr-2 outline-none'
 
 /**
  * 자료실 목록 패널 — "전체 파일" + 채널 → 이관 원본 폴더 트리(설계 03 §2-1).
@@ -237,7 +236,7 @@ function TreeNode({
           aria-expanded={isOpen}
           aria-controls={isOpen ? listId : undefined}
           aria-label={`${label} ${isOpen ? '접기' : '펼치기'}`}
-          className="flex size-6 shrink-0 items-center justify-center rounded-w-md outline-none pointer-coarse:size-11 focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+          className="flex size-6 shrink-0 items-center justify-center rounded-w-lg outline-none pointer-coarse:size-11"
         >
           <ChevronRightIcon
             aria-hidden="true"
@@ -278,7 +277,7 @@ function TreeNode({
               <button
                 type="button"
                 onClick={() => retry(channelId, path)}
-                className="rounded px-1 text-foreground underline outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+                className="rounded-w-lg px-1 text-foreground underline outline-none"
               >
                 다시 시도
               </button>

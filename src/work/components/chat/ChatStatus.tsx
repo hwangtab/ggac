@@ -20,7 +20,7 @@ export function ConnectionBadge({
   return (
     <div
       role="status"
-      className="mx-4 mt-2 flex items-center gap-2 rounded-w-md border border-destructive/30 bg-destructive/10 px-3 py-1.5 text-xs text-destructive"
+      className="mx-4 mt-2 flex items-center gap-2 rounded-w-lg border border-destructive/30 bg-destructive/10 px-3 py-1.5 text-xs text-destructive"
     >
       <WifiOffIcon aria-hidden="true" className="size-3.5" />
       {text}

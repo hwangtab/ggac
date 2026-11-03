@@ -73,7 +73,7 @@ export function jsonError(
 /** requireBoardMember() 통과 뒤 업무툴 역할을 만든다. 업무툴 구성원이 아니면 403 응답 */
 export async function workClientFor(userId: string): Promise<WorkServerClient | NextResponse> {
   const staff = await loadWorkStaff(userId)
-  if (!staff) return jsonError(403, '업무툴을 쓸 수 없습니다.')
+  if (!staff) return jsonError(403, '이사회 구성원(이사·감사)과 관리자만 쓸 수 있습니다.')
   return { user: { id: userId }, staff }
 }
 

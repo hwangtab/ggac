@@ -109,7 +109,7 @@ test('메일: 제목에 건수, 링크는 /board-room, 민감 메시지는 본�
     ],
     'https://ggac.kr/'
   )
-  assert.equal(mail.subject, '[이사회 업무툴] 읽지 않은 멘션 1건 · 다이렉트 메시지 1건')
+  assert.equal(mail.subject, '[이사회 업무] 읽지 않은 멘션 1건 · 다이렉트 메시지 1건')
   assert.equal(mail.count, 2)
   assert.match(mail.html, /https:\/\/ggac\.kr\/board-room\/c\/board#msg-/)
   assert.match(mail.html, /https:\/\/ggac\.kr\/board-room\/dm\//)

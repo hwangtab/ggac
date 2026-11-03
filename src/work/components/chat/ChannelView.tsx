@@ -767,7 +767,7 @@ export default function ChannelView({
       {error && (
         <p
           role="alert"
-          className="mx-4 mb-1 rounded-w-md bg-destructive/10 px-3 py-1.5 text-xs text-destructive"
+          className="mx-4 mb-1 rounded-w-lg bg-destructive/10 px-3 py-1.5 text-xs text-destructive"
         >
           {error}
         </p>
@@ -776,7 +776,7 @@ export default function ChannelView({
       {syncNotice && (
         <p
           role="alert"
-          className="mx-4 mb-1 flex flex-wrap items-center gap-2 rounded-w-md bg-destructive/10 px-3 py-1.5 text-xs text-destructive"
+          className="mx-4 mb-1 flex flex-wrap items-center gap-2 rounded-w-lg bg-destructive/10 px-3 py-1.5 text-xs text-destructive"
         >
           {syncNotice === 'stale'
             ? '새 버전이 배포되었습니다. 새로 고침하면 최신 화면으로 바뀝니다.'
@@ -794,7 +794,7 @@ export default function ChannelView({
       {catchUpNotice && (
         <p
           role="status"
-          className="mx-4 mb-1 rounded-w-md bg-muted px-3 py-1.5 text-xs text-muted-foreground"
+          className="mx-4 mb-1 rounded-w-lg bg-subtle px-3 py-1.5 text-xs text-muted-foreground"
         >
           새 메시지가 많아 최근 것부터 보여 줍니다. 위로 올리면 이전 메시지를 불러옵니다.
         </p>

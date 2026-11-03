@@ -31,6 +31,17 @@ export type MenuBadge =
 
 export type MenuBadgeKey = 'chat' | 'inbox' | 'tasks'
 
+/**
+ * 배지 모양 — 이사회실 메뉴(board-room/layout.tsx)와 업무 화면 목록 칸(채널·DM·활동)이 **같은 클래스**를 쓴다(§8-4).
+ * 색은 호출처가 더한다: 메뉴는 업무 토큰 밖이라 `bg-[#fbd9a5] text-black`(+ `data-poster-keep` — 포스터가
+ * `.text-black`을 흰 글자로 바꾸지 않게), 업무 화면은 `bg-mention-solid text-mention-solid-foreground`(같은 값).
+ * - 숫자: 앰버 바탕·검은 글자의 작은 사각(2px). 포스터의 `.rounded-full → 2px` 규칙과 상관없이 2px로 둔다
+ * - 점: 일반 안 읽음(글자는 굵게) — 6px 앰버 사각
+ */
+export const BADGE_COUNT_CLASS =
+  'min-w-[1.25rem] shrink-0 rounded-[2px] px-1.5 text-center text-xs font-semibold leading-5 tabular-nums'
+export const BADGE_DOT_CLASS = 'block size-1.5 shrink-0 rounded-[2px]'
+
 /** 99 초과는 "99+" */
 export function formatMenuBadgeCount(n: number): string {
   return n > 99 ? '99+' : String(n)

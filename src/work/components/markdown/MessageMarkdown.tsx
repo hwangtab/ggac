@@ -55,7 +55,7 @@ export default function MessageMarkdown({
   return (
     <div
       className={cn(
-        'post-markdown prose prose-sm max-w-none dark:prose-invert text-sm leading-6 prose-p:my-0 prose-p:leading-6 prose-pre:my-1 prose-ul:my-1 prose-ol:my-1 prose-blockquote:my-1',
+        'post-markdown prose prose-sm max-w-none text-sm leading-6 prose-p:my-0 prose-p:leading-6 prose-pre:my-1 prose-ul:my-1 prose-ol:my-1 prose-blockquote:my-1',
         className
       )}
     >

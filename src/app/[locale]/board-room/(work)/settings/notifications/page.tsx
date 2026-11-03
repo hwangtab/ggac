@@ -30,6 +30,7 @@ export default async function BoardWorkNotificationSettingsPage() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <PageHeader
+        variant="page"
         title="알림 설정"
         hideOnMobile
         actions={
@@ -68,7 +69,7 @@ export default async function BoardWorkNotificationSettingsPage() {
           {changed.length === 0 ? (
             <p className="text-sm text-muted-foreground">기본값에서 바꾼 대화가 없습니다.</p>
           ) : (
-            <ul className="divide-y overflow-hidden rounded-w-lg border text-sm">
+            <ul className="divide-y overflow-hidden rounded-w-lg border bg-card text-sm">
               {changed.map(m => {
                 const ch = m.channel
                 const href =

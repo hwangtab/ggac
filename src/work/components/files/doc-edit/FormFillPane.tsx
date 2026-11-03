@@ -118,7 +118,7 @@ export default function FormFillPane({
   const empty = schema.fields.length === 0 && schema.clickHere.length === 0
   if (empty) {
     return (
-      <p role="status" className="rounded-w-md border p-3 text-sm text-muted-foreground">
+      <p role="status" className="rounded-w-lg border p-3 text-sm text-muted-foreground">
         채울 칸을 찾지 못했습니다 — 문구 고치기를 써 보세요.
       </p>
     )
@@ -131,7 +131,7 @@ export default function FormFillPane({
         </NoticeBanner>
       )}
       {schema.clickHere.length > 0 && (
-        <fieldset className="grid gap-3 rounded-w-md border p-3">
+        <fieldset className="grid gap-3 rounded-w-lg border p-3">
           <legend className="px-1 text-sm font-medium">문서 칸</legend>
           {schema.clickHere.map(c => {
             const id = `fill-ch-${c.name}`

@@ -393,7 +393,7 @@ export default function DocumentEditDialog({
             <section
               aria-label="미리보기"
               className={cn(
-                'min-h-0 overflow-y-auto rounded-w-md border bg-muted/50',
+                'min-h-0 overflow-y-auto rounded-w-lg border bg-subtle',
                 pane === 'input' && 'hidden lg:block'
               )}
             >

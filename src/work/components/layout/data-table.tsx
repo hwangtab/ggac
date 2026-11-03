@@ -5,13 +5,13 @@ import { cn } from '@work/lib/utils'
  * 표 공용 부품 — docs/13 §9d. 서버·클라이언트 컴포넌트 어디서나 쓴다(컨텍스트 없이 props 만).
  *
  * 두 형식:
- * - `card`(기본): 페이지 본문(PageBody) 안의 표. `overflow-hidden rounded-lg border` 카드 안.
+ * - `card`(기본): 페이지 본문(PageBody) 안의 표. `overflow-hidden rounded-w-lg border` 카드 안.
  * - `full`: 화면 전체가 "필터 줄 + 표"인 작업 화면(결재 목록). 좌우 테두리 없이 전체 폭, 마지막 행까지 `border-b`.
  * 스크롤: 기본은 가로로만 넘친다(`overflow-x-auto`). 머리 행을 `THead sticky` 로 붙이는 표는 `scroll` 을 켠다 — 래퍼가
  * 가로·세로 스크롤 상자(`overflow-auto`)가 되어 sticky 가 이 상자 기준으로 붙는다. `overflow-x-auto` 만 있으면 그 래퍼가
  * sticky 의 스크롤 조상이 되는데 세로로는 스크롤하지 않아 머리 행이 영영 안 붙는다(2026-10-29 결재 목록 실측 top -498px).
  * `scroll` 이면 래퍼 높이가 정해져야 하므로 부모를 `flex flex-col` + 래퍼 `min-h-0 flex-1`(자동 적용)로 둔다.
- * 두 형식 모두 머리 행 `bg-muted/50 text-xs font-medium text-muted-foreground`, 행 `px-4 py-3`(밀집 `dense` = `py-2`),
+ * 두 형식 모두 머리 행 `bg-subtle text-xs font-medium text-muted-foreground`, 행 `px-4 py-3`(밀집 `dense` = `py-2`),
  * `divide-y`, 셀 `align-middle`. 숫자·금액 칸은 `numeric`(`text-right tabular-nums`), 날짜 칸은 `nowrap` + `tabular-nums`.
  */
 
@@ -68,7 +68,7 @@ export function THead({
       className={cn(
         'border-b text-xs font-medium text-muted-foreground',
         // 반투명 머리 배경 아래로 본문이 비치지 않게 바탕을 한 겹 깐다
-        sticky && 'sticky top-0 z-10 bg-background',
+        sticky && 'sticky top-0 z-10 bg-card',
         className
       )}
     >
@@ -89,7 +89,7 @@ export function Th({
       scope="col"
       {...props}
       className={cn(
-        'bg-muted/50 px-4 py-2 text-left align-middle font-medium whitespace-nowrap',
+        'bg-subtle px-4 py-2 text-left align-middle font-medium whitespace-nowrap',
         numeric && 'text-right',
         className
       )}
@@ -111,7 +111,7 @@ export function Tr({
   ...props
 }: ComponentProps<'tr'> & { interactive?: boolean }) {
   return (
-    <tr {...props} className={cn(interactive && 'hover:bg-muted', className)}>
+    <tr {...props} className={cn(interactive && 'hover:bg-accent', className)}>
       {children}
     </tr>
   )

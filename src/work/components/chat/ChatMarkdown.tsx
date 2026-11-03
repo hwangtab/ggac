@@ -33,7 +33,7 @@ export const UNKNOWN_MENTION_NAME = '알 수 없는 사용자'
  */
 export const CHAT_PROSE_CLASS = cn(
   'prose-code:before:content-none prose-code:after:content-none',
-  'prose-code:rounded prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:font-normal prose-code:text-[13px]',
+  'prose-code:rounded-w-lg prose-code:bg-subtle prose-code:px-1 prose-code:py-0.5 prose-code:font-normal prose-code:text-[13px]',
   '[&_pre_code]:bg-transparent [&_pre_code]:p-0',
   'prose-pre:text-[13px] prose-pre:leading-relaxed',
   'prose-blockquote:font-normal prose-blockquote:not-italic',
@@ -66,7 +66,7 @@ function makeComponents(
           <span
             data-mention={isChannel ? 'channel' : mention.id}
             className={cn(
-              'rounded px-0.5 font-medium',
+              'rounded-w-lg px-0.5 font-medium',
               self ? 'bg-mention-solid text-mention-solid-foreground' : 'bg-primary/10 text-primary'
             )}
           >
@@ -132,7 +132,7 @@ export default function ChatMarkdown({
   return (
     <div
       className={cn(
-        'post-markdown prose prose-sm max-w-none break-words dark:prose-invert prose-p:my-0 prose-pre:my-1 prose-ul:my-1 prose-ol:my-1',
+        'post-markdown prose prose-sm max-w-none break-words prose-p:my-0 prose-pre:my-1 prose-ul:my-1 prose-ol:my-1',
         CHAT_PROSE_CLASS,
         className
       )}

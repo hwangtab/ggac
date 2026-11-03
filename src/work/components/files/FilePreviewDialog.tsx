@@ -99,7 +99,7 @@ export default function FilePreviewDialog({
 
             <FileVersionControls key={file.id} attachmentId={file.id} fileName={file.name} />
 
-            <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-w-lg bg-muted">
+            <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-w-lg bg-subtle">
               <FilePreviewBody key={file.id} file={file} />
 
               {hasPrev && (

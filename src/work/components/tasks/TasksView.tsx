@@ -369,7 +369,7 @@ function TaskViewNav({
                 href={tasksHref({ view: v })}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'inline-flex h-8 items-center rounded-full border px-3 text-xs pointer-coarse:h-11 outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  'inline-flex h-8 items-center rounded-w-lg border px-3 text-xs pointer-coarse:h-11 outline-none',
                   active
                     ? 'border-primary bg-accent font-medium text-foreground'
                     : 'text-muted-foreground'
@@ -398,7 +398,7 @@ function TaskViewNav({
           </NativeSelect>
           <button
             type="submit"
-            className="h-8 shrink-0 rounded-w-lg border px-3 text-xs outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+            className="h-8 shrink-0 rounded-w-lg border px-3 text-xs outline-none hover:bg-accent"
           >
             이동
           </button>

@@ -20,7 +20,7 @@ import { StorageUnavailableError } from './storage-errors'
 /** 저장소 토큰이 설정되지 않았다 — 라우트는 503으로 알린다(권한 판정은 이미 통과한 뒤다) */
 export class StorageUnconfiguredError extends Error {
   constructor() {
-    super('업무툴 파일 저장소가 설정되지 않았습니다.')
+    super('파일 저장소가 설정되지 않았습니다. 관리자에게 알려 주세요.')
     this.name = 'StorageUnconfiguredError'
   }
 }

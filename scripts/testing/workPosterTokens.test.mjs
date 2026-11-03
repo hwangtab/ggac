@@ -123,6 +123,11 @@ test('토큰 값이 포스터 팔레트와 같다(03-통합-재설계 §4-4)', (
     '--highlight': amber,
     '--highlight-foreground': '#000000',
     '--online': '#86efac',
+    // R3 컴포넌트 재스킨(§4-5)
+    '--subtle': 'rgba(255, 255, 255, 0.07)',
+    '--subtle-foreground': text2,
+    '--disabled': 'rgba(255, 255, 255, 0.14)',
+    '--disabled-foreground': 'rgba(255, 255, 255, 0.45)',
   }
   for (const [name, value] of Object.entries(expected)) {
     assert.ok(name in tokens, `${name}이 정의돼 있어야 한다`)

@@ -26,7 +26,7 @@ export default async function EditLayout({ children }: { children: ReactNode }) 
   return (
     <div
       data-work-app
-      className={`flex flex-col overflow-hidden rounded-lg border bg-background font-sans text-foreground ${WORK_PANE_HEIGHT_CLASS}`}
+      className={`flex flex-col overflow-hidden rounded-w-lg border bg-card font-sans text-foreground ${WORK_PANE_HEIGHT_CLASS}`}
     >
       {children}
     </div>

@@ -16,7 +16,7 @@ export const PDF_THUMB_MAX_BYTES = 15 * 1024 * 1024
 export const DOCUMENT_THUMB_MAX_BYTES = 20 * 1024 * 1024
 
 /** 종이 한 장의 윗부분 — 썸네일 칸 위쪽에 붙여 아래가 잘리게 둔다(문서 첫 쪽을 엿보는 모양) */
-const PAPER = 'mt-3 w-3/5 self-start overflow-hidden rounded-t-w-sm bg-background shadow'
+const PAPER = 'mt-3 w-3/5 self-start overflow-hidden rounded-t-w-lg bg-background shadow'
 
 function Icon({ file }: { file: PreviewFile }) {
   return <FileIcon mime={file.mime} name={file.name} size={file.size} className="size-14" />

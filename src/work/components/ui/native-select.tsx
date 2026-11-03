@@ -14,7 +14,7 @@ function NativeSelect({
     <select
       data-slot="native-select"
       className={cn(
-        'w-full min-w-0 rounded-w-lg border border-input bg-transparent px-2.5 py-1 text-base transition-colors outline-none focus-visible:border-ring focus-visible:ring focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-destructive aria-[invalid=true]:ring aria-[invalid=true]:ring-destructive/20 md:text-sm dark:bg-input/30',
+        'w-full min-w-0 rounded-w-lg border border-input bg-background text-foreground px-2.5 py-1 text-base transition-colors outline-none disabled:cursor-not-allowed disabled:bg-subtle disabled:text-disabled-foreground aria-[invalid=true]:border-destructive md:text-sm',
         size === 'default' ? 'h-9' : 'h-8',
         className
       )}

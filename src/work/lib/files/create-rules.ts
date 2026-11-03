@@ -149,7 +149,7 @@ export function canOfferCreateDocument(opts: CreateActor): boolean {
 
 /** 거절 문구(서버) — 허용이면 null */
 export function createDeniedMessage(opts: CreateActor): string | null {
-  if (opts.isGuest) return '서브관리자는 새 문서를 만들 수 없습니다.'
+  if (opts.isGuest) return '외부 참여자는 새 문서를 만들 수 없습니다.'
   if (!opts.isMember) return '이 채널의 멤버만 새 문서를 만들 수 있습니다.'
   if (opts.archived) return '보관된 채널에서는 새 문서를 만들 수 없습니다.'
   if (!canOfferCreateDocument(opts)) {

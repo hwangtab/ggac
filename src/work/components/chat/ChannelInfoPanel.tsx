@@ -552,8 +552,8 @@ export default function ChannelInfoPanel({
                 <span
                   aria-hidden="true"
                   className={cn(
-                    'size-2 shrink-0 rounded-full',
-                    isOnline ? 'bg-primary' : 'border border-muted-foreground'
+                    'size-2 shrink-0 rounded-w-lg',
+                    isOnline ? 'bg-online' : 'border border-muted-foreground'
                   )}
                 />
                 <span className="min-w-0 flex-1 truncate">

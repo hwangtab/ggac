@@ -10,7 +10,12 @@ import {
   isBoardWorkEditPath,
   isBoardWorkPath,
 } from '@/lib/boardWork/paths'
-import { formatMenuBadgeCount, type MenuBadge } from '@/lib/boardWork/menuBadges'
+import {
+  BADGE_COUNT_CLASS,
+  BADGE_DOT_CLASS,
+  formatMenuBadgeCount,
+  type MenuBadge,
+} from '@/lib/boardWork/menuBadges'
 import { BoardWorkBadgesProvider, useBoardWorkBadges } from '@/components/boardWork/BoardWorkBadges'
 
 // 메뉴는 역할에 따라 **순서와 이름이 다르다.** 이사에게 이 공간은 회의를
@@ -226,18 +231,19 @@ function MenuBadgeMark({ badge }: { badge: MenuBadge }) {
   if (badge.kind === 'dot') {
     return (
       <span data-badge="dot" className="ml-auto flex items-center">
-        <span aria-hidden="true" className="block h-1.5 w-1.5 rounded-full bg-[#fbd9a5]" />
+        <span aria-hidden="true" className={`${BADGE_DOT_CLASS} bg-[#fbd9a5]`} />
         <span className="sr-only">{badge.srText}</span>
       </span>
     )
   }
+  const mention = badge.kind === 'mention'
   return (
     <span
       data-badge={badge.kind}
-      className={`ml-auto min-w-[1.25rem] rounded-sm px-1.5 text-center text-xs leading-5 ${
-        badge.kind === 'mention'
-          ? 'bg-[#fbd9a5] font-semibold text-black'
-          : 'font-normal text-gray-500'
+      // 앰버 위 검은 글자 — 포스터가 `.text-black`을 흰 글자로 바꾸지 않게 예외로 둔다
+      data-poster-keep={mention ? '' : undefined}
+      className={`ml-auto ${BADGE_COUNT_CLASS} ${
+        mention ? 'bg-[#fbd9a5] text-black' : 'font-normal text-gray-500'
       }`}
     >
       <span aria-hidden="true">{formatMenuBadgeCount(badge.count)}</span>

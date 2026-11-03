@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const staff = await loadWorkStaff(user.id)
-    if (!staff) return deny(403, '업무툴을 쓸 수 없습니다.')
+    if (!staff) return deny(403, '이사회 구성원(이사·감사)과 관리자만 쓸 수 있습니다.')
     const viewer: WorkViewer = { userId: user.id, role: staff.role }
 
     const body = await parseJsonObjectBody(request)

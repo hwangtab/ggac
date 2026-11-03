@@ -23,20 +23,21 @@ export default async function BoardWorkSettingsPage() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <PageHeader
+        variant="page"
         title="업무 설정"
-        subtitle={`${user.email ?? ''} · ${staff.role === 'admin' ? '관리자' : '구성원'}`}
+        subtitle={`${user.email ?? ''} · ${staff.role === 'admin' ? '관리자' : '이사회 구성원'}`}
       />
       <PageBody width="narrow">
         <section aria-labelledby="settings-profile" className="space-y-3">
           <SectionHeading id="settings-profile">프로필</SectionHeading>
-          <div className="rounded-w-lg border p-4">
+          <div className="rounded-w-lg border bg-card p-4">
             <ProfileForm displayName={staff.display_name} title={staff.title} />
           </div>
         </section>
 
         <section aria-labelledby="settings-status" className="space-y-3">
           <SectionHeading id="settings-status">상태 메시지</SectionHeading>
-          <div className="rounded-w-lg border p-4">
+          <div className="rounded-w-lg border bg-card p-4">
             <StatusSetting current={myStatus} />
           </div>
         </section>

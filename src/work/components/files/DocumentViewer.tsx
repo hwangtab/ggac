@@ -95,7 +95,7 @@ function Notice({ children, role }: { children: React.ReactNode; role?: 'status'
 
 function TruncatedNotice({ file, limit }: { file: DocumentViewerFile; limit: string }) {
   return (
-    <p className="flex flex-wrap items-center gap-2 border-t bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+    <p className="flex flex-wrap items-center gap-2 border-t bg-subtle px-3 py-2 text-xs text-muted-foreground">
       <span>{limit}</span>
       <a
         href={`/api/board-room/work/files/${file.id}?download=1`}
@@ -159,10 +159,10 @@ function SheetsView({ sheets, file }: { sheets: RenderedSheet[]; file: DocumentV
               onClick={() => setActive(i)}
               onKeyDown={e => onKeyDown(e, i)}
               className={cn(
-                'shrink-0 rounded-t-w-md border border-b-0 px-3 py-1.5 text-sm whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                'shrink-0 rounded-t-w-lg border border-b-0 px-3 py-1.5 text-sm whitespace-nowrap outline-none',
                 selected
                   ? 'bg-background font-medium text-foreground'
-                  : 'bg-muted text-muted-foreground hover:text-foreground'
+                  : 'bg-subtle text-muted-foreground hover:text-foreground'
               )}
             >
               {s.name}
@@ -176,10 +176,10 @@ function SheetsView({ sheets, file }: { sheets: RenderedSheet[]; file: DocumentV
         aria-labelledby={`${baseId}-tab-${activeIndex}`}
         tabIndex={0}
         className={cn(
-          'min-h-0 flex-1 overflow-auto outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+          'min-h-0 flex-1 overflow-auto outline-none',
           '[&_table]:w-max [&_table]:border-collapse [&_table]:text-[13px]',
           '[&_td]:max-w-[32rem] [&_td]:border [&_td]:px-2 [&_td]:py-1 [&_td]:align-top [&_td]:break-words [&_td]:whitespace-pre-wrap',
-          '[&_th]:border [&_th]:bg-muted [&_th]:px-2 [&_th]:py-1 [&_th]:text-left [&_th]:font-medium [&_th]:whitespace-pre-wrap',
+          '[&_th]:border [&_th]:bg-subtle [&_th]:px-2 [&_th]:py-1 [&_th]:text-left [&_th]:font-medium [&_th]:whitespace-pre-wrap',
           '[&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10'
         )}
       >
@@ -271,7 +271,9 @@ function LayoutPageView({
   return (
     <figure className="m-0 flex flex-col items-center gap-1">
       <div
-        className="w-full overflow-hidden border bg-white text-gray-700 shadow"
+        // 종이 면(흰 바탕·검은 글자)은 의도다 — 포스터의 `bg-white`·`text-*` 재매핑을 비켜 간다
+        data-poster-keep=""
+        className="w-full overflow-hidden border bg-white text-black"
         style={{ aspectRatio: `${page.width} / ${page.height}` }}
       >
         {page.tooLarge ? (
@@ -318,13 +320,13 @@ function LayoutPageView({
 
 function LayoutView({ file, manifest }: { file: DocumentViewerFile; manifest: LayoutManifest }) {
   return (
-    <div className="flex size-full min-h-0 flex-col bg-muted/50">
+    <div className="flex size-full min-h-0 flex-col bg-subtle">
       <div
         // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- 스크롤 영역을 키보드로 움직이게 한다(원본과 같다)
         tabIndex={0}
         role="region"
         aria-label={`${file.name} 원본 모양`}
-        className="min-h-0 flex-1 overflow-auto p-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+        className="min-h-0 flex-1 overflow-auto p-4 outline-none"
       >
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
           {manifest.pages.map(p => (
@@ -392,9 +394,9 @@ function HwpViewer({ file }: { file: DocumentViewerFile }) {
               aria-pressed={mode === value}
               onClick={() => setMode(value)}
               className={cn(
-                'rounded-w-md px-3 py-1 text-xs outline-none pointer-coarse:min-h-9 focus-visible:ring-2 focus-visible:ring-ring',
+                'rounded-w-lg px-3 py-1 text-xs outline-none pointer-coarse:min-h-9',
                 mode === value
-                  ? 'bg-secondary font-medium text-secondary-foreground'
+                  ? 'bg-subtle font-medium text-subtle-foreground'
                   : 'text-muted-foreground hover:text-foreground'
               )}
             >
@@ -471,10 +473,10 @@ function TextDocumentViewer({ file }: { file: DocumentViewerFile }) {
         tabIndex={0}
         role="region"
         aria-label={`${file.name} 내용`}
-        className="min-h-0 flex-1 overflow-auto p-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+        className="min-h-0 flex-1 overflow-auto p-4 outline-none"
       >
         {doc.markdown.trim() ? (
-          <div className="prose prose-sm dark:prose-invert prose-p:my-2 prose-table:text-[13px] mx-auto max-w-3xl">
+          <div className="prose prose-sm prose-p:my-2 prose-table:text-[13px] mx-auto max-w-3xl">
             <Markdown content={doc.markdown} components={DOC_COMPONENTS} />
           </div>
         ) : (

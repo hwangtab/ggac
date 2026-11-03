@@ -561,9 +561,11 @@ function ShellFrame({
             />
           )}
           {/* 대화 칸 — 좁은 화면에서 목록이 화면을 차지하면(대화 첫 화면) 숨긴다 */}
+          {/* 1단 화면(업무 설정 — 목록 칸 없음)은 이사회실 다른 화면처럼 면 없이 바탕 위에 그린다(03 §3·§4-5) */}
           <div
             className={cn(
-              'relative min-w-0 flex-1 flex-col overflow-hidden rounded-w-lg border bg-background',
+              'relative min-w-0 flex-1 flex-col overflow-hidden',
+              hasWorkListPane(section) ? 'rounded-w-lg border bg-card' : 'bg-transparent',
               listOnMobile ? 'hidden lg:flex' : 'flex'
             )}
           >
@@ -572,7 +574,7 @@ function ShellFrame({
               <div className="flex h-10 shrink-0 items-center border-b px-2 lg:hidden">
                 <Link
                   href={back.href}
-                  className="inline-flex items-center gap-1 rounded-w-md px-2 py-1 text-sm text-muted-foreground hover:text-foreground"
+                  className="inline-flex items-center gap-1 rounded-w-lg px-2 py-1 text-sm text-muted-foreground hover:text-foreground"
                 >
                   <ArrowLeftIcon aria-hidden="true" className="size-4" />
                   {back.label}
@@ -590,7 +592,7 @@ function ShellFrame({
         {shellNotice && (
           <div
             role="alert"
-            className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-1/2 z-50 w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-w-lg bg-popover px-4 py-2 text-sm text-destructive shadow-md ring-1 ring-foreground/10"
+            className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-1/2 z-50 w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-w-lg bg-popover px-4 py-2 text-sm text-destructive border border-border"
           >
             {shellNotice}
           </div>

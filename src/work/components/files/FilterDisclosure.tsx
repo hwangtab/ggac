@@ -24,12 +24,12 @@ export default function FilterDisclosure({
         aria-expanded={open}
         aria-controls={id}
         onClick={() => setOpen(v => !v)}
-        className="inline-flex h-8 pointer-coarse:h-11 items-center gap-1.5 self-start rounded-w-lg border px-3 text-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring md:hidden"
+        className="inline-flex h-8 pointer-coarse:h-11 items-center gap-1.5 self-start rounded-w-lg border px-3 text-sm outline-none hover:bg-accent md:hidden"
       >
         <SlidersHorizontalIcon aria-hidden="true" className="size-3.5" />
         필터
         {activeCount > 0 && (
-          <span className="rounded-full bg-primary px-1.5 text-xs leading-5 text-primary-foreground">
+          <span className="rounded-w-lg bg-primary px-1.5 text-xs leading-5 text-primary-foreground">
             <span className="sr-only">적용 중 </span>
             {activeCount}
           </span>

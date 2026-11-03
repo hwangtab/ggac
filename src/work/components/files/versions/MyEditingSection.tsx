@@ -15,8 +15,7 @@ import {
 import SaveVersionDialog from './SaveVersionDialog'
 import { useUploadEdited } from './use-edit-flow'
 
-const rowButton =
-  'rounded px-1.5 py-0.5 text-xs outline-none hover:bg-sidebar-accent/60 focus-visible:ring-2 focus-visible:ring-sidebar-ring'
+const rowButton = 'rounded-w-lg px-1.5 py-0.5 text-xs outline-none hover:bg-sidebar-accent/60'
 
 function EditingRow({ item, onChanged }: { item: MyCheckoutItem; onChanged: () => void }) {
   const router = useRouter()
@@ -41,7 +40,7 @@ function EditingRow({ item, onChanged }: { item: MyCheckoutItem; onChanged: () =
   }
 
   return (
-    <li className="rounded-w-md px-3 py-1.5 text-sm">
+    <li className="rounded-w-lg px-3 py-1.5 text-sm">
       <p className="truncate font-medium" title={item.name}>
         {item.name}
       </p>

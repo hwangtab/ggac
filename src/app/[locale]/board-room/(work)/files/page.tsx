@@ -164,7 +164,7 @@ export default async function FilesPage({
                       path: parentFolder(folderSearch.path),
                       page: 1,
                     })}
-                    className="inline-flex h-7 pointer-coarse:h-11 items-center gap-1.5 rounded-w-md border px-2 text-xs outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+                    className="inline-flex h-7 pointer-coarse:h-11 items-center gap-1.5 rounded-w-lg border px-2 text-xs outline-none hover:bg-accent"
                   >
                     <ArrowUpIcon aria-hidden="true" className="size-3.5" />
                     상위 폴더
