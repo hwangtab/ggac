@@ -1,6 +1,7 @@
 import { defineConfig, devices } from '@playwright/test'
 
 import { assertNoRemoteTursoTarget } from './e2e/helpers/authState'
+import { E2E_CRON_SECRET } from './e2e/helpers/cron'
 
 if (process.env.FORCE_COLOR) {
   delete process.env.NO_COLOR
@@ -127,7 +128,7 @@ export default defineConfig({
         ...(process.env.CI ? {} : { channel: 'chrome' as const }),
       },
       // board-work-chat·tabs·files: 로그인 상태(authz-setup)와 로컬 Turso 시드가 필요해 authz 프로젝트에서만 돈다
-      testIgnore: /authz[.-]|board-work-(chat|tabs|files|editors)\.spec\.ts/,
+      testIgnore: /authz[.-]|board-work-(chat|tabs|files|editors|cron)\.spec\.ts/,
     },
     // authz 계열은 로컬 Turso(`turso dev`)와 픽스처 시드가 있어야 도는 로컬 전용
     // 프로젝트다(CI는 돌리지 않는다). 단계 4 Task 5로 앱에서 Supabase가 사라진 뒤로
@@ -143,7 +144,7 @@ export default defineConfig({
     {
       name: 'authz',
       testMatch:
-        /(authz-(ownership|personal|remaining|maintenance|roles|mailbox|funding|features|email-verification|market|board-work)|board-work-(chat|tabs|files|editors))\.spec\.ts/,
+        /(authz-(ownership|personal|remaining|maintenance|roles|mailbox|funding|features|email-verification|market|board-work)|board-work-(chat|tabs|files|editors|cron))\.spec\.ts/,
       dependencies: ['authz-setup'],
       use: { ...devices['Desktop Chrome'], channel: 'chrome' },
     },
@@ -266,6 +267,16 @@ export default defineConfig({
         // authz-setup의 로그인 자체가 항상 실패했다 — 여기서 `baseURL`로 맞춘다.
         BETTER_AUTH_URL: baseURL,
         NEXT_PUBLIC_SITE_URL: baseURL,
+        // **E2E 서버에서 실제 메일·푸시가 나갈 길을 닫는다.** `.env.local`에는 운영 Resend 키가 있다 — Next는 부모
+        // 환경에 이미 정의된 키(빈 값 포함)를 `.env.local`로 덮지 않으므로 빈 값을 넘기면 그 키는 서버에 닿지 않는다.
+        // 업무툴 멘션 메일은 `log` 전송(보내지 않고 건수만 로그)으로 돌려 크론 경로는 끝까지 탄다(src/work/lib/digest/mailer.ts).
+        // 웹 푸시는 VAPID 키가 비면 no-op이다(src/work/lib/push/send.ts).
+        RESEND_API_KEY: '',
+        BOARD_WORK_DIGEST_TRANSPORT: 'log',
+        WEB_PUSH_PUBLIC_KEY: '',
+        NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY: '',
+        WEB_PUSH_PRIVATE_KEY: '',
+        CRON_SECRET: E2E_CRON_SECRET,
       },
       url: `${baseURL}/robots.txt`,
       reuseExistingServer,

@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 
 import { assertLocalTurso, readFixtures, storageStatePath } from './helpers/authState'
+import { cronHeaders, E2E_CRON_SECRET } from './helpers/cron'
 
 assertLocalTurso()
 
@@ -990,6 +991,149 @@ test.describe('업무툴 문서 편집 경계 — 편집 화면·문서 편집 �
       expect((await anon.get(`${base}/blocks`, { maxRedirects: 0 })).status()).toBe(401)
     } finally {
       await anon.dispose()
+    }
+  })
+})
+
+/**
+ * 5단계 — 웹 푸시 구독 라우트(`/api/board-room/work/push/*`). 원본은 requireStaffRoute + service_role upsert였다.
+ * 여기서는 `requireBoardMember()`가 먼저다: 비로그인 401, 일반 조합원 403. 그리고 **남의 endpoint는 409**다 —
+ * 그 사람에게 갈 멘션·DM 푸시를 가로채거나 끊지 못하게. 실제 푸시는 나가지 않는다(E2E 서버는 VAPID 키가 비어 있다).
+ * endpoint는 허용 목록 호스트(fcm.googleapis.com) 모양의 가짜이고, 이 스펙이 마지막에 지운다.
+ */
+test.describe('업무툴 웹 푸시 구독 경계(/api/board-room/work/push/*)', () => {
+  const PUSH_ROUTES = ['subscribe', 'unsubscribe', 'status'] as const
+  const keys = { p256dh: 'B'.repeat(87), auth: 'a'.repeat(22) }
+
+  async function postAs(
+    browser: import('@playwright/test').Browser,
+    role: string,
+    route: string,
+    data: unknown
+  ): Promise<{ status: number; body: { data?: { mine?: boolean } } | null }> {
+    const context = await browser.newContext({ storageState: storageStatePath(role) })
+    try {
+      const res = await context.request.post(`/api/board-room/work/push/${route}`, { data })
+      const status = res.status()
+      return { status, body: status === 200 ? await res.json() : null }
+    } finally {
+      await context.close()
+    }
+  }
+
+  test('일반 조합원 403 · 비로그인 401 — 짝: 이사는 같은 요청이 200', async ({
+    browser,
+    playwright,
+    baseURL,
+  }) => {
+    const endpoint = `https://fcm.googleapis.com/fcm/send/e2e-gate-${crypto.randomUUID()}`
+    const anon = await playwright.request.newContext({ baseURL })
+    try {
+      for (const route of PUSH_ROUTES) {
+        const data = route === 'subscribe' ? { endpoint, keys } : { endpoint }
+        expect((await postAs(browser, 'other', route, data)).status, `other ${route}`).toBe(403)
+        const res = await anon.post(`/api/board-room/work/push/${route}`, {
+          data,
+          maxRedirects: 0,
+        })
+        expect(res.status(), `anon ${route}`).toBe(401)
+      }
+      // 허용 쪽: 관리자가 아닌 이사
+      expect((await postAs(browser, 'director', 'subscribe', { endpoint, keys })).status).toBe(200)
+      expect((await postAs(browser, 'director', 'status', { endpoint })).body?.data?.mine).toBe(
+        true
+      )
+      expect((await postAs(browser, 'director', 'unsubscribe', { endpoint })).status).toBe(200)
+      expect((await postAs(browser, 'director', 'status', { endpoint })).body?.data?.mine).toBe(
+        false
+      )
+    } finally {
+      await anon.dispose()
+      await postAs(browser, 'director', 'unsubscribe', { endpoint })
+    }
+  })
+
+  test('다른 사람 endpoint를 등록하면 409, 해지해도 남의 구독은 남는다 — 짝: 주인은 다시 저장 200', async ({
+    browser,
+  }) => {
+    const endpoint = `https://fcm.googleapis.com/fcm/send/e2e-owned-${crypto.randomUUID()}`
+    try {
+      expect((await postAs(browser, 'director', 'subscribe', { endpoint, keys })).status).toBe(200)
+      // 감사가 같은 endpoint를 자기 것으로 등록하려 한다
+      expect((await postAs(browser, 'auditor', 'subscribe', { endpoint, keys })).status).toBe(409)
+      // 감사에게는 "내 것 아님", 해지 요청은 남의 행을 지우지 않는다
+      expect((await postAs(browser, 'auditor', 'status', { endpoint })).body?.data?.mine).toBe(
+        false
+      )
+      expect((await postAs(browser, 'auditor', 'unsubscribe', { endpoint })).status).toBe(200)
+      expect((await postAs(browser, 'director', 'status', { endpoint })).body?.data?.mine).toBe(
+        true
+      )
+      // 주인은 같은 endpoint를 다시 저장할 수 있다(하루 두 번 재알림 경로)
+      expect((await postAs(browser, 'director', 'subscribe', { endpoint, keys })).status).toBe(200)
+    } finally {
+      await postAs(browser, 'director', 'unsubscribe', { endpoint })
+    }
+  })
+
+  test('허용 목록 밖·내부 주소 endpoint는 이사에게도 400', async ({ browser }) => {
+    for (const endpoint of [
+      'https://127.0.0.1/push',
+      'https://evil.example/push',
+      'http://fcm.googleapis.com/fcm/send/x',
+    ]) {
+      expect(
+        (await postAs(browser, 'director', 'subscribe', { endpoint, keys })).status,
+        endpoint
+      ).toBe(400)
+    }
+  })
+})
+
+/**
+ * 5단계 — 업무툴 크론(`/api/internal/board-work/*`). Vercel 크론과 같은 `Authorization: Bearer $CRON_SECRET`만 통과한다.
+ * E2E 서버의 CRON_SECRET은 로컬 전용 값이다(`e2e/helpers/cron.ts` — `.env.local`의 운영 값을 덮는다).
+ * 짝: 맞는 시크릿이면 200(push-cleanup — 90일 넘은 구독만 지우므로 시드에 영향 없음).
+ */
+test.describe('업무툴 크론 인증(/api/internal/board-work/*)', () => {
+  const JOBS = ['mention-digest', 'purge-pending-uploads', 'purge-deleted', 'push-cleanup']
+
+  test('시크릿 없이·틀린 시크릿·이사 세션으로는 401 — 짝: 맞는 시크릿은 200', async ({
+    browser,
+    playwright,
+    baseURL,
+  }) => {
+    const anon = await playwright.request.newContext({ baseURL })
+    const director = await browser.newContext({ storageState: storageStatePath('director') })
+    try {
+      for (const job of JOBS) {
+        const path = `/api/internal/board-work/${job}`
+        expect((await anon.get(path, { maxRedirects: 0 })).status(), `${job} 없음`).toBe(401)
+        expect(
+          (
+            await anon.get(path, { headers: cronHeaders('wrong-secret'), maxRedirects: 0 })
+          ).status(),
+          `${job} 틀림`
+        ).toBe(401)
+        expect(
+          (
+            await anon.get(path, {
+              headers: { Authorization: `Bearer ${E2E_CRON_SECRET}x` },
+              maxRedirects: 0,
+            })
+          ).status(),
+          `${job} 접미`
+        ).toBe(401)
+        expect(
+          (await director.request.get(path, { maxRedirects: 0 })).status(),
+          `${job} 이사`
+        ).toBe(401)
+      }
+      const ok = await anon.get('/api/internal/board-work/push-cleanup', { headers: cronHeaders() })
+      expect(ok.status()).toBe(200)
+    } finally {
+      await anon.dispose()
+      await director.close()
     }
   })
 })
