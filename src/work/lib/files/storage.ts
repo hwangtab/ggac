@@ -1,4 +1,4 @@
-import { copy, del, put } from '@vercel/blob'
+import { copy, del, list, put } from '@vercel/blob'
 import { getPrivateObject, headPrivateObject } from '@/lib/storage/blob'
 import { isSafeBoardWorkPath, rangeHeaderValue } from '@/lib/storage/boardWork'
 import { StorageUnavailableError } from './storage-errors'
@@ -171,4 +171,44 @@ export async function copyObject(from: string, to: string): Promise<void> {
   } catch (e) {
     throw new StorageUnavailableError(e instanceof Error ? e.message : String(e))
   }
+}
+
+/** 목록 접두로 허용하는 것 — 업무툴 파일·미리보기 캐시 폴더뿐(다른 비공개 객체 `backups/`·`mailbox/`를 훑지 않는다) */
+export const LISTABLE_PREFIXES = ['board-work/files/', 'board-work/renders/'] as const
+
+export type ListedWorkObject = { pathname: string; uploadedAt: Date }
+
+/**
+ * 업무툴 객체 한 페이지(정리 크론 전용). 접두는 `LISTABLE_PREFIXES`로 시작해야 한다. 돌려주는 키 중
+ * `isSafeBoardWorkPath`를 지나지 못하는 것은 **목록에서 빼고** `skipped`로 센다 — 호출부가 지울 수 없는 키를 받지 않게.
+ * 저장소 오류는 StorageUnavailableError.
+ */
+export async function listObjectsPage(
+  prefix: string,
+  cursor?: string,
+  limit = 1000
+): Promise<{
+  objects: ListedWorkObject[]
+  skipped: number
+  cursor: string | null
+  hasMore: boolean
+}> {
+  if (!LISTABLE_PREFIXES.some(p => prefix.startsWith(p)) || prefix.includes('..')) {
+    throw new UnsafeStoragePathError()
+  }
+  const t = token()
+  let res: Awaited<ReturnType<typeof list>>
+  try {
+    res = await list({ prefix, cursor, limit: Math.min(Math.max(limit, 1), 1000), token: t })
+  } catch (e) {
+    throw new StorageUnavailableError(e instanceof Error ? e.message : String(e))
+  }
+  const objects: ListedWorkObject[] = []
+  let skipped = 0
+  for (const b of res.blobs) {
+    if (isSafeBoardWorkPath(b.pathname)) {
+      objects.push({ pathname: b.pathname, uploadedAt: new Date(b.uploadedAt) })
+    } else skipped++
+  }
+  return { objects, skipped, cursor: res.cursor ?? null, hasMore: Boolean(res.hasMore) }
 }

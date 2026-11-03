@@ -268,6 +268,13 @@ export type SecurityEventType =
   // 유일한 경로라, 멈춰 있으면 Resend 보관 기한(30일)이 지나며 본문이 영영
   // 사라진다.
   | 'MAILBOX_BACKFILL_CRON_FAILED'
+  // 이사회 업무툴 크론(`/api/internal/board-work/*`)이 실패(5xx·예외)한 경우. 원본(kosmart-work)은 운영 채널에
+  // 봇 글을 남겼지만 ggac에는 그 채널이 없어 이 경로로 내보낸다. 멘션 메일·임시 업로드·삭제 메시지·만료 구독 정리가
+  // 멈추면 비공개 저장소에 지워야 할 파일이 쌓이고 메일이 끊긴다.
+  | 'BOARD_WORK_CRON_FAILED'
+  // 업무툴 크론이 기대 주기의 2배 넘게 성공하지 않았거나 시간 초과로 끊긴 흔적('running' 방치)이 있는 경우(감시 —
+  // mention-digest가 돌 때 본다). 실패 응답 자체가 없는(스케줄에서 빠짐·강제 종료) 경우를 잡는다.
+  | 'BOARD_WORK_CRON_STALLED'
 
 export type SecurityEventSeverity = 'low' | 'medium' | 'high'
 
