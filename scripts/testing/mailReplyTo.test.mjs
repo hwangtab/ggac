@@ -95,3 +95,19 @@ test('식별자를 읽지 못해도 발송은 성공으로 둔다', async () => 
     f.restore()
   }
 })
+
+test('@test.local 수신자에게는 sendEmail·sendAuthEmail이 Resend를 호출하지 않는다', async () => {
+  process.env.RESEND_API_KEY = 'test-key'
+  const f = captureFetch()
+  try {
+    const id = await sendEmail({ to: 'authz-admin@test.local', subject: 's', html: '<p>x</p>' })
+    await sendAuthEmail('recovery', 'Someone@Test.Local', 'https://ggac.kr/x')
+    assert.equal(id, null)
+    assert.equal(f.calls.length, 0)
+
+    await sendEmail({ to: 'real@gmail.com', subject: 's', html: '<p>x</p>' })
+    assert.equal(f.calls.length, 1)
+  } finally {
+    f.restore()
+  }
+})

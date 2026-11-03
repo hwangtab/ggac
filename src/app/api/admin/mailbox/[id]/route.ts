@@ -3,7 +3,12 @@ import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import type { BoardAuthSuccess } from '@/lib/server/boardRoomAuth'
 import { logSecurityEvent } from '@/utils/security'
-import { getInboundEmail, listAttachmentsForEmail, updateInboundStatus } from '@/db/queries/mailbox'
+import {
+  getInboundEmail,
+  listAttachmentsForEmail,
+  listRepliesForEmail,
+  updateInboundStatus,
+} from '@/db/queries/mailbox'
 import { validateUUID } from '@/utils/validation'
 
 export const dynamic = 'force-dynamic'
@@ -11,7 +16,7 @@ export const runtime = 'nodejs'
 
 const ALLOWED_STATUSES = ['unread', 'read', 'replied', 'archived', 'spam'] as const
 
-// GET: 메일 한 건 상세 + 첨부 목록 (이사·감사·관리자, 브리프 A)
+// GET: 메일 한 건 상세 + 첨부 목록 + 보낸 답장 (이사·감사·관리자, 브리프 A)
 export const GET = defineApiRoute<undefined, BoardAuthSuccess>({
   method: 'GET',
   name: 'api/admin/mailbox/[id]',
@@ -37,8 +42,11 @@ export const GET = defineApiRoute<undefined, BoardAuthSuccess>({
       throw ApiError.notFound('메일을 찾을 수 없습니다.')
     }
 
-    const attachments = await listAttachmentsForEmail(id)
-    return ApiSuccess.ok({ email, attachments, can_manage: auth.isAdmin })
+    const [attachments, replies] = await Promise.all([
+      listAttachmentsForEmail(id),
+      listRepliesForEmail(id),
+    ])
+    return ApiSuccess.ok({ email, attachments, replies, can_manage: auth.isAdmin })
   },
 })
 

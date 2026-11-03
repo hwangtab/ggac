@@ -22,6 +22,16 @@ function replyToPayload(): { reply_to: string[] } | Record<string, never> {
   return value ? { reply_to: [value] } : {}
 }
 
+/**
+ * E2E 픽스처(`authz-*@test.local`)로 가는 메일은 보내지 않는다. 실제 키로 나가면
+ * 전부 반송되어 일일 한도를 먹고 발신 평판을 깎는다(2026-11-02 하루 176건).
+ * 호출부는 성공으로 본다 — 알림 흐름 자체는 그대로 검증된다.
+ */
+export function isUndeliverableTestRecipient(address: string): boolean {
+  const domain = address.trim().toLowerCase().split('@').pop() ?? ''
+  return domain === 'test.local' || domain.endsWith('.test.local')
+}
+
 export interface SendEmailInput {
   to: string
   subject: string
@@ -36,6 +46,8 @@ export interface SendEmailInput {
  * @throws 키 누락·HTTP 실패는 던진다. 호출부가 실패를 세고 관리자에게 알린다.
  */
 export async function sendEmail(input: SendEmailInput): Promise<string | null> {
+  if (isUndeliverableTestRecipient(input.to)) return null
+
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) {
     throw new Error('RESEND_API_KEY가 설정되지 않았습니다.')

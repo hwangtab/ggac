@@ -86,6 +86,11 @@ function replyToPayload(): { reply_to: string[] } | Record<string, never> {
  * 남기는 로그에 전적으로 의존한다.
  */
 export async function sendAuthEmail(kind: AuthEmailKind, to: string, url: string): Promise<void> {
+  // E2E 픽스처 주소(`@test.local`)는 반송만 되고 한도를 먹는다. `lib/mail/send.ts`와 같은 규칙 —
+  // 이 파일은 로컬 import를 둘 수 없어 판정을 복제한다.
+  const domain = to.trim().toLowerCase().split('@').pop() ?? ''
+  if (domain === 'test.local' || domain.endsWith('.test.local')) return
+
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) {
     throw new Error('RESEND_API_KEY가 설정되지 않았습니다.')
