@@ -41,6 +41,22 @@
     {
       "path": "/api/internal/board-work/extract-texts",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/internal/board-work/mention-digest",
+      "schedule": "5 * * * *"
+    },
+    {
+      "path": "/api/internal/board-work/purge-pending-uploads",
+      "schedule": "40 18 * * *"
+    },
+    {
+      "path": "/api/internal/board-work/purge-deleted",
+      "schedule": "0 18 * * *"
+    },
+    {
+      "path": "/api/internal/board-work/push-cleanup",
+      "schedule": "0 19 * * *"
     }
   ]
 }

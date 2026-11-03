@@ -10,15 +10,16 @@
  * 그래서 권한(읽기 범위)을 판정하지 않는다. 이 라우트는 결과를 **돌려주지 않고**(개수만) 첨부와 같은 채널 id 로만
  * 저장한다. 읽기 범위는 검색 쿼리가 WHERE 에서 건다. `/api/internal/` 접두사라 점검 모드에서도 돈다(src/middleware.ts).
  *
- * ggac 이식: 원본의 실패 알림(`withCronAlert` → ops 채널)은 없다 — 5xx 와 구조화 로그로 Vercel 크론 실패에 남긴다.
+ * ggac 이식: 원본 `withCronAlert` 자리는 업무툴 크론 감싸개 `withBoardWorkCron`(5단계)이다 — 인증·실행 장부(work_cron_runs)·
+ * 실패 알림(구조화 로그·보안 로그)을 맡고, mention-digest 감시가 이 크론이 멈춘 것도 잡는다.
  * kordoc(+ PDF 용 pdfjs-dist·@napi-rs/canvas)을 번들에 남기는 설정은 next.config.js(KORDOC_EXTRACT_ROUTE)에 있다.
  */
-import { after, type NextRequest } from 'next/server'
-import { timingSafeEqual } from 'node:crypto'
+import { after } from 'next/server'
 import { z } from 'zod'
 
 import { extractBatchFailed } from '@work/lib/files/extract-health'
 import { extractByIds, runExtractionBatch } from '@work/lib/files/extract-store'
+import { withBoardWorkCron } from '@work/lib/ops/cron-alert'
 import { ApiError, ApiSuccess } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
 
@@ -34,21 +35,7 @@ const EXTRACT_BUDGET_MS = 230_000
 
 const bodySchema = z.object({ ids: z.array(z.string().uuid()).min(1).max(20) })
 
-function isAuthorized(request: NextRequest): boolean {
-  const expected = [process.env.CRON_SECRET].filter(
-    (v): v is string => typeof v === 'string' && v.length > 0
-  )
-  if (expected.length === 0) return false
-  const header = request.headers.get('authorization') ?? ''
-  const provided = header.startsWith('Bearer ') ? header.slice(7) : ''
-  return expected.some(
-    t => provided.length === t.length && timingSafeEqual(Buffer.from(provided), Buffer.from(t))
-  )
-}
-
-async function handle(request: NextRequest) {
-  if (!isAuthorized(request)) return ApiError.unauthorized('권한이 없습니다.').toNextResponse()
-
+async function handle(request: Request) {
   if (request.method === 'POST') {
     const parsed = bodySchema.safeParse(await request.json().catch(() => null))
     if (!parsed.success) return ApiError.badRequest('잘못된 요청입니다.').toNextResponse()
@@ -79,5 +66,7 @@ async function handle(request: NextRequest) {
   }
 }
 
-export const GET = handle
-export const POST = handle
+// 인증(CRON_SECRET Bearer, 시간 고정 비교)·실행 장부·실패 알림은 다른 업무툴 크론과 같은 감싸개가 맡는다
+const guarded = withBoardWorkCron('extract-texts', handle)
+export const GET = guarded
+export const POST = guarded

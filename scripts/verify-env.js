@@ -44,7 +44,7 @@ const requiredEnvVars = [
   'NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL',
   'PUBLIC_BLOB_READ_WRITE_TOKEN',
   'PRIVATE_BLOB_READ_WRITE_TOKEN',
-  // 인증 메일(가입·비밀번호 재설정)과 지원사업 다이제스트 메일 발송에 쓴다.
+  // 인증 메일(가입·비밀번호 재설정)·지원사업 다이제스트·이사회 업무툴 멘션 메일 발송에 쓴다.
   // 없으면 두 발송 모두 에러 없이 조용히 실패한다 — RESEND_API_KEY 없이도
   // 가입·재설정 API는 200을 반환하고 메일만 안 간다(README 알려진 이슈).
   // 지금까지는 .env.local에만 있어 이 스크립트가 누락을 못 잡았다.
@@ -89,6 +89,13 @@ const optionalEnvVars = [
   'NEXT_PUBLIC_OFFICE_EDITOR_ORIGIN',
   'NEXT_PUBLIC_HWP_EDITOR_ENABLED',
   'NEXT_PUBLIC_HWPX_EDITOR_ENABLED',
+  // 이사회 업무툴 웹 푸시(설계 §8-4) VAPID 키 쌍. 공개키는 WEB_PUSH_PUBLIC_KEY(서버가 설정 화면에 넘긴다) 또는
+  // NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY 중 하나면 된다. 공개키와 WEB_PUSH_PRIVATE_KEY가 둘 다 없으면 푸시는 아무것도
+  // 보내지 않고(no-op) 설정 화면의 "이 기기 알림 켜기"가 "준비되지 않음"으로 잠긴다. 앱은 그대로 돈다.
+  // 만들기: `npx web-push generate-vapid-keys`. 키를 바꾸면 기존 구독이 전부 무효가 된다(기기마다 다시 켜야 한다).
+  'WEB_PUSH_PUBLIC_KEY',
+  'NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY',
+  'WEB_PUSH_PRIVATE_KEY',
   'UPSTASH_REDIS_REST_URL',
   'UPSTASH_REDIS_REST_TOKEN',
   'KV_REST_API_URL',

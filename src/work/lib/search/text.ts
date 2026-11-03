@@ -1,4 +1,4 @@
-import { decodeMentions } from '@work/lib/messages/mentions'
+import { decodeMentions } from '../messages/mentions.ts'
 
 /**
  * 검색 순수 헬퍼 — 쿼리 분해·ilike 이스케이프·스니펫·하이라이트 구간.

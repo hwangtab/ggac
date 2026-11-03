@@ -344,7 +344,9 @@ throw ApiError.internalServerError('Server error')
 noreply@ggac.kr로 가서 유실된다), `MAILBOX_BACKFILL_CRON_TOKEN`(메일함 백필 크론
 손호출용 — Vercel 크론 자체는 `CRON_SECRET`을 쓴다),
 `MAILBOX_DAILY_INBOUND_ALERT` (일일 수신 임계치, 기본 60 — 없어도 기본값으로
-동작한다).
+동작한다), `WEB_PUSH_PUBLIC_KEY`(또는 `NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY`)·
+`WEB_PUSH_PRIVATE_KEY`(이사회 업무툴 웹 푸시 VAPID 키. **없으면 푸시가 no-op이고
+설정 화면의 알림 켜기가 잠긴다.** 키를 바꾸면 기존 구독이 전부 무효).
 
 정본은 `npm run env:check`(`scripts/verify-env.js`)다.
 

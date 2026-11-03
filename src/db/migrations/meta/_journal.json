@@ -218,6 +218,13 @@
       "when": 1789800000000,
       "tag": "0030_board_work_texts",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "6",
+      "when": 1789900000000,
+      "tag": "0031_board_work_push",
+      "breakpoints": true
     }
   ]
 }
