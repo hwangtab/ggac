@@ -1,5 +1,6 @@
 'use server'
 
+import { after } from 'next/server'
 import { requireWorkStaff } from '@/lib/server/boardWorkAuth'
 import {
   canPostRestricted,
@@ -24,6 +25,7 @@ import {
 } from '@work/lib/channels/action-result'
 import { writeLimited } from '@work/lib/channels/action-support'
 import { logAudit } from '@work/lib/audit/log'
+import { notifyChannel, notifyDm } from '@work/lib/push/notify'
 import { sanitizeUserMarkdown } from '@work/lib/markdown/sanitize-markdown'
 import {
   buildForwardBody,
@@ -189,7 +191,22 @@ export async function forwardMessage(input: unknown): Promise<ActionResult<Forwa
     )
   }
 
-  // 6. 첨부 복제 — 2단계. 7. 푸시 — 5단계(원본: 대상이 DM이면 notifyDm, 아니면 notifyChannel)
+  // 6. 첨부 복제 — 2단계.
+  // 7. 푸시(응답 뒤) — 원본처럼 대상이 DM이면 notifyDm, 아니면 notifyChannel. notify* 는 던지지 않는다
+  const notify = target.kind === 'dm' ? notifyDm : notifyChannel
+  const run = async () => {
+    if (duplicate) return
+    try {
+      await notify(newId)
+    } catch (e) {
+      console.error('[forwardMessage] 푸시 실패:', e)
+    }
+  }
+  try {
+    after(run)
+  } catch {
+    void run()
+  }
 
   // 8. 대상 대화 경로 + 확정 행
   const message = await fetchMessage(ctx, newId).catch(e => {

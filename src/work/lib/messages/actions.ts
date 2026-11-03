@@ -1,5 +1,6 @@
 'use server'
 
+import { after } from 'next/server'
 import { requireWorkStaff } from '@/lib/server/boardWorkAuth'
 import {
   canPostRestricted,
@@ -10,6 +11,7 @@ import {
 } from '@/lib/server/boardWorkChannelAuth'
 import {
   editMessageBody,
+  hasAllLevelWatcher,
   insertMessage,
   recordMentionRows,
   softDeleteMessage,
@@ -33,7 +35,8 @@ import { writeLimited } from '@work/lib/channels/action-support'
 import { uuidSchema } from '@work/lib/channels/schema'
 import { boundedArray } from '@work/lib/validation/bounded-array'
 import { extractMentionIds, hasChannelMention } from './mentions'
-import { pushTriggersFor } from './push-triggers'
+import { notifyChannel, notifyDm, notifyMention, notifyThreadReply } from '@work/lib/push/notify'
+import { pushTriggersFor, type PushTrigger } from './push-triggers'
 import {
   fetchAttachmentsFor,
   fetchMessage,
@@ -62,7 +65,7 @@ import type { AttachmentRow, ChatMessage, MessagePage } from './types'
  *  - 데이터 규칙(작성자 강제·답글 1단계·같은 채널 인용·보관 채널·답글 수 재계산·rev)은 쿼리 계층
  *    (`src/db/queries/work/messages.ts`)이 같은 트랜잭션에서 지킨다.
  * 멘션 행 생성은 메시지 저장의 곁가지라 실패해도 메시지는 성공으로 돌려준다(mentionsFailed).
- * 푸시는 5단계다 — `schedulePush`는 지금 아무것도 보내지 않는다(아래).
+ * 푸시(5단계)는 저장 뒤 `schedulePush`가 응답 뒤(after)에 보낸다(아래).
  */
 
 async function recordMentions(opts: {
@@ -87,23 +90,56 @@ async function recordMentions(opts: {
   }
 }
 
+const NOTIFIERS: Record<PushTrigger, (messageId: string) => Promise<unknown>> = {
+  mention: notifyMention,
+  dm: notifyDm,
+  thread: notifyThreadReply,
+  channel: notifyChannel,
+}
+
 /**
- * 저장 직후 푸시 예약 자리 — **5단계(웹 푸시)에서 채운다.** 원본은 pushTriggersFor로 고른 notify*를
- * next/server after()로 응답 뒤에 돌렸다(채널 새 글 푸시는 알림 수준 'all'인 다른 멤버가 있을 때만 —
- * 쿼리 계층 `hasAllLevelWatcher`가 그 판정이다). 지금은 어떤 푸시를 보낼지만 계산하고 보내지 않는다.
+ * 저장 직후 푸시 예약 — 원본 schedulePush. 응답을 붙잡지 않도록 next/server `after()`로 응답 뒤에 돌린다.
+ * 채널 새 글 푸시(0027)는 알림 수준을 '모든 새 글'로 둔 다른 멤버가 있을 때만 예약한다(없으면 after 도 안 돈다 —
+ * 쿼리 계층 `hasAllLevelWatcher`). notify* 는 던지지 않지만, 혹시 모를 실패도 로그만 남긴다(메시지 전송은 이미 성공).
+ * 누구에게 보낼지(알림 수준·방해 금지·이사회 권한·읽기 범위)는 notify.ts 가 보내는 순간 다시 판정한다.
  */
 async function schedulePush(opts: {
+  messageId: string
+  channelId: string
+  authorId: string
   channelKind: 'public' | 'private' | 'dm'
   parentId: string | null
   mentioned: string[]
 }): Promise<void> {
+  let channelPush = false
+  if (opts.channelKind !== 'dm' && !opts.parentId) {
+    channelPush = await hasAllLevelWatcher(opts.channelId, opts.authorId).catch(e => {
+      console.error('[sendMessage] 알림 수준 조회 실패(채널 새 글 푸시 건너뜀):', e)
+      return false
+    })
+  }
   const triggers = pushTriggersFor({
     channelKind: opts.channelKind,
     mentioned: opts.mentioned,
     parentId: opts.parentId,
-    channelPush: false,
+    channelPush,
   })
-  void triggers // 5단계: notifyMention·notifyDm·notifyThreadReply·notifyChannel
+  if (triggers.length === 0) return
+  const run = async () => {
+    for (const t of triggers) {
+      try {
+        await NOTIFIERS[t](opts.messageId)
+      } catch (e) {
+        console.error(`[sendMessage] 푸시(${t}) 실패:`, e)
+      }
+    }
+  }
+  try {
+    after(run)
+  } catch {
+    // 요청 범위 밖(테스트·스크립트) — 기다리지 않고 돌린다
+    void run()
+  }
 }
 
 /**
@@ -183,6 +219,9 @@ export async function sendMessage(input: unknown): Promise<
     authorId: user.id,
   })
   await schedulePush({
+    messageId,
+    channelId,
+    authorId: user.id,
     channelKind: access.kind,
     parentId: parentId ?? null,
     mentioned,

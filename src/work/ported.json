@@ -619,6 +619,21 @@
     "commit": "eaafbfa",
     "sha256": "aa2548c7b7a39eae"
   },
+  "src/work/components/push/IosInstallGuide.tsx": {
+    "source": "src/components/push/IosInstallGuide.tsx",
+    "commit": "f2edce0",
+    "sha256": "30244dea8108810c"
+  },
+  "src/work/components/push/PushSubscribeButton.tsx": {
+    "source": "src/components/push/PushSubscribeButton.tsx",
+    "commit": "f2edce0",
+    "sha256": "60f91b1e521c9596"
+  },
+  "src/work/components/push/ServiceWorkerRegistrar.tsx": {
+    "source": "src/components/push/ServiceWorkerRegistrar.tsx",
+    "commit": "f2edce0",
+    "sha256": "eb3e7dfc03175e41"
+  },
   "src/work/components/search/AutoApplyFilters.tsx": {
     "source": "src/components/search/AutoApplyFilters.tsx",
     "commit": "22a6bdc",
@@ -858,6 +873,11 @@
     "source": "src/lib/channels/types.ts",
     "commit": "8ae8dd5",
     "sha256": "49d424c01f265789"
+  },
+  "src/work/lib/digest/build.ts": {
+    "source": "src/lib/digest/build.ts",
+    "commit": "f2edce0",
+    "sha256": "a01386707b977b82"
   },
   "src/work/lib/files/actions.ts": {
     "source": "src/lib/files/actions.ts",
@@ -1193,6 +1213,31 @@
     "source": "src/lib/ops/chunk-reload.ts",
     "commit": "eaafbfa",
     "sha256": "a8ae34dac811df22"
+  },
+  "src/work/lib/ops/cron-schedule.ts": {
+    "source": "src/lib/ops/cron-schedule.ts",
+    "commit": "f2edce0",
+    "sha256": "bc9fe7be10383f0b"
+  },
+  "src/work/lib/push/client.ts": {
+    "source": "src/lib/push/client.ts",
+    "commit": "f2edce0",
+    "sha256": "1ad89958aa0c8657"
+  },
+  "src/work/lib/push/device.ts": {
+    "source": "src/lib/push/device.ts",
+    "commit": "f2edce0",
+    "sha256": "8568c66d82c2378f"
+  },
+  "src/work/lib/push/payload.ts": {
+    "source": "src/lib/push/payload.ts",
+    "commit": "f2edce0",
+    "sha256": "624b429c459842e6"
+  },
+  "src/work/lib/push/subscription.ts": {
+    "source": "src/lib/push/subscription.ts",
+    "commit": "f2edce0",
+    "sha256": "8829a8fb973ba83c"
   },
   "src/work/lib/search/text.ts": {
     "source": "src/lib/search/text.ts",

@@ -1,6 +1,7 @@
 'use client'
 
 import { cleanupBeforeSignOut } from './sign-out-cleanup'
+import ServiceWorkerRegistrar from '@work/components/push/ServiceWorkerRegistrar'
 import { resumeDraftWrites } from '@work/lib/messages/drafts'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { usePathname, useRouter } from '@work/lib/nav/navigation'
@@ -610,6 +611,7 @@ function ShellFrame({
     <SidebarBadgesProvider value={badgesApi}>
       <ShellDataProvider value={shellData}>
         <div className="flex h-dvh overflow-hidden">
+          <ServiceWorkerRegistrar userId={meId ?? null} />
           <AppRail isGuest={isGuest} isAdmin={isAdmin} badges={badges} items={items} />
 
           <div className="flex min-w-0 flex-1 flex-col">
