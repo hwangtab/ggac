@@ -1,19 +1,23 @@
 /**
- * 다크모드 — 수동 지정(localStorage)이 있으면 <html data-theme>, 없으면 OS 설정(CSS 미디어쿼리).
- * 'system' 은 data-theme 속성을 지운다(globals.css 의 prefers-color-scheme 분기가 적용된다).
+ * 화면 테마 — ggac 이식 R2(docs/board-work/03-통합-재설계.md §4-4)부터 **포스터 다크 한 벌로 고정**이다.
+ * 원본은 시스템/라이트/다크를 순환했지만, 업무툴은 이제 ggac 포스터 테마 하나만 쓴다(src/work/styles.css).
+ *
+ * 아래 이름들은 기존 임포트(ThemeToggle 등)가 깨지지 않게 남긴 껍데기다 — 어떤 입력이 와도 결과는 'dark'이고,
+ * `applyThemePreference`는 예전에 저장돼 남은 `data-work-theme` 속성을 지울 뿐이다. 토글 UI는 R1에서 걷는다.
  */
 export type ThemePreference = 'system' | 'light' | 'dark'
 
 export const THEME_STORAGE_KEY = 'kw-theme'
 
-export function parseThemePreference(raw: string | null | undefined): ThemePreference {
-  return raw === 'light' || raw === 'dark' ? raw : 'system'
+/** 고정 테마 */
+export const FIXED_THEME: ThemePreference = 'dark'
+
+export function parseThemePreference(_raw?: string | null): ThemePreference {
+  return FIXED_THEME
 }
 
-export function nextThemePreference(current: ThemePreference): ThemePreference {
-  if (current === 'system') return 'light'
-  if (current === 'light') return 'dark'
-  return 'system'
+export function nextThemePreference(_current?: ThemePreference): ThemePreference {
+  return FIXED_THEME
 }
 
 export const THEME_LABEL: Record<ThemePreference, string> = {
@@ -22,21 +26,14 @@ export const THEME_LABEL: Record<ThemePreference, string> = {
   dark: '다크',
 }
 
-/**
- * ggac 이식: 테마는 `<html data-theme>`가 아니라 **업무툴 루트(`[data-work-app]`)의 `data-work-theme`**에 둔다 —
- * 공개 사이트와 같은 문서를 쓰므로 바깥까지 어두워지지 않게(src/work/styles.css·tailwind.config.js darkMode).
- */
+/** 예전 수동 지정이 남긴 속성 이름 — styles.css는 더 이상 이 속성을 보지 않는다 */
 export const THEME_ATTRIBUTE = 'data-work-theme'
 
-export function applyThemePreference(pref: ThemePreference, root: HTMLElement): void {
-  if (pref === 'system') root.removeAttribute(THEME_ATTRIBUTE)
-  else root.setAttribute(THEME_ATTRIBUTE, pref)
+export function applyThemePreference(_pref: ThemePreference, root: HTMLElement): void {
+  root.removeAttribute(THEME_ATTRIBUTE)
 }
 
 /** 업무툴 루트(없으면 null — 셸 밖) */
 export function workThemeRoot(doc: Document = document): HTMLElement | null {
   return doc.querySelector<HTMLElement>('[data-work-app]')
 }
-
-// ggac 이식: 원본의 첫 페인트 전 인라인 스크립트(THEME_INIT_SCRIPT)는 두지 않는다 — ggac CSP가 인라인 스크립트를 막을 수 있다.
-// 저장된 테마는 ThemeToggle이 마운트될 때 업무툴 루트에 적용한다(어두운 테마는 첫 페인트에 잠깐 밝게 보일 수 있다).

@@ -4,7 +4,7 @@
  * 원본은 `:root`에 토큰을 두지만, 여기서는 **업무툴 루트(`[data-work-app]`) 안에서만** 정한다 — 공개 사이트의
  * 포스터 테마(`data-poster`)와 섞이지 않게. 색 이름은 tailwind.config.js `workColors`가 이 변수를 가리킨다.
  *
- * 테마: `data-work-theme="light|dark"`가 있으면 그것을, 없으면 OS 설정을 따른다(원본 data-theme 규칙과 같다).
+ * 테마: 다크 한 벌(ggac 포스터 값)뿐이다. 원본의 라이트·OS 다크·수동 다크(`data-work-theme`) 세 벌은 R2에서 합쳤다.
  *
  * 이 파일은 `@tailwind` 지시문 없이 처리되므로 `@layer`를 쓰지 않는다(Tailwind v3는 짝 없는 @layer를 거부한다).
  * 대신 기본 규칙은 `:where()`로 감싸 명시도를 0으로 둔다 — 유틸리티 클래스가 항상 이긴다.
@@ -13,33 +13,42 @@
 /*
  * 이 아래 토큰·기본 규칙은 **`body:has([data-work-app])`에도** 건다. 대화상자·메뉴·툴팁(@base-ui Portal)은
  * `document.body`에 바로 그려져 업무툴 루트의 자손이 아니다 — 루트에만 토큰을 두면 그 팝업의 배경(`bg-popover`)이
- * 투명해지고 다크 테마도 닿지 않는다(3단계 버전 기록 대화상자에서 실측, 2026-11-02). 업무툴 화면일 때만 body가
- * 걸리므로 공개 사이트에는 영향이 없다.
+ * 투명해진다(3단계 버전 기록 대화상자에서 실측, 2026-11-02). 업무툴 화면일 때만 body가 걸리므로 공개 사이트에는
+ * 영향이 없다.
+ *
+ * 값은 ggac 포스터 테마(`src/app/globals.css` `[data-poster]`의 `--poster-*`)를 따른다 —
+ * docs/board-work/03-통합-재설계.md §4-4 표가 정본이고, scripts/testing/workPosterTokens.test.mjs가 어긋남을 잡는다.
+ * - 밝은 테마·테마 전환은 없다(§1). 다크 한 벌만 둔다.
+ * - 바탕 #16161b(이사회실 바탕과 같다), 목록·대화 칸 면 #101014(§8-3)
+ * - 글자 흰 92%(본문)·72%(보조)·55%(흐린), 헤어라인 흰 15%
+ * - 주 버튼 흰 바탕·검은 글자, 강조는 앰버(#fbd9a5) 하나 — 멘션·안 읽음 점·검색 일치(§8-4). 빨강은 오류·삭제에만
+ * - 모서리 2px, 그림자 없음
  */
-/* ── 라이트(기본) ── */
 [data-work-app],
 body:has([data-work-app]) {
-  color-scheme: light;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.2 0.02 250);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.2 0.02 250);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.2 0.02 250);
-  --primary: oklch(0.5 0.13 200);
-  --primary-foreground: oklch(0.98 0 0);
-  --secondary: oklch(0.97 0.004 250);
-  --secondary-foreground: oklch(0.22 0.02 250);
-  --muted: oklch(0.97 0.004 250);
-  --muted-foreground: oklch(0.48 0.02 250);
-  --accent: oklch(0.92 0.025 220);
-  --accent-foreground: oklch(0.22 0.02 250);
-  --destructive: oklch(0.47 0.22 27.325);
-  --border: oklch(0.92 0.004 250);
-  --input: oklch(0.62 0.004 250);
-  --ring: oklch(0.5 0.13 200);
-  --radius: 0.625rem;
-  /* 원본 `@theme`가 만들던 반경 변수 — `rounded-[min(var(--radius-md),10px)]`처럼 클래스 안에서 직접 쓴다 */
+  color-scheme: dark;
+  --background: #16161b;
+  --foreground: rgba(255, 255, 255, 0.92);
+  --card: #101014;
+  --card-foreground: rgba(255, 255, 255, 0.92);
+  --popover: #16161b;
+  --popover-foreground: rgba(255, 255, 255, 0.92);
+  --primary: #ffffff;
+  --primary-foreground: #000000;
+  --secondary: #16161b;
+  --secondary-foreground: rgba(255, 255, 255, 0.92);
+  --muted: #16161b;
+  --muted-foreground: rgba(255, 255, 255, 0.55);
+  --accent: rgba(255, 255, 255, 0.12);
+  --accent-foreground: rgba(255, 255, 255, 0.92);
+  --destructive: #fca5a5;
+  --border: rgba(255, 255, 255, 0.15);
+  --input: rgba(255, 255, 255, 0.15);
+  /* 포커스 표시는 전역 `:focus-visible` outline(#0ea5e9)이 맡는다. 남은 `ring-ring` 클래스도 같은 색으로 보이게 둔다 */
+  --ring: #0ea5e9;
+  --radius: 2px;
+  /* 원본 `@theme`가 만들던 반경 변수 — `rounded-[min(var(--radius-md),10px)]`처럼 클래스 안에서 직접 쓴다.
+     --radius가 2px라 전부 1~5px 안이다 */
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -52,20 +61,24 @@ body:has([data-work-app]) {
   --spacing-rail: 64px;
   --spacing-sidebar: 260px;
   --spacing-panel: 360px;
-  --sidebar: oklch(0.975 0.004 250);
-  --sidebar-foreground: oklch(0.25 0.02 250);
-  --sidebar-primary: oklch(0.5 0.13 200);
-  --sidebar-primary-foreground: oklch(0.98 0 0);
-  --sidebar-accent: oklch(0.9 0.025 220);
-  --sidebar-accent-foreground: oklch(0.2 0.02 250);
-  --sidebar-border: oklch(0.92 0.004 250);
-  --sidebar-ring: oklch(0.5 0.13 200);
-  --unread: oklch(0.2 0.02 250);
-  --mention: oklch(0.577 0.245 27.325);
-  --mention-solid: oklch(0.577 0.245 27.325);
-  --mention-solid-foreground: oklch(1 0 0);
-  --online: oklch(0.6 0.16 150);
-  --highlight: oklch(0.92 0.12 95);
+  /* 목록 칸 — 읽은 항목은 보조 글자(72%), 안 읽은 항목만 `text-unread`(92%·굵게)로 올라온다 */
+  --sidebar: #101014;
+  --sidebar-foreground: rgba(255, 255, 255, 0.72);
+  --sidebar-primary: #ffffff;
+  --sidebar-primary-foreground: #000000;
+  --sidebar-accent: rgba(255, 255, 255, 0.12);
+  --sidebar-accent-foreground: rgba(255, 255, 255, 0.92);
+  --sidebar-border: rgba(255, 255, 255, 0.15);
+  --sidebar-ring: #0ea5e9;
+  --unread: rgba(255, 255, 255, 0.92);
+  /* 일반 안 읽음 = 굵은 흰 글자 + 작은 앰버 점(§8-4). 점 색(`bg-unread-dot`) */
+  --unread-dot: #fbd9a5;
+  --mention: #fbd9a5;
+  --mention-solid: #fbd9a5;
+  --mention-solid-foreground: #000000;
+  --online: #86efac;
+  --highlight: #fbd9a5;
+  --highlight-foreground: #000000;
 
   background-color: var(--background);
   color: var(--foreground);
@@ -73,124 +86,51 @@ body:has([data-work-app]) {
   overflow-wrap: break-word;
 }
 
-/* ── 다크 — 같은 값 두 벌: OS 다크(수동 지정 없음) / 수동 다크 ── */
-@media (prefers-color-scheme: dark) {
-  [data-work-app]:not([data-work-theme]),
-  body:has([data-work-app]:not([data-work-theme])) {
-    color-scheme: dark;
-    --background: oklch(0.17 0.01 250);
-    --foreground: oklch(0.96 0 0);
-    --card: oklch(0.21 0.01 250);
-    --card-foreground: oklch(0.96 0 0);
-    --popover: oklch(0.21 0.01 250);
-    --popover-foreground: oklch(0.96 0 0);
-    --primary: oklch(0.72 0.12 200);
-    --primary-foreground: oklch(0.17 0.01 250);
-    --secondary: oklch(0.27 0.01 250);
-    --secondary-foreground: oklch(0.96 0 0);
-    --muted: oklch(0.27 0.01 250);
-    --muted-foreground: oklch(0.72 0.01 250);
-    --accent: oklch(0.33 0.03 220);
-    --accent-foreground: oklch(0.96 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 40%);
-    --ring: oklch(0.72 0.12 200);
-    --sidebar: oklch(0.2 0.01 250);
-    --sidebar-foreground: oklch(0.9 0 0);
-    --sidebar-primary: oklch(0.72 0.12 200);
-    --sidebar-primary-foreground: oklch(0.17 0.01 250);
-    --sidebar-accent: oklch(0.28 0.02 220);
-    --sidebar-accent-foreground: oklch(0.98 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.72 0.12 200);
-    --unread: oklch(0.98 0 0);
-    --mention: oklch(0.704 0.191 22.216);
-    --mention-solid: oklch(0.52 0.2 27);
-    --mention-solid-foreground: oklch(1 0 0);
-    --online: oklch(0.75 0.17 150);
-    --highlight: oklch(0.45 0.09 95);
-  }
-}
-
-[data-work-app][data-work-theme='dark'],
-body:has([data-work-app][data-work-theme='dark']) {
-  color-scheme: dark;
-  --background: oklch(0.17 0.01 250);
-  --foreground: oklch(0.96 0 0);
-  --card: oklch(0.21 0.01 250);
-  --card-foreground: oklch(0.96 0 0);
-  --popover: oklch(0.21 0.01 250);
-  --popover-foreground: oklch(0.96 0 0);
-  --primary: oklch(0.72 0.12 200);
-  --primary-foreground: oklch(0.17 0.01 250);
-  --secondary: oklch(0.27 0.01 250);
-  --secondary-foreground: oklch(0.96 0 0);
-  --muted: oklch(0.27 0.01 250);
-  --muted-foreground: oklch(0.72 0.01 250);
-  --accent: oklch(0.33 0.03 220);
-  --accent-foreground: oklch(0.96 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 40%);
-  --ring: oklch(0.72 0.12 200);
-  --sidebar: oklch(0.2 0.01 250);
-  --sidebar-foreground: oklch(0.9 0 0);
-  --sidebar-primary: oklch(0.72 0.12 200);
-  --sidebar-primary-foreground: oklch(0.17 0.01 250);
-  --sidebar-accent: oklch(0.28 0.02 220);
-  --sidebar-accent-foreground: oklch(0.98 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.72 0.12 200);
-  --unread: oklch(0.98 0 0);
-  --mention: oklch(0.704 0.191 22.216);
-  --mention-solid: oklch(0.52 0.2 27);
-  --mention-solid-foreground: oklch(1 0 0);
-  --online: oklch(0.75 0.17 150);
-  --highlight: oklch(0.45 0.09 95);
-}
-
 /*
  * 원본 `@layer base { * { @apply border-border outline-ring/50 } }`의 짝.
- * ggac 전역 기본 테두리색(흰 15%, 포스터 테마용)을 업무툴 안에서만 원본 토큰으로 되돌린다.
+ * 색 지정 없는 `border`가 헤어라인(흰 15%)으로 그려진다 — ggac 전역 기본 테두리색과 같은 값이다.
  */
 :where([data-work-app], [data-work-app] *, body:has([data-work-app]) *) {
   border-color: var(--border);
-  outline-color: color-mix(in oklch, var(--ring) 50%, transparent);
+  outline-color: var(--ring);
 }
 
 /*
- * ggac 전역 포커스 윤곽(globals.css "Enhanced Focus Styles": `button|a|input|select|textarea:focus-visible`에
- * 하늘색 outline !important + border-radius 4px)이 업무툴 안에서는 각 컴포넌트의 ring과 겹쳐 이중 테두리가 되고
- * (입력창 안에 상자가 하나 더 보인다), 둥근 단추가 포커스 때 4px로 각진다. 업무툴 안에서만 되돌린다 —
- * 포커스 표시는 원본처럼 각 컴포넌트의 `focus-visible:ring-*`이 맡는다. globals.css는 건드리지 않는다.
+ * 포커스 윤곽은 ggac 전역 규칙(globals.css "Enhanced Focus Styles" — 하늘색 2px outline)을 그대로 쓴다.
+ * 업무툴만 그것을 끄던 규칙(과 모양별 border-radius 되돌리기)은 R2에서 지웠다(03-통합-재설계 §4-4).
  */
-body:has([data-work-app]) .focus-visible:focus,
-body:has([data-work-app]) :is(button, a, input, select, textarea):focus-visible {
-  outline: none !important;
-  outline-offset: 0 !important;
+
+/*
+ * 그림자 대신 헤어라인(포스터 원칙). 팝업은 body에 바로 그려져(Portal) R1 이후에도 `[data-poster]` 밖이라
+ * 포스터의 `.shadow-*` 끄기 규칙이 닿지 않는다 — 여기서 같은 일을 한다.
+ * 그림자 변수만 비워 `ring-*`(box-shadow로 그리는 테두리)는 살린다.
+ */
+body:has([data-work-app])
+  :is(.shadow-sm, .shadow, .shadow-md, .shadow-lg, .shadow-xl, .shadow-2xl) {
+  --tw-shadow: 0 0 #0000;
+  --tw-shadow-colored: 0 0 #0000;
 }
-body:has([data-work-app]) .rounded-w-sm:focus-visible {
-  border-radius: var(--radius-sm);
+/* 대화상자·메뉴 면: ring(흰 10%) 대신 헤어라인 테두리(흰 15%) */
+body:has([data-work-app])
+  :is(
+    [data-slot='dialog-content'],
+    [data-slot='dropdown-menu-content'],
+    [data-slot='dropdown-menu-sub-content']
+  ) {
+  box-shadow: none;
+  border: 1px solid var(--border);
 }
-body:has([data-work-app]) .rounded-w-md:focus-visible {
-  border-radius: var(--radius-md);
+/* 시트는 옆면 테두리(`data-[side=*]:border-*`)가 이미 있다 — 그림자·ring만 걷는다 */
+body:has([data-work-app]) [data-slot='sheet-content'] {
+  box-shadow: none;
 }
-body:has([data-work-app]) .rounded-w-lg:focus-visible {
-  border-radius: var(--radius-lg);
-}
-body:has([data-work-app]) .rounded-w-xl:focus-visible {
-  border-radius: var(--radius-xl);
-}
-body:has([data-work-app]) .rounded-w-4xl:focus-visible {
-  border-radius: var(--radius-4xl);
-}
-body:has([data-work-app]) .rounded-full:focus-visible {
-  border-radius: 9999px;
-}
-body:has([data-work-app]) .rounded-none:focus-visible,
-body:has([data-work-app]) :is(input, textarea, select):not([class*='rounded']):focus-visible {
-  border-radius: 0;
+
+/*
+ * 검색 일치(`<mark class="bg-highlight … text-foreground">`) — 바탕이 앰버라 흰 글자가 읽히지 않는다.
+ * 컴포넌트 클래스(search/Highlight.tsx)는 R3에서 `text-highlight-foreground`로 바꾼다. 그때까지 여기서 고정한다.
+ */
+body:has([data-work-app]) mark.bg-highlight {
+  color: var(--highlight-foreground);
 }
 
 /* v4 preflight는 버튼 커서를 default로 둔다 — 원본은 눌러지는 것을 손 모양으로 되돌렸다. v3도 같게 고정. */
