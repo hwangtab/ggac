@@ -62,6 +62,8 @@ export type Fixtures = {
   workPublicFileName: string
   workPrivateFileName: string
   workDmFileName: string
+  /** 4단계 검색 경계 — 첨부 본문 추출 결과(공개 PDF·비공개 HWP·DM DOCX). 낱말 authz-e2e 를 셋 다 담는다 */
+  workSearchTexts: { public: string; private: string; dm: string }
   /** 승격하지 않은 임시 업로드 — 감사(비공개 채널)·이사(공개 채널). 업로드 토큰 경계용 */
   workAuditorPendingId: string
   workAuditorPendingPath: string

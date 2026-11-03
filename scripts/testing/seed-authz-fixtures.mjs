@@ -133,6 +133,7 @@ const { insertTabRow } = await import('@/db/queries/work/tabs')
 const { saveNoteRow } = await import('@/db/queries/work/notes')
 const { insertTaskRow } = await import('@/db/queries/work/tasks')
 const { insertPendingUploads, promotePendingUpload } = await import('@/db/queries/work/files')
+const { upsertAttachmentText } = await import('@/db/queries/work/texts')
 
 // id는 전부 고정값이다. 예전에는 Supabase가 만들어준 uuid를 그대로 받아
 // 썼는데, 그쪽이 사라진 지금 매번 새로 뽑으면 재실행마다 계정이 늘고
@@ -1551,6 +1552,29 @@ async function main() {
     safeName: 'authz-e2e_dm.docx',
     mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   })
+  // ── 4단계(검색): 첨부 본문 추출 결과 — 추출기·Blob 없이 결과 행만 넣는다(검색 경계 E2E `authz-board-work.spec.ts`).
+  // 같은 낱말(authz-e2e)이 세 채널에 다 있어, 한 번의 검색으로 "보이는 것"과 "안 보이는 것"을 짝으로 본다.
+  const WORK_SEARCH_TEXTS = {
+    public: 'authz-e2e 공개문서본문 — 누구나 찾는 회의 자료',
+    private: 'authz-e2e 비공개문서본문 — 감사 의견 기밀',
+    dm: 'authz-e2e 디엠문서본문 — 이사와 감사만',
+  }
+  for (const [attachmentId, ext, content] of [
+    [workPublicAttachmentId, 'pdf', WORK_SEARCH_TEXTS.public],
+    [workPrivateHwpAttachmentId, 'hwp', WORK_SEARCH_TEXTS.private],
+    [workDmDocxAttachmentId, 'docx', WORK_SEARCH_TEXTS.dm],
+  ]) {
+    await upsertAttachmentText({
+      attachmentId,
+      ext,
+      content,
+      truncated: false,
+      status: 'ok',
+      extractorVersion: 'authz-seed',
+      attempts: 1,
+    })
+  }
+
   // 업로드 토큰 경계용 임시 업로드(승격하지 않는다): 감사가 비공개 채널에, 이사가 공개 채널에 준비해 둔 것
   const WORK_AUDITOR_PENDING_ID = '00000000-0000-4000-8000-00000000c031'
   const WORK_DIRECTOR_PENDING_ID = '00000000-0000-4000-8000-00000000c032'
@@ -1605,6 +1629,7 @@ async function main() {
     workPublicFileName: WORK_PUBLIC_FILE_NAME,
     workPrivateFileName: WORK_PRIVATE_FILE_NAME,
     workDmFileName: WORK_DM_FILE_NAME,
+    workSearchTexts: WORK_SEARCH_TEXTS,
     workAuditorPendingId: WORK_AUDITOR_PENDING_ID,
     workAuditorPendingPath: `board-work/files/${WORK_AUDITOR_PENDING_ID}/auditor_pending.pdf`,
     workDirectorPendingId: WORK_DIRECTOR_PENDING_ID,
@@ -1665,7 +1690,7 @@ async function main() {
       `이사회 회의 2(scheduled·completed)·회의록 2·안건 1·안건 의견 3, ` +
       `펀딩 캠페인 6(draft·submitted 3·closed·active)·리워드 6·후원 2(회원·비회원), ` +
       `system_settings ${settingRows.length}행, default_settings ${DEFAULT_SETTINGS.length}행, ` +
-      `업무툴 채널 3(공개·비공개·탭)·DM 1·메시지 3·첨부 5(PDF 3·HWP·DOCX)·임시 업로드 2·탭 6(메모 3·할 일 3)·할 일 2 (전부 Turso)`
+      `업무툴 채널 3(공개·비공개·탭)·DM 1·메시지 3·첨부 5(PDF 3·HWP·DOCX)·본문 3·임시 업로드 2·탭 6(메모 3·할 일 3)·할 일 2 (전부 Turso)`
   )
 }
 

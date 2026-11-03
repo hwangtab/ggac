@@ -993,3 +993,183 @@ test.describe('업무툴 문서 편집 경계 — 편집 화면·문서 편집 �
     }
   })
 })
+
+/**
+ * 전체 검색(4단계, 설계 §8-3) — 원본은 RLS가 검색 RPC 결과를 걸렀다. 여기서는 `searchAll`이 읽기 범위를 모든 쿼리의
+ * WHERE에 넣는다. 시드는 공개 채널·비공개 채널(감사 owner)·이사–감사 DM에 같은 낱말(authz-e2e)을 메시지·메모·첨부
+ * 이름·첨부 본문(work_attachment_texts)으로 깔아 둔다. 페이지 HTML 전체(RSC 데이터 포함)를 보고 "결과에도 스니펫에도
+ * 없다"를 단정하고, 같은 요청에서 허용된 사람은 그 내용을 본다(짝). 하이라이트(<mark>)가 검색어를 잘라 놓으므로
+ * 검색어가 아닌 조각으로 찾는다.
+ */
+async function searchHtml(
+  browser: import('@playwright/test').Browser,
+  role: string,
+  q: string
+): Promise<{ status: number; url: string; html: string }> {
+  const context = await browser.newContext({ storageState: storageStatePath(role) })
+  try {
+    const res = await context.request.get(`/board-room/search?q=${encodeURIComponent(q)}`)
+    return { status: res.status(), url: res.url(), html: await res.text() }
+  } finally {
+    await context.close()
+  }
+}
+
+test.describe('업무툴 전체 검색 — 읽기 경계(/board-room/search)', () => {
+  test('이사: 초대받지 않은 비공개 채널의 메시지·파일·문서 본문·메모는 결과·스니펫에 없고, 공개 채널과 자기 DM은 있다', async ({
+    browser,
+  }) => {
+    const f = readFixtures()
+    const d = await searchHtml(browser, 'director', 'authz-e2e')
+    expect(d.status).toBe(200)
+    expect(d.html).toContain('data-testid="board-work-search"')
+    // 허용 쪽
+    expect(d.html).toContain('공개 채널 글')
+    expect(d.html).toContain('이사와 감사의 DM')
+    expect(d.html).toContain(f.workPublicFileName.replace('authz-e2e ', ''))
+    expect(d.html).toContain('공개문서본문')
+    expect(d.html).toContain('디엠문서본문')
+    expect(d.html).toContain('DM 메모 본문')
+    // 금지 쪽 — 메시지·파일명·문서 본문·메모·채널 id·채널 이름(필터 목록 포함)
+    expect(d.html).not.toContain('비공개 채널 글')
+    expect(d.html).not.toContain(f.workPrivateFileName.replace('authz-e2e ', ''))
+    expect(d.html).not.toContain('비공개문서본문')
+    expect(d.html).not.toContain('감사 의견 기밀')
+    expect(d.html).not.toContain('비공개 메모 본문')
+    expect(d.html).not.toContain(f.workPrivateChannelId)
+    expect(d.html).not.toContain('authz-e2e 비공개')
+
+    // 비공개 문서 본문만의 낱말로 찾아도 없다 — 같은 낱말을 owner인 감사는 스니펫과 함께 본다
+    const dOnly = await searchHtml(browser, 'director', '비공개문서본문')
+    expect(dOnly.html).not.toContain('감사 의견 기밀')
+    expect(dOnly.html).toContain('검색 결과가 없습니다')
+    const a = await searchHtml(browser, 'auditor', '비공개문서본문')
+    expect(a.status).toBe(200)
+    expect(a.html).toContain('감사 의견 기밀')
+  })
+
+  test('관리자: 비공개 채널은 찾지만(0037) 남의 DM 메시지·첨부 본문·메모는 찾지 못한다 — DM 당사자인 감사는 찾는다', async ({
+    browser,
+  }) => {
+    const f = readFixtures()
+    const ad = await searchHtml(browser, 'admin', 'authz-e2e')
+    expect(ad.status).toBe(200)
+    expect(ad.html).toContain('비공개 채널 글')
+    expect(ad.html).toContain('감사 의견 기밀')
+    expect(ad.html).not.toContain('이사와 감사의 DM')
+    expect(ad.html).not.toContain('디엠문서본문')
+    expect(ad.html).not.toContain('이사와 감사만')
+    expect(ad.html).not.toContain('DM 메모 본문')
+    expect(ad.html).not.toContain(f.workDmChannelId)
+    expect(ad.html).not.toContain(f.workDmFileName.replace('authz-e2e ', ''))
+
+    const adOnly = await searchHtml(browser, 'admin', '디엠문서본문')
+    expect(adOnly.html).not.toContain('이사와 감사만')
+    const au = await searchHtml(browser, 'auditor', '디엠문서본문')
+    expect(au.html).toContain('이사와 감사만')
+  })
+
+  test('채널을 직접 지정해도(?channel=) 읽을 수 없는 채널은 비어 있다', async ({ browser }) => {
+    const f = readFixtures()
+    const context = await browser.newContext({ storageState: storageStatePath('director') })
+    try {
+      const res = await context.request.get(
+        `/board-room/search?q=authz-e2e&channel=${f.workPrivateChannelId}`
+      )
+      expect(res.status()).toBe(200)
+      const html = await res.text()
+      expect(html).not.toContain('비공개 채널 글')
+      expect(html).not.toContain('감사 의견 기밀')
+      expect(html).toContain('검색 결과가 없습니다')
+    } finally {
+      await context.close()
+    }
+  })
+
+  test('채널 파일 탭의 문서 본문 검색: 비공개 채널은 이사에게 404, 감사는 본문 결과를 본다', async ({
+    browser,
+  }) => {
+    const f = readFixtures()
+    const directorContext = await browser.newContext({ storageState: storageStatePath('director') })
+    const auditorContext = await browser.newContext({ storageState: storageStatePath('auditor') })
+    try {
+      const path = `/board-room/c/${f.workPrivateChannelSlug}/files?q=${encodeURIComponent('비공개문서본문')}`
+      const denied = await directorContext.request.get(path)
+      expect(denied.status()).toBe(404)
+      expect(await denied.text()).not.toContain('감사 의견 기밀')
+      const allowed = await auditorContext.request.get(path)
+      expect(allowed.status()).toBe(200)
+      const html = await allowed.text()
+      expect(html).toContain('문서 내용에서 찾음')
+      expect(html).toContain('감사 의견 기밀')
+    } finally {
+      await directorContext.close()
+      await auditorContext.close()
+    }
+  })
+
+  test('일반 조합원은 /board로 돌아가고, 같은 주소를 이사는 연다', async ({ browser }) => {
+    const memberContext = await browser.newContext({ storageState: storageStatePath('other') })
+    const directorContext = await browser.newContext({ storageState: storageStatePath('director') })
+    try {
+      const member = await memberContext.newPage()
+      await member.goto('/board-room/search?q=authz-e2e', { waitUntil: 'domcontentloaded' })
+      await expect(member).toHaveURL(/\/board$/, { timeout: 15000 })
+      await expect(member.getByText('공개 채널 글')).toHaveCount(0)
+
+      const director = await directorContext.newPage()
+      await director.goto('/board-room/search?q=authz-e2e', { waitUntil: 'domcontentloaded' })
+      await expect(director.getByTestId('board-work-search')).toBeVisible({ timeout: 15000 })
+      await expect(director.getByText('공개 채널 글').first()).toBeVisible()
+    } finally {
+      await memberContext.close()
+      await directorContext.close()
+    }
+  })
+})
+
+/**
+ * 본문 추출 크론(`/api/internal/board-work/extract-texts`) — 세션이 아니라 CRON_SECRET Bearer만 연다.
+ * 짝: 비밀이 없거나 틀리면 401, 맞으면 200(실제로 한 바퀴 돈다 — 시드 첨부는 Blob 객체가 없어 failed 로 남을 뿐이다).
+ */
+test.describe('업무툴 본문 추출 크론 — CRON_SECRET', () => {
+  test('비밀 없음·틀린 비밀·이사 세션은 401이고, 맞는 비밀이면 200이다', async ({
+    browser,
+    request,
+  }) => {
+    const path = '/api/internal/board-work/extract-texts'
+    expect((await request.get(path)).status()).toBe(401)
+    expect(
+      (await request.get(path, { headers: { authorization: 'Bearer wrong-secret' } })).status()
+    ).toBe(401)
+    expect(
+      (
+        await request.post(path, {
+          headers: { authorization: 'Bearer wrong-secret' },
+          data: { ids: [readFixtures().workPrivateAttachmentId] },
+        })
+      ).status()
+    ).toBe(401)
+    // 로그인한 이사(관리자 아님)도 세션만으로는 못 연다
+    const directorContext = await browser.newContext({ storageState: storageStatePath('director') })
+    try {
+      expect((await directorContext.request.get(path)).status()).toBe(401)
+    } finally {
+      await directorContext.close()
+    }
+
+    const secret = process.env.E2E_CRON_SECRET
+    expect(secret, 'playwright.config.ts 가 E2E_CRON_SECRET 을 심는다').toBeTruthy()
+    const ok = await request.get(path, { headers: { authorization: `Bearer ${secret}` } })
+    expect(ok.status()).toBe(200)
+    const body = (await ok.json()) as { success: boolean; data: { processed: number } }
+    expect(body.success).toBe(true)
+    expect(typeof body.data.processed).toBe('number')
+    // 잘못된 본문은 비밀이 맞아도 400(권한을 지난 뒤의 검증)
+    const bad = await request.post(path, {
+      headers: { authorization: `Bearer ${secret}` },
+      data: { ids: ['not-a-uuid'] },
+    })
+    expect(bad.status()).toBe(400)
+  })
+})

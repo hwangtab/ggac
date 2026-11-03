@@ -338,6 +338,13 @@ webServer에 `{...process.env, ...webServer.env}`를 넘긴다. e2e 전용 변�
   `authz-features`·`authz-email-verification` 9개 스펙
 - `authz-public`: `authz-boundaries` 21건
 
+**실측 기준선(2026-11-03, 이사회 업무툴 4단계 — 본문 추출·전체 검색 뒤, 시험 저장소 토큰 있음):** 총 225건 중
+**219 passed, 2 failed, 4 skipped.** 실패 하나는 정책 36(`PUBLIC_BLOB_READ_WRITE_TOKEN` 없이 돌림)이고, 다른 하나는
+`board-work-files.spec.ts`의 실제 업로드가 브라우저 → Blob 직접 업로드 단계에서 "업로드하지 못했습니다"로 끝난 것이다 —
+같은 시드로 그 파일만 다시 돌리면 통과했다(8 passed). 늘어난 것은 `authz-board-work.spec.ts`의 검색·크론 경계 6건과
+`board-work-search.spec.ts`(실제 DOCX 업로드 → 추출 → 검색 스니펫) 1건이다. 크론 라우트를 부르는 스펙은
+`playwright.config.ts`가 심는 로컬 `CRON_SECRET`(`E2E_CRON_SECRET`)을 쓴다.
+
 **실측 기준선(2026-11-02, 운영 빌드 서버로 옮긴 뒤):** 총 200건 중 **198 passed,
 1 failed, 1 skipped** — 연달아 두 번 같았다(빌드 포함 161초·168초). 같은 시드·같은 기계에서
 `PLAYWRIGHT_DEV_SERVER=1`(dev 서버)로 돌리면 1113초에 9건이 실패했다(타임아웃과 `/login` 튕김). 실패 1건은 정책 36(`PUBLIC_BLOB_READ_WRITE_TOKEN` 없이 돌림), 스킵 1건은 메일함
