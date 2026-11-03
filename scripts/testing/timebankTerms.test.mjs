@@ -29,7 +29,18 @@ test('2026-11 본문은 제1조로 시작해 부칙(판 표시)으로 끝난다'
   const body = TIMEBANK_TERMS['2026-11']
   assert.ok(body.startsWith('**제1조(목적)**'))
   assert.ok(body.endsWith('(판: 2026-11)'))
-  for (let n = 1; n <= 24; n++) assert.ok(body.includes(`**제${n}조(`), `제${n}조가 없다`)
+  for (let n = 1; n <= 21; n++) assert.ok(body.includes(`**제${n}조(`), `제${n}조가 없다`)
+  assert.ok(!body.includes('**제22조('), '제21조 뒤에 조항이 더 있다')
+  // 조문 머리는 제1조…제21조가 차례대로 한 번씩, 그 뒤에 부칙 하나다.
+  const heads = [...body.matchAll(/^\*\*(제\d+조|부칙)/gm)].map(m => m[1])
+  assert.deepEqual(heads, [...Array.from({ length: 21 }, (_, i) => `제${i + 1}조`), '부칙'])
+})
+
+test('2026-11 본문에는 조율자·조합 업무·시범 운영 조항이 없다 (2026-11-03 이사회 결정)', () => {
+  const body = TIMEBANK_TERMS['2026-11']
+  for (const word of ['조율자', '조합 업무', '시범']) {
+    assert.ok(!body.includes(word), `"${word}"가 남아 있다`)
+  }
 })
 
 test('문단·항·호를 나누고, 줄바꿈으로 끊긴 문장은 이어 붙인다', () => {
