@@ -14,18 +14,29 @@ export const EXTRACT_ROUTE_PATH = '/api/internal/board-work/extract-texts'
  * ggac 이식(원본 kosmart-work `lib/files/extract-schedule.ts`): 라우트 경로만 업무툴 아래로 바꿨다.
  */
 export function scheduleTextExtraction(attachmentIds: string[]): void {
-  if (attachmentIds.length === 0) return
+  postExtraction({ ids: attachmentIds.slice(0, 20) })
+}
+
+/**
+ * 이사회 서류 업로드 직후 본문 추출 예약(`/api/board-room/documents` POST — 03 §10). 같은 라우트에 `boardDocumentIds`로
+ * 맡긴다. 규칙은 위와 같다 — 응답을 막지 않고, 던지지 않고, 실패하면 크론이 따라잡는다(서류 업로드는 성공이다).
+ */
+export function scheduleBoardDocumentTextExtraction(documentIds: string[]): void {
+  postExtraction({ boardDocumentIds: documentIds.slice(0, 20) })
+}
+
+function postExtraction(body: { ids?: string[]; boardDocumentIds?: string[] }): void {
+  if ((body.ids?.length ?? 0) === 0 && (body.boardDocumentIds?.length ?? 0) === 0) return
   const base = (process.env.NEXT_PUBLIC_SITE_URL ?? '').replace(/\/+$/, '')
   const secret = process.env.CRON_SECRET
   if (!base || !secret) return
-  const ids = attachmentIds.slice(0, 20)
   try {
     after(async () => {
       try {
         const res = await fetch(`${base}${EXTRACT_ROUTE_PATH}`, {
           method: 'POST',
           headers: { authorization: `Bearer ${secret}`, 'content-type': 'application/json' },
-          body: JSON.stringify({ ids }),
+          body: JSON.stringify(body),
           signal: AbortSignal.timeout(10_000),
         })
         if (!res.ok) console.warn('[extract-schedule] 추출 요청 거부:', res.status)

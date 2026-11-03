@@ -11,6 +11,7 @@ import {
 } from 'drizzle-orm/sqlite-core'
 
 import { createdAt, nowMs, updatedAt, uuidPk } from './_shared.ts'
+import { boardDocuments } from './board.ts'
 import { memberProfiles } from './identity.ts'
 
 /**
@@ -47,6 +48,11 @@ export const workMemberPrefs = sqliteTable('work_member_prefs', {
   statusEmoji: text('status_emoji'),
   statusText: text('status_text'),
   statusUntil: integer('status_until', { mode: 'timestamp_ms' }),
+  /**
+   * 업무 화면에만 보이는 직함(0033). NULL이면 이사회 직함(`member_profiles.director_title`)이 보인다 —
+   * `resolveWorkTitle`(src/work/lib/staff/work-title.ts). 공식 직함은 업무툴이 쓰지 않는다.
+   */
+  workTitle: text('work_title'),
   /**
    * 사용자 단위 변경 번호(§6) — 새 채널에 들어감·새 DM처럼 **사이드바 목록 자체**가 바뀔 때 올린다.
    * 원본 `user:<uid>` 토픽의 MEMBER_ADDED·DM_MESSAGE 신호 자리다.
@@ -522,6 +528,41 @@ export const workAttachmentTexts = sqliteTable(
     index('work_attachment_texts_channel_idx').on(table.channelId),
     /** 재시도 대상 조회(failed 만) */
     index('work_attachment_texts_failed_idx')
+      .on(table.extractedAt)
+      .where(sql`"status" = 'failed'`),
+  ]
+)
+
+/**
+ * 이사회 서류(`board_documents` — 서류함·정기총회 자료) 파일 본문 추출 결과(0034, 03 §10). 업무 검색의 '이사회 서류'
+ * 묶음이 제목·파일 이름·`body_markdown`에 더해 이 본문에서도 찾는다. `work_attachment_texts`(0031)와 같은 모양·규칙이고
+ * (상태·시도 횟수·재시도 간격 — `src/db/queries/work/boardDocumentTexts.ts`), 채널 열만 없다: 열람 범위는
+ * **서류 행의 `visibility`**로 검색 쿼리가 WHERE 에서 건다. 서류를 지우면 행도 지워진다(ON DELETE CASCADE).
+ */
+export const workBoardDocumentTexts = sqliteTable(
+  'work_board_document_texts',
+  {
+    documentId: text('document_id')
+      .primaryKey()
+      .references(() => boardDocuments.id, { onDelete: 'cascade' }),
+    /** 소문자 확장자(점 없음, 없으면 '') */
+    ext: text('ext').notNull().default(''),
+    /** 검색용 평문(최대 2,000,000자 — 넘으면 앞부분만 두고 truncated) */
+    content: text('content').notNull().default(''),
+    truncated: integer('truncated', { mode: 'boolean' }).notNull().default(false),
+    /** 'ok' | 'unsupported' | 'failed' | 'too_large' */
+    status: text('status').notNull(),
+    extractorVersion: text('extractor_version').notNull(),
+    /** 지금까지의 시도 횟수(선점할 때 1 오른다). failed 는 3회까지 다시 시도한다 */
+    attempts: integer('attempts').notNull().default(1),
+    extractedAt: integer('extracted_at', { mode: 'timestamp_ms' })
+      .notNull()
+      .default(nowMs())
+      .$defaultFn(() => new Date()),
+  },
+  table => [
+    /** 재시도 대상 조회(failed 만) */
+    index('work_board_document_texts_failed_idx')
       .on(table.extractedAt)
       .where(sql`"status" = 'failed'`),
   ]

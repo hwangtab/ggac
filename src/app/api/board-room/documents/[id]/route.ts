@@ -10,6 +10,7 @@ import { isSafeBoardDocumentFilePath } from '@/lib/storage/boardDocuments'
 import { deleteBoardDocument } from '@/lib/storage/privateProvider'
 import { validateUUID } from '@/utils/validation'
 import { deleteDocument, getDocumentDetail, getDocumentForDelete } from '@/db/queries/board'
+import { removeBoardDocumentRenderCache } from '@work/lib/files/render-cache-cleanup'
 
 const log = createLogger('boardRoom/documents')
 
@@ -100,6 +101,16 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
           path: doc.file_path,
         })
       }
+
+      // 자료실 미리보기 캐시(`board-work/renders/<id>-…`, 03 §10)도 지운다. 업무툴 저장소 계층을 거쳐
+      // 이 서류 id 로 시작하는 캐시 키만 지우고(경로 가드 `isSafeBoardWorkPath`), 실패해도 삭제는 성공이다 —
+      // 행이 없으니 미리보기 라우트가 그 캐시를 다시 열지 않는다(저장소에 남을 뿐이다).
+      await removeBoardDocumentRenderCache(id, cacheErr => {
+        log.warn('미리보기 캐시 삭제 실패', {
+          id,
+          error: cacheErr instanceof Error ? cacheErr.message : String(cacheErr),
+        })
+      })
 
       return ApiSuccess.ok({ id }, '서류가 삭제되었습니다.')
     },

@@ -5,10 +5,12 @@ import { FiChevronsLeft, FiChevronsRight } from 'react-icons/fi'
 import { Link, usePathname } from '@/i18n/navigation'
 import { fetchSessionProfile, canAccessBoardRoom } from '@/utils/sessionProfile'
 import {
-  BOARD_WORK_NAV_ITEMS,
-  boardWorkNavKey,
+  BOARD_MENU_GROUPS,
+  BOARD_MENU_SETTINGS,
+  boardMenuKey,
   isBoardWorkEditPath,
   isBoardWorkPath,
+  type BoardMenuItem,
 } from '@/lib/boardWork/paths'
 import {
   BADGE_COUNT_CLASS,
@@ -18,23 +20,13 @@ import {
 } from '@/lib/boardWork/menuBadges'
 import { BoardWorkBadgesProvider, useBoardWorkBadges } from '@/components/boardWork/BoardWorkBadges'
 
-// 메뉴는 역할에 따라 **순서와 이름이 다르다.** 이사에게 이 공간은 회의를
-// 굴리는 곳이라 대시보드가 먼저지만, 조합원에게는 조합을 알아보는 곳이라
-// 정관이 먼저다. 같은 화면이라도 '서류함'(올리는 곳)과 '조합 서류'(읽는 곳)는
-// 하는 일이 달라 이름을 나눈다.
+// 메뉴는 역할에 따라 **모양과 이름이 다르다.** 이사에게 이 공간은 회의를 굴리고 함께 일하는 곳이라 대시보드 아래로
+// 이사회·소통·업무 묶음이 있다(`BOARD_MENU_GROUPS` — docs/board-work/03-통합-재설계.md §10). 조합원에게는 조합을 알아보는
+// 곳이라 정관이 먼저인 평면 목록이다. 이사의 '서류함'(올리는 곳)은 자료실의 '이사회 서류'로 들어갔고, 조합원에게 같은
+// 화면은 '조합 서류'(읽는 곳)다.
 //
-// 서류함·정기총회는 페이지를 열되 자료마다 `visibility`로 다시 갈린다 —
-// 조합원은 'members' 자료만 본다. 미들웨어가 나머지 경로를 실제로 막는다.
-const BOARD_NAV_ITEMS = [
-  { href: '/board-room', label: '대시보드', exact: true },
-  { href: '/board-room/charter', label: '정관' },
-  { href: '/board-room/meetings', label: '이사회 회의' },
-  { href: '/board-room/schedule', label: '일정 투표' },
-  { href: '/board-room/documents', label: '서류함' },
-  { href: '/board-room/assembly', label: '정기총회' },
-  { href: '/board-room/mailbox', label: '메일함' },
-  { href: '/board-room/timebank', label: '타임뱅크 보고' },
-] as const
+// 서류함·정기총회는 페이지를 열되 자료마다 `visibility`로 다시 갈린다 — 조합원은 'members' 자료만 본다. 미들웨어가
+// 나머지 경로를 실제로 막는다.
 
 // 조합원에게는 대시보드를 두지 않는다 — 그 화면은 이사회 회의 목록이고,
 // 회의 목록은 아래 '이사회 회의록'이 이미 담당한다. `/board-room`으로 들어온
@@ -76,8 +68,8 @@ export default function BoardRoomLayout({ children }: { children: React.ReactNod
     }
   }, [])
 
-  const visibleNavItems: readonly { href: string; label: string; exact?: boolean }[] =
-    isBoardMember === null ? [] : isBoardMember ? BOARD_NAV_ITEMS : MEMBER_NAV_ITEMS
+  const memberNavItems: readonly { href: string; label: string }[] =
+    isBoardMember === false ? MEMBER_NAV_ITEMS : []
 
   // 업무 화면(docs/board-work/03-통합-재설계.md §3)은 이 레이아웃 안에서 그린다 — 전역 내비·이 메뉴·푸터가 그대로다.
   // 업무 화면은 콘텐츠 칸 전폭을 쓴다(페이지가 max-w를 두지 않는다). 편집 화면은 폭이 가장 필요해 메뉴를 기본으로 접는다.
@@ -103,9 +95,6 @@ export default function BoardRoomLayout({ children }: { children: React.ReactNod
       current.getBoundingClientRect().left - nav.getBoundingClientRect().left + nav.scrollLeft
     nav.scrollTo({ left: Math.max(0, offset - (nav.clientWidth - current.offsetWidth) / 2) })
   }, [pathname, isBoardMember])
-
-  const isActive = (item: { href: string; exact?: boolean }) =>
-    item.exact ? pathname === item.href : pathname.startsWith(item.href)
 
   return (
     <BoardWorkBadgesProvider enabled={isBoardMember === true}>
@@ -160,27 +149,23 @@ export default function BoardRoomLayout({ children }: { children: React.ReactNod
                 hidden={menuCollapsed}
                 // `hidden` 속성만으로는 `flex` 유틸리티가 이겨 보인다 — 클래스로도 숨긴다
                 className={`${menuCollapsed ? 'hidden' : 'flex'} gap-1 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0 ${
-                  inEdit ? '' : 'lg:sticky lg:top-24'
-                }`}
+                  isBoardMember ? 'lg:gap-0.5' : ''
+                } ${inEdit ? '' : 'lg:sticky lg:top-24'}`}
               >
-                {visibleNavItems.map(item => {
-                  const active = isActive(item)
+                {memberNavItems.map(item => {
+                  const active = pathname.startsWith(item.href)
                   return (
                     <Link
                       key={item.href}
                       href={item.href}
                       aria-current={active ? 'page' : undefined}
-                      className={`whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
-                        active
-                          ? 'bg-primary-600 text-white shadow-sm'
-                          : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                      }`}
+                      className={`${MEMBER_ITEM_CLASS} ${active ? NAV_ITEM_ACTIVE : NAV_ITEM_IDLE}`}
                     >
                       {item.label}
                     </Link>
                   )
                 })}
-                {isBoardMember === true && <BoardWorkNavGroup pathname={pathname} />}
+                {isBoardMember === true && <BoardMenu pathname={pathname} />}
               </nav>
             </aside>
 
@@ -193,51 +178,74 @@ export default function BoardRoomLayout({ children }: { children: React.ReactNod
   )
 }
 
+// 조합원 메뉴 항목 — 예전 그대로(R4는 이사 메뉴만 바꿨다)
+const MEMBER_ITEM_CLASS =
+  'whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-medium transition-colors'
+// 이사 메뉴 항목은 하나의 크기·굵기다(배지가 있어도 굵기를 바꾸지 않는다 — 안 읽음은 배지가 알린다)
+const NAV_ITEM_CLASS =
+  'flex items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-medium transition-colors lg:py-2'
+const NAV_ITEM_ACTIVE = 'bg-primary-600 text-white shadow-sm'
+const NAV_ITEM_IDLE = 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+
 /**
- * 메뉴의 '업무' 묶음(03 §2-1) — 이사·감사·관리자에게만. 모바일에서는 같은 가로 탭 줄에 이어 붙는다(`contents`).
- * 배지는 업무 화면 밖에서도 갱신된다(BoardWorkBadgesProvider).
+ * 묶음 제목 — 회의 목록의 묶음 제목(`meetings/page.tsx`)과 같은 모양(`text-sm font-semibold text-gray-400
+ * tracking-widest`)이라 각주가 아니라 제목으로 읽힌다. 모바일 가로 탭 줄에서는 왼쪽 헤어라인이 붙은 작은 구분 라벨이다.
  */
-function BoardWorkNavGroup({ pathname }: { pathname: string }) {
-  const activeKey = boardWorkNavKey(pathname)
+const GROUP_HEADING_CLASS =
+  'flex items-center whitespace-nowrap border-l border-gray-200 pl-3 pr-1 text-xs font-semibold tracking-widest text-gray-400 lg:border-l-0 lg:px-4 lg:pb-1 lg:pt-4 lg:text-sm'
+
+/**
+ * 이사·감사·관리자 메뉴(03 §10) — 대시보드 / 이사회 / 소통 / 업무 / ── / 설정. 모바일에서는 같은 가로 탭 줄에 이어
+ * 붙는다(`contents`). 배지는 업무 화면 밖에서도 갱신된다(BoardWorkBadgesProvider).
+ */
+function BoardMenu({ pathname }: { pathname: string }) {
+  const activeKey = boardMenuKey(pathname)
   const badges = useBoardWorkBadges()?.badges ?? {}
-  return (
-    <div
-      role="group"
-      aria-labelledby="board-work-nav-label"
-      className="contents lg:mt-4 lg:flex lg:flex-col lg:gap-1"
-    >
-      <span
-        id="board-work-nav-label"
-        className="self-center whitespace-nowrap border-l border-gray-200 pl-3 pr-1 text-xs font-semibold uppercase tracking-wider text-gray-400 lg:self-auto lg:border-l-0 lg:px-4 lg:pb-1"
+  const renderItem = (item: BoardMenuItem) => {
+    const active = activeKey === item.key
+    const badge =
+      item.key === 'chat' || item.key === 'inbox' || item.key === 'tasks'
+        ? badges[item.key]
+        : undefined
+    return (
+      <Link
+        key={item.key}
+        href={item.href}
+        aria-current={active ? 'page' : undefined}
+        data-board-menu={item.key}
+        className={`${NAV_ITEM_CLASS} ${active ? NAV_ITEM_ACTIVE : NAV_ITEM_IDLE}`}
       >
-        업무
-      </span>
-      {BOARD_WORK_NAV_ITEMS.map(item => {
-        const active = activeKey === item.key
-        const badge =
-          item.key === 'chat' || item.key === 'inbox' || item.key === 'tasks'
-            ? badges[item.key]
-            : undefined
-        return (
-          <Link
-            key={item.key}
-            href={item.href}
-            aria-current={active ? 'page' : undefined}
-            data-board-work-nav={item.key}
-            className={`flex items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2.5 text-sm transition-colors ${
-              badge ? 'font-bold' : 'font-medium'
-            } ${
-              active
-                ? 'bg-primary-600 text-white shadow-sm'
-                : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-            }`}
+        <span>{item.label}</span>
+        {badge && <MenuBadgeMark badge={badge} />}
+      </Link>
+    )
+  }
+  return (
+    <>
+      {BOARD_MENU_GROUPS.map(group =>
+        group.label === null ? (
+          group.items.map(renderItem)
+        ) : (
+          <div
+            key={group.key}
+            role="group"
+            aria-labelledby={`board-menu-${group.key}`}
+            className="contents lg:flex lg:flex-col lg:gap-0.5"
           >
-            <span>{item.label}</span>
-            {badge && <MenuBadgeMark badge={badge} />}
-          </Link>
+            <span id={`board-menu-${group.key}`} className={GROUP_HEADING_CLASS}>
+              {group.label}
+            </span>
+            {group.items.map(renderItem)}
+          </div>
         )
-      })}
-    </div>
+      )}
+      <span
+        role="separator"
+        // 헤어라인 — 포스터에서 `border-gray-*`는 흰 15% 선이다(`bg-gray-200` 면은 바탕과 같아 보이지 않는다)
+        className="mx-1 shrink-0 self-stretch border-l border-gray-200 lg:mx-4 lg:my-3 lg:border-l-0 lg:border-t"
+      />
+      {renderItem(BOARD_MENU_SETTINGS)}
+    </>
   )
 }
 

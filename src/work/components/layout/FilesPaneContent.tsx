@@ -4,12 +4,20 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import Link from '@work/lib/nav/link'
 import { usePathname, useSearchParams } from '@work/lib/nav/navigation'
-import { ChevronRightIcon, FolderIcon, HashIcon, LibraryIcon, LockIcon } from 'lucide-work'
+import {
+  ChevronRightIcon,
+  FolderIcon,
+  FolderLockIcon,
+  HashIcon,
+  LibraryIcon,
+  LockIcon,
+} from 'lucide-work'
 import { cn } from '@work/lib/utils'
 import { groupChannelsForPane } from '@work/lib/channels/sort'
 import { filesFolderHref, type ChannelFolder } from '@work/lib/files/channel-files'
 import { listChannelFolders } from '@work/lib/files/folder-actions'
 import { folderCrumbs, parseFolderParam } from '@work/lib/files/folders'
+import { BOARD_FOLDERS, boardFolderHref } from '@work/lib/files/board-folders'
 import type { ChannelListItem } from './channel-items'
 import { useShellData } from './shell-context'
 import { ROW_ACTIVE_CLASS, ROW_CLASS, TREE_ROW_CLASS } from './pane-styles'
@@ -50,7 +58,8 @@ function writeExpanded(keys: string[]): void {
 const linkClass = 'flex h-full min-w-0 flex-1 items-center gap-2 rounded-w-lg pr-2 outline-none'
 
 /**
- * 자료실 목록 패널 — "전체 파일" + 채널 → 이관 원본 폴더 트리(설계 03 §2-1).
+ * 자료실 목록 패널 — 맨 위 '이사회 서류'(서류함 분류 + 총회, 03-통합-재설계 §10) → "대화 첨부"(전체 파일 + 채널 →
+ * 이관 원본 폴더 트리, 설계 03 §2-1).
  * 접근성: ARIA tree 대신 "버튼(aria-expanded) + 중첩 목록" 공개 패턴이다(링크와 펼침 단추가 따로 탭 순서에 든다).
  * 폴더는 펼칠 때 서버 액션(`listChannelFolders`)으로 한 폴더씩 지연 로드한다(RLS 가 권한을 정한다).
  * 현재 URL(`?channel=&path=`)의 채널·폴더와 그 조상은 자동으로 펼치고 `aria-current` 로 표시한다.
@@ -66,6 +75,7 @@ export default function FilesPaneContent({
 }) {
   const pathname = usePathname() ?? '/'
   const params = useSearchParams()
+  const activeBoard = pathname === '/files' ? (params?.get('board') ?? null) : null
   const activeChannel = pathname === '/files' ? (params?.get('channel') ?? null) : null
   const activePath = activeChannel ? (parseFolderParam(params?.get('path') ?? undefined) ?? '') : ''
   // 폴더 파일 수는 "최신 버전만" 센다(DB channel_subfolders, 0032) — 이전 버전까지 보는 ?versions=all 에서는 목록과 어긋나므로 숨긴다.
@@ -139,22 +149,52 @@ export default function FilesPaneContent({
   const { channelSort = 'section', categories } = useShellData()
   const groups = groupChannelsForPane(channels, channelSort, categories)
 
+  const allFilesActive = pathname === '/files' && !activeChannel && !activeBoard
+
   return (
     <nav aria-label="자료실 폴더">
+      {/* 이사회 서류 — 게스트(외부 참여자)는 이사회 구성원이 아니라 보이지 않는다(서버 라우트도 requireBoardMember) */}
+      {!isGuest && (
+        <section aria-labelledby="files-pane-board">
+          <div id="files-pane-board">
+            <SubTitle>이사회 서류</SubTitle>
+          </div>
+          <ul className="space-y-px">
+            {BOARD_FOLDERS.map(category => {
+              const active = activeBoard === category
+              return (
+                <li key={category}>
+                  <Link
+                    href={boardFolderHref(category)}
+                    aria-current={active ? 'page' : undefined}
+                    className={cn(ROW_CLASS, active && ROW_ACTIVE_CLASS)}
+                  >
+                    <FolderLockIcon aria-hidden="true" className="size-4 shrink-0" />
+                    {category}
+                  </Link>
+                </li>
+              )
+            })}
+          </ul>
+        </section>
+      )}
       {!isGuest && <MyEditingSection />}
       {!isGuest && (
-        <ul className="space-y-px">
-          <li>
-            <Link
-              href="/files"
-              aria-current={pathname === '/files' && !activeChannel ? 'page' : undefined}
-              className={cn(ROW_CLASS, pathname === '/files' && !activeChannel && ROW_ACTIVE_CLASS)}
-            >
-              <LibraryIcon aria-hidden="true" className="size-4 shrink-0" />
-              전체 파일
-            </Link>
-          </li>
-        </ul>
+        <>
+          <SubTitle>대화 첨부</SubTitle>
+          <ul className="space-y-px">
+            <li>
+              <Link
+                href="/files"
+                aria-current={allFilesActive ? 'page' : undefined}
+                className={cn(ROW_CLASS, allFilesActive && ROW_ACTIVE_CLASS)}
+              >
+                <LibraryIcon aria-hidden="true" className="size-4 shrink-0" />
+                전체 파일
+              </Link>
+            </li>
+          </ul>
+        </>
       )}
 
       {groups.length === 0 && <EmptyState compact title="참여한 채널이 없습니다" />}

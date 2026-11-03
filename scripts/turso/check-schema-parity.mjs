@@ -70,6 +70,7 @@ const POST_CUTOVER_TABLES = new Set([
   'work_push_subscriptions', // 0032 이사회 업무툴 푸시·다이제스트·크론 장부
   'work_digest_state', // 0032
   'work_cron_runs', // 0032
+  'work_board_document_texts', // 0034 이사회 서류 본문 추출(검색)
 ])
 
 export function comparePgToSqlite(pgSnapshot, sqliteSchema) {

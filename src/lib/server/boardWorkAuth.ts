@@ -2,6 +2,8 @@ import { cache } from 'react'
 import { redirect } from 'next/navigation'
 import { canAccessBoardRoom, getSessionContext, isApprovedActiveAdmin } from '@/lib/server/authz'
 import { getProfileById } from '@/db/queries/profiles'
+import { getMemberPrefsRecord } from '@/db/queries/work/prefs'
+import { resolveWorkTitle } from '@work/lib/staff/work-title'
 
 /**
  * 이사회 업무툴(kosmart-work 이식) 서버 가드 — docs/board-work/01-설계.md §3·§5-1.
@@ -28,7 +30,12 @@ export type WorkStaffRole = 'owner' | 'admin' | 'member' | 'guest'
 export type WorkStaff = {
   user_id: string
   display_name: string
+  /** 업무 화면에 보이는 직함 = 업무툴 직함 ?? 이사회 직함(03 §10) */
   title: string | null
+  /** 업무툴 직함(`work_member_prefs.work_title`) — 설정 폼이 채운다. 비면 이사회 직함으로 떨어진다 */
+  work_title: string | null
+  /** 이사회 공식 직함(`member_profiles.director_title`) — 업무툴은 읽기만 한다 */
+  official_title: string | null
   role: WorkStaffRole
   status: 'active'
 }
@@ -52,16 +59,21 @@ export function isWorkAdminRole(role: WorkStaffRole | null | undefined): boolean
 
 /**
  * 이름·직함을 읽어 `WorkStaff`를 만든다. `getSessionContext`는 개인정보 때문에 프로필을 권한 필드 5개로 좁혀 두므로
- * 여기서 한 번 더 읽고, **화면에 필요한 두 열만** 꺼낸다(계좌·실명 같은 열은 돌려주지 않는다).
+ * 여기서 한 번 더 읽고, **화면에 필요한 두 열만** 꺼낸다(계좌·실명 같은 열은 돌려주지 않는다). 업무툴 직함은
+ * `work_member_prefs`에서 읽는다(행이 없으면 null).
  */
 export async function loadWorkStaff(userId: string): Promise<WorkStaff | null> {
-  const profile = await getProfileById(userId)
+  const [profile, prefs] = await Promise.all([getProfileById(userId), getMemberPrefsRecord(userId)])
   const role = workRoleOf(profile)
   if (!profile || !role) return null
+  const officialTitle = profile.director_title?.trim() || null
+  const workTitle = prefs?.work_title?.trim() || null
   return {
     user_id: userId,
     display_name: profile.display_name?.trim() || '이름 없음',
-    title: profile.director_title?.trim() || null,
+    title: resolveWorkTitle(workTitle, officialTitle),
+    work_title: workTitle,
+    official_title: officialTitle,
     role,
     status: 'active',
   }

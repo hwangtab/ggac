@@ -21,6 +21,8 @@ export type MemberPrefsRecord = {
   status_emoji: string | null
   status_text: string | null
   status_until: string | null
+  /** 업무 화면에만 보이는 직함(0033). NULL이면 이사회 직함으로 떨어진다 */
+  work_title: string | null
   membership_rev: number
   created_at: string | null
 }
@@ -44,6 +46,7 @@ export async function getMemberPrefsRecord(userId: string): Promise<MemberPrefsR
     status_emoji: r.statusEmoji,
     status_text: r.statusText,
     status_until: iso(r.statusUntil),
+    work_title: r.workTitle,
     membership_rev: r.membershipRev,
     created_at: iso(r.createdAt),
   }
@@ -61,6 +64,7 @@ export type MemberPrefsPatch = Partial<{
   statusEmoji: string | null
   statusText: string | null
   statusUntil: Date | null
+  workTitle: string | null
 }>
 
 /** 본인 행 upsert(없으면 기본값으로 만들고 patch를 얹는다). membership_rev·created_at은 건드리지 않는다 */

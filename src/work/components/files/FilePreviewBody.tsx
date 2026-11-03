@@ -6,20 +6,25 @@ import { previewKindOf, TEXT_PREVIEW_MAX_BYTES } from '@work/lib/files/mime'
 import type { Attachment } from '@work/lib/files/schema'
 import DocumentViewer from './DocumentViewer'
 import FileIcon from './FileIcon'
+import { useFileApiBase, WORK_FILE_API_BASE } from './file-api-base'
 
 export type PreviewFile = Pick<Attachment, 'id' | 'name' | 'mime' | 'size'>
 
-export function fileUrl(id: string, opts: { thumb?: boolean; download?: boolean } = {}): string {
+export function fileUrl(
+  id: string,
+  opts: { thumb?: boolean; download?: boolean } = {},
+  base: string = WORK_FILE_API_BASE
+): string {
   const q = opts.thumb ? '?thumb=1' : opts.download ? '?download=1' : ''
-  return `/api/board-room/work/files/${id}${q}`
+  return `${base}/${id}${q}`
 }
 
 /**
  * 미리보기용 주소 `/api/board-room/work/files/<id>/<원래 파일명>` — 서버가 내용을 직접 흘려보내므로 PDF 뷰어 제목이
  * 저장 경로(`<uuid>-<safe-name>`)가 아니라 원래 파일명이 된다(QA #21).
  */
-export function namedFileUrl(id: string, name: string): string {
-  return `/api/board-room/work/files/${id}/${encodeURIComponent(name)}`
+export function namedFileUrl(id: string, name: string, base: string = WORK_FILE_API_BASE): string {
+  return `${base}/${id}/${encodeURIComponent(name)}`
 }
 
 type TextState =
@@ -30,13 +35,14 @@ type TextState =
 /** 텍스트(.txt/.md/.csv/.json/.log 등) 미리보기 — 내용을 받아 <pre> 로 그린다(마크다운·HTML 도 렌더하지 않고 원문 그대로) */
 export function TextPreview({ file }: { file: PreviewFile }) {
   const tooLarge = file.size > TEXT_PREVIEW_MAX_BYTES
+  const base = useFileApiBase()
   const [state, setState] = useState<TextState>({ status: 'loading' })
 
   useEffect(() => {
     if (tooLarge) return
     const ctrl = new AbortController()
     setState({ status: 'loading' })
-    fetch(namedFileUrl(file.id, file.name), { signal: ctrl.signal, cache: 'no-store' })
+    fetch(namedFileUrl(file.id, file.name, base), { signal: ctrl.signal, cache: 'no-store' })
       .then(async res => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         setState({ status: 'ready', text: await res.text() })
@@ -50,7 +56,7 @@ export function TextPreview({ file }: { file: PreviewFile }) {
         })
       })
     return () => ctrl.abort()
-  }, [file.id, file.name, tooLarge])
+  }, [file.id, file.name, tooLarge, base])
 
   if (tooLarge) {
     return (
@@ -90,12 +96,13 @@ const PLAY_ERROR = '이 브라우저에서 재생할 수 없습니다. 다운로
  */
 function MediaPreview({ file, kind }: { file: PreviewFile; kind: 'video' | 'audio' }) {
   const [failed, setFailed] = useState(false)
+  const base = useFileApiBase()
   if (failed) return <EmptyState compact title={PLAY_ERROR} />
   if (kind === 'video') {
     return (
       // eslint-disable-next-line jsx-a11y/media-has-caption -- 사용자가 올린 파일이라 자막 트랙이 없다
       <video
-        src={fileUrl(file.id)}
+        src={fileUrl(file.id, {}, base)}
         controls
         preload="metadata"
         aria-label={`${file.name} 재생`}
@@ -109,7 +116,7 @@ function MediaPreview({ file, kind }: { file: PreviewFile; kind: 'video' | 'audi
       <FileIcon mime={file.mime} name={file.name} size={file.size} className="size-16" />
       {/* eslint-disable-next-line jsx-a11y/media-has-caption -- 사용자가 올린 파일이라 자막 트랙이 없다 */}
       <audio
-        src={fileUrl(file.id)}
+        src={fileUrl(file.id, {}, base)}
         controls
         preload="metadata"
         aria-label={`${file.name} 재생`}
@@ -139,12 +146,13 @@ export default function FilePreviewBody({
   downloadVerb?: string
 }) {
   const preview = previewKindOf(file.mime, file.name, file.size)
+  const base = useFileApiBase()
   if (preview === 'image') {
     const img = (
       // 서명 URL 로 302 되는 보호된 이미지라 next/image 최적화 대상이 아니다.
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src={fileUrl(file.id)}
+        src={fileUrl(file.id, {}, base)}
         alt={file.name}
         className="max-h-full max-w-full object-contain"
       />
@@ -159,7 +167,7 @@ export default function FilePreviewBody({
     return (
       <iframe
         key={file.id}
-        src={namedFileUrl(file.id, file.name)}
+        src={namedFileUrl(file.id, file.name, base)}
         title={`${file.name} 미리보기`}
         className="size-full border-0 bg-background"
       />

@@ -8,7 +8,7 @@ assertLocalTurso()
  * 이사회 업무 화면 통합 재설계 R1(구조) — docs/board-work/03-통합-재설계.md §2·§3·§4.
  *
  * - 업무 화면은 전역 내비·이사회실 메뉴·푸터 **안에서** 열린다(예전 전체 화면 앱 셸이 아니다)
- * - 이사회실 메뉴의 '업무' 묶음(대화·활동·할 일·자료실·검색·업무 설정)이 이사에게 보인다
+ * - 이사 메뉴는 대시보드 / 이사회 / 소통 / 업무 / 설정이다(R4 — 03 §10). '검색'·'서류함'은 메뉴에 없다
  * - 배지는 업무 화면 밖(회의 화면)에서도 폴링으로 갱신된다 — 두 사람의 브라우저로 본다
  * - 조합원에게는 '업무' 묶음이 없고 폴링(sync)도 부르지 않는다
  * - 좁은 화면(390px): 대화 목록 → 대화 → `← 목록`으로 돌아온다
@@ -30,8 +30,8 @@ function boardMenu(page: Page) {
   return page.getByRole('navigation', { name: '이사회 메뉴' })
 }
 
-function workGroup(page: Page) {
-  return boardMenu(page).getByRole('group', { name: '업무' })
+function menuGroup(page: Page, name: '이사회' | '소통' | '업무') {
+  return boardMenu(page).getByRole('group', { name })
 }
 
 function composer(page: Page) {
@@ -41,7 +41,7 @@ function composer(page: Page) {
 
 /** 메뉴 '대화' 항목의 숫자 배지(없으면 0) */
 async function chatBadgeCount(page: Page): Promise<number> {
-  const badge = workGroup(page).locator('[data-board-work-nav="chat"] [data-badge="mention"]')
+  const badge = boardMenu(page).locator('[data-board-menu="chat"] [data-badge="mention"]')
   if ((await badge.count()) === 0) return 0
   const text = (await badge.locator('[aria-hidden="true"]').textContent()) ?? '0'
   return Number.parseInt(text, 10) || 0
@@ -61,15 +61,37 @@ test.describe('업무 화면 — 이사회실 레이아웃 안', () => {
       await expect(boardMenu(page)).toBeVisible()
       await expect(page.getByRole('contentinfo')).toBeAttached()
 
-      const group = workGroup(page)
-      for (const label of ['대화', '활동', '할 일', '자료실', '검색', '업무 설정']) {
-        await expect(group.getByRole('link', { name: new RegExp(`^${label}`) })).toBeVisible()
+      const groups = {
+        이사회: ['이사회 회의', '일정 투표', '정기총회', '정관'],
+        소통: ['대화', '활동', '메일함'],
+        업무: ['할 일', '자료실', '타임뱅크 보고'],
+      } as const
+      for (const [name, labels] of Object.entries(groups)) {
+        const group = menuGroup(page, name as keyof typeof groups)
+        await expect(group).toBeVisible()
+        for (const label of labels) {
+          await expect(group.getByRole('link', { name: new RegExp(`^${label}`) })).toBeVisible()
+        }
       }
+      const group = menuGroup(page, '소통')
       await expect(group.getByRole('link', { name: /^대화/ })).toHaveAttribute(
         'aria-current',
         'page'
       )
-      await expect(boardMenu(page).getByRole('link', { name: '업무툴' })).toHaveCount(0)
+      await expect(boardMenu(page).getByRole('link', { name: '설정', exact: true })).toBeVisible()
+      for (const gone of ['업무툴', '검색', '서류함', '업무 설정']) {
+        await expect(boardMenu(page).getByRole('link', { name: gone, exact: true })).toHaveCount(0)
+      }
+      // 묶음 제목은 모두 같은 크기이고 메뉴 항목보다 작지 않다(예전 '업무' 제목만 text-xs였다)
+      const sizes = await boardMenu(page)
+        .locator('[role="group"] > span[id^="board-menu-"]')
+        .evaluateAll(els => els.map(el => getComputedStyle(el).fontSize))
+      expect(sizes).toHaveLength(3)
+      expect(new Set(sizes).size).toBe(1)
+      const itemSize = await group
+        .getByRole('link', { name: /^대화/ })
+        .evaluate(el => getComputedStyle(el).fontSize)
+      expect(Number.parseFloat(sizes[0])).toBeGreaterThanOrEqual(Number.parseFloat(itemSize))
 
       const list = page.getByRole('complementary', { name: '대화 목록' })
       await expect(list).toBeVisible()
@@ -123,7 +145,7 @@ test.describe('업무 화면 — 이사회실 레이아웃 안', () => {
       // 읽음 처리(markChannelRead)가 끝날 틈을 준다
       await director.page.waitForTimeout(2_000)
       await director.page.goto('/board-room/meetings', { waitUntil: 'domcontentloaded' })
-      await expect(workGroup(director.page)).toBeVisible({ timeout: 20_000 })
+      await expect(menuGroup(director.page, '소통')).toBeVisible({ timeout: 20_000 })
       // 첫 폴링이 반영될 때까지 잠깐 기다려 기준선을 잡는다
       await director.page.waitForTimeout(3_000)
       const before = await chatBadgeCount(director.page)
@@ -170,7 +192,9 @@ test.describe('업무 화면 — 이사회실 레이아웃 안', () => {
         timeout: 20_000,
       })
       await page.waitForTimeout(4_000)
-      await expect(page.getByRole('group', { name: '업무' })).toHaveCount(0)
+      for (const name of ['이사회', '소통', '업무']) {
+        await expect(page.getByRole('group', { name })).toHaveCount(0)
+      }
       expect(syncCalls).toEqual([])
 
       // 업무 화면은 여전히 막힌다

@@ -3,8 +3,10 @@
  *
  *  - GET(Vercel 크론, 10분마다): 아직 추출하지 않았거나 재시도할 첨부를 최신 순으로 시간 예산 안에서 처리한다.
  *    한 번에 다 못 하면 다음 실행이 이어서 한다(처리된 첨부는 행이 생겨 제외 — failed 는 1시간 뒤 3회까지).
- *  - POST {ids}(업로드 직후 훅 `scheduleTextExtraction`): 202 로 먼저 응답하고 응답 뒤(after)에 10MB 이하 파일만
- *    처리한다. 큰 파일·실패분은 크론이 맡는다.
+ *  - POST {ids?, boardDocumentIds?}(업로드 직후 훅 `scheduleTextExtraction`·`scheduleBoardDocumentTextExtraction`):
+ *    202 로 먼저 응답하고 응답 뒤(after)에 10MB 이하 파일만 처리한다. 큰 파일·실패분은 크론이 맡는다.
+ *  - 대상은 업무툴 첨부와 이사회 서류(`board_documents`, 0034 — 03 §10) 둘이다. 크론은 두 대기열을 섞어 최신 순으로,
+ *    같은 상한·예산·재시도 규칙으로 돈다(`extract-store.ts`). 서류 바이트는 서류 저장소에서 경로 판정 뒤에만 읽는다.
  *
  * 인증은 다른 내부 크론과 같다: `CRON_SECRET` Bearer(시간 고정 비교), 없으면 닫는다. 사람의 세션으로는 열리지 않는다 —
  * 그래서 권한(읽기 범위)을 판정하지 않는다. 이 라우트는 결과를 **돌려주지 않고**(개수만) 첨부와 같은 채널 id 로만
@@ -18,7 +20,11 @@ import { after } from 'next/server'
 import { z } from 'zod'
 
 import { extractBatchFailed } from '@work/lib/files/extract-health'
-import { extractByIds, runExtractionBatch } from '@work/lib/files/extract-store'
+import {
+  extractBoardDocumentsByIds,
+  extractByIds,
+  runExtractionBatch,
+} from '@work/lib/files/extract-store'
 import { withBoardWorkCron } from '@work/lib/ops/cron-alert'
 import { ApiError, ApiSuccess } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
@@ -33,22 +39,36 @@ export const maxDuration = 300
 /** 크론 한 번이 새 항목을 시작할 수 있는 시간(ms) */
 const EXTRACT_BUDGET_MS = 230_000
 
-const bodySchema = z.object({ ids: z.array(z.string().uuid()).min(1).max(20) })
+const bodySchema = z
+  .object({
+    ids: z.array(z.string().uuid()).max(20).optional(),
+    boardDocumentIds: z.array(z.string().uuid()).max(20).optional(),
+  })
+  .refine(b => (b.ids?.length ?? 0) + (b.boardDocumentIds?.length ?? 0) > 0)
 
 async function handle(request: Request) {
   if (request.method === 'POST') {
     const parsed = bodySchema.safeParse(await request.json().catch(() => null))
     if (!parsed.success) return ApiError.badRequest('잘못된 요청입니다.').toNextResponse()
-    const { ids } = parsed.data
+    const ids = parsed.data.ids ?? []
+    const boardDocumentIds = parsed.data.boardDocumentIds ?? []
     after(async () => {
       try {
-        const result = await extractByIds(ids)
-        if (result.processed > 0) log.info('업로드 직후 추출', { ...result })
+        if (ids.length > 0) {
+          const result = await extractByIds(ids)
+          if (result.processed > 0) log.info('업로드 직후 추출', { ...result })
+        }
+        if (boardDocumentIds.length > 0) {
+          const result = await extractBoardDocumentsByIds(boardDocumentIds)
+          if (result.processed > 0) log.info('서류 업로드 직후 추출', { ...result })
+        }
       } catch (e) {
         log.error('업로드 직후 추출 실패(크론이 이어받음)', e)
       }
     })
-    return ApiSuccess.accepted({ accepted: ids.length }).toNextResponse()
+    return ApiSuccess.accepted({
+      accepted: ids.length + boardDocumentIds.length,
+    }).toNextResponse()
   }
 
   try {

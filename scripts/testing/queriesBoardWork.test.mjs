@@ -36,6 +36,7 @@ before(async () => {
     access: await import(url('work/access.ts')),
     sync: await import(url('work/sync.ts')),
     prefs: await import(url('work/prefs.ts')),
+    directory: await import(url('work/directory.ts')),
   }
 })
 
@@ -573,6 +574,34 @@ test('읽기 범위 밖의 메시지는 id로 물어도 돌려주지 않고, 전
   assert.equal(withEmbed.forwarded.id, secret)
   assert.equal((await Q.messages.fetchMessagePageRecords(priv, onlyPublic)).messages.length, 0)
   assert.equal(await Q.inbox.countUnreadMentionRows(a, new Set()), 0)
+})
+
+// ── 직함(0033) ──────────────────────────────────────────────────────────────
+
+test('업무툴 직함: work_member_prefs에만 쓰고 이사회 직함(director_title)은 그대로다', async () => {
+  const p = await seedPerson({ is_director: true, director_title: '이사' })
+  let row = (await Q.directory.getWorkPeople([p])).get(p)
+  assert.equal(row.director_title, '이사')
+  assert.equal(row.work_title, null, '행이 없으면 업무툴 직함도 없다(이사회 직함으로 떨어진다)')
+
+  await Q.prefs.upsertMemberPrefs(p, { workTitle: '총무 담당' })
+  row = (await Q.directory.getWorkPeople([p])).get(p)
+  assert.equal(row.work_title, '총무 담당')
+  assert.equal(row.director_title, '이사')
+  assert.equal((await Q.prefs.getMemberPrefsRecord(p)).work_title, '총무 담당')
+  assert.equal(
+    (await Q.profiles.getProfileById(p)).director_title,
+    '이사',
+    '공식 직함은 바뀌지 않는다'
+  )
+  const listed = (await Q.directory.listWorkPeople()).find(r => r.user_id === p)
+  assert.equal(listed.work_title, '총무 담당')
+
+  // 다른 설정을 바꿔도 직함은 남고, null로 비우면 사라진다
+  await Q.prefs.upsertMemberPrefs(p, { chatSort: 'name' })
+  assert.equal((await Q.prefs.getMemberPrefsRecord(p)).work_title, '총무 담당')
+  await Q.prefs.upsertMemberPrefs(p, { workTitle: null })
+  assert.equal((await Q.directory.getWorkPeople([p])).get(p).work_title, null)
 })
 
 // ── 활동 ────────────────────────────────────────────────────────────────────

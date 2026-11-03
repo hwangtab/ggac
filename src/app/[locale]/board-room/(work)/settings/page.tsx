@@ -7,11 +7,11 @@ import StatusSetting from '@work/components/settings/StatusSetting'
 import { listStaffDirectory } from '@work/lib/channels/queries'
 import { activeStatus } from '@work/lib/notifications/status'
 
-export const metadata: Metadata = { title: '업무 설정' }
+export const metadata: Metadata = { title: '설정' }
 
 /**
  * 설정 — 원본 `app/(app)/settings/page.tsx`. ggac 이식: 2단계 인증 절은 뺐다(설계 §3 — 업무툴은 이메일 2단계 인증을
- * 하지 않는다). 표시 이름은 ggac 회원 프로필과 같은 값이고, 직함은 관리자가 정한다(ProfileForm에서 읽기 전용).
+ * 하지 않는다). 표시 이름은 ggac 회원 프로필과 같은 값이고, 직함은 업무 화면에만 보이는 업무툴 직함이다(비우면 이사회 직함 — 03 §10).
  * 상태 메시지는 원본 상단바 계정 메뉴에 있던 것을 여기로 옮겼다(docs/board-work/03-통합-재설계.md §2-3).
  */
 export default async function BoardWorkSettingsPage() {
@@ -24,14 +24,18 @@ export default async function BoardWorkSettingsPage() {
     <div className="flex min-h-0 flex-1 flex-col">
       <PageHeader
         variant="page"
-        title="업무 설정"
+        title="설정"
         subtitle={`${user.email ?? ''} · ${staff.role === 'admin' ? '관리자' : '이사회 구성원'}`}
       />
       <PageBody width="narrow">
         <section aria-labelledby="settings-profile" className="space-y-3">
           <SectionHeading id="settings-profile">프로필</SectionHeading>
           <div className="rounded-w-lg border bg-card p-4">
-            <ProfileForm displayName={staff.display_name} title={staff.title} />
+            <ProfileForm
+              displayName={staff.display_name}
+              title={staff.work_title}
+              officialTitle={staff.official_title}
+            />
           </div>
         </section>
 

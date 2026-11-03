@@ -628,3 +628,89 @@ test('getDocumentForDelete/getDocumentForDownload: 존재하지 않으면 null',
   assert.equal(await getDocumentForDelete('00000000-0000-0000-0000-000000000000'), null)
   assert.equal(await getDocumentForDownload('00000000-0000-0000-0000-000000000000'), null)
 })
+
+test('getDocumentForPreview: 크기·제목·등급까지 돌려주고, 없으면 null(자료실 미리보기 — 03 §10)', async () => {
+  const uploader = await seedProfile()
+  const { createDocument, getDocumentForPreview } = await loadFreshBoardModule()
+  const doc = await createDocument({
+    title: '미리보기 서류',
+    category: '계약',
+    filePath: `${uploader}/preview.pdf`,
+    fileName: 'preview.pdf',
+    fileSize: 4321,
+    mimeType: 'application/pdf',
+    uploadedBy: uploader,
+    visibility: 'members',
+  })
+  const row = await getDocumentForPreview(doc.id)
+  assert.deepEqual(
+    { ...row, id: undefined },
+    {
+      id: undefined,
+      title: '미리보기 서류',
+      category: '계약',
+      file_path: `${uploader}/preview.pdf`,
+      file_name: 'preview.pdf',
+      file_size: 4321,
+      mime_type: 'application/pdf',
+      visibility: 'members',
+    }
+  )
+  assert.equal(await getDocumentForPreview('00000000-0000-0000-0000-000000000000'), null)
+})
+
+test('searchDocuments: 제목·파일 이름·본문 AND 일치, 받은 등급 밖은 절대 돌려주지 않는다', async () => {
+  const uploader = await seedProfile()
+  const { createDocument, searchDocuments } = await loadFreshBoardModule()
+  const tag = `검색표식${Date.now()}`
+  const board = await createDocument({
+    title: `${tag} 임대 계약서`,
+    category: '계약',
+    filePath: `${uploader}/lease.pdf`,
+    fileName: 'lease-2026.pdf',
+    fileSize: 10,
+    mimeType: 'application/pdf',
+    uploadedBy: uploader,
+    visibility: 'board',
+  })
+  const members = await createDocument({
+    title: `${tag} 정관`,
+    category: '정관',
+    filePath: `${uploader}/charter.pdf`,
+    fileName: 'charter.pdf',
+    fileSize: 10,
+    mimeType: 'application/pdf',
+    uploadedBy: uploader,
+    visibility: 'members',
+    bodyMarkdown: '제1조 이 조합은 경기아트콜렉티브라 한다.',
+  })
+  const all = ['board', 'members']
+  const ids = async (terms, visibility = all) =>
+    (await searchDocuments({ terms, visibility, limit: 50 })).map(d => d.id).sort()
+
+  assert.deepEqual(await ids([tag]), [board.id, members.id].sort())
+  // 파일 이름(대소문자 무시)
+  assert.deepEqual(await ids([tag, 'LEASE']), [board.id])
+  // 본문 — 일치 표시가 붙는다
+  const byBody = await searchDocuments({
+    terms: [tag, '경기아트콜렉티브'],
+    visibility: all,
+    limit: 50,
+  })
+  assert.deepEqual(
+    byBody.map(d => [d.id, d.body_matched]),
+    [[members.id, true]]
+  )
+  // 제목만 맞으면 본문 일치가 아니다
+  assert.equal(
+    (await searchDocuments({ terms: [tag, '임대'], visibility: all, limit: 5 }))[0].body_matched,
+    false
+  )
+  // 조합원 등급으로 찾으면 'board' 자료는 나오지 않는다
+  assert.deepEqual(await ids([tag], ['members']), [members.id])
+  // 와일드카드가 아니다
+  assert.deepEqual(await ids([`${tag}%`]), [])
+  // 빈 검색어·빈 등급은 아무것도 돌려주지 않는다
+  assert.deepEqual(await ids([]), [])
+  assert.deepEqual(await ids([tag], []), [])
+})
