@@ -37,6 +37,7 @@ const ALL_KEYS = [
   'TURSO_DATABASE_URL',
   'TURSO_AUTH_TOKEN',
   'BETTER_AUTH_SECRET',
+  'TIMEBANK_REJOIN_SECRET',
   'NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL',
   'PUBLIC_BLOB_READ_WRITE_TOKEN',
   'PRIVATE_BLOB_READ_WRITE_TOKEN',
@@ -60,6 +61,7 @@ const COMPLETE_ENV = {
   TURSO_DATABASE_URL: 'file:local.db',
   TURSO_AUTH_TOKEN: 'local-placeholder',
   BETTER_AUTH_SECRET: 'local-placeholder',
+  TIMEBANK_REJOIN_SECRET: 'local-placeholder-at-least-32-characters',
   NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL: 'https://example-store.public.blob.vercel-storage.com',
   PUBLIC_BLOB_READ_WRITE_TOKEN: 'local-placeholder',
   PRIVATE_BLOB_READ_WRITE_TOKEN: 'local-placeholder',
@@ -244,4 +246,12 @@ test('Turnstile 키가 둘 다 없거나 둘 다 있으면 경고가 없다', ()
   })
   assert.equal(both.code, 0, both.stdout)
   assert.doesNotMatch(both.stdout, /TURNSTILE.*없습니다/)
+})
+
+test('TIMEBANK_REJOIN_SECRET이 없으면 실패한다 — 없으면 동의가 500이고 참여자 탈퇴가 롤백된다', () => {
+  const env = { ...COMPLETE_ENV }
+  delete env.TIMEBANK_REJOIN_SECRET
+  const { code, stdout } = run(env)
+  assert.notEqual(code, 0, stdout)
+  assert.match(stdout, /TIMEBANK_REJOIN_SECRET/)
 })

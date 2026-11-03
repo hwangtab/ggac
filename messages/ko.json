@@ -950,7 +950,8 @@
       "roleArtist": "아티스트",
       "roleMember": "조합원",
       "helpPrompt": "도움이 필요하시면",
-      "helpBody": "관리자에게 문의해 주세요."
+      "helpBody": "관리자에게 문의해 주세요.",
+      "timebank": "타임뱅크"
     },
     "calendar": {
       "title": "내 캘린더",
@@ -979,7 +980,13 @@
         "fri": "금",
         "sat": "토"
       }
-    }
+    },
+    "timebankCardTitle": "타임뱅크",
+    "timebankCardDesc": "조합원끼리 시간으로 주고받은 도움을 기록하고 내 시간을 관리하세요.",
+    "timebankCardButton": "내 타임 관리",
+    "timebankCardBalance": "내 잔액 {balance}",
+    "timebankCardNeedsAgreement": "이용규칙에 동의하면 타임뱅크를 이용할 수 있습니다.",
+    "timebankCardPending": "확인할 기록 {count}건"
   },
   "board": {
     "heading": "조합원 게시판",
@@ -1000,7 +1007,8 @@
       "pendingInfo": "조합원 승인 대기 중입니다. 승인 후 게시글 작성이 가능합니다.",
       "writeButton": "새 게시글 작성",
       "boardOff": "게시판 글쓰기 기능이 지금 꺼져 있습니다. 읽기는 그대로 됩니다.",
-      "marketLink": "중고장터"
+      "marketLink": "중고장터",
+      "timebankLink": "타임뱅크"
     },
     "write": {
       "noAccess": "접근 권한이 없습니다",
@@ -1167,6 +1175,293 @@
         "ended": "낙찰",
         "no_bids": "유찰",
         "canceled": "취소된 경매"
+      }
+    }
+  },
+  "timebank": {
+    "kicker": "TIME BANK",
+    "heading": "타임뱅크",
+    "subtitle": "조합원끼리 시간으로 도움을 주고받습니다. 누가 무엇을 하든 1시간은 1시간입니다.",
+    "notice": "조합은 교환의 연결을 도울 뿐 그 결과를 보증하지 않습니다. 약속과 일정은 댓글로 정하고, 일이 끝난 뒤 마이페이지에서 기록해 주세요.",
+    "scopeNotice": "받지 않는 것: 곡·로고·영상 등 결과물을 넘기는 제작 의뢰, 운전·고소작업·아동 돌봄 등 다칠 수 있는 일, 돈이 함께 오가는 거래. 건강 정보는 적지 마세요. 결과물이 남는 교환의 저작권은 만든 사람에게 있고, 받은 사람은 비상업적으로만 씁니다.",
+    "backToBoard": "← 게시판으로",
+    "write": "글쓰기",
+    "mine": "내 글",
+    "empty": "조건에 맞는 글이 없습니다.",
+    "commentCount": "댓글 {count}",
+    "volunteerCount": "참여 {count}명",
+    "tabs": {
+      "all": "전체",
+      "offer": "제공",
+      "request": "요청",
+      "coop_task": "조합 업무"
+    },
+    "kind": {
+      "offer": "제공합니다",
+      "request": "요청합니다",
+      "coop_task": "조합 업무"
+    },
+    "category": {
+      "lesson": "레슨",
+      "feedback": "피드백",
+      "production_help": "제작 도움",
+      "moving": "이동·운반",
+      "audience": "관객",
+      "admin_help": "행정 도움",
+      "daily": "생활",
+      "etc": "기타"
+    },
+    "status": {
+      "open": "진행 중",
+      "closed": "마감"
+    },
+    "filters": {
+      "all": "전체 분류",
+      "hideClosed": "마감 숨기기",
+      "showClosed": "마감 보기"
+    },
+    "duration": {
+      "hours": "{hours}시간",
+      "minutes": "{minutes}분",
+      "hoursMinutes": "{hours}시간 {minutes}분",
+      "undecided": "미정"
+    },
+    "pagination": {
+      "prev": "← 이전",
+      "next": "다음 →"
+    },
+    "gate": {
+      "unapproved": {
+        "title": "조합원만 이용할 수 있습니다",
+        "body": "타임뱅크는 승인된 조합원끼리 쓰는 공간입니다. 승인이 끝나면 이용할 수 있습니다."
+      },
+      "disabled": {
+        "title": "타임뱅크가 지금 꺼져 있습니다.",
+        "body": "지금은 글쓰기·댓글·참여·기록을 할 수 없습니다. 올라온 글과 내 기록은 계속 볼 수 있고, 대기 중인 기록은 마이페이지에서 거절·취소할 수 있습니다."
+      },
+      "not_agreed": {
+        "title": "타임뱅크 이용규칙에 먼저 동의해 주세요.",
+        "body": "이용규칙에 동의하면 글쓰기·댓글·참여·기록을 할 수 있습니다. 처음 동의하면 조합이 2시간을 한 번 발행합니다."
+      },
+      "terms_outdated": {
+        "title": "바뀐 이용규칙에 다시 동의해 주세요.",
+        "body": "새 판에 동의하기 전까지는 글과 내 기록을 보고, 대기 중인 기록을 거절·취소하는 것만 할 수 있습니다."
+      },
+      "frozen": {
+        "title": "탈퇴 신청 중에는 타임뱅크를 이용할 수 없습니다.",
+        "body": "올라온 글과 내 기록은 볼 수 있습니다. 탈퇴 신청을 거두면 다시 이용할 수 있습니다."
+      },
+      "inactive": {
+        "title": "승인된 조합원만 이용할 수 있습니다.",
+        "body": "계정 상태를 확인해 주세요. 궁금한 점은 사무국(contact@ggac.kr)으로 문의해 주세요."
+      },
+      "boardOff": {
+        "title": "지금은 글을 올릴 수 없습니다",
+        "body": "게시판 새 글 기능이 꺼져 있습니다. 사무국(contact@ggac.kr)으로 문의해 주세요."
+      },
+      "agreeLink": "이용규칙 읽고 동의하기",
+      "backToList": "← 타임뱅크 목록"
+    },
+    "terms": {
+      "heading": "경기아트콜렉티브 타임뱅크 이용규칙",
+      "version": "{version} 판",
+      "originalNotice": "한국어 원문이 정본입니다.",
+      "previouslyAgreed": "{version} 판에 동의하셨습니다. 규칙이 바뀌어 새 판에 다시 동의해야 합니다.",
+      "missing": "이 판의 이용규칙 본문을 찾을 수 없습니다. 사무국(contact@ggac.kr)에 알려 주세요.",
+      "checkbox": "이용규칙을 끝까지 읽었고 이에 동의합니다.",
+      "agree": "동의하기",
+      "agreeing": "처리 중…",
+      "error": "동의를 처리하지 못했습니다."
+    },
+    "form": {
+      "newTitle": "타임뱅크 글쓰기",
+      "editTitle": "타임뱅크 글 수정",
+      "kind": "글 종류",
+      "category": "분류",
+      "title": "제목",
+      "titlePlaceholder": "예: 보컬 발성 기초 1시간 봐 드려요",
+      "description": "설명",
+      "descriptionPlaceholder": "무엇을 할 수 있는지(또는 필요한지), 가능한 때와 장소를 적어 주세요.",
+      "estimated": "예상 시간",
+      "estimatedNone": "미정",
+      "contactWarning": "전화번호·계좌번호는 본문에 쓰지 마세요. 연락은 댓글로 시작해 주세요.",
+      "submit": "등록하기",
+      "save": "저장하기",
+      "submitting": "저장 중…",
+      "cancel": "취소",
+      "error": "저장하지 못했습니다."
+    },
+    "detail": {
+      "author": "글쓴이",
+      "estimated": "예상 시간",
+      "taskDate": "일정",
+      "postedAt": "등록일",
+      "edit": "수정",
+      "delete": "삭제",
+      "deleteConfirm": "이 글을 삭제할까요?",
+      "close": "마감하기",
+      "reopen": "다시 열기",
+      "statusError": "상태를 바꾸지 못했습니다.",
+      "deleteError": "삭제하지 못했습니다.",
+      "backToList": "← 타임뱅크 목록",
+      "coopNotice": "참여는 자유이며 참여하지 않아도 불이익이 없습니다.",
+      "coopNoticeDetail": "조합은 특정 조합원을 지명하거나 배정하지 않습니다. 사례비·인건비를 받기로 한 일은 크레딧으로 대신하지 않습니다."
+    },
+    "volunteer": {
+      "count": "{count}명이 참여 의사를 밝혔습니다.",
+      "join": "참여할게요",
+      "withdraw": "참여 철회",
+      "joined": "참여 의사를 남겼습니다.",
+      "withdrawConfirm": "참여 의사를 거둘까요?",
+      "closed": "마감된 조합 업무입니다.",
+      "off": "조합 업무 참여가 지금 꺼져 있습니다.",
+      "error": "처리하지 못했습니다."
+    },
+    "comments": {
+      "heading": "댓글",
+      "placeholder": "일정·장소 약속이나 궁금한 점을 남겨 주세요.",
+      "submit": "댓글 남기기",
+      "empty": "아직 댓글이 없습니다.",
+      "deleted": "삭제된 댓글입니다.",
+      "delete": "삭제",
+      "deleteConfirm": "댓글을 삭제할까요?",
+      "author": "글쓴이",
+      "error": "댓글을 처리하지 못했습니다.",
+      "readOnly": {
+        "disabled": "타임뱅크가 꺼져 있어 지금은 댓글을 남길 수 없습니다.",
+        "not_agreed": "타임뱅크 이용규칙에 동의하면 댓글을 남길 수 있습니다.",
+        "terms_outdated": "바뀐 이용규칙에 다시 동의하면 댓글을 남길 수 있습니다.",
+        "frozen": "탈퇴 신청 중에는 댓글을 남길 수 없습니다.",
+        "inactive": "승인된 조합원만 댓글을 남길 수 있습니다."
+      }
+    },
+    "transferKind": {
+      "exchange": "교환",
+      "market": "장터",
+      "reversal": "되돌림",
+      "signup_grant": "가입 크레딧",
+      "carryover": "재가입 승계",
+      "coop_task": "조합 업무",
+      "redeem": "조합 서비스 사용",
+      "redeem_refund": "조합 서비스 환불",
+      "adjustment": "조정",
+      "withdrawal_settlement": "탈퇴 정산"
+    },
+    "transferStatus": {
+      "pending": "확인 대기",
+      "confirmed": "확정",
+      "rejected": "거절",
+      "canceled": "취소"
+    },
+    "my": {
+      "title": "내 타임 관리",
+      "description": "잔액과 확인 대기, 기록, 내역을 한곳에서 봅니다. 일이 끝난 뒤 한 사람이 기록하면 상대가 확인해 확정됩니다.",
+      "loadError": "불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      "actionError": "처리하지 못했습니다.",
+      "coop": "조합",
+      "fromCounterparty": "{name}에게서 받음",
+      "toCounterparty": "{name}에게 줌",
+      "recordedByMe": "내가 기록",
+      "balance": {
+        "heading": "잔액",
+        "balance": "내 잔액",
+        "roomToFloor": "하한까지 남은 시간",
+        "floor": "하한 {floor}",
+        "coopTask": "{month} 조합 업무 받은 양 / 월 상한",
+        "pending": "확인 대기",
+        "toConfirm": "내가 확인할 기록 {count}건",
+        "awaitingOther": "상대를 기다리는 기록 {count}건"
+      },
+      "pending": {
+        "heading": "확인 대기",
+        "toConfirm": "내가 확인할 기록",
+        "awaitingOther": "내가 남긴 기록(상대 확인 대기)",
+        "emptyToConfirm": "확인할 기록이 없습니다.",
+        "emptyAwaiting": "상대를 기다리는 기록이 없습니다.",
+        "confirm": "확인",
+        "reject": "거절",
+        "cancel": "취소",
+        "rejectConfirm": "이 기록을 거절할까요?",
+        "cancelConfirm": "이 기록을 취소할까요?",
+        "confirmDone": "기록을 확인했습니다.",
+        "rejectDone": "기록을 거절했습니다.",
+        "cancelDone": "기록을 취소했습니다.",
+        "stale": "7일 넘음"
+      },
+      "record": {
+        "heading": "기록하기",
+        "help": "도움을 주고받은 일이 끝난 뒤에 기록해 주세요. 상대가 확인하면 확정되고, 그 전까지는 잔액에 들어가지 않습니다.",
+        "noParticipants": "아직 기록할 수 있는 다른 참여자가 없습니다.",
+        "role": "나는 도움을",
+        "role_received": "받았다",
+        "role_gave": "주었다",
+        "counterparty": "상대",
+        "counterpartyPlaceholder": "참여자를 고르세요",
+        "minutes": "시간",
+        "categoryNone": "분류 없음",
+        "memo": "메모(선택)",
+        "memoPlaceholder": "무엇을 했나요?",
+        "memoHelp": "짧게 적어 주세요. 건강 정보는 적지 마세요.",
+        "submit": "기록 남기기",
+        "submitting": "기록하는 중…",
+        "done": "기록을 남겼습니다. 상대가 확인하면 확정됩니다.",
+        "error": "기록하지 못했습니다."
+      },
+      "history": {
+        "heading": "내역",
+        "csv": "{month} CSV 내려받기",
+        "channel": "채널",
+        "channelAll": "전체 채널",
+        "channels": {
+          "exchange": "교환",
+          "reversal": "되돌림",
+          "coop_task": "조합 업무",
+          "signup": "가입·승계",
+          "adjustment": "조정·정산"
+        },
+        "month": "월(KST)",
+        "allMonths": "전체 기간",
+        "totals": "{month} 확정분 — 받은 시간 {received}, 준 시간 {given}",
+        "empty": "조건에 맞는 기록이 없습니다.",
+        "relatedPost": "관련 글",
+        "reverse": "되돌리기 요청",
+        "reverseConfirm": "이 거래를 되돌리는 기록을 남길까요? 상대가 확인하면 확정됩니다.",
+        "reverseDone": "되돌리기를 요청했습니다. 상대가 확인하면 확정됩니다."
+      },
+      "posts": {
+        "heading": "내 글",
+        "viewAll": "게시판에서 모두 보기",
+        "mine": "내가 쓴 제공·요청 글",
+        "empty": "쓴 글이 없습니다.",
+        "volunteered": "참여한 조합 업무",
+        "emptyVolunteered": "참여한 조합 업무가 없습니다."
+      },
+      "profile": {
+        "heading": "프로필",
+        "readOnly": {
+          "disabled": "타임뱅크가 꺼져 있어 지금은 프로필을 고칠 수 없습니다.",
+          "not_agreed": "이용규칙에 동의하면 프로필을 고칠 수 있습니다.",
+          "terms_outdated": "바뀐 이용규칙에 다시 동의하면 프로필을 고칠 수 있습니다.",
+          "frozen": "탈퇴 신청 중에는 프로필을 고칠 수 없습니다.",
+          "inactive": "승인된 조합원만 프로필을 고칠 수 있습니다."
+        },
+        "offers": "줄 수 있는 것",
+        "needs": "필요한 것",
+        "visible": "참여자 디렉터리에 공개",
+        "visibleHelp": "공개하면 다른 참여자가 줄 수 있는 것·필요한 것·분류를 볼 수 있습니다.",
+        "save": "프로필 저장",
+        "saving": "저장 중…",
+        "saved": "프로필을 저장했습니다.",
+        "error": "프로필을 저장하지 못했습니다."
+      },
+      "agreement": {
+        "heading": "이용규칙 동의",
+        "current": "현재 판",
+        "agreed": "내 동의",
+        "agreedValue": "{version} 판 · {date}",
+        "none": "아직 동의하지 않았습니다.",
+        "needsAgreement": "현재 판에 동의해야 합니다. 위 안내에서 이용규칙을 읽고 동의해 주세요.",
+        "unavailable": "현재 판에 동의해야 하지만 지금은 동의를 받을 수 없습니다. 위 안내를 확인해 주세요."
       }
     }
   },

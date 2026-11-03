@@ -1,5 +1,9 @@
 import { listSystemSettings } from '@/db/queries/settings'
 import { MEMBER_FEE_RATE_BP, NONMEMBER_FEE_RATE_BP } from '@/lib/funding/feeRate'
+// 순환 임포트다(`@/lib/timebank/settings`가 이 모듈의 `getSystemSettings`를 쓴다).
+// 둘 다 상대 값을 **함수 안에서만** 읽으므로(`getDefaultSettings`·
+// `getTimebankSettings`) 어느 쪽이 먼저 로드돼도 TDZ에 걸리지 않는다.
+import { TIMEBANK_DEFAULTS, type TimebankSettings } from '@/lib/timebank/settings'
 
 /**
  * 주의: getSystemSettings는 일반 사용자 요청에서도 호출될 수 있다. 예전에는
@@ -119,6 +123,12 @@ interface SystemSettingsData {
       platform_fee_rate_nonmember_bp: number
       hold_minutes: number
     }
+    /**
+     * 조합원 타임뱅크(스펙 §9.1). 정규화·기본값의 정본은
+     * `@/lib/timebank/settings`다. 이사회 의결 사항이라 일반 설정 화면·초기화가
+     * 바꾸지 않고, 전용 라우트(`/api/admin/timebank/settings`)만 쓴다(§9.2).
+     */
+    timebank_features: TimebankSettings
   }
 }
 
@@ -249,6 +259,8 @@ function getDefaultSettings(): SystemSettingsData {
         platform_fee_rate_nonmember_bp: NONMEMBER_FEE_RATE_BP,
         hold_minutes: 10,
       },
+      // 수치는 다시 적지 않는다 — 정본(`TIMEBANK_DEFAULTS`)을 복제해 쓴다.
+      timebank_features: { ...TIMEBANK_DEFAULTS },
     },
   }
 }

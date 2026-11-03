@@ -45,6 +45,17 @@ export const NOTIFICATION_TYPE = [
   'market_outbid',
   'market_auction_won',
   'market_auction_ended',
+  // 조합원 타임뱅크(2026-11-02, 스펙 §10). 받는 사람·이동은
+  // `src/lib/server/timebankNotify.ts`·`src/utils/notificationNavigation.ts`.
+  // 위와 같이 DB CHECK가 없어 마이그레이션이 필요 없다.
+  'timebank_pending',
+  'timebank_confirmed',
+  'timebank_rejected',
+  'timebank_canceled',
+  'timebank_comment',
+  'timebank_credited',
+  'timebank_volunteer',
+  'timebank_withdrawal_negative',
 ] as const
 
 export const posts = sqliteTable(

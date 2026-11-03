@@ -123,7 +123,15 @@ const {
   marketAuctions: tursoMarketAuctions,
   marketBids: tursoMarketBids,
 } = await import('@/db/schema/market')
-const { eq, inArray } = await import('drizzle-orm')
+const {
+  timebankProfiles: tursoTimebankProfiles,
+  timebankListings: tursoTimebankListings,
+  timebankComments: tursoTimebankComments,
+  timebankTaskVolunteers: tursoTimebankTaskVolunteers,
+  timebankTransfers: tursoTimebankTransfers,
+} = await import('@/db/schema/timebank')
+const { TIMEBANK_DEFAULTS } = await import('@/lib/timebank/settings')
+const { eq, and, inArray, notInArray, or } = await import('drizzle-orm')
 const { workChannels: tursoWorkChannels } = await import('@/db/schema/work')
 const { createChannelRow, addChannelMemberRows, openDmRow } = await import(
   '@/db/queries/work/channels'
@@ -192,7 +200,8 @@ export const ACCOUNTS = [
   // 관리자는 그 DM을 읽지 못해야 한다(원본 can_read_channel 0037).
   {
     key: 'auditor',
-    id: '00000000-0000-4000-8000-00000000b00a',
+    // b00a는 타임뱅크의 `suspended`가 먼저 썼다(두 브랜치가 따로 같은 값을 골랐다 — main 병합 2026-11-03).
+    id: '00000000-0000-4000-8000-00000000b00b',
     email: 'authz-auditor@test.local',
     password: 'Authz!Audit2026',
     profile: {
@@ -241,6 +250,23 @@ export const ACCOUNTS = [
     password: 'Authz!Unverified2026',
     emailVerified: false,
     profile: { is_admin: false, registration_status: 'approved', is_active: true },
+  },
+  // 정지 회원(타임뱅크 계획 결정 6). 정지는 `is_active = false`를 함께 세팅하므로
+  // (`member-action/route.ts`) 조합원 라우트는 `requireActiveMember()`에서 이미
+  // 403이다. 정지는 로그인을 막지 않는다(auth 계층에 `is_suspended` 검사가 없다) —
+  // 그래서 `e2e/authz.setup.ts`에도 있고 storageState를 만든다.
+  // `e2e/authz-timebank.spec.ts`가 "정지 회원이 당사자인 대기 기록"을 확인한다.
+  {
+    key: 'suspended',
+    id: '00000000-0000-4000-8000-00000000b00a',
+    email: 'authz-suspended@test.local',
+    password: 'Authz!Suspend2026',
+    profile: {
+      is_admin: false,
+      registration_status: 'approved',
+      is_active: false,
+      is_suspended: true,
+    },
   },
 ]
 
@@ -424,6 +450,187 @@ async function enforceAuthzState(account) {
   return drift
 }
 
+/**
+ * 타임뱅크 픽스처(`e2e/authz-timebank.spec.ts`).
+ *
+ * - 동의: `admin`·`owner`·`other`·`withdrawalRequested`·`suspended`는 현재 판에
+ *   동의한 상태다. `admin`이 동의해 있어야 "제3자의 확인"이 참여 판정(403
+ *   미동의)에서 멈추지 않고 **원장의 당사자 판정**까지 닿는다.
+ *   `director`는 **미동의**다 — 프로필 행을 지워 매번 그 상태로 되돌린다.
+ *   `withdrawalRequested`는 동의했지만 탈퇴 신청 중이라 동결(403)을 본다.
+ * - 원장: 대기 1(owner 기록·상대 other), 확정 교환 1(owner → other), 정지 회원이
+ *   당사자인 대기 2 — (a) `suspended` 기록·상대 `other`, (b) `owner` 기록·상대
+ *   `suspended`.
+ *
+ * **멱등이자 복구 수단이다.** 스펙은 기록을 만들고 확인·거절·취소한다. 확정된
+ * 행은 잔액을 바꾸고, 거절은 "같은 상대에게서 30일 안에 거절 3회" 차단에
+ * 쌓인다. 그래서 픽스처 계정이 당사자인 원장 행·자원 기록·댓글과 픽스처가 아닌
+ * 글을 **지우고** 고정 행만 다시 심는다. 원장 삭제는 마이그레이션 트리거
+ * (`timebank_transfers_no_delete`)가 막지만 권한 E2E DB는 `drizzle-kit push`로
+ * 만들어 트리거가 없다(계획 "스펙과 다르게 가는 곳" 3). 마이그레이션을 적용한
+ * DB에 이 시드를 돌리면 여기서 던진다 — 그 DB는 권한 E2E 대상이 아니다.
+ */
+async function seedTimebank(ids, fx) {
+  const fixtureMembers = Object.entries(ids)
+    .filter(([key]) => key !== 'withdrawnEmail')
+    .map(([, id]) => id)
+  const fixtureListings = [fx.listingId, fx.taskId]
+  const terms = TIMEBANK_DEFAULTS.terms_version
+  const agreedAt = new Date('2026-11-01T00:00:00.000Z')
+
+  const t = tursoTimebankTransfers
+  await db
+    .delete(t)
+    .where(
+      or(
+        inArray(t.fromAccount, fixtureMembers),
+        inArray(t.toAccount, fixtureMembers),
+        inArray(t.createdBy, fixtureMembers),
+        inArray(t.counterpartyId, fixtureMembers)
+      )
+    )
+  await db
+    .delete(tursoTimebankTaskVolunteers)
+    .where(
+      or(
+        inArray(tursoTimebankTaskVolunteers.memberId, fixtureMembers),
+        inArray(tursoTimebankTaskVolunteers.listingId, fixtureListings)
+      )
+    )
+  await db
+    .delete(tursoTimebankComments)
+    .where(
+      or(
+        inArray(tursoTimebankComments.authorId, fixtureMembers),
+        inArray(tursoTimebankComments.listingId, fixtureListings)
+      )
+    )
+  // 스펙이 만든 글(픽스처가 아닌 것)을 치운다. 픽스처 글은 아래 upsert가 되돌린다.
+  await db
+    .delete(tursoTimebankListings)
+    .where(
+      and(
+        inArray(tursoTimebankListings.authorId, fixtureMembers),
+        notInArray(tursoTimebankListings.id, fixtureListings)
+      )
+    )
+
+  // 동의 프로필. `director`는 미동의여야 하므로 행을 지운다.
+  await db.delete(tursoTimebankProfiles).where(eq(tursoTimebankProfiles.memberId, ids.director))
+  for (const key of ['admin', 'owner', 'other', 'withdrawalRequested', 'suspended']) {
+    const values = {
+      memberId: ids[key],
+      offers: '',
+      needs: '',
+      categories: [],
+      visible: false,
+      termsVersion: terms,
+      agreedAt,
+    }
+    await db
+      .insert(tursoTimebankProfiles)
+      .values(values)
+      .onConflictDoUpdate({ target: tursoTimebankProfiles.memberId, set: values })
+  }
+
+  // 글 둘. status·isDeleted를 set에 넣어 매번 열림·살아 있음으로 되돌린다.
+  const listings = [
+    {
+      id: fx.listingId,
+      authorId: ids.owner,
+      kind: 'offer',
+      category: 'lesson',
+      title: 'authz 픽스처 타임뱅크 글',
+      description: '타임뱅크 경계 테스트용',
+      estimatedMinutes: 60,
+      status: 'open',
+      taskDate: null,
+      isDeleted: false,
+    },
+    {
+      id: fx.taskId,
+      authorId: ids.admin,
+      kind: 'coop_task',
+      category: 'admin_help',
+      title: 'authz 픽스처 조합 업무',
+      description: '조합 업무 지급 경계 테스트용',
+      estimatedMinutes: 120,
+      status: 'open',
+      taskDate: null,
+      isDeleted: false,
+    },
+  ]
+  for (const values of listings) {
+    await db
+      .insert(tursoTimebankListings)
+      .values(values)
+      .onConflictDoUpdate({ target: tursoTimebankListings.id, set: values })
+  }
+
+  // 원장 넷. 위에서 지웠으므로 insert 한 번이다(루프 insert 금지 — 계획 전역 제약).
+  // created_at은 지금이다 — CSV·내역의 기본 월(이번 달, KST)에 들어와야 "남의
+  // 기록이 내 CSV에 없다"가 빈 CSV 때문에 공허하게 통과하지 않는다.
+  const now = new Date()
+  const row = (id, fields) => ({
+    id,
+    minutes: 60,
+    kind: 'exchange',
+    category: 'lesson',
+    refType: null,
+    refId: null,
+    reversesId: null,
+    approvedBy: null,
+    decidedBy: null,
+    decidedAt: null,
+    createdAt: now,
+    ...fields,
+  })
+  await db.insert(t).values([
+    row(fx.pendingId, {
+      fromAccount: ids.owner,
+      toAccount: ids.other,
+      status: 'pending',
+      createdBy: ids.owner,
+      counterpartyId: ids.other,
+      memo: 'authz 픽스처 대기 기록',
+      fromName: 'authz-owner',
+      toName: 'authz-other',
+    }),
+    row(fx.confirmedId, {
+      fromAccount: ids.owner,
+      toAccount: ids.other,
+      status: 'confirmed',
+      createdBy: ids.owner,
+      counterpartyId: ids.other,
+      decidedBy: ids.other,
+      decidedAt: now,
+      memo: 'authz 픽스처 확정 기록',
+      fromName: 'authz-owner',
+      toName: 'authz-other',
+    }),
+    row(fx.suspendedPendingAId, {
+      fromAccount: ids.suspended,
+      toAccount: ids.other,
+      status: 'pending',
+      createdBy: ids.suspended,
+      counterpartyId: ids.other,
+      memo: 'authz 픽스처 정지 회원 기록(a)',
+      fromName: 'authz-suspended',
+      toName: 'authz-other',
+    }),
+    row(fx.suspendedPendingBId, {
+      fromAccount: ids.owner,
+      toAccount: ids.suspended,
+      status: 'pending',
+      createdBy: ids.owner,
+      counterpartyId: ids.suspended,
+      memo: 'authz 픽스처 정지 회원 기록(b)',
+      fromName: 'authz-owner',
+      toName: 'authz-suspended',
+    }),
+  ])
+}
+
 async function main() {
   const ids = {}
   const driftReport = []
@@ -567,6 +774,15 @@ async function main() {
   const COMMENT_FEATURE_SETTING_ID = '00000000-0000-4000-8000-00000000a00e'
   const FILE_UPLOAD_SETTING_ID = '00000000-0000-4000-8000-00000000a00f'
   const EMAIL_VERIFICATION_SETTING_ID = '00000000-0000-4000-8000-00000000a010'
+  // 타임뱅크 경계(`e2e/authz-timebank.spec.ts`). 설정 행 하나, 글 둘(제공 글·조합
+  // 업무 글), 원장 행 넷(대기·확정·정지 회원이 당사자인 대기 둘).
+  const TIMEBANK_SETTING_ID = '00000000-0000-4000-8000-00000000a011'
+  const TIMEBANK_LISTING_ID = '00000000-0000-4000-8000-00000000a040'
+  const TIMEBANK_TASK_ID = '00000000-0000-4000-8000-00000000a041'
+  const TIMEBANK_PENDING_ID = '00000000-0000-4000-8000-00000000a042'
+  const TIMEBANK_CONFIRMED_ID = '00000000-0000-4000-8000-00000000a043'
+  const TIMEBANK_SUSPENDED_PENDING_A_ID = '00000000-0000-4000-8000-00000000a044'
+  const TIMEBANK_SUSPENDED_PENDING_B_ID = '00000000-0000-4000-8000-00000000a045'
   // 펀딩 인가 경계(`e2e/authz-funding.spec.ts`)용 픽스처. 캠페인을 둘 둔다 —
   // 하나는 `owner`의 편집 가능한 초안(읽기·수정·리워드·본인 제출 경계),
   // 다른 하나는 이미 심사 대기 중인 캠페인(관리자 심사 경계)이다. 한 캠페인으로
@@ -1217,6 +1433,19 @@ async function main() {
       description: 'authz E2E 픽스처',
       isSensitive: false,
     },
+    // 타임뱅크 — **로컬 테스트 DB에서만** 켠다(운영은 `seed-timebank-settings.mjs`가
+    // 꺼짐으로 심고, 켜는 것은 이사회 의결 뒤 전용 라우트다). 꺼져 있으면 쓰기
+    // 라우트가 전부 '꺼져 있습니다' 403이라 인가 경계 단정이 그 403에 가려진다.
+    // `e2e/authz-timebank.spec.ts`가 껐다(enabled·coop_tasks_enabled·terms_version)
+    // 되돌린다. 나머지 수치는 정본 기본값 그대로다.
+    {
+      id: TIMEBANK_SETTING_ID,
+      category: 'features',
+      settingKey: 'timebank_features',
+      settingValue: { ...TIMEBANK_DEFAULTS, enabled: true, coop_tasks_enabled: true },
+      description: 'authz E2E 픽스처',
+      isSensitive: false,
+    },
   ]
   for (const row of settingRows) {
     await db
@@ -1598,6 +1827,14 @@ async function main() {
     )
     if (!ok) throw new Error(`업무툴 임시 업로드 시드 실패: ${uploadId}`)
   }
+  await seedTimebank(ids, {
+    listingId: TIMEBANK_LISTING_ID,
+    taskId: TIMEBANK_TASK_ID,
+    pendingId: TIMEBANK_PENDING_ID,
+    confirmedId: TIMEBANK_CONFIRMED_ID,
+    suspendedPendingAId: TIMEBANK_SUSPENDED_PENDING_A_ID,
+    suspendedPendingBId: TIMEBANK_SUSPENDED_PENDING_B_ID,
+  })
 
   const fixtures = {
     users: ids,
@@ -1665,6 +1902,14 @@ async function main() {
     fundingGuestPledgeId: FUNDING_GUEST_PLEDGE_ID,
     fundingGuestPledgeCode: FUNDING_GUEST_PLEDGE_CODE,
     fundingGuestBackerEmail: FUNDING_GUEST_BACKER_EMAIL,
+    timebankListingId: TIMEBANK_LISTING_ID,
+    timebankTaskId: TIMEBANK_TASK_ID,
+    timebankPendingId: TIMEBANK_PENDING_ID,
+    timebankConfirmedId: TIMEBANK_CONFIRMED_ID,
+    timebankSuspendedPendingIds: {
+      bySuspended: TIMEBANK_SUSPENDED_PENDING_A_ID,
+      toSuspended: TIMEBANK_SUSPENDED_PENDING_B_ID,
+    },
   }
   writeFileSync(OUT_FILE, JSON.stringify(fixtures, null, 2) + '\n')
 
@@ -1689,6 +1934,7 @@ async function main() {
     `  계정 ${Object.keys(ids).length}개, 글 1, 댓글 1, 알림 1, 좋아요 1, ` +
       `이사회 회의 2(scheduled·completed)·회의록 2·안건 1·안건 의견 3, ` +
       `펀딩 캠페인 6(draft·submitted 3·closed·active)·리워드 6·후원 2(회원·비회원), ` +
+      `타임뱅크 동의 5·글 2(제공·조합 업무)·원장 4(대기 3·확정 1), ` +
       `system_settings ${settingRows.length}행, default_settings ${DEFAULT_SETTINGS.length}행, ` +
       `업무툴 채널 3(공개·비공개·탭)·DM 1·메시지 3·첨부 5(PDF 3·HWP·DOCX)·본문 3·임시 업로드 2·탭 6(메모 3·할 일 3)·할 일 2 (전부 Turso)`
   )

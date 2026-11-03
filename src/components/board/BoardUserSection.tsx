@@ -134,17 +134,29 @@ const BoardUserSection = ({ boardEnabled = true }: BoardUserSectionProps) => {
           >
             {t('userSection.marketLink')}
           </button>
+          <button
+            onClick={() => router.push('/board/timebank')}
+            className="bg-white text-primary-700 border border-primary-200 px-6 py-3 rounded-lg hover:bg-primary-50"
+          >
+            {t('userSection.timebankLink')}
+          </button>
         </div>
       )}
 
-      {/* 게시판 스위치가 꺼져도 장터 읽기는 된다 — 끈 것은 새 글이지 읽기가 아니다. */}
+      {/* 게시판 스위치가 꺼져도 장터·타임뱅크 읽기는 된다 — 끈 것은 새 글이지 읽기가 아니다. */}
       {isMember && isAuthenticated && boardEnabled === false && (
-        <div>
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => router.push('/board/market')}
             className="bg-white text-primary-700 border border-primary-200 px-6 py-3 rounded-lg hover:bg-primary-50"
           >
             {t('userSection.marketLink')}
+          </button>
+          <button
+            onClick={() => router.push('/board/timebank')}
+            className="bg-white text-primary-700 border border-primary-200 px-6 py-3 rounded-lg hover:bg-primary-50"
+          >
+            {t('userSection.timebankLink')}
           </button>
         </div>
       )}

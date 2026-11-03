@@ -11,6 +11,7 @@ import {
   FiChevronRight,
   FiCalendar,
   FiHeart,
+  FiClock,
 } from 'react-icons/fi'
 import { MypageMenuItem } from '@/types'
 import PermissionCheck from './PermissionCheck'
@@ -77,6 +78,14 @@ const MypageNavigation: React.FC<MypageNavigationProps> = ({ currentPath }) => {
       icon: FiHeart,
       requiredPermission: 'member',
       isActive: currentPath === '/mypage/funding',
+    },
+    {
+      id: 'timebank',
+      label: t('nav.timebank'),
+      href: '/mypage/timebank',
+      icon: FiClock,
+      requiredPermission: 'member',
+      isActive: currentPath === '/mypage/timebank',
     },
     {
       id: 'artist',

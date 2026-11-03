@@ -67,6 +67,20 @@ export function canRemoveMarketItem(
 }
 
 /**
+ * 타임뱅크 글·댓글을 **지울** 자격 — `canRemoveMarketItem`과 같은 판정(승인·활성
+ * 이면서 작성자 본인이거나 관리자). 수정은 호출부가 작성자 본인만 연다.
+ * `coop_task` 글은 이 판정과 무관하게 조합원 라우트에서 404다(관리자 라우트 몫).
+ */
+export function canRemoveTimebankItem(
+  profile: ProfileLike | null,
+  actorId: string,
+  ownerId: string
+): boolean {
+  if (!isApprovedActive(profile)) return false
+  return actorId === ownerId || profile?.is_admin === true
+}
+
+/**
  * `ProfileRow`(33개 컬럼 전부 — `account_number`·`bank_name`·`real_name`·
  * `phone_number`·`birth_date` 같은 민감 컬럼 포함)를 세션 판정에만 필요한
  * `ProfileLike`의 5개 필드로 좁힌다. 전환 전 `getSessionContext`는

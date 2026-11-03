@@ -15,6 +15,8 @@ export default function robots(): MetadataRoute.Robots {
     '/board/write',
     // 조합원 장터. 비회원은 안내 상자만 보지만 그 껍데기도 색인할 이유가 없다.
     '/board/market',
+    // 조합원 타임뱅크 게시판. 장터와 같은 이유.
+    '/board/timebank',
     '/board/*/edit',
     '/board-room',
   ]

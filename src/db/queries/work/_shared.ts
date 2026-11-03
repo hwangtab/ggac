@@ -140,7 +140,7 @@ export async function channelMemberIds(tx: WorkExecutor, channelId: string): Pro
   return rows.map(r => r.userId)
 }
 
-/** 계보 키 coalesce(version_root_id, id) — 0027 유일 인덱스와 같은 식 */
+/** 계보 키 coalesce(version_root_id, id) — 0028 유일 인덱스와 같은 식 */
 export const lineageKeySql = sql`coalesce(${workAttachments.versionRootId}, ${workAttachments.id})`
 
 /**

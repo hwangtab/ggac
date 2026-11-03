@@ -5,6 +5,7 @@ import { FiUser, FiSettings, FiMusic, FiActivity, FiCreditCard } from 'react-ico
 import MypageLayout from './components/MypageLayout'
 import DashboardCard from './components/DashboardCard'
 import PermissionCheck from './components/PermissionCheck'
+import TimebankSummaryCard from './components/TimebankSummaryCard'
 
 export const metadata: Metadata = {
   title: '마이페이지',
@@ -80,6 +81,9 @@ export default async function MypagePage({ params }: { params: Promise<{ locale:
             href="/mypage/dues"
             buttonText="조합비 납부"
           />
+
+          {/* 클라이언트 섬 — 이 페이지는 정적 서버 컴포넌트로 남는다(스펙 §8). */}
+          <TimebankSummaryCard />
 
           <PermissionCheck
             requiredPermission="artist"

@@ -46,6 +46,15 @@ export const NOTIFICATION_TYPE_COLOR: Record<NotificationType, string> = {
   market_outbid: 'bg-orange-100 text-orange-800',
   market_auction_won: 'bg-emerald-100 text-emerald-800',
   market_auction_ended: 'bg-teal-100 text-teal-800',
+  // 타임뱅크. 확인·거절은 승인 계열과 같은 색으로 "됐다 / 안 됐다"를 맞춘다.
+  timebank_pending: 'bg-amber-100 text-amber-800',
+  timebank_confirmed: 'bg-green-100 text-green-800',
+  timebank_rejected: 'bg-red-100 text-red-800',
+  timebank_canceled: 'bg-gray-100 text-gray-800',
+  timebank_comment: 'bg-teal-100 text-teal-800',
+  timebank_credited: 'bg-emerald-100 text-emerald-800',
+  timebank_volunteer: 'bg-indigo-100 text-indigo-800',
+  timebank_withdrawal_negative: 'bg-rose-100 text-rose-800',
 }
 
 /** 목록에 보이는 한국어 이름. 영문 식별자가 그대로 보이던 것이 출발점이다. */
@@ -74,6 +83,14 @@ export const NOTIFICATION_TYPE_LABEL: Record<NotificationType, string> = {
   market_outbid: '경매 입찰',
   market_auction_won: '경매 낙찰',
   market_auction_ended: '경매 종료',
+  timebank_pending: '타임 확인 요청',
+  timebank_confirmed: '타임 확인',
+  timebank_rejected: '타임 거절',
+  timebank_canceled: '타임 취소',
+  timebank_comment: '타임뱅크 댓글',
+  timebank_credited: '타임 적립',
+  timebank_volunteer: '조합 업무 자원',
+  timebank_withdrawal_negative: '타임뱅크 탈퇴 정산',
 }
 
 export function notificationTypeColor(type: NotificationType): string {

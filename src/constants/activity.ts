@@ -73,6 +73,17 @@ export const SERVER_ONLY_ACTIVITY_ACTION_TYPES = [
   // 사무국 대리 예매 환불. 돈을 돌려주고 좌석을 푸는 것은 서버가 하는 일이므로
   // 브라우저가 그 줄을 만들 수 있으면 기록이 증거로서 값을 잃는다.
   'ticket_reservation_refunded',
+  // 조합원 타임뱅크(스펙 §5·§6·§9.2). 시간 이동·조정·설정 변경의 증거다 —
+  // 조합원이 "상대가 확인했다"를 스스로 적을 수 있으면 원장 감사가 무의미해진다.
+  'timebank_agreed',
+  'timebank_transfer_recorded',
+  'timebank_transfer_decided',
+  'timebank_coop_credit',
+  'timebank_adjustment',
+  'timebank_adjustment_approved',
+  'timebank_settings_changed',
+  'timebank_coop_task_created',
+  'timebank_transfer_admin_canceled',
 ] as const satisfies readonly ActivityActionType[]
 
 /**
@@ -98,6 +109,8 @@ export const ACTIVITY_TARGET_TYPES = [
   'funding_campaign',
   'funding_pledge',
   'ticket_reservation',
+  'timebank_transfer',
+  'timebank_listing',
 ] as const satisfies readonly ActivityTargetType[]
 
 /** 원장에 있을 수 있는 종류인가(필터·표시용). **기록 허가가 아니다.** */

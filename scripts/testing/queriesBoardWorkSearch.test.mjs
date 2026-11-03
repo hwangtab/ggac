@@ -677,7 +677,7 @@ test('실행 건강: 5건 이상 처리하고 80% 이상 실패하면 실행 전
   assert.equal(Q.health.extractBatchFailed({ processed: 10, failed: 8 }), true)
 })
 
-test('마이그레이션 0030 이 만든 표·색인이 스키마 선언과 같다', async () => {
+test('마이그레이션 0031 이 만든 표·색인이 스키마 선언과 같다', async () => {
   const idx = await setupClient.execute(
     "select name from sqlite_master where type = 'index' and tbl_name = 'work_attachment_texts' and name not like 'sqlite_%' order by name"
   )

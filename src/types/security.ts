@@ -275,6 +275,14 @@ export type SecurityEventType =
   // 업무툴 크론이 기대 주기의 2배 넘게 성공하지 않았거나 시간 초과로 끊긴 흔적('running' 방치)이 있는 경우(감시 —
   // mention-digest가 돌 때 본다). 실패 응답 자체가 없는(스케줄에서 빠짐·강제 종료) 경우를 잡는다.
   | 'BOARD_WORK_CRON_STALLED'
+  // 조합원 타임뱅크 관리자 쓰기(조합 업무 글·지급·조정·승인·pending 취소). 스펙
+  // §7.3 "모든 관리자 쓰기는 user_activities와 보안 로그에 남긴다".
+  | 'TIMEBANK_ADMIN_WRITE'
+  // 타임뱅크 설정(이사회 의결 사항, §9.2) 변경. 의결 근거와 바뀐 칸을 함께 남긴다.
+  | 'TIMEBANK_SETTINGS_CHANGED'
+  // 위 쓰기의 활동 기록(`user_activities`)이 실패한 경우. 쓰기는 이미 커밋됐다.
+  | 'TIMEBANK_ADMIN_AUDIT_FAILED'
+  | 'TIMEBANK_ADMIN_API_ERROR'
 
 export type SecurityEventSeverity = 'low' | 'medium' | 'high'
 

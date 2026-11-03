@@ -1,7 +1,7 @@
 -- 이사회 업무툴 2단계 — 파일(첨부·자료실, kosmart-work 이식). 설계: docs/board-work/01-설계.md §4·§7.
 --
 -- 원본은 kosmart-work Postgres `work.pending_uploads`(0003·0034)와 `work.attachments`(0001·0022·0032)다. 옮기면서:
--- - 표 이름에 `work_` 접두사, 사람 FK는 `member_profiles`. CHECK·트리거는 두지 않는다(0026과 같다).
+-- - 표 이름에 `work_` 접두사, 사람 FK는 `member_profiles`. CHECK·트리거는 두지 않는다(0027과 같다).
 -- - `bucket_path` 대신 `blob_path` — 비공개 Vercel Blob 키(`board-work/files/<uploadId>/<asciiSafeName>`).
 --   원본처럼 `pending/`에서 옮기지 않는다: 처음부터 최종 키에 올리고 승격은 행만 바꾼다(§7-1).
 -- - 원본 harden_attachments_write(업로더 강제·경로 규약)·is_latest 재계산 트리거는 **옮기지 않았다.**
@@ -9,7 +9,7 @@
 -- - 버전 열 넷은 3단계(버전)가 표를 바꾸지 않게 지금 둔다. 계보 키 coalesce(version_root_id, id)는
 --   drizzle-kit이 식 안 쉼표를 자르므로 CASE로 썼다(같은 값이다).
 --
--- DDL은 `src/db/schema/work.ts`를 drizzle-kit push로 빈 DB에 밀어 넣고 sqlite_master에서 그대로 옮겼다(0026과 같다).
+-- DDL은 `src/db/schema/work.ts`를 drizzle-kit push로 빈 DB에 밀어 넣고 sqlite_master에서 그대로 옮겼다(0027과 같다).
 BEGIN;
 
 CREATE TABLE `work_pending_uploads` (
