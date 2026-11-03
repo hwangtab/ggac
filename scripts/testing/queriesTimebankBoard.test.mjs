@@ -111,6 +111,22 @@ test('목록 kind·category·status·author 필터, 본문 없음', async () => 
 
   const mine = await board.listTimebankListings({ authorId: a, offset: 0, limit: 100 })
   assert.deepEqual(ids(mine).sort(), [offer.id, task.id].sort())
+
+  // 조합 업무 스위치가 꺼졌을 때 화면이 쓰는 excludeKinds — 다른 필터와 함께 걸린다.
+  const mineNoTasks = await board.listTimebankListings({
+    authorId: a,
+    excludeKinds: ['coop_task'],
+    offset: 0,
+    limit: 100,
+  })
+  assert.deepEqual(ids(mineNoTasks), [offer.id])
+  const allNoTasks = await board.listTimebankListings({
+    excludeKinds: ['coop_task'],
+    offset: 0,
+    limit: 100,
+  })
+  assert.ok(!ids(allNoTasks).includes(task.id))
+  assert.ok(ids(allNoTasks).includes(request.id))
 })
 
 test('삭제된 글은 목록·상세·소유 조회에서 빠진다', async () => {

@@ -12,7 +12,19 @@
  * 응답은 snake_case. 임포트는 상대경로 + `.ts`(`node --test`가 직접 import한다).
  */
 
-import { and, asc, count, desc, eq, inArray, isNotNull, isNull, lt, sql } from 'drizzle-orm'
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  notInArray,
+  sql,
+} from 'drizzle-orm'
 
 import { db } from '../client.ts'
 import {
@@ -118,6 +130,11 @@ export interface ListTimebankListingsFilter {
   category?: TimebankCategory
   status?: TimebankListingStatus
   authorId?: string
+  /**
+   * 이 종류는 빼고 읽는다. 조합 업무 스위치가 꺼졌을 때 화면이 `coop_task` 글을
+   * 목록에서 빼는 데 쓴다(권한 판정이 아니라 표시 선택이다).
+   */
+  excludeKinds?: TimebankListingKind[]
   offset: number
   limit: number
 }
@@ -131,6 +148,9 @@ export async function listTimebankListings(
   if (filter.category) conditions.push(eq(timebankListings.category, filter.category))
   if (filter.status) conditions.push(eq(timebankListings.status, filter.status))
   if (filter.authorId) conditions.push(eq(timebankListings.authorId, filter.authorId))
+  if (filter.excludeKinds?.length) {
+    conditions.push(notInArray(timebankListings.kind, filter.excludeKinds))
+  }
 
   const rows = await db
     .select(listingColumns)

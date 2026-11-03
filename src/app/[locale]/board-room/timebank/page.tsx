@@ -1,6 +1,11 @@
 import type { Locale } from '@/i18n/routing'
 import { requireBoardMemberPage } from '@/lib/server/boardRoomPageAuth'
+import { getTimebankSettings } from '@/lib/timebank/settings'
+import { coopTasksOpen } from '@/lib/timebank/adminRules'
+import { createLogger } from '@/utils/logger'
 import OversightView from './OversightView'
+
+const log = createLogger('boardRoomTimebank')
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -18,5 +23,14 @@ interface PageProps {
 export default async function BoardRoomTimebankPage({ params }: PageProps) {
   const { locale } = await params
   await requireBoardMemberPage(locale, '/board-room/timebank')
-  return <OversightView />
+  // 조합 업무 칸은 스위치가 켜졌을 때만 보인다. 설정을 못 읽으면 꺼짐으로 본다.
+  let coopOpen = false
+  try {
+    coopOpen = coopTasksOpen(await getTimebankSettings())
+  } catch (error) {
+    log.error('타임뱅크 설정 조회 실패 — 조합 업무 꺼짐으로 처리', {
+      error: (error as Error)?.message,
+    })
+  }
+  return <OversightView coopTasksOpen={coopOpen} />
 }

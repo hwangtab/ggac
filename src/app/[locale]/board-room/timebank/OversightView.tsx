@@ -86,12 +86,16 @@ const pct = (r: number | null) => (r === null ? '—' : `${Math.round(r * 1000) 
 
 /**
  * 이사회·감사 타임뱅크 보고(스펙 §7.4·§9.2·§12). 월을 고르면 그달의 발행·회수·발행잔액,
- * 조합 업무 회원별 합계, 조정 전 건, 마이너스 탈퇴 정산, 파일럿 지표를 보인다. 설정
- * 변경 이력(의결 근거)은 월과 무관하게 최근 것부터.
+ * 조정 전 건, 마이너스 탈퇴 정산, 운영 지표를 보인다. 설정 변경 이력(의결 근거)은 월과
+ * 무관하게 최근 것부터.
+ *
+ * 조합 업무(발행 내역의 조합 업무 몫·조합 업무 비율·회원별 합계)는 조합 업무 스위치가
+ * 켜졌을 때(`coopTasksOpen`)만 그린다 — 이사회가 조합 업무 크레딧을 두지 않기로 해
+ * 기본은 꺼짐이다. API 응답 모양은 그대로다.
  *
  * 사람 수를 세는 칸은 3명 미만이면 서버가 가린다("3명 미만"으로 표시).
  */
-export default function OversightView() {
+export default function OversightView({ coopTasksOpen }: { coopTasksOpen: boolean }) {
   const [month, setMonth] = useState(() => currentKstMonth())
   const [data, setData] = useState<Oversight | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -167,7 +171,14 @@ export default function OversightView() {
               {card(
                 '발행',
                 fmtMinutes(data.issued.total),
-                `가입 ${fmtMinutes(data.issued.signup_grant)} · 조합 업무 ${fmtMinutes(data.issued.coop_task)} · 조정+ ${fmtMinutes(data.issued.adjustment_credit)} · 탈퇴 정산 ${fmtMinutes(data.issued.withdrawal_settlement)}`
+                [
+                  `가입 ${fmtMinutes(data.issued.signup_grant)}`,
+                  coopTasksOpen ? `조합 업무 ${fmtMinutes(data.issued.coop_task)}` : null,
+                  `조정+ ${fmtMinutes(data.issued.adjustment_credit)}`,
+                  `탈퇴 정산 ${fmtMinutes(data.issued.withdrawal_settlement)}`,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')
               )}
               {card(
                 '회수',
@@ -179,14 +190,9 @@ export default function OversightView() {
           </section>
 
           <section aria-labelledby="ov-pilot" data-testid="board-timebank-pilot">
-            <h2 id="ov-pilot" className="mb-1 text-lg font-semibold text-gray-900">
-              파일럿 지표
+            <h2 id="ov-pilot" className="mb-3 text-lg font-semibold text-gray-900">
+              운영 지표
             </h2>
-            <p className="mb-3 text-sm text-gray-600">
-              3개월 차 판단(이사회): 지속 — 양방향 참여자 8명 이상 그리고 확정 교환 10건 이상 · 중단
-              검토 — 양방향 참여자 5명 미만 또는 조합 업무 비율 50% 초과 · 그 사이 — 수정 후 3개월
-              연장.
-            </p>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {card(
                 '확정 교환',
@@ -204,11 +210,12 @@ export default function OversightView() {
                 pct(data.pilot.request_author_ratio),
                 `작성자 ${people(data.pilot.request_authors)} / 참여자 ${data.pilot.request_author_participants}명`
               )}
-              {card(
-                '조합 업무 비율',
-                pct(data.pilot.coop_task_ratio),
-                `조합 업무 ${fmtMinutes(data.pilot.coop_task_minutes)} / (조합 업무 + 교환)`
-              )}
+              {coopTasksOpen &&
+                card(
+                  '조합 업무 비율',
+                  pct(data.pilot.coop_task_ratio),
+                  `조합 업무 ${fmtMinutes(data.pilot.coop_task_minutes)} / (조합 업무 + 교환)`
+                )}
               {card(
                 '거절·취소',
                 `${data.pilot.rejected_count}건 · ${data.pilot.canceled_count}건`,
@@ -252,31 +259,33 @@ export default function OversightView() {
             </div>
           </section>
 
-          <section aria-labelledby="ov-coop">
-            <h2 id="ov-coop" className="mb-2 text-lg font-semibold text-gray-900">
-              조합 업무 회원별 합계
-            </h2>
-            {data.coop_task_by_member.length === 0 ? (
-              <p className="text-sm text-gray-500">이달 조합 업무 지급이 없습니다.</p>
-            ) : (
-              <table className="min-w-full rounded-lg border border-gray-200 bg-white text-sm">
-                <thead className="bg-gray-50 text-left text-gray-600">
-                  <tr>
-                    <th className="px-3 py-2 font-medium">조합원</th>
-                    <th className="px-3 py-2 text-right font-medium">합계</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {data.coop_task_by_member.map(r => (
-                    <tr key={r.member_id}>
-                      <td className="px-3 py-2">{r.name || r.member_id.slice(0, 8)}</td>
-                      <td className="px-3 py-2 text-right">{fmtMinutes(r.minutes)}</td>
+          {coopTasksOpen && (
+            <section aria-labelledby="ov-coop" data-testid="board-timebank-coop">
+              <h2 id="ov-coop" className="mb-2 text-lg font-semibold text-gray-900">
+                조합 업무 회원별 합계
+              </h2>
+              {data.coop_task_by_member.length === 0 ? (
+                <p className="text-sm text-gray-500">이달 조합 업무 지급이 없습니다.</p>
+              ) : (
+                <table className="min-w-full rounded-lg border border-gray-200 bg-white text-sm">
+                  <thead className="bg-gray-50 text-left text-gray-600">
+                    <tr>
+                      <th className="px-3 py-2 font-medium">조합원</th>
+                      <th className="px-3 py-2 text-right font-medium">합계</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </section>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {data.coop_task_by_member.map(r => (
+                      <tr key={r.member_id}>
+                        <td className="px-3 py-2">{r.name || r.member_id.slice(0, 8)}</td>
+                        <td className="px-3 py-2 text-right">{fmtMinutes(r.minutes)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </section>
+          )}
 
           <section aria-labelledby="ov-adjust" data-testid="board-timebank-adjustments">
             <h2 id="ov-adjust" className="mb-2 text-lg font-semibold text-gray-900">

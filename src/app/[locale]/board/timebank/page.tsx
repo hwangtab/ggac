@@ -63,8 +63,14 @@ export default async function TimebankPage({ params, searchParams }: TimebankPag
   const canWrite = viewer.access === 'ok'
   const boardOff = canWrite && (await isBoardEnabled()) === false
   const query = parseListingQuery(rawParams)
+  // 조합 업무 스위치(전체 + `coop_tasks_enabled`, 둘 다 `=== true`)가 꺼져 있으면 조합
+  // 업무 탭을 숨기고 그 글도 목록에서 뺀다. `?kind=coop_task`로 들어와도 전체로 본다.
+  const coopOn = viewer.coopTasksEnabled
+  if (!coopOn && query.kind === 'coop_task') query.kind = undefined
+  const visibleKinds = TIMEBANK_LISTING_KINDS.filter(kind => coopOn || kind !== 'coop_task')
   const { rows, hasNext } = await listTimebankListings({
     kind: query.kind,
+    excludeKinds: coopOn ? undefined : ['coop_task'],
     category: query.category,
     status: query.status,
     authorId: query.mine ? viewer.userId : undefined,
@@ -145,7 +151,7 @@ export default async function TimebankPage({ params, searchParams }: TimebankPag
           <Link href={hrefWith({ kind: null })} className={chip(!query.kind)}>
             {t('tabs.all')}
           </Link>
-          {TIMEBANK_LISTING_KINDS.map(kind => (
+          {visibleKinds.map(kind => (
             <Link key={kind} href={hrefWith({ kind })} className={chip(query.kind === kind)}>
               {t(`tabs.${kind}`)}
             </Link>

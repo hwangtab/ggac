@@ -16,7 +16,11 @@ type MeSummary = {
   pending: { to_confirm: number; awaiting_other: number }
 }
 
-/** 잔액 영역(스펙 §8): 잔액, 하한까지 남은 시간, 이번 달 조합 업무 받은 양/상한, 대기 수. */
+/**
+ * 잔액 영역(스펙 §8): 잔액, 하한까지 남은 시간, 이번 달 조합 업무 받은 양/상한, 대기 수.
+ * 조합 업무 칸은 스위치(`coop_tasks_enabled` — 서버가 전체 스위치와 함께 `=== true`로
+ * 판정한 값)가 켜졌을 때만 그린다.
+ */
 export default function BalancePanel({ refreshKey }: { refreshKey: number }) {
   const t = useTranslations('timebank')
   const [me, setMe] = useState<MeSummary | null>(null)
@@ -50,7 +54,9 @@ export default function BalancePanel({ refreshKey }: { refreshKey: number }) {
       )}
       {!me && !error && <div className="h-24 animate-pulse rounded-lg bg-gray-100" />}
       {me && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div
+          className={`grid gap-3 sm:grid-cols-2 ${me.coop_tasks_enabled === true ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}
+        >
           <div className="rounded-lg border border-violet-200 bg-violet-50 p-4">
             <p className="text-xs text-violet-700">{t('my.balance.balance')}</p>
             <p
@@ -70,16 +76,23 @@ export default function BalancePanel({ refreshKey }: { refreshKey: number }) {
               {t('my.balance.floor', { floor: fmt(me.floor_minutes) })}
             </p>
           </div>
-          <div className="rounded-lg border border-gray-200 bg-white p-4">
-            <p className="text-xs text-gray-500">{t('my.balance.coopTask', { month: me.month })}</p>
-            <p className="mt-1 text-lg font-semibold text-gray-900">
-              {fmt(me.coop_task.received_minutes)}
-              <span className="text-sm font-normal text-gray-500">
-                {' '}
-                / {fmt(me.coop_task.cap_minutes)}
-              </span>
-            </p>
-          </div>
+          {me.coop_tasks_enabled === true && (
+            <div
+              className="rounded-lg border border-gray-200 bg-white p-4"
+              data-testid="timebank-balance-coop"
+            >
+              <p className="text-xs text-gray-500">
+                {t('my.balance.coopTask', { month: me.month })}
+              </p>
+              <p className="mt-1 text-lg font-semibold text-gray-900">
+                {fmt(me.coop_task.received_minutes)}
+                <span className="text-sm font-normal text-gray-500">
+                  {' '}
+                  / {fmt(me.coop_task.cap_minutes)}
+                </span>
+              </p>
+            </div>
+          )}
           <div className="rounded-lg border border-gray-200 bg-white p-4">
             <p className="text-xs text-gray-500">{t('my.balance.pending')}</p>
             <p className="mt-1 text-sm text-gray-900">
