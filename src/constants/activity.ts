@@ -57,6 +57,8 @@ export const SERVER_ONLY_ACTIVITY_ACTION_TYPES = [
   'admin_action',
   'file_deleted',
   'attachment_downloaded',
+  // 메일함에서 새 메일을 작성해 보낸 일(관리자). 누가 누구에게 보냈는지의 흔적이다. DB CHECK가 없어 마이그레이션 불필요.
+  'mailbox_email_sent',
   'funding_campaign_created',
   'funding_campaign_created_by_admin',
   'funding_campaign_submitted',
@@ -106,6 +108,8 @@ export const ACTIVITY_TARGET_TYPES = [
   'notification',
   'system',
   'inbound_email_attachment',
+  'outbound_email',
+  'outbound_email_attachment',
   'funding_campaign',
   'funding_pledge',
   'ticket_reservation',

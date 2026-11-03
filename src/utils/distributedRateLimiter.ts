@@ -639,6 +639,15 @@ export const DISTRIBUTED_RATE_LIMIT_CONFIGS = {
     message: '파일 업로드 한도를 초과했습니다. 잠시 후 다시 시도해주세요.',
   },
 
+  // 메일함 새 메일 발송(10분에 10회). 실제 수신자에게 나가는 요청이라 일반 관리자 API보다 훨씬 좁다.
+  // 일일 상한의 정본은 DB 합계(`countOutboundRecipientsSince`)다 — 이 리미터는 요청 폭주만 막는다.
+  MAILBOX_COMPOSE: {
+    name: 'mailbox_compose',
+    windowMs: 10 * 60 * 1000,
+    maxRequests: 10,
+    message: '메일 발송 요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요.',
+  },
+
   // 관리자 API (분당 100회)
   ADMIN_API: {
     name: 'admin_api',

@@ -6,10 +6,16 @@
  * 응답 조립이나 인가 판정에 쓰는 것은 아무것도 이 파일에 들여오지 않는다.
  */
 
-import { and, asc, desc, eq, gte, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, inArray, or, sql } from 'drizzle-orm'
 
 import { db } from '../client.ts'
-import { inboundEmails, inboundEmailAttachments, inboundEmailReplies } from '../schema/index.ts'
+import {
+  inboundEmails,
+  inboundEmailAttachments,
+  inboundEmailReplies,
+  outboundEmails,
+  outboundEmailAttachments,
+} from '../schema/index.ts'
 
 import { toIso, toSnakeCase, likeContains } from './_helpers.ts'
 
@@ -386,4 +392,190 @@ export async function countInboundSince(sinceMs: number): Promise<number> {
     .from(inboundEmails)
     .where(gte(inboundEmails.receivedAt, new Date(sinceMs)))
   return Number(row?.count ?? 0)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 새 메일 작성(보낸 메일) — outbound_emails
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type InsertOutboundInput = {
+  idempotency_key: string
+  to_addresses: string[]
+  cc_addresses: string[]
+  bcc_addresses: string[]
+  recipient_count: number
+  subject: string
+  body_html: string
+  sent_by: string | null
+  sent_by_email: string | null
+}
+
+export type OutboundFinalStatus = 'failed' | 'unknown' | 'blocked'
+
+function rowToOutbound(row: Record<string, unknown>): Record<string, unknown> {
+  const snake = toSnakeCase(row)
+  snake.sent_at = toIso(row.sentAt as Date | null)
+  snake.created_at = toIso(row.createdAt as Date | null)
+  snake.updated_at = toIso(row.updatedAt as Date | null)
+  return snake
+}
+
+/**
+ * 발송 **전에** `sending` 행을 쓴다. `idempotency_key`가 이미 있으면 새 행을 만들지 않고
+ * 기존 행을 돌려준다 — 호출부가 그 상태를 보고 중복 발송 여부를 판정한다.
+ */
+export async function insertOutboundSending(
+  input: InsertOutboundInput
+): Promise<{ created: boolean; row: Record<string, unknown> }> {
+  const inserted = await db
+    .insert(outboundEmails)
+    .values({
+      idempotencyKey: input.idempotency_key,
+      toAddresses: JSON.stringify(input.to_addresses),
+      ccAddresses: input.cc_addresses.length ? JSON.stringify(input.cc_addresses) : null,
+      bccAddresses: input.bcc_addresses.length ? JSON.stringify(input.bcc_addresses) : null,
+      recipientCount: input.recipient_count,
+      subject: input.subject,
+      bodyHtml: input.body_html,
+      sentBy: input.sent_by,
+      sentByEmail: input.sent_by_email,
+      status: 'sending',
+    })
+    .onConflictDoNothing({ target: outboundEmails.idempotencyKey })
+    .returning()
+  if (inserted.length > 0) return { created: true, row: rowToOutbound(inserted[0]) }
+
+  const [existing] = await db
+    .select()
+    .from(outboundEmails)
+    .where(eq(outboundEmails.idempotencyKey, input.idempotency_key))
+    .limit(1)
+  if (!existing) throw new Error('보낸 메일 행을 만들지도, 찾지도 못했습니다.')
+  return { created: false, row: rowToOutbound(existing) }
+}
+
+/** 발송이 확인된 행만 `sent`로 옮긴다. `sending` 상태일 때만 바꾼다(되돌림 방지). */
+export async function markOutboundSent(id: string, resendMessageId: string | null): Promise<void> {
+  await db
+    .update(outboundEmails)
+    .set({ status: 'sent', resendMessageId, sentAt: new Date(), error: null })
+    .where(and(eq(outboundEmails.id, id), eq(outboundEmails.status, 'sending')))
+}
+
+export async function markOutboundStatus(
+  id: string,
+  status: OutboundFinalStatus,
+  error: string | null
+): Promise<void> {
+  await db
+    .update(outboundEmails)
+    .set({ status, error: error ? error.slice(0, 200) : null })
+    .where(and(eq(outboundEmails.id, id), eq(outboundEmails.status, 'sending')))
+}
+
+export async function getOutboundEmail(id: string): Promise<Record<string, unknown> | null> {
+  const [row] = await db.select().from(outboundEmails).where(eq(outboundEmails.id, id)).limit(1)
+  return row ? rowToOutbound(row) : null
+}
+
+export async function insertOutboundAttachment(input: {
+  id: string
+  email_id: string
+  filename: string
+  content_type: string | null
+  size_bytes: number
+  blob_path: string
+}): Promise<void> {
+  await db.insert(outboundEmailAttachments).values({
+    id: input.id,
+    emailId: input.email_id,
+    filename: input.filename,
+    contentType: input.content_type,
+    sizeBytes: input.size_bytes,
+    blobPath: input.blob_path,
+  })
+}
+
+export async function listOutboundAttachments(emailId: string): Promise<Record<string, unknown>[]> {
+  const rows = await db
+    .select()
+    .from(outboundEmailAttachments)
+    .where(eq(outboundEmailAttachments.emailId, emailId))
+    .orderBy(asc(outboundEmailAttachments.createdAt))
+  return rows.map(rowToAttachment)
+}
+
+export async function getOutboundAttachment(id: string): Promise<Record<string, unknown> | null> {
+  const [row] = await db
+    .select()
+    .from(outboundEmailAttachments)
+    .where(eq(outboundEmailAttachments.id, id))
+    .limit(1)
+  return row ? rowToAttachment(row) : null
+}
+
+/**
+ * `sinceMs` 이후 메일함에서 나간 수신자 수(= Resend가 세는 단위의 보수적 추정).
+ * 새 메일은 `recipient_count` 합, 답장은 한 통에 한 명이라 행 수다. 실패·차단은 세지 않는다.
+ * `sending`을 센다 — 지금 나가는 중인 요청도 한도를 먹어야 동시 요청이 서로를 본다.
+ */
+export async function countOutboundRecipientsSince(sinceMs: number): Promise<number> {
+  const since = new Date(sinceMs)
+  const [composed] = await db
+    .select({ total: sql<number>`coalesce(sum(${outboundEmails.recipientCount}), 0)` })
+    .from(outboundEmails)
+    .where(
+      and(
+        gte(outboundEmails.createdAt, since),
+        inArray(outboundEmails.status, ['sending', 'sent', 'unknown'])
+      )
+    )
+  const [replied] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(inboundEmailReplies)
+    .where(gte(inboundEmailReplies.createdAt, since))
+  return Number(composed?.total ?? 0) + Number(replied?.count ?? 0)
+}
+
+export type SentMailKind = 'all' | 'compose' | 'reply'
+
+/**
+ * 보낸 편지함 — 새 메일(`outbound_emails`)과 답장(`inbound_email_replies`)을 최신순으로 합친다.
+ * 답장의 수신자는 원본 메일의 발신자다. 본문은 싣지 않는다(상세에서 읽는다). BCC도 싣지 않는다.
+ */
+export async function listSentMail(options: {
+  limit: number
+  offset: number
+  kind: SentMailKind
+}): Promise<{ items: Record<string, unknown>[]; total_count: number }> {
+  const composeSql = sql`
+    select o.id as id, 'compose' as kind, o.to_addresses as to_addresses, o.subject as subject,
+           o.status as status, o.created_at as created_at, null as related_email_id,
+           (select count(*) from outbound_email_attachments a where a.email_id = o.id) as attachment_count
+    from outbound_emails o`
+  const replySql = sql`
+    select r.id as id, 'reply' as kind, json_array(ie.from_address) as to_addresses, r.subject as subject,
+           'sent' as status, r.created_at as created_at, r.email_id as related_email_id,
+           0 as attachment_count
+    from inbound_email_replies r join inbound_emails ie on ie.id = r.email_id`
+  const union =
+    options.kind === 'compose'
+      ? composeSql
+      : options.kind === 'reply'
+        ? replySql
+        : sql`${composeSql} union all ${replySql}`
+
+  const rows = await db.all<Record<string, unknown>>(
+    sql`select * from (${union}) order by created_at desc, id desc limit ${options.limit} offset ${options.offset}`
+  )
+  const countRows = await db.all<{ n: number }>(sql`select count(*) as n from (${union})`)
+
+  return {
+    items: rows.map(row => ({
+      ...row,
+      created_at: toIso(new Date(Number(row.created_at))),
+      attachment_count: Number(row.attachment_count ?? 0),
+    })),
+    total_count: Number(countRows[0]?.n ?? 0),
+  }
 }

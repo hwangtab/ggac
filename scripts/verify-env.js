@@ -151,6 +151,12 @@ const optionalEnvVars = [
   'MAILBOX_BACKFILL_CRON_TOKEN',
   // 일일 수신 임계치. 기본 60.
   'MAILBOX_DAILY_INBOUND_ALERT',
+  // 메일함 새 메일 작성 킬스위치. 정확히 'true'일 때만 켜진다 — 비어 있으면 작성·발송이 막힌다(정상 상태).
+  'MAILBOX_COMPOSE_ENABLED',
+  // 메일함 발신 일일 상한(수신자 수 기준, 기본 20)과 받은 메일까지 합친 총량 가드(기본 70).
+  // 인증·다이제스트 메일 몫을 남기려는 값이다.
+  'MAILBOX_DAILY_OUTBOUND_LIMIT',
+  'MAILBOX_DAILY_TOTAL_GUARD',
   // 결제 킬스위치. `isPaymentEnabled()`(src/lib/payments/toss/config.ts)이 값이
   // 정확히 'toss'일 때만 true다 — 비어 있으면 신규 결제가 전부 막히고
   // funding/expire 크론도 skipped로 빠진다. 켜지 않은 상태가 정상 동작이라
