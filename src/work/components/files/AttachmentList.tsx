@@ -52,7 +52,7 @@ export default function AttachmentList({
                 type="button"
                 onClick={() => openPreview(a.id)}
                 aria-label={`${a.name} 크게 보기`}
-                className="block overflow-hidden rounded-w-lg border bg-muted outline-none focus-visible:ring focus-visible:ring-ring/50"
+                className="block overflow-hidden rounded-w-lg border bg-subtle outline-none"
               >
                 {/* 서명 URL 로 302 되는 보호된 이미지 — next/image 최적화 대상 아님 */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -111,7 +111,7 @@ export default function AttachmentList({
                   href={fileUrl(a.id, { download: true })}
                   download={a.name}
                   aria-label={`${a.name} 다운로드`}
-                  className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring focus-visible:ring-ring/50"
+                  className="shrink-0 rounded-w-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
                 >
                   <DownloadIcon aria-hidden="true" className="size-4" />
                 </a>

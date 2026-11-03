@@ -75,7 +75,7 @@ export function TextPreview({ file }: { file: PreviewFile }) {
       // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- 스크롤 영역을 키보드로 움직이게 한다(원본과 같다)
       tabIndex={0}
       aria-label={`${file.name} 내용`}
-      className="size-full overflow-auto bg-background p-4 text-left font-mono text-[13px] leading-relaxed break-words whitespace-pre-wrap outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="size-full overflow-auto bg-background p-4 text-left font-mono text-[13px] leading-relaxed break-words whitespace-pre-wrap outline-none"
     >
       {state.text}
     </pre>

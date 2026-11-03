@@ -45,7 +45,7 @@ export type MessageActionSheetProps = {
 }
 
 const ITEM =
-  'flex h-11 w-full items-center gap-3 rounded-w-md px-3 text-left text-sm outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring'
+  'flex h-11 w-full items-center gap-3 rounded-w-lg px-3 text-left text-sm outline-none hover:bg-accent'
 
 function Item({
   icon,
@@ -123,7 +123,7 @@ export default function MessageActionSheet({
                   type="button"
                   aria-label={emojiLabel(emoji)}
                   onClick={run(() => onReact(emoji))}
-                  className="flex h-11 w-full items-center justify-center rounded-w-md text-xl outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+                  className="flex h-11 w-full items-center justify-center rounded-w-lg text-xl outline-none hover:bg-accent"
                 >
                   {emoji}
                 </button>

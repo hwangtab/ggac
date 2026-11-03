@@ -124,7 +124,7 @@ export default function HwpEditScreen({
     gate.kind === 'failed' ? gate.message : editorError && phase !== 'ready' ? editorError : null
 
   return (
-    <div className="flex h-dvh flex-col" data-testid="hwp-edit-screen">
+    <div className="flex h-full flex-col" data-testid="hwp-edit-screen">
       <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
         <Button type="button" variant="ghost" size="sm" onClick={onBackClick}>
           <ArrowLeftIcon aria-hidden="true" />
@@ -170,7 +170,7 @@ export default function HwpEditScreen({
         </NoticeBanner>
       )}
 
-      <main id="main-content" className="relative min-h-0 flex-1">
+      <div className="relative min-h-0 flex-1">
         {failedMessage ? (
           <div
             role="alert"
@@ -212,7 +212,7 @@ export default function HwpEditScreen({
             </div>
           )
         )}
-      </main>
+      </div>
 
       <HwpSaveDialog
         open={saveFile !== null}

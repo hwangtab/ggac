@@ -86,8 +86,16 @@ export type TopicListener = (event: TopicEvent) => void
 
 export type PresenceMeta = { user_id: string; display_name: string }
 
-/** 응답의 배지 스냅샷 수신자. requestedAt = 그 요청을 보낸 시각(ms) — 사이드바가 읽음 기록과 비교한다 */
-export type BadgeListener = (snapshot: SidebarBadgeSnapshot, requestedAt: number) => void
+/**
+ * 응답의 배지 스냅샷 수신자. requestedAt = 그 요청을 보낸 시각(ms) — 사이드바가 읽음 기록과 비교한다.
+ * membershipChanged = 내 대화 목록이 바뀌었다(새 DM·채널 초대 — 사용자 토픽 `MEMBER_ADDED`와 같은 신호). 이사회실 메뉴가
+ * 대화 종류(채널/DM)를 다시 읽는 데 쓴다(ggac에서 더한 인자)
+ */
+export type BadgeListener = (
+  snapshot: SidebarBadgeSnapshot,
+  requestedAt: number,
+  membershipChanged: boolean
+) => void
 
 // ── 주기(설계 §6-3) — 순수 규칙은 lib/sync/poll.ts ─────────────────────────────
 
@@ -317,7 +325,7 @@ async function applyResponse(
 
   for (const l of [...badgeListeners]) {
     try {
-      l(data.badges, requestedAt)
+      l(data.badges, requestedAt, membershipChanged)
     } catch (e) {
       console.error('[realtime] 배지 listener 오류:', e)
     }

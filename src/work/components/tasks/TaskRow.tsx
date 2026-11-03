@@ -205,7 +205,7 @@ export default function TaskRow({
                 <Link
                   href={href}
                   aria-label={`${task.title} 원본 메시지`}
-                  className="inline-flex items-center gap-1 rounded text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+                  className="inline-flex items-center gap-1 rounded-w-lg text-primary outline-none hover:underline"
                 >
                   <MessageSquareIcon aria-hidden="true" className="size-3.5" />
                   원본 메시지

@@ -5,7 +5,6 @@ import { ReactNode } from 'react'
 import Navigation from '@/components/Navigation'
 import Footer from '@/components/Footer'
 import ActivityTracker from '@/components/ActivityTracker'
-import { isBoardWorkPath } from '@/lib/boardWork/paths'
 import type { GlobalData } from '@/types'
 
 interface ConditionalLayoutProps {
@@ -20,12 +19,6 @@ export default function ConditionalLayout({ children, globalData }: ConditionalL
   const pathname = usePathname() || ''
   const isAdminPage = pathname.startsWith('/admin')
 
-  if (isBoardWorkPath(pathname)) {
-    // 이사회 업무툴은 화면 전체를 쓰는 앱 셸이다(docs/board-work/01-설계.md §2-1). 전역 내비·푸터를 두지 않고,
-    // 포스터 테마(`data-poster`)도 켜지 않는다 — 업무툴은 자기 토큰(`src/work/styles.css`)으로 칠한다.
-    return <ActivityTracker>{children}</ActivityTracker>
-  }
-
   if (isAdminPage) {
     // 관리자 페이지에서는 Navigation과 Footer 없이 children만 렌더링
     return (
@@ -37,7 +30,8 @@ export default function ConditionalLayout({ children, globalData }: ConditionalL
     )
   }
 
-  // 일반 페이지에서는 기존 레이아웃 사용
+  // 일반 페이지에서는 기존 레이아웃 사용. 이사회 업무툴(`/board-room/chat` 등)도 여기서 그린다 — 전역 내비·푸터·
+  // 포스터 테마 안의 이사회실 한 영역이다(docs/board-work/03-통합-재설계.md §4-1).
   return (
     <ActivityTracker>
       {/*

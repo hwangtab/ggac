@@ -167,9 +167,21 @@ const Navigation = () => {
   const handleLogout = async () => {
     try {
       setLoading(true)
-      // 이사회 업무툴 푸시 구독(이 기기)을 로그아웃 **전에** 해지한다 — 다음 사람이 이 브라우저를 쓰면 앞사람의
-      // 멘션·DM 알림이 뜨지 않게. 업무툴 서비스 워커가 없는 브라우저는 아무 요청도 보내지 않고, 실패해도 던지지 않는다.
-      await releaseDevicePushSubscription()
+      // 이사회 업무툴 흔적을 로그아웃 **전에** 지운다(docs/board-work/03-통합-재설계.md §2-3 — 업무툴 자체 로그아웃이 없어졌다).
+      // 이사·감사·관리자: 푸시 구독 해지(서버 해지에 세션이 필요하다)·임시 저장·마지막 위치·파일 핸들·편집기 출처 저장소(purge
+      // iframe, 최대 3초)까지 `cleanupBeforeSignOut`이 한다. 그 밖의 계정은 업무툴을 쓸 수 없어 푸시 구독만 확인한다 —
+      // 업무툴 서비스 워커가 없는 브라우저는 아무 요청도 보내지 않는다. 둘 다 던지지 않는다.
+      if (isBoardMember) {
+        try {
+          const { cleanupBeforeSignOut } = await import('@work/components/layout/sign-out-cleanup')
+          await cleanupBeforeSignOut()
+        } catch (cleanupError) {
+          // 정리가 실패해도 로그아웃은 계속한다
+          console.error('[Navigation] 업무툴 로그아웃 정리 실패:', cleanupError)
+        }
+      } else {
+        await releaseDevicePushSubscription()
+      }
       const response = await fetch('/api/auth/logout', {
         method: 'POST',
         credentials: 'include',

@@ -13,7 +13,7 @@ import {
 import ChannelList, { type CategoryMenu as ChannelCategoryMenu } from './ChannelList'
 import CategoryMenu, { CategoryNameDialog } from './CategoryMenu'
 import { CATEGORY_DRAG_TYPE, CHANNEL_DRAG_TYPE } from './drag-types'
-import { COUNT_BADGE_CLASS } from './pane-styles'
+import { COUNT_BADGE_CLASS, UNREAD_DOT_CLASS } from './pane-styles'
 import type { ChannelListItem } from './channel-items'
 import type { CategoryOps } from './shell-context'
 
@@ -39,6 +39,16 @@ function writeCollapsed(keys: string[]): void {
 }
 
 /** 카테고리 안 읽지 않은 합계(뮤트한 채널 제외 — ChannelList 의 강조 기준과 같다) */
+/** 묶음의 "나를 부른 것" 수 — 채널은 멘션, 뮤트 아닌 DM·그룹은 안 읽음 전부(menuBadges.ts와 같은 규칙) */
+export function sectionUrgent(
+  items: Pick<ChannelListItem, 'unread' | 'muted' | 'mentions' | 'kind'>[]
+): number {
+  return items.reduce((sum, i) => {
+    const mentions = i.mentions ?? 0
+    return sum + (i.kind === 'dm' && !i.muted ? Math.max(i.unread, mentions) : mentions)
+  }, 0)
+}
+
 export function sectionUnread(items: Pick<ChannelListItem, 'unread' | 'muted'>[]): number {
   return items.reduce((sum, i) => (i.muted ? sum : sum + i.unread), 0)
 }
@@ -150,6 +160,7 @@ export default function ChannelSections({
       {groups.map(group => {
         const open = !collapsed.includes(group.key)
         const unread = sectionUnread(group.items)
+        const urgent = sectionUrgent(group.items)
         const headerId = `${baseId}-${group.key}-h`
         const bodyId = `${baseId}-${group.key}-b`
         const Chevron = open ? ChevronDownIcon : ChevronRightIcon
@@ -175,7 +186,7 @@ export default function ChannelSections({
             }
             onDrop={canManage ? e => onDrop(e, group.id) : undefined}
             className={cn(
-              'rounded-w-md',
+              'rounded-w-lg',
               dropKey === group.key && 'bg-sidebar-accent/60 ring-2 ring-sidebar-ring'
             )}
           >
@@ -198,7 +209,7 @@ export default function ChannelSections({
                   aria-controls={bodyId}
                   onClick={() => toggle(group.key)}
                   className={cn(
-                    'flex h-7 pointer-coarse:h-11 w-full items-center gap-1 rounded-w-md px-3 text-xs font-semibold tracking-wide text-sidebar-foreground/70 outline-none hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring',
+                    'flex h-7 pointer-coarse:h-11 w-full items-center gap-1 rounded-w-lg px-3 text-xs font-semibold tracking-wide text-sidebar-foreground/70 outline-none hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground',
                     manageable && 'pr-8 pointer-coarse:pr-11'
                   )}
                 >
@@ -206,19 +217,21 @@ export default function ChannelSections({
                   <span id={headerId} className="min-w-0 flex-1 truncate text-left">
                     {group.label}
                   </span>
-                  {unread > 0 && (
-                    <span
-                      data-section-unread={unread}
-                      className={cn(
-                        COUNT_BADGE_CLASS,
-                        'ml-auto',
-                        open
-                          ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                          : 'bg-sidebar-primary text-sidebar-primary-foreground'
+                  {/* 접힌 묶음만 알린다(펼친 묶음은 행마다 보인다). 메뉴·행 배지와 같은 규칙(§8-4) —
+                      나를 부른 것이 있으면 앰버 숫자, 아니면 앰버 점 */}
+                  {unread > 0 && !open && (
+                    <span data-section-unread={unread} className="ml-auto flex items-center">
+                      {urgent > 0 ? (
+                        <span aria-hidden="true" data-badge="mention" className={COUNT_BADGE_CLASS}>
+                          {urgent > 99 ? '99+' : urgent}
+                        </span>
+                      ) : (
+                        <span aria-hidden="true" data-badge="dot" className={UNREAD_DOT_CLASS} />
                       )}
-                    >
-                      <span aria-hidden="true">{unread > 99 ? '99+' : unread}</span>
-                      <span className="sr-only">읽지 않은 메시지 {unread}개</span>
+                      <span className="sr-only">
+                        읽지 않은 메시지 {unread}개
+                        {urgent > 0 ? `, 나를 부른 메시지 ${urgent}개` : ''}
+                      </span>
                     </span>
                   )}
                 </button>
@@ -270,7 +283,7 @@ export default function ChannelSections({
           <button
             type="button"
             onClick={() => setNewOpen(true)}
-            className="mt-2 flex h-8 w-full items-center gap-1 rounded-w-md px-3 text-xs text-sidebar-foreground/70 outline-none hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring pointer-coarse:h-11"
+            className="mt-2 flex h-8 w-full items-center gap-1 rounded-w-lg px-3 text-xs text-sidebar-foreground/70 outline-none hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground pointer-coarse:h-11"
           >
             <PlusIcon aria-hidden="true" className="size-3.5" />새 카테고리
           </button>

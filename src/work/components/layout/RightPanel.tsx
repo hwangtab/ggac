@@ -10,12 +10,14 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { XIcon } from 'lucide-work'
+import { ArrowLeftIcon, XIcon } from 'lucide-work'
 import { Button } from '@work/components/ui/button'
 import { cn } from '@work/lib/utils'
 
 /**
- * 우측 패널(스레드·파일 상세·멤버 목록) 슬롯 — 데스크톱 360px 3단째, 모바일은 전체화면.
+ * 우측 패널(스레드·파일 상세·멤버 목록) 슬롯 — ggac 이식(docs/board-work/03-통합-재설계.md §3): 2xl(1536px)부터는 대화 칸 옆
+ * 360px 세 번째 칸, 그보다 좁으면 **대화 칸 위를 덮는다**(lg 이상은 오른쪽 360px, lg 미만은 대화 칸 전체 + `← 대화`).
+ * 화면 전체를 덮지 않는다 — 이사회실 메뉴와 전역 내비는 보인다.
  *
  * 사용(클라이언트 컴포넌트에서):
  *   const panel = useRightPanel();
@@ -27,7 +29,7 @@ import { cn } from '@work/lib/utils'
  * (스크린리더가 무엇이 열렸는지 읽는다), 닫히면 그 요소로 되돌린다(아직 화면에 있고 포커스를 잃었을 때만).
  * 페이지가 스스로 여는 경우(위키 목차 자동 열기 — 포커스가 body)는 포커스를 건드리지 않는다.
  *
- * 모바일(<768px)은 전체 화면이라 열 때 history 항목을 넣어 뒤로 가기가 패널 닫기가 되게 한다(아래 Provider 주석).
+ * 좁은 화면(<1024px)은 패널이 대화 칸 전체를 덮어서 열 때 history 항목을 넣어 뒤로 가기가 패널 닫기가 되게 한다(아래 Provider 주석).
  */
 export type RightPanelView = {
   /** 무엇을 보여주는지 식별(예: 'thread:<id>', 'members:<channelId>') */
@@ -50,9 +52,9 @@ const RightPanelContext = createContext<RightPanelApi | null>(null)
 /** 슬롯이 "열린 직후 제목으로 포커스를 옮길지" 한 번 묻는다(내부용) */
 const FocusRequestContext = createContext<() => boolean>(() => false)
 
-/** 패널이 전체 화면이 되는 폭(CSS `md` 미만) */
+/** 패널이 대화 칸 전체를 덮는 폭(CSS `lg` 미만) */
 function isMobileViewport(): boolean {
-  return typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 767px)').matches
+  return typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 1023px)').matches
 }
 
 /** 패널 밖에서 포커스를 갖고 있던 요소(패널을 연 단추 등) */
@@ -112,7 +114,7 @@ export function RightPanelProvider({ children }: { children: ReactNode }) {
     if (target && target.isConnected && focusLost) target.focus()
   }, [isOpen])
 
-  // 모바일(<768px)에서는 패널이 전체 화면이라 "뒤로 가기"가 패널 닫기여야 한다 — 스레드를 연 채 뒤로 제스처를 하면
+  // 좁은 화면(<1024px)에서는 패널이 대화 칸 전체를 덮어서 "뒤로 가기"가 패널 닫기여야 한다 — 스레드를 연 채 뒤로 제스처를 하면
   // 대화 화면을 떠나던 것을 막는다. 열 때 history 항목을 하나 넣고, popstate 면 닫고, 단추·Esc 로 닫을 땐 그 항목을 되감는다.
   // 되감기는 아직 같은 주소에 있을 때만(패널 안 링크로 다른 화면에 갔다면 그 항목은 이미 지나갔다) — 남의 항목을 건드리지 않는다.
   // 데스크톱·matchMedia 없는 환경(jsdom)은 건드리지 않는다.
@@ -191,19 +193,37 @@ export function RightPanelSlot({ className }: { className?: string }) {
       data-right-panel=""
       aria-label={view.title}
       className={cn(
-        'fixed inset-0 z-40 flex flex-col bg-background md:static md:z-auto md:w-panel md:shrink-0 md:border-l',
+        // 2xl 미만: 대화 칸(셸의 relative 상자)을 덮는다 — lg 미만은 전체, lg 이상은 오른쪽 360px. 2xl부터는 세 번째 칸.
+        'absolute inset-0 z-30 flex flex-col bg-card lg:left-auto lg:w-[360px] lg:border-l 2xl:static 2xl:z-auto 2xl:shrink-0',
         className
       )}
     >
-      <div className="flex h-12 shrink-0 items-center justify-between border-b px-4">
-        <h2
-          ref={headingRef}
-          tabIndex={-1}
-          className="truncate text-base font-semibold outline-none"
+      <div className="flex h-12 shrink-0 items-center justify-between gap-1 border-b px-2 lg:px-4">
+        <div className="flex min-w-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={close}
+            className="inline-flex shrink-0 items-center gap-1 rounded-w-lg px-2 py-1 text-sm text-muted-foreground hover:text-foreground lg:hidden"
+          >
+            <ArrowLeftIcon aria-hidden="true" className="size-4" />
+            대화
+          </button>
+          <h2
+            ref={headingRef}
+            tabIndex={-1}
+            className="truncate text-base font-semibold outline-none"
+          >
+            {view.title}
+          </h2>
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          onClick={close}
+          aria-label="패널 닫기"
+          className="hidden lg:inline-flex"
         >
-          {view.title}
-        </h2>
-        <Button type="button" variant="ghost" size="icon-sm" onClick={close} aria-label="패널 닫기">
           <XIcon aria-hidden="true" />
         </Button>
       </div>

@@ -16,7 +16,7 @@ import { MOBILE_SORT_CLASS } from '@work/components/layout/pane-styles'
  */
 export default function ChatHome({
   title = '대화를 고르세요',
-  description = '목록에서 대화를 고르거나 새 채팅으로 동료에게 말을 걸어 보세요.',
+  description = '목록에서 대화를 고르거나 새 채팅으로 다른 이사·감사에게 말을 걸어 보세요.',
 }: {
   /** ggac 이식: 업무툴 첫 화면(`/board-room/chat`)이 원본 홈 자리를 겸해서 제목·설명을 바꿀 수 있게 했다 */
   title?: ReactNode
@@ -30,14 +30,14 @@ export default function ChatHome({
         icon={MessagesSquareIcon}
         title={title}
         description={description}
-        className="hidden md:flex"
+        className="hidden lg:flex"
       >
         <Link href="/chat?new=1" className={buttonVariants({ size: 'sm' })}>
           <MessageSquarePlusIcon aria-hidden="true" />새 채팅
         </Link>
       </EmptyState>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-2 md:hidden">
+      <div className="min-h-0 flex-1 overflow-y-auto p-2 lg:hidden">
         <h1 className="sr-only">채팅</h1>
         <div className="mb-2 flex items-center gap-1">
           <Link href="/chat?new=1" className={buttonVariants({ className: 'flex-1' })}>

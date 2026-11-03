@@ -27,7 +27,7 @@ export function messageHref(item: Pick<FileListItem, 'channel_id' | 'message_id'
 
 /** 다른 화면으로 가는 바로 가기 행(아이콘 · 이름 · ›) */
 const SHORTCUT_CLASS =
-  'flex items-center gap-2 px-4 py-3 text-sm outline-none hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset'
+  'flex items-center gap-2 px-4 py-3 text-sm outline-none hover:bg-accent focus-visible:bg-accent'
 
 /** 우측 패널(useRightPanel().open 의 content)에 들어가는 파일 상세. */
 export default function FileDetail({
@@ -62,7 +62,7 @@ export default function FileDetail({
 
   return (
     <div className="flex flex-col gap-4 p-4">
-      <div className="flex aspect-video items-center justify-center overflow-hidden rounded-w-lg border bg-muted">
+      <div className="flex aspect-video items-center justify-center overflow-hidden rounded-w-lg border bg-subtle">
         <FileThumbnail key={item.id} file={item} />
       </div>
 

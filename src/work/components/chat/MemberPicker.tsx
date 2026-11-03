@@ -10,7 +10,7 @@ const ROLE_LABEL: Record<NonNullable<ShellPerson['role']>, string> = {
   owner: '관리자',
   admin: '관리자',
   member: '',
-  guest: '서브관리자',
+  guest: '외부 참여자',
 }
 
 /**
@@ -68,7 +68,7 @@ export default function MemberPicker({
           type="button"
           disabled={disabled || quickDone}
           onClick={() => onChange([...new Set([...selected, ...quickIds])])}
-          className="inline-flex h-8 items-center rounded-w-md border px-2.5 text-xs font-medium outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+          className="inline-flex h-8 items-center rounded-w-lg border px-2.5 text-xs font-medium outline-none hover:bg-accent disabled:opacity-60"
         >
           {quickDone ? `${quickAdd.label} (추가됨)` : quickAdd.label}
         </button>
@@ -106,7 +106,7 @@ export default function MemberPicker({
             <li key={p.userId}>
               <label
                 htmlFor={optId}
-                className="flex w-full cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-muted has-[:focus-visible]:bg-muted"
+                className="flex w-full cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-accent has-[:focus-visible]:bg-accent"
               >
                 <input
                   id={optId}

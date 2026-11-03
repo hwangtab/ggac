@@ -42,7 +42,7 @@ export default function SystemMessage({
       id={anchor ? `msg-${message.id}` : undefined}
       className={cn(
         boxed
-          ? 'mx-4 my-1 rounded-w-lg border bg-muted/50 px-3 py-2 text-left text-xs text-muted-foreground [overflow-wrap:anywhere]'
+          ? 'mx-4 my-1 rounded-w-lg border bg-subtle px-3 py-2 text-left text-xs text-muted-foreground [overflow-wrap:anywhere]'
           : 'px-4 py-1 text-center text-xs text-muted-foreground',
         highlighted && 'bg-primary/10'
       )}
@@ -68,7 +68,7 @@ export default function SystemMessage({
                 aria-expanded={open}
                 aria-controls={panelId}
                 onClick={() => setOpen(v => !v)}
-                className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 font-medium text-muted-foreground outline-none hover:text-foreground hover:underline focus-visible:ring focus-visible:ring-ring/50"
+                className="inline-flex items-center gap-0.5 rounded-w-lg px-1 py-0.5 font-medium text-muted-foreground outline-none hover:text-foreground hover:underline"
               >
                 {open ? (
                   <ChevronDownIcon aria-hidden="true" className="size-3.5" />
@@ -81,7 +81,7 @@ export default function SystemMessage({
             {filesBase && folder && (
               <Link
                 href={channelFilesHref(filesBase, { path: folder })}
-                className="inline-flex items-center gap-1 rounded px-1 py-0.5 font-medium text-primary outline-none hover:underline focus-visible:ring focus-visible:ring-ring/50"
+                className="inline-flex items-center gap-1 rounded-w-lg px-1 py-0.5 font-medium text-primary outline-none hover:underline"
               >
                 <FolderOpenIcon aria-hidden="true" className="size-3.5" />
                 파일 탭에서 이 폴더 열기

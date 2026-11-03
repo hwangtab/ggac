@@ -165,7 +165,7 @@ export default function OfficeEditScreen({
     gate.kind === 'failed' ? gate.message : editorError && phase !== 'ready' ? editorError : null
 
   return (
-    <div className="flex h-dvh flex-col" data-testid="office-edit-screen">
+    <div className="flex h-full flex-col" data-testid="office-edit-screen">
       <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
         <Button type="button" variant="ghost" size="sm" onClick={onBackClick}>
           <ArrowLeftIcon aria-hidden="true" />
@@ -224,7 +224,7 @@ export default function OfficeEditScreen({
         </NoticeBanner>
       )}
 
-      <main id="main-content" className="relative min-h-0 flex-1">
+      <div className="relative min-h-0 flex-1">
         {failedMessage ? (
           <div
             role="alert"
@@ -269,7 +269,7 @@ export default function OfficeEditScreen({
             </div>
           )
         )}
-      </main>
+      </div>
 
       {newDocument && baseId === null && (
         <FirstSaveDialog

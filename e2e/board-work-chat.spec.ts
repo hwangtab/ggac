@@ -60,7 +60,9 @@ test.describe('업무툴 채팅 — 폴링 동기화', () => {
   }) => {
     test.setTimeout(120_000)
     const director = await openChannel(browser, 'director')
-    const auditor = await openChannel(browser, 'auditor')
+    // 감사는 2xl(1536px) — 스레드 패널이 대화 칸을 덮지 않고 세 번째 칸으로 열린다(03-통합-재설계 §3).
+    // 1280에서는 패널이 대화 칸 오른쪽을 덮어 메시지 행의 반응 단추가 가려진다
+    const auditor = await openChannel(browser, 'auditor', { width: 1536, height: 864 })
     try {
       const text = `폴링 확인 ${Date.now()}`
 
@@ -114,15 +116,21 @@ test.describe('업무툴 채팅 — 폴링 동기화', () => {
     test.setTimeout(120_000)
     const mobile = await openChannel(browser, 'director', { width: 390, height: 844 })
     try {
-      // 데스크톱 레일·목록 패널은 숨고, 머리글 ← 뒤로·입력창이 보인다
-      await expect(mobile.page.getByRole('navigation', { name: '앱' })).toBeHidden()
-      await expect(mobile.page.getByRole('link', { name: '뒤로' })).toBeVisible()
+      // 목록 칸은 접히고(메일함과 같은 목록 → 상세), 본문 머리 ← 목록·입력창이 보인다
+      await expect(mobile.page.getByRole('complementary', { name: '대화 목록' })).toBeHidden()
+      await expect(mobile.page.getByRole('link', { name: '목록', exact: true })).toBeVisible()
       await mobile.page.screenshot({ path: 'test-results/board-work-chat-mobile.png' })
 
+      // 대화 첫 화면은 목록이 화면을 차지한다. 이사회실 모바일 가로 탭에 '업무' 묶음이 이어 붙는다(하단 탭은 없다)
       await mobile.page.goto('/board-room/chat', { waitUntil: 'domcontentloaded' })
-      await expect(mobile.page.getByRole('navigation', { name: '앱 하단 메뉴' })).toBeVisible({
+      await expect(mobile.page.getByRole('complementary', { name: '대화 목록' })).toBeVisible({
         timeout: 20_000,
       })
+      await expect(
+        mobile.page
+          .getByRole('navigation', { name: '이사회 메뉴' })
+          .getByRole('link', { name: /^대화/ })
+      ).toBeAttached()
       await mobile.page.screenshot({ path: 'test-results/board-work-home-mobile.png' })
     } finally {
       await mobile.context.close()
@@ -139,12 +147,14 @@ test.describe('업무툴 채팅 — 폴링 동기화', () => {
     try {
       const { page } = desk
       await page.goto('/board-room/chat', { waitUntil: 'domcontentloaded' })
-      await expect(page.getByRole('heading', { name: '이사회 업무툴', level: 1 })).toBeVisible({
+      await expect(page.getByRole('heading', { name: '대화', level: 1 })).toBeVisible({
         timeout: 20_000,
       })
-      // 업무툴 밖 이사회실로 돌아가는 길(레일 맨 아래)
+      // 이사회실 다른 화면으로 가는 길은 이사회실 메뉴가 그대로 맡는다
       await expect(
-        page.getByRole('navigation', { name: '앱' }).getByRole('link', { name: '이사회실' })
+        page
+          .getByRole('navigation', { name: '이사회 메뉴' })
+          .getByRole('link', { name: '대시보드' })
       ).toHaveAttribute('href', '/board-room')
       await page.screenshot({ path: 'test-results/board-work-home-desktop.png' })
 
@@ -163,7 +173,7 @@ test.describe('업무툴 채팅 — 폴링 동기화', () => {
       await expect(page.getByTestId('board-work-channel')).toBeVisible({ timeout: 20_000 })
       await expect(
         page
-          .getByRole('complementary', { name: '채널 목록' })
+          .getByRole('complementary', { name: '대화 목록' })
           .getByRole('link', { name: /authz-e2e 공개/ })
       ).toHaveAttribute('href', `/en/board-room/c/${f.workPublicChannelSlug}`)
     } finally {

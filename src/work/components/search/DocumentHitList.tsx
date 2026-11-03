@@ -43,14 +43,14 @@ export default function DocumentHitList({
               type="button"
               onClick={() => setIndex(i)}
               aria-haspopup="dialog"
-              className="flex w-full items-center gap-2 rounded-w-sm text-left text-sm outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex w-full items-center gap-2 rounded-w-lg text-left text-sm outline-none hover:underline"
             >
               <FileIcon mime={h.mime} name={h.name} size={h.size} className="size-4 shrink-0" />
               <span className="min-w-0 break-all">
                 <Highlight text={h.name} terms={terms} />
               </span>
               {h.oldVersionNo !== undefined && (
-                <span className="shrink-0 rounded-w-sm border px-1 text-xs text-muted-foreground">
+                <span className="shrink-0 rounded-w-lg border px-1 text-xs text-muted-foreground">
                   이전 버전 v{h.oldVersionNo}
                 </span>
               )}
@@ -65,7 +65,7 @@ export default function DocumentHitList({
               <time dateTime={h.createdAt}>{formatDateTime(h.createdAt, now)}</time>
               <Link
                 href={h.href}
-                className="inline-flex items-center gap-1 rounded-w-sm underline outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                className="inline-flex items-center gap-1 rounded-w-lg underline outline-none hover:text-foreground"
               >
                 <MessageSquareIcon aria-hidden="true" className="size-3.5" />
                 대화에서 보기

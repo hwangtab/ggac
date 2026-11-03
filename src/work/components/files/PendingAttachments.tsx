@@ -8,7 +8,7 @@ import FileIcon from './FileIcon'
 import type { AttachmentUploads } from './useAttachmentUploads'
 
 const ICON_BTN =
-  'shrink-0 rounded-w-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring focus-visible:ring-ring/50'
+  'shrink-0 rounded-w-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground'
 
 /**
  * 전송 전 첨부 목록(진행률·제거·총량). MessageComposer 의 attachmentsSlot 에 넣는다.
@@ -39,7 +39,7 @@ export default function PendingAttachments({
               return (
                 <li
                   key={it.localId}
-                  className="flex items-center gap-2 rounded-w-md border bg-muted px-2 py-1 text-sm"
+                  className="flex items-center gap-2 rounded-w-lg border bg-subtle px-2 py-1 text-sm"
                 >
                   <FileIcon mime={it.mime} name={it.name} size={it.size} className="size-4" />
                   <div className="min-w-0 flex-1">
@@ -56,7 +56,7 @@ export default function PendingAttachments({
                         aria-valuemin={0}
                         aria-valuemax={100}
                         aria-valuenow={percent}
-                        className="mt-1 h-1 overflow-hidden rounded-full bg-border"
+                        className="mt-1 h-1 overflow-hidden rounded-w-lg bg-border"
                       >
                         <div
                           className="h-full bg-primary transition-[width]"

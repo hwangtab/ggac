@@ -48,7 +48,7 @@ export default function NotificationPrefsForm({
 
   return (
     <div className="space-y-6">
-      <fieldset className="space-y-4 rounded-w-lg border p-4">
+      <fieldset className="space-y-4 rounded-w-lg border bg-card p-4">
         <legend className="px-1 text-sm font-semibold">방해 금지 시간</legend>
         <p className="text-xs text-muted-foreground">
           정한 시간에는 푸시 알림을 보내지 않습니다(멘션 포함). 놓친 글은 앱에서 그대로 읽지
@@ -99,7 +99,7 @@ export default function NotificationPrefsForm({
         </FieldChoice>
       </fieldset>
 
-      <fieldset className="space-y-4 rounded-w-lg border p-4">
+      <fieldset className="space-y-4 rounded-w-lg border bg-card p-4">
         <legend className="px-1 text-sm font-semibold">메일 알림(다이제스트)</legend>
         <p className="text-xs text-muted-foreground">
           멘션이나 다이렉트 메시지를 오래 읽지 않으면 가입한 메일 주소로 한 통에 모아 보냅니다.

@@ -67,7 +67,7 @@ export async function createChannel(
   const { staff } = ctx
   const parsed = createChannelSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
-  if (staff.role === 'guest') return fail('서브관리자는 채널을 만들 수 없습니다.')
+  if (staff.role === 'guest') return fail('외부 참여자는 채널을 만들 수 없습니다.')
   const limited = await writeLimited(staff.user_id)
   if (limited) return limited
 

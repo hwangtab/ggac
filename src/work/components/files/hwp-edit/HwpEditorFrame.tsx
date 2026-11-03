@@ -211,6 +211,8 @@ export default function HwpEditorFrame({
       role="group"
       aria-label={`${fileName} 편집기`}
       data-testid="hwp-editor-container"
+      // 종이 면(흰 바탕)은 의도다 — 포스터의 `bg-white` 재매핑을 비켜 간다
+      data-poster-keep=""
       className="size-full bg-white"
     />
   )

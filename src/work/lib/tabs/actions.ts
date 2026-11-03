@@ -67,7 +67,7 @@ import type { ConversationTabItem } from './types'
  */
 
 const NOT_FOUND_OR_FORBIDDEN = '탭을 찾을 수 없거나 권한이 없습니다.'
-const GUEST_MESSAGE = '서브관리자는 탭을 추가할 수 없습니다.'
+const GUEST_MESSAGE = '외부 참여자는 탭을 추가할 수 없습니다.'
 const ARCHIVED_MESSAGE = '보관된 채널의 탭은 바꿀 수 없습니다.'
 
 type TabResult = { tab: ConversationTabItem; href: string }

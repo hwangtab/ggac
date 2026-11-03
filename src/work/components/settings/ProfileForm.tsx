@@ -47,7 +47,7 @@ export default function ProfileForm({
           name="title"
           defaultValue={title ?? ''}
           maxLength={50}
-          placeholder="예: 사무국장"
+          placeholder="예: 이사"
           // ggac 이식: 직함은 관리자가 정한다(이사회 직함 director_title) — 읽기 전용으로 보여 주고 값은 그대로 보낸다
           readOnly
           className="h-9"

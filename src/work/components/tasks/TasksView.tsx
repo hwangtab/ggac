@@ -118,7 +118,7 @@ export default function TasksView({
     lockedChannelId === undefined && !readOnly && canCreate && channels.length > 0 && !prefill ? (
       <Link
         href={tasksHref({ view, channel: channelFilter, extra: { new: '1' } })}
-        className={cn(buttonVariants({ size: 'sm' }), 'hidden md:inline-flex')}
+        className={cn(buttonVariants({ size: 'sm' }), 'hidden lg:inline-flex')}
       >
         <PlusIcon aria-hidden="true" />새 할 일 만들기
       </Link>
@@ -245,7 +245,7 @@ export default function TasksView({
             lockChannel={lockedChannelId !== undefined}
             onCreated={task => dispatch({ type: 'add', task })}
             onDismiss={onDismissPrefill}
-            triggerClassName={lockedChannelId === undefined ? 'md:hidden' : undefined}
+            triggerClassName={lockedChannelId === undefined ? 'lg:hidden' : undefined}
           />
         )}
         {readOnly && (
@@ -359,7 +359,7 @@ function TaskViewNav({
 }) {
   const options = channels.filter(c => c.kind !== 'dm')
   return (
-    <nav aria-label="할 일 보기" className="space-y-2 md:hidden">
+    <nav aria-label="할 일 보기" className="space-y-2 lg:hidden">
       <ul className="flex flex-wrap gap-1.5">
         {TASK_VIEWS.map(v => {
           const active = !channelFilter && view === v
@@ -369,7 +369,7 @@ function TaskViewNav({
                 href={tasksHref({ view: v })}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'inline-flex h-8 items-center rounded-full border px-3 text-xs pointer-coarse:h-11 outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  'inline-flex h-8 items-center rounded-w-lg border px-3 text-xs pointer-coarse:h-11 outline-none',
                   active
                     ? 'border-primary bg-accent font-medium text-foreground'
                     : 'text-muted-foreground'
@@ -398,7 +398,7 @@ function TaskViewNav({
           </NativeSelect>
           <button
             type="submit"
-            className="h-8 shrink-0 rounded-w-lg border px-3 text-xs outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+            className="h-8 shrink-0 rounded-w-lg border px-3 text-xs outline-none hover:bg-accent"
           >
             이동
           </button>

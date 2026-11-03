@@ -11,8 +11,7 @@ import { SENSITIVE_PREVIEW } from '@work/lib/inbox/queries'
 import { messageSnippet } from '@work/lib/search/text'
 import type { SearchResult } from '@work/lib/search/search'
 
-const linkClass =
-  'block px-4 py-3 outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset'
+const linkClass = 'block px-4 py-3 outline-none hover:bg-accent'
 
 /** 구역이 상한에서 잘렸을 때 */
 function MoreNote({ show }: { show?: boolean }) {
@@ -24,7 +23,7 @@ function MoreNote({ show }: { show?: boolean }) {
 function DateNote({ show }: { show?: boolean }) {
   if (!show) return null
   return (
-    <p className="rounded-w-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+    <p className="rounded-w-lg bg-subtle px-3 py-2 text-xs text-muted-foreground">
       기간은 메시지에 정확히 적용됩니다. 파일(올린 날)·문서 내용(올린 날)·메모(고친 날)는 검색 상위
       결과 중에서만 기간으로 거르므로 일부가 빠질 수 있습니다.
     </p>
@@ -140,7 +139,7 @@ export default function SearchResults({ result, now }: { result: SearchResult; n
                       <Highlight text={f.name} terms={terms} />
                     </span>
                     {f.oldVersionNo !== undefined && (
-                      <span className="shrink-0 rounded-w-sm border px-1 text-xs text-muted-foreground">
+                      <span className="shrink-0 rounded-w-lg border px-1 text-xs text-muted-foreground">
                         이전 버전 v{f.oldVersionNo}
                       </span>
                     )}

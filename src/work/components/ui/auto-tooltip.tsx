@@ -114,7 +114,7 @@ export default function AutoTooltip() {
       ref={tipRef}
       aria-hidden="true"
       data-slot="auto-tooltip"
-      className="pointer-events-none fixed top-0 left-0 z-[200] max-w-xs rounded-w-md bg-foreground px-2 py-1 text-xs text-background shadow"
+      className="pointer-events-none fixed top-0 left-0 z-[200] max-w-xs rounded-w-lg border border-border bg-popover px-2 py-1 text-xs text-foreground"
       style={{
         transform: pos ? `translate(${pos.x}px, ${pos.y}px)` : undefined,
         visibility: pos ? 'visible' : 'hidden',

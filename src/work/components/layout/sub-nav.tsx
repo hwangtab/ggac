@@ -5,7 +5,7 @@ import { cn } from '@work/lib/utils'
 /**
  * 탭 줄(서브내비) 공용 부품 — docs/13 §9c.
  * 줄 `min-h-10 pointer-coarse:min-h-11` + `border-b`, 항목 `px-3 gap-1`, 활성 `border-b-2 border-primary` + `font-medium`(색 + 굵기),
- * 포커스 `focus-visible:ring-2 ring-ring`(안쪽 — 가로 스크롤 영역에서 잘리지 않게). 활성 밑줄은 줄 테두리를 1px 덮는다(`-mb-px`).
+ * 포커스는 ggac 전역 outline(globals.css — 업무 화면 안에서는 안쪽으로 그려 가로 스크롤 영역에서 잘리지 않는다). 활성 밑줄은 줄 테두리를 1px 덮는다(`-mb-px`).
  *
  * 링크만 있는 단순한 줄은 `SubNav` + `SubNavLink`. 오른쪽 안내·＋·⋯·드래그처럼 기능이 많은 줄(대화 탭 바, 관리 메뉴)은
  * 아래 클래스 상수만 가져다 쓴다 — 활성 표시를 손으로 조립하지 않는다(design-rules 검사).
@@ -24,7 +24,7 @@ export const SUB_NAV_LIST_CLASS =
 
 /** 항목 공통(활성·비활성 공통 뼈대) */
 export const SUB_NAV_ITEM_CLASS =
-  'flex items-center gap-1 whitespace-nowrap border-b-2 px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset'
+  'flex items-center gap-1 whitespace-nowrap border-b-2 px-3 text-sm outline-none'
 /** 활성 = 밑줄 색 + 굵기(색 외의 단서, §9n) */
 export const SUB_NAV_ACTIVE_CLASS = 'border-primary font-medium text-foreground'
 export const SUB_NAV_IDLE_CLASS =

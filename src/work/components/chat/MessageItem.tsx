@@ -138,7 +138,7 @@ function InlineEditor({
         }}
         onKeyDown={onKeyDown}
         rows={Math.min(8, Math.max(2, value.split('\n').length))}
-        className="block [field-sizing:fixed] min-h-0 resize-y rounded-w-md bg-background px-2 py-1.5"
+        className="block [field-sizing:fixed] min-h-0 resize-y rounded-w-lg bg-background px-2 py-1.5"
       />
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <span>Esc 취소 · Enter 저장</span>
@@ -225,7 +225,7 @@ function MessageItem({
       aria-labelledby={compact ? undefined : headingId}
       {...longPress}
       className={cn(
-        'group relative flex scroll-mt-4 gap-3 px-4 transition-colors hover:bg-muted focus-within:bg-muted',
+        'group relative flex scroll-mt-4 gap-3 px-4 transition-colors hover:bg-subtle focus-within:bg-subtle',
         compact ? 'py-0.5' : 'py-1',
         showActions && '[@media(hover:none)]:pr-12',
         highlighted && 'bg-primary/10',
@@ -240,7 +240,7 @@ function MessageItem({
         ) : (
           <span
             aria-hidden="true"
-            className="flex size-9 items-center justify-center rounded-w-md bg-secondary text-sm font-semibold text-secondary-foreground"
+            className="flex size-9 items-center justify-center rounded-[50%] bg-accent text-sm font-semibold text-subtle-foreground"
           >
             {authorName.slice(0, 1)}
           </span>
@@ -251,7 +251,7 @@ function MessageItem({
           <div className="flex items-baseline gap-2">
             <span
               id={headingId}
-              className="truncate text-sm font-semibold"
+              className="truncate text-sm font-medium text-foreground"
               title={statusOf?.(message.author_id) || undefined}
             >
               {authorName}
@@ -342,10 +342,10 @@ function MessageItem({
                     aria-label={`${emojiLabel(r.emoji)} ${r.count}명: ${who}`}
                     data-tooltip={who}
                     className={cn(
-                      'flex h-6 items-center gap-1 rounded-full border px-2 text-xs pointer-coarse:h-9 pointer-coarse:px-3 outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      'flex h-6 items-center gap-1 rounded-w-lg border px-2 text-xs pointer-coarse:h-9 pointer-coarse:px-3 outline-none',
                       r.mine
                         ? 'border-primary bg-primary/10 text-primary'
-                        : 'bg-background hover:bg-muted'
+                        : 'bg-background hover:bg-accent'
                     )}
                   >
                     <span aria-hidden="true">{r.emoji}</span>
@@ -361,7 +361,7 @@ function MessageItem({
           <button
             type="button"
             onClick={() => onOpenThread(message)}
-            className="mt-1 flex items-center gap-1 rounded text-xs font-medium text-primary pointer-coarse:min-h-11 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+            className="mt-1 flex items-center gap-1 rounded-w-lg text-xs font-medium text-primary pointer-coarse:min-h-11 outline-none hover:underline"
           >
             <MessageSquareReplyIcon aria-hidden="true" className="size-3.5" />
             답글 {message.reply_count}개
@@ -378,7 +378,7 @@ function MessageItem({
         <div
           role="toolbar"
           aria-label={`${authorName}의 메시지 작업`}
-          className="absolute -top-4 right-4 flex items-center gap-0.5 rounded-w-md border bg-background p-0.5 opacity-0 shadow [@media(hover:none)]:hidden group-hover:opacity-100 focus-within:opacity-100 has-[[aria-expanded=true]]:opacity-100"
+          className="absolute -top-4 right-4 flex items-center gap-0.5 rounded-w-lg border bg-background p-0.5 opacity-0 shadow [@media(hover:none)]:hidden group-hover:opacity-100 focus-within:opacity-100 has-[[aria-expanded=true]]:opacity-100"
         >
           {onReact && <ReactionPicker onPick={emoji => onReact(message, emoji)} />}
           {onOpenThread && (
@@ -470,7 +470,7 @@ function MessageItem({
             aria-label="메시지 작업 열기"
             aria-haspopup="dialog"
             onClick={openSheet}
-            className="absolute top-0 right-1 hidden size-11 items-center justify-center rounded-w-md text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring [@media(hover:none)]:flex"
+            className="absolute top-0 right-1 hidden size-11 items-center justify-center rounded-w-lg text-muted-foreground outline-none [@media(hover:none)]:flex"
           >
             <EllipsisIcon aria-hidden="true" className="size-5" />
           </button>

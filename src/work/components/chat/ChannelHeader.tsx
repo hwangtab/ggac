@@ -79,14 +79,14 @@ export default function ChannelHeader({
             <span
               className={cn(
                 'ml-1 shrink-0 text-xs font-normal whitespace-nowrap',
-                peerOnline ? 'text-primary' : 'text-muted-foreground'
+                peerOnline ? 'text-online' : 'text-muted-foreground'
               )}
             >
               {peerOnline ? '접속 중' : '자리 비움'}
             </span>
           )}
           {channel.archived_at && (
-            <span className="ml-1 shrink-0 rounded-w-md border px-1.5 text-xs font-normal whitespace-nowrap text-muted-foreground">
+            <span className="ml-1 shrink-0 rounded-w-lg border px-1.5 text-xs font-normal whitespace-nowrap text-muted-foreground">
               보관됨
             </span>
           )}

@@ -63,7 +63,7 @@ function CommandInput({
 }: React.ComponentProps<typeof CommandPrimitive.Input>) {
   return (
     <div data-slot="command-input-wrapper" className="p-1 pb-0">
-      <InputGroup className="!h-8 !rounded-w-lg border-input bg-muted/50 !shadow-none data-[slot=input-group-addon]:*:!pl-2">
+      <InputGroup className="!h-8 !rounded-w-lg border-input bg-background !shadow-none data-[slot=input-group-addon]:*:!pl-2">
         <CommandPrimitive.Input
           data-slot="command-input"
           className={cn(
@@ -144,7 +144,7 @@ function CommandItem({
     <CommandPrimitive.Item
       data-slot="command-item"
       className={cn(
-        "group/command-item relative flex cursor-default items-center gap-2 rounded-w-sm px-2 py-1.5 pointer-coarse:min-h-11 text-sm outline-none select-none [[data-slot=dialog-content]_&]:!rounded-w-lg data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 data-selected:bg-muted data-selected:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&:is(svg)]:*:data-selected:text-foreground",
+        "group/command-item relative flex cursor-default items-center gap-2 rounded-w-lg px-2 py-1.5 pointer-coarse:min-h-11 text-sm outline-none select-none [[data-slot=dialog-content]_&]:!rounded-w-lg data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 data-selected:bg-accent data-selected:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&:is(svg)]:*:data-selected:text-foreground",
         className
       )}
       {...props}

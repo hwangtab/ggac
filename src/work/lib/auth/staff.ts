@@ -17,6 +17,6 @@ export function isActiveStaff(staff: Pick<StaffRow, 'status'> | null | undefined
 export const STAFF_ROLE_LABEL: Record<StaffRole, string> = {
   owner: '소유자',
   admin: '관리자',
-  member: '멤버',
-  guest: '서브관리자',
+  member: '이사회 구성원',
+  guest: '외부 참여자',
 }

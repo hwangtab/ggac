@@ -27,7 +27,7 @@ export default function RemovableChips({
       {items.map(item => (
         <li
           key={item.id}
-          className="inline-flex items-center gap-1 rounded-full bg-muted py-0.5 pr-1 pl-2.5 text-xs"
+          className="inline-flex items-center gap-1 rounded-w-lg bg-subtle py-0.5 pr-1 pl-2.5 text-xs"
         >
           {item.label}
           <button
@@ -35,7 +35,7 @@ export default function RemovableChips({
             disabled={disabled}
             onClick={() => onRemove(item.id)}
             aria-label={`${item.label} 선택 해제`}
-            className="relative inline-flex size-5 items-center justify-center rounded-full outline-none pointer-coarse:after:absolute pointer-coarse:after:-inset-3 hover:bg-background focus-visible:ring-2 focus-visible:ring-ring"
+            className="relative inline-flex size-5 items-center justify-center rounded-w-lg outline-none pointer-coarse:after:absolute pointer-coarse:after:-inset-3 hover:bg-background"
           >
             <XIcon aria-hidden="true" className="size-3" />
           </button>

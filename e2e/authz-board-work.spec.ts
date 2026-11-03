@@ -35,14 +35,17 @@ test.describe('업무툴 진입', () => {
       await directorPage.goto('/board-room/chat', { waitUntil: 'domcontentloaded' })
       await expect(directorPage).toHaveURL(/\/board-room\/chat$/, { timeout: 15000 })
       // 게이트를 지나 화면이 실제로 그려졌는지 — 가드가 넘겨 준 역할까지 본다(이사 = 구성원, 관리자 아님).
-      await expect(
-        directorPage.getByRole('heading', { name: '이사회 업무툴', level: 1 })
-      ).toBeVisible({
+      await expect(directorPage.getByRole('heading', { name: '대화', level: 1 })).toBeVisible({
         timeout: 15000,
       })
       await expect(directorPage.getByTestId('board-work-staff')).toContainText('구성원')
-      // 업무툴은 전역 내비·이사회실 메뉴 없이 앱 셸만 그린다(ConditionalLayout·board-room/layout).
-      await expect(directorPage.getByRole('navigation', { name: '이사회 메뉴' })).toHaveCount(0)
+      // 업무 화면은 이사회실의 한 영역이다 — 전역 내비·이사회실 메뉴('업무' 묶음 포함) 안에서 그린다
+      // (docs/board-work/03-통합-재설계.md §4-1).
+      const boardMenu = directorPage.getByRole('navigation', { name: '이사회 메뉴' })
+      await expect(boardMenu).toBeVisible()
+      await expect(
+        boardMenu.getByRole('group', { name: '업무' }).getByRole('link', { name: /^대화/ })
+      ).toHaveAttribute('aria-current', 'page')
     } finally {
       await memberContext.close()
       await directorContext.close()

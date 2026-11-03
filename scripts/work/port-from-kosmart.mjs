@@ -14,6 +14,8 @@
  *   4. `src/work/ported.json`에 원본 경로·커밋·원본 해시를 남긴다 — 원본이 바뀌었는지 나중에 대조한다.
  *
  * 이미 있는 대상 파일은 덮어쓰지 않는다(`--force`로만). 옮긴 뒤 손으로 고친 내용을 지우지 않기 위해서다.
+ * 장부에 `modified`(손으로 고침)·`removed`(없앰)가 적힌 파일과 다른 이름으로 옮긴 파일은 `--force`로도 덮지 않는다
+ * (`--overwrite-modified`로만).
  */
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -274,6 +276,24 @@ function main(argv) {
     if (!rel.startsWith('src/')) throw new Error(`원본 경로는 src/로 시작해야 한다: ${rel}`)
     const src = path.join(KOSMART, rel)
     const dest = path.join(ROOT, 'src/work', rel.slice('src/'.length))
+    // 손으로 고친 파일(`modified`)·없앤 파일(`removed`)·이름을 바꾼 파일은 `--force`로도 덮지 않는다(03-통합-재설계 §5).
+    // 원본 변경을 따라가려면 차이를 보고 손으로 옮기거나, 정말 덮을 때만 `--overwrite-modified`를 준다.
+    const destKey = path.relative(ROOT, dest)
+    if (!argv.includes('--overwrite-modified')) {
+      if (ledger[destKey]?.modified) {
+        console.log(`건너뜀(손으로 고친 파일 — --overwrite-modified로만 덮는다): ${destKey}`)
+        continue
+      }
+      const moved = Object.entries(ledger).find(
+        ([k, v]) => v.source === rel && (k !== destKey || v.removed)
+      )
+      if (moved) {
+        console.log(
+          `건너뜀(${moved[1].removed ? `없앤 파일 — ${moved[1].removed}` : `${moved[0]}로 옮겨 고쳤다`}): ${rel}`
+        )
+        continue
+      }
+    }
     if (fs.existsSync(dest) && !force) {
       console.log(`건너뜀(이미 있음): ${path.relative(ROOT, dest)}`)
       continue

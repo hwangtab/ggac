@@ -86,7 +86,7 @@ export default function ChannelBrowser({
       >
         <PageBody noScroll>
           {myChannels.length > 0 && (
-            <section aria-labelledby={`${filterId}-mine`} className="space-y-3 md:hidden">
+            <section aria-labelledby={`${filterId}-mine`} className="space-y-3 lg:hidden">
               <SectionHeading
                 id={`${filterId}-mine`}
                 actions={

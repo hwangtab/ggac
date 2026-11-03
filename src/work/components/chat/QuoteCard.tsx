@@ -11,7 +11,7 @@ import type { ChatMessage } from '@work/lib/messages/types'
 import { cn } from '@work/lib/utils'
 
 const CARD =
-  'mt-0.5 mb-1 flex max-w-prose items-start gap-2 rounded-w-md border-l-2 bg-muted/50 px-2.5 py-1.5 text-xs'
+  'mt-0.5 mb-1 flex max-w-prose items-start gap-2 rounded-w-lg border-l-2 bg-subtle px-2.5 py-1.5 text-xs'
 
 /**
  * 메시지 위 인용 카드(0028). 원본을 볼 수 있으면 작성자·앞 2줄 + `#msg-<id>` 앵커 링크,
@@ -62,10 +62,7 @@ export function QuoteCard({
       </span>
     </>
   )
-  const className = cn(
-    CARD,
-    'border-primary outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring'
-  )
+  const className = cn(CARD, 'border-primary outline-none hover:bg-accent')
   return quoted.parent_id && base ? (
     <Link href={href} aria-label={`${author}의 인용된 메시지로 이동`} className={className}>
       {content}
@@ -107,7 +104,7 @@ export function ForwardedNote({
     <p className="mt-0.5 text-xs">
       <Link
         href={href}
-        className="inline-flex items-center gap-1 rounded text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+        className="inline-flex items-center gap-1 rounded-w-lg text-primary outline-none hover:underline"
       >
         <ForwardIcon aria-hidden="true" className="size-3.5" />
         원문 보기

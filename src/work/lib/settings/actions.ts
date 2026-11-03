@@ -36,7 +36,7 @@ export async function updateStaffProfile(
     return {
       status: 'error',
       message: '입력값을 확인해 주세요.',
-      fieldErrors: { title: '직함은 관리자가 정합니다. 바꾸려면 사무국에 요청해 주세요.' },
+      fieldErrors: { title: '직함은 관리자가 정합니다. 바꾸려면 관리자에게 요청해 주세요.' },
     }
   }
 

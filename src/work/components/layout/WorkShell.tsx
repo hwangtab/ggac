@@ -1,12 +1,11 @@
 'use client'
 
-import { cleanupBeforeSignOut } from './sign-out-cleanup'
 import ServiceWorkerRegistrar from '@work/components/push/ServiceWorkerRegistrar'
 import { resumeDraftWrites } from '@work/lib/messages/drafts'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { usePathname, useRouter } from '@work/lib/nav/navigation'
+import { usePathname, useSearchParams } from '@work/lib/nav/navigation'
 import { cn } from '@work/lib/utils'
-import { clearSessionProfileCache } from '@/utils/sessionProfile'
+import { useBoardWorkBadges } from '@/components/boardWork/BoardWorkBadges'
 import type { ActiveStatus } from '@work/lib/notifications/status'
 import { setChannelStarred } from '@work/lib/channels/actions'
 import {
@@ -26,10 +25,7 @@ import {
   type ChannelSort,
   type ChatSort,
 } from '@work/lib/channels/sort'
-import AppRail from './AppRail'
-import BottomTabs from './BottomTabs'
-import ListPane, { hasListPane } from './ListPane'
-import TopBar from './TopBar'
+import ListPane from './ListPane'
 import QuickSwitcher, { type QuickSwitcherPerson, type QuickSwitcherWikiDoc } from './QuickSwitcher'
 import { RightPanelProvider, RightPanelSlot, useRightPanel } from './RightPanel'
 import {
@@ -38,15 +34,16 @@ import {
   type ExpenseShellData,
   type ShellPerson,
 } from './shell-context'
+import { unreadTitleCount } from './nav-sections'
 import {
-  activeSection,
-  mobileBackHref,
-  sectionBadges,
-  sectionByKey,
-  unreadTitleCount,
-} from './nav-sections'
-import { useLastLocation } from './use-last-location'
-import { useSectionShortcuts } from './use-section-shortcuts'
+  WORK_PANE_HEIGHT_CLASS,
+  hasWorkListPane,
+  mobileBackLink,
+  mobileShowsList,
+  workSection,
+} from './work-layout'
+import Link from '@work/lib/nav/link'
+import { ArrowLeftIcon } from 'lucide-work'
 import { useUnreadIndicators } from './use-unread-indicators'
 import { useWorkspacePresence } from './use-workspace-presence'
 import { withPresence } from './presence'
@@ -82,13 +79,13 @@ type ShellProps = {
   /** 게스트: 위키·자료실·채널 만들기 링크를 숨긴다 */
   isGuest?: boolean
   wikiDocs?: QuickSwitcherWikiDoc[]
-  /** 내 미완료 할 일 수(레일 "할 일" 배지) */
+  /** 내 미완료 할 일 수(이사회실 메뉴 "할 일" 배지) */
   openTaskCount?: number
-  /** 지출결의(0045): 내 결재 역할과 대기 수(레일 "결재" 배지·목록 패널). 서브관리자는 없다 */
+  /** 지출결의(0045): 내 결재 역할과 대기 수(목록 패널). 서브관리자는 없다 */
   expense?: ExpenseShellData
-  /** 읽지 않은 멘션 수(레일 "활동" 배지) */
+  /** 읽지 않은 멘션 수(이사회실 메뉴 "활동" 배지) */
   mentionCount?: number
-  /** 내 user_id — 있으면(게스트 제외) 워크스페이스 presence(0020)에 접속하고 DM 접속 점을 그린다 */
+  /** 내 user_id — 있으면(게스트 제외) 접속 표시(presence, 0020)에 접속하고 DM 접속 점을 그린다 */
   meId?: string
   /** 1:1 DM 채널 id → 상대 user_id(listDmPeers). 접속 점 매핑용 */
   dmPeers?: Record<string, string>
@@ -99,9 +96,6 @@ type ShellProps = {
   children: ReactNode
 }
 
-/** 목록 패널을 사용자가 접어 둔 상태 */
-const LIST_COLLAPSED_KEY = 'kw-list-collapsed'
-const LG_QUERY = '(min-width: 1024px)'
 const NO_READ_RECORDS: ReadonlyMap<string, ReadRecord> = new Map()
 const NO_PINS: ReadonlyMap<string, boolean> = new Map()
 const NO_BUMPS: ReadonlyMap<string, number> = new Map()
@@ -126,23 +120,15 @@ function applyMoves(
   return items.map(i => (moves.has(i.id) ? { ...i, categoryId: moves.get(i.id) ?? null } : i))
 }
 
-/** 모바일 머리글 제목 — 레일 밖 경로(검색·설정)도 이름을 붙인다 */
-function mobileTitleFor(pathname: string): string | undefined {
-  const section = activeSection(pathname)
-  if (section) return sectionByKey(section).label
-  if (pathname.startsWith('/search')) return '검색'
-  if (pathname.startsWith('/settings')) return '설정'
-  return undefined
-}
-
 /**
- * 앱 셸(설계 03 §2-1): 앱 레일 64px │ 목록 패널 260px │ 메인 │ 우측 패널 360px, 위에 상단바.
- * 모바일(<768px): 레일·목록 패널 대신 하단 탭(BottomTabs), 섹션 루트 페이지가 목록 전체 화면이 된다.
- * 우측 패널은 전체화면.
- * 키보드: ⌘K(Ctrl+K) 빠른 이동, Alt+1~6 레일 항목, Esc 우측 패널 닫기(RightPanelProvider).
- * 안 읽음 수는 탭 제목 `(N) …`과 PWA 앱 배지로도 알린다(use-unread-indicators).
+ * 업무 화면 셸 — 원본 `AppShell`을 쪼갠 것(docs/board-work/03-통합-재설계.md §3·§4-2). 이사회실 콘텐츠 칸 안에서
+ * 목록 칸(w-72) │ 대화 칸 │ 패널(2xl부터 세 번째 칸, 그보다 좁으면 대화 칸을 덮는다)을 그린다.
+ * 원본의 레일·상단바·하단 탭·테마 전환은 없다 — 길찾기는 이사회실 메뉴 '업무' 묶음, 로그아웃은 ggac 전역 내비가 맡는다.
+ * 좁은 화면(lg 미만): 메일함과 같은 목록 → 상세 전환(`← 목록`), 패널은 대화 칸 전체를 덮는다(`← 대화`).
+ * 키보드: ⌘K(Ctrl+K) 빠른 이동, Esc 우측 패널 닫기(RightPanelProvider).
+ * 안 읽음 수는 탭 제목 `(N) …`과 PWA 앱 배지로도 알린다(use-unread-indicators). 이사회실 메뉴 배지에는 같은 값을 올린다.
  */
-export default function AppShell(props: ShellProps) {
+export default function WorkShell(props: ShellProps) {
   return (
     <RightPanelProvider>
       <ShellFrame {...props} />
@@ -169,13 +155,11 @@ function ShellFrame({
   people,
   children,
 }: ShellProps) {
-  const router = useRouter()
   const pathname = usePathname() ?? '/'
-  const panel = useRightPanel()
+  const searchParams = useSearchParams()
+  const newChat = searchParams?.get('new') === '1'
   const [switcherOpen, setSwitcherOpen] = useState(false)
-  const [listCollapsed, setListCollapsed] = useState(false)
-  // 처음엔 넓은 화면으로 가정한다(우측 패널은 닫힌 채 시작하므로 깜빡임이 없다)
-  const [isLg, setIsLg] = useState(true)
+  const panel = useRightPanel()
   // ⌘K "사람" 맨 앞에 나(나와의 채팅). 채널 만들기 멤버 후보(ShellData.people)에는 넣지 않는다
   const switcherPeople = useMemo(
     () =>
@@ -457,7 +441,7 @@ function ShellFrame({
     return () => clearTimeout(t)
   }, [shellNotice])
 
-  // 아래(레일·목록 패널·하단 탭·⌘K·탭 제목)는 모두 이 값을 쓴다
+  // 아래(목록 칸·⌘K·탭 제목·이사회실 메뉴 배지)는 모두 이 값을 쓴다
   const channels = useMemo(
     () =>
       bumpActivity(
@@ -468,10 +452,7 @@ function ShellFrame({
   )
   const activityCount = base.serverActivityCount
   const expenseCounts = base.serverExpenseCounts
-  const expenseCount = expenseCounts
-    ? expenseCounts.approvalPending + expenseCounts.paymentPending + expenseCounts.myUnseen
-    : 0
-  // 워크스페이스 전역 presence(0020): 내부 staff 만 구독한다(게스트는 DB 인가도 거절)
+  // 업무툴 전체 접속 표시(presence, 0020): 내부 staff 만 구독한다(게스트는 DB 인가도 거절)
   const online = useWorkspacePresence(
     meId && !isGuest ? { userId: meId, displayName: me.displayName } : null
   )
@@ -489,41 +470,9 @@ function ShellFrame({
   )
   const mentionCount = applyLocalMentionCount(base.serverMentionCount, reads)
 
-  useLastLocation(pathname)
-
   // 로그아웃 정리가 멈춘 임시 저장 쓰기를 다음 로그인 셸이 열릴 때 재개한다
   useEffect(() => {
     resumeDraftWrites()
-  }, [])
-
-  useEffect(() => {
-    try {
-      setListCollapsed(window.localStorage.getItem(LIST_COLLAPSED_KEY) === '1')
-    } catch {
-      // 저장소 차단 환경 — 기본(펼침)
-    }
-  }, [])
-
-  // lg(1024px) 미만에서 우측 패널을 열면 목록 패널을 일시적으로 접는다(저장하지 않음)
-  useEffect(() => {
-    if (typeof window.matchMedia !== 'function') return
-    const mq = window.matchMedia(LG_QUERY)
-    setIsLg(mq.matches)
-    const onChange = (e: MediaQueryListEvent) => setIsLg(e.matches)
-    mq.addEventListener?.('change', onChange)
-    return () => mq.removeEventListener?.('change', onChange)
-  }, [])
-
-  const toggleList = useCallback(() => {
-    setListCollapsed(v => {
-      const next = !v
-      try {
-        window.localStorage.setItem(LIST_COLLAPSED_KEY, next ? '1' : '0')
-      } catch {
-        // 저장 실패해도 이번 화면에서는 접힌다
-      }
-      return next
-    })
   }, [])
 
   useEffect(() => {
@@ -538,34 +487,23 @@ function ShellFrame({
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  const signOut = useCallback(async () => {
-    // ggac 이식: Supabase auth.signOut 대신 ggac 로그아웃(Better Auth — POST /api/auth/logout, Navigation.tsx와 같은 경로).
-    // 이 브라우저에 남은 임시 저장·마지막 위치를 먼저 지운다(다음 사용자에게 보이지 않게).
-    await cleanupBeforeSignOut()
-    try {
-      const res = await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
-      if (!res.ok) throw new Error(`logout ${res.status}`)
-    } catch (e) {
-      console.error('[AppShell] 로그아웃 실패:', e)
-      setShellNotice('로그아웃하지 못했습니다. 잠시 후 다시 시도해 주세요.')
-      return
-    }
-    clearSessionProfileCache()
-    // 홈페이지 첫 화면으로 — 업무툴 라우터(원본 `/` = 업무툴 홈)를 거치지 않게 문서째 옮긴다
-    window.location.assign('/')
-  }, [])
-
-  const openSwitcher = useCallback(() => setSwitcherOpen(true), [])
-
-  const section = activeSection(pathname)
-  const badges = useMemo(
-    () =>
-      sectionBadges({ channels, dms, mentionCount, activityCount, openTaskCount, expenseCount }),
-    [channels, dms, mentionCount, activityCount, openTaskCount, expenseCount]
-  )
   const items = useMemo(() => [...channels, ...dms], [channels, dms])
-  useSectionShortcuts({ isGuest, items })
   useUnreadIndicators(unreadTitleCount({ dms, mentionCount, activityCount }))
+
+  // 이사회실 메뉴 배지(03 §4-3)에 이 셸의 값(스냅숏 + 읽음 보정)을 올린다 — 채널을 읽으면 메뉴 배지도 바로 준다
+  const setMenuInput = useBoardWorkBadges()?.setShellInput
+  useEffect(() => {
+    setMenuInput?.({
+      conversations: [
+        ...channels.map(c => ({ unread: c.unread, mentions: c.mentions, muted: c.muted })),
+        ...dms.map(d => ({ unread: d.unread, mentions: d.mentions, muted: d.muted, dm: true })),
+      ],
+      mentionCount,
+      activityCount,
+      openTaskCount,
+    })
+  }, [setMenuInput, channels, dms, mentionCount, activityCount, openTaskCount])
+  useEffect(() => () => setMenuInput?.(null), [setMenuInput])
   const shellData = useMemo(
     () => ({
       channels,
@@ -603,58 +541,58 @@ function ShellFrame({
       expenseCounts,
     ]
   )
-  const showListToggle = hasListPane(section)
-  // 모바일: 대화·문서 화면은 하단 탭을 숨기고 머리글 ← 뒤로가 대신한다
-  const backHref = mobileBackHref(pathname)
+  const section = workSection(pathname)
+  const listOnMobile = mobileShowsList(pathname, { newChat })
+  const back = mobileBackLink(pathname, { newChat })
 
   return (
     <SidebarBadgesProvider value={badgesApi}>
       <ShellDataProvider value={shellData}>
-        <div className="flex h-dvh overflow-hidden">
+        <div data-work-app className={cn('flex gap-3 lg:gap-4', WORK_PANE_HEIGHT_CLASS)}>
           <ServiceWorkerRegistrar userId={meId ?? null} />
-          <AppRail isGuest={isGuest} isAdmin={isAdmin} badges={badges} items={items} />
-
-          <div className="flex min-w-0 flex-1 flex-col">
-            <TopBar
-              displayName={me.displayName}
-              title={me.title}
-              status={me.status}
-              onOpenSwitcher={openSwitcher}
-              onSignOut={signOut}
-              backHref={backHref}
-              mobileTitle={mobileTitleFor(pathname)}
-              listToggle={
-                showListToggle ? { collapsed: listCollapsed, onToggle: toggleList } : undefined
-              }
+          {hasWorkListPane(section) && (
+            <ListPane
+              channels={channels}
+              dms={dms}
+              isGuest={isGuest}
+              mentionCount={mentionCount}
+              activityCount={activityCount}
+              onMobile={listOnMobile}
             />
-            <div className="flex min-h-0 flex-1">
-              <ListPane
-                channels={channels}
-                dms={dms}
-                isGuest={isGuest}
-                mentionCount={mentionCount}
-                activityCount={activityCount}
-                collapsed={listCollapsed || (panel.isOpen && !isLg)}
-              />
-              <main id="main-content" className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          )}
+          {/* 대화 칸 — 좁은 화면에서 목록이 화면을 차지하면(대화 첫 화면) 숨긴다 */}
+          {/* 1단 화면(업무 설정 — 목록 칸 없음)은 이사회실 다른 화면처럼 면 없이 바탕 위에 그린다(03 §3·§4-5) */}
+          <div
+            className={cn(
+              'relative min-w-0 flex-1 flex-col overflow-hidden',
+              hasWorkListPane(section) ? 'rounded-w-lg border bg-card' : 'bg-transparent',
+              listOnMobile ? 'hidden lg:flex' : 'flex'
+            )}
+          >
+            {/* 패널(스레드 등)이 칸을 덮으면 패널 머리의 `← 대화`만 남긴다 — 뒤로 가기가 두 줄로 겹치지 않게 */}
+            {back && !panel.isOpen && (
+              <div className="flex h-10 shrink-0 items-center border-b px-2 lg:hidden">
+                <Link
+                  href={back.href}
+                  className="inline-flex items-center gap-1 rounded-w-lg px-2 py-1 text-sm text-muted-foreground hover:text-foreground"
+                >
+                  <ArrowLeftIcon aria-hidden="true" className="size-4" />
+                  {back.label}
+                </Link>
+              </div>
+            )}
+            <div className="relative flex min-h-0 flex-1">
+              <div id="work-main" className="flex min-w-0 flex-1 flex-col overflow-hidden">
                 {children}
-              </main>
+              </div>
               <RightPanelSlot />
             </div>
-            {!backHref && <BottomTabs isGuest={isGuest} isAdmin={isAdmin} badges={badges} />}
           </div>
         </div>
         {shellNotice && (
           <div
             role="alert"
-            className={cn(
-              // 폭을 글에 맞춰 좁은 폰에서 50% 폭으로 여러 줄이 되지 않게. 하단 탭(56px + 노치 영역)이 있는 화면은 그 위로,
-              // 탭이 없는 대화·문서 화면은 입력창 위로 띄운다
-              'fixed left-1/2 z-50 w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-w-lg bg-popover px-4 py-2 text-sm text-destructive shadow-md ring-1 ring-foreground/10 md:bottom-6',
-              backHref
-                ? 'bottom-[calc(6rem+env(safe-area-inset-bottom))]'
-                : 'bottom-[calc(5rem+env(safe-area-inset-bottom))]'
-            )}
+            className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-1/2 z-50 w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-w-lg bg-popover px-4 py-2 text-sm text-destructive border border-border"
           >
             {shellNotice}
           </div>

@@ -176,7 +176,7 @@ export default function NewChatPicker({
             <li key={p.user_id}>
               <label
                 htmlFor={optId}
-                className="flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-sm hover:bg-muted has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60 has-[:focus-visible]:bg-muted"
+                className="flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-sm hover:bg-accent has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60 has-[:focus-visible]:bg-accent"
               >
                 <input
                   id={optId}
@@ -194,7 +194,7 @@ export default function NewChatPicker({
                 )}
                 {p.role === 'guest' && (
                   <span className="shrink-0 text-xs whitespace-nowrap text-muted-foreground">
-                    서브관리자
+                    외부 참여자
                   </span>
                 )}
               </label>

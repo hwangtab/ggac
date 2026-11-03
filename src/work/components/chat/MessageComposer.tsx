@@ -378,7 +378,7 @@ export default function MessageComposer({
               }}
               onMouseEnter={() => setActiveIndex(i)}
               className={cn(
-                'flex cursor-pointer items-center gap-2 h-8 rounded-w-md px-2',
+                'flex cursor-pointer items-center gap-2 h-8 rounded-w-lg px-2',
                 i === activeIndex && 'bg-accent text-accent-foreground'
               )}
             >
@@ -395,7 +395,8 @@ export default function MessageComposer({
           ))}
         </ul>
       )}
-      <div className="rounded-w-lg border bg-background focus-within:border-ring focus-within:ring focus-within:ring-ring/50">
+      {/* 포커스 윤곽은 입력 칸(textarea)이 아니라 이 상자(첨부·도구 줄 포함)에 하나만 그린다 — globals.css `[data-work-composer]` */}
+      <div data-work-composer="" className="rounded-w-lg border bg-background">
         {quoteSlot}
         {attachmentsSlot}
         <textarea

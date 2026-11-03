@@ -129,9 +129,9 @@ export default function FilesBrowser({
                 type="button"
                 onClick={() => select(item)}
                 aria-label={`${item.name} 상세 보기`}
-                className="flex w-full flex-col overflow-hidden rounded-w-lg border bg-card text-left outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex w-full flex-col overflow-hidden rounded-w-lg border bg-card text-left outline-none hover:bg-accent"
               >
-                <span className="flex aspect-[4/3] items-center justify-center bg-muted">
+                <span className="flex aspect-[4/3] items-center justify-center bg-subtle">
                   {isBrowserImage(item.mime, item.name) ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img

@@ -11,7 +11,7 @@ const CARD_REASON: Record<Extract<WebsiteDisplay, { mode: 'card' }>['reason'], s
   'not-allowed':
     '탭 안 표시는 구글 문서·시트·슬라이드·설문·캘린더·드라이브 파일만 지원합니다. 새 창에서 여세요.',
   // ggac 이식: 사이트 CSP(frame-src)가 외부 문서 출처를 열기 전까지는 링크 카드로만 보인다(website.ts)
-  'not-embeddable': '이 업무툴은 아직 탭 안에 외부 페이지를 표시하지 않습니다. 새 창에서 여세요.',
+  'not-embeddable': '탭 안에서는 아직 외부 페이지를 보여 주지 않습니다. 새 창에서 여세요.',
   invalid: '주소를 표시할 수 없습니다.',
 }
 

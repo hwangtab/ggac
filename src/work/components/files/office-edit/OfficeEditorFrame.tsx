@@ -187,7 +187,8 @@ export default function OfficeEditorFrame({
   const [clientOrigin, setClientOrigin] = useState('')
   useEffect(() => setClientOrigin(window.location.origin), [])
   const parent = parentOrigin ?? clientOrigin
-  if (!parent) return <div className="size-full bg-white" aria-hidden="true" />
+  // 종이 면(흰 바탕)은 의도다 — data-poster-keep으로 포스터의 `bg-white` → 어두운 면 재매핑을 비켜 간다
+  if (!parent) return <div data-poster-keep="" className="size-full bg-white" aria-hidden="true" />
 
   return (
     <iframe
@@ -197,6 +198,7 @@ export default function OfficeEditorFrame({
       sandbox={OFFICE_IFRAME_SANDBOX}
       allow={OFFICE_IFRAME_ALLOW}
       referrerPolicy="no-referrer"
+      data-poster-keep=""
       className="size-full border-0 bg-white"
     />
   )

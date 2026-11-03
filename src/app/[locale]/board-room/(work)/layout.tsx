@@ -12,20 +12,20 @@ import { countMyOpenTasks } from '@work/lib/tasks/queries'
 import { getChannelSortPref, getChatSortPref } from '@work/lib/notifications/prefs'
 import { activeStatus } from '@work/lib/notifications/status'
 import { filterVisiblePeople, guestVisibleUserIds } from '@work/lib/staff/visibility'
-import AppShell from '@work/components/layout/AppShell'
+import WorkShell from '@work/components/layout/WorkShell'
 import SidebarLiveUpdates from '@work/components/chat/SidebarLiveUpdates'
 import '@work/styles.css'
 
 /**
- * 이사회 업무툴 앱 셸 — 원본 kosmart-work `app/(app)/layout.tsx`(docs/board-work/01-설계.md §2-1).
+ * 이사회 업무 화면 레이아웃 — 원본 kosmart-work `app/(app)/layout.tsx`(docs/board-work/01-설계.md §2-1).
  *
- * 전역 내비·푸터·포스터 테마는 `ConditionalLayout`이, 이사회실 좌측 메뉴는 `board-room/layout.tsx`가
- * `isBoardWorkPath`로 비켜 준다. 여기서 화면 전체를 쓴다.
+ * 전역 내비·푸터·포스터 테마(`ConditionalLayout`)와 이사회실 좌측 메뉴(`board-room/layout.tsx`) **안에서** 그린다
+ * (docs/board-work/03-통합-재설계.md §4-1). 여기서 하는 일은 가드·`#전체` 자동 가입·목록 데이터 로드·`WorkShell`로 감싸기다.
  *
  * 원본과 다른 점:
  * - 가드는 `requireWorkStaff`(ggac 이사회 권한, 설계 §3). 처음 들어온 사람은 `#전체`에 넣는다(`ensureWorkspaceEntry`).
  * - 결재(지출결의)·위키 데이터는 읽지 않는다(가져오지 않는다). 할 일 배지(내 미완료 수)는 2b에서 켰다.
- * - 첫 사용 안내(OnboardingGate)는 아직 옮기지 않았다. 푸시는 설정 > 알림에서 켠다(5단계). 서비스 워커 등록은 AppShell이 한다.
+ * - 첫 사용 안내(OnboardingGate)는 옮기지 않는다. 푸시는 업무 설정 > 알림에서 켠다(5단계). 서비스 워커 등록은 WorkShell이 한다.
  * - 원본 `loading.tsx`는 두지 않는다 — 페이지가 스트리밍을 먼저 시작하면 `notFound()`가 404 상태 코드를 못 낸다
  *   (권한 E2E `authz-board-work.spec.ts`가 비공개 채널·남의 DM의 404를 본다).
  */
@@ -38,7 +38,7 @@ import '@work/styles.css'
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
-  title: '업무툴 | 이사회',
+  title: '업무 | 이사회',
   robots: { index: false, follow: false },
 }
 
@@ -91,11 +91,8 @@ export default async function BoardWorkLayout({ children }: { children: React.Re
   ).map(s => ({ userId: s.user_id, name: s.display_name, title: s.title, role: s.role }))
 
   return (
-    <div
-      data-work-app
-      className="flex h-dvh min-h-0 flex-col bg-background font-sans text-foreground"
-    >
-      <AppShell
+    <div className="font-sans text-foreground">
+      <WorkShell
         me={{
           displayName: staff.display_name,
           title: staff.title,
@@ -117,7 +114,7 @@ export default async function BoardWorkLayout({ children }: { children: React.Re
       >
         {children}
         <SidebarLiveUpdates items={[...channels, ...dms]} me={user.id} />
-      </AppShell>
+      </WorkShell>
     </div>
   )
 }

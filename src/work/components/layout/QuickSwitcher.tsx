@@ -152,7 +152,7 @@ export default function QuickSwitcher({
               <button
                 type="button"
                 onClick={goSearch}
-                className="w-full px-3 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                className="w-full px-3 text-muted-foreground outline-none hover:text-foreground"
               >
                 결과가 없습니다 · Enter 로 전체 검색
               </button>

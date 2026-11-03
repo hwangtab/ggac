@@ -102,7 +102,8 @@ async function postFile(page: Page, name: string, mimeType: string, buffer: Buff
 }
 
 function editorStatus(page: Page) {
-  return page.locator('header [role="status"]')
+  // 편집 화면은 전역 내비(<header>) 안이라 편집기 머리로 좁힌다
+  return page.locator('[data-work-app] header [role="status"]')
 }
 
 /**
@@ -168,6 +169,15 @@ test.describe('업무툴 앱 안 편집 — 실제 편집기(ggac-office)', () =
       // 실제 편집 영역(ONLYOFFICE sdk 캔버스 영역)이 생길 때까지
       await waitForEditorUi(page, '#editor_sdk')
       await page.waitForTimeout(2_000)
+      // 편집 화면은 이사회실 레이아웃 안이다(03-통합-재설계 §8 결정 2): 전역 내비는 그대로, 이사회실 메뉴는 기본으로 접혀
+      // '메뉴 펼치기'만 보인다. 편집기는 화면 높이 안에 들어온다(아래로 넘치지 않는다)
+      await expect(page.locator('#navigation')).toBeVisible()
+      await expect(page.getByRole('navigation', { name: '이사회 메뉴' })).toBeHidden()
+      await expect(page.getByRole('button', { name: '메뉴 펼치기' })).toBeVisible()
+      const frameBox = await page.locator(frameSel).boundingBox()
+      expect(frameBox, '편집기 iframe 위치').toBeTruthy()
+      expect((frameBox?.y ?? 0) + (frameBox?.height ?? 0)).toBeLessThanOrEqual(DESKTOP.height)
+      expect(frameBox?.width ?? 0).toBeGreaterThan(1100)
       await page.screenshot({ path: 'test-results/board-work-editors-office-loaded.png' })
 
       await typeInEditor(page, frameSel, 'board work e2e')
@@ -176,6 +186,16 @@ test.describe('업무툴 앱 안 편집 — 실제 편집기(ggac-office)', () =
       await page.getByRole('button', { name: '저장(새 버전)' }).click()
       await expect(editorStatus(page)).toHaveText(/저장됨 v2/, { timeout: 120_000 })
       await page.screenshot({ path: 'test-results/board-work-editors-office-saved.png' })
+
+      // '메뉴 펼치기' → 이사회실 메뉴가 펼쳐지고 '넓게 보기'로 다시 접힌다. 편집기는 그대로 있다.
+      // 저장 완료 대화상자가 떠 있어 먼저 닫는다(대화상자 밖은 누를 수 없다)
+      await page.getByRole('dialog').getByRole('button', { name: '닫기' }).first().click()
+      await expect(page.getByRole('dialog')).toHaveCount(0)
+      await page.getByRole('button', { name: '메뉴 펼치기' }).click()
+      await expect(page.getByRole('navigation', { name: '이사회 메뉴' })).toBeVisible()
+      await page.getByRole('button', { name: '넓게 보기' }).click()
+      await expect(page.getByRole('navigation', { name: '이사회 메뉴' })).toBeHidden()
+      await expect(page.locator(frameSel)).toBeVisible()
 
       // 계보: v1(이전) → v2(최신), 저장한 v2 에 편집기에서 친 글자가 들어 있다
       const lineage = await lineageOf(id)

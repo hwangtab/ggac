@@ -33,7 +33,7 @@ export default function NoteDiff({
         {fromLabel} · <span aria-hidden="true">+ </span>
         {toLabel}
       </p>
-      <pre className="max-h-80 overflow-auto rounded-w-lg border bg-muted/50 px-4 py-3 font-mono text-xs leading-6">
+      <pre className="max-h-80 overflow-auto rounded-w-lg border bg-subtle px-4 py-3 font-mono text-xs leading-6">
         {ops.map((op, i) => (
           <div
             key={i}

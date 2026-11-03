@@ -94,7 +94,7 @@ export default function TextEditPane({
         <NoticeBanner>문단 추가·삭제는 안 됩니다 — 글자만 고칠 수 있어요.</NoticeBanner>
       )}
 
-      <fieldset className="grid gap-2 rounded-w-md border p-3">
+      <fieldset className="grid gap-2 rounded-w-lg border p-3">
         <legend className="px-1 text-sm font-medium">찾아 바꾸기</legend>
         <div className="grid gap-2 sm:grid-cols-2">
           <Field>
@@ -163,12 +163,12 @@ export default function TextEditPane({
         )}
         {visible.map(b => {
           const changed = isBlockChanged(b)
-          const tone = changed ? 'border-primary bg-muted' : 'border-border'
+          const tone = changed ? 'border-primary bg-subtle' : 'border-border'
           if (b.kind === 'readonly') {
             return (
               <li
                 key={b.key}
-                className="rounded-w-md border border-dashed p-2 text-xs text-muted-foreground"
+                className="rounded-w-lg border border-dashed p-2 text-xs text-muted-foreground"
               >
                 [{b.label}] — 앱에서는 고칠 수 없습니다
               </li>
@@ -176,7 +176,7 @@ export default function TextEditPane({
           }
           if (b.kind === 'table') {
             return (
-              <li key={b.key} className={cn('grid gap-1 rounded-w-md border p-2', tone)}>
+              <li key={b.key} className={cn('grid gap-1 rounded-w-lg border p-2', tone)}>
                 <span className="text-xs text-muted-foreground">표</span>
                 <div className="overflow-x-auto">
                   <table className="w-full border-collapse text-sm">
@@ -197,7 +197,7 @@ export default function TextEditPane({
                                     aria-label={`표 ${ri + 1}행 ${ci + 1}열`}
                                     className={cn(
                                       'min-h-8 resize-y',
-                                      cellChanged && 'border-primary bg-muted'
+                                      cellChanged && 'border-primary bg-subtle'
                                     )}
                                     rows={1}
                                     value={cell.text}
@@ -224,7 +224,7 @@ export default function TextEditPane({
             )
           }
           return (
-            <li key={b.key} className={cn('grid gap-1 rounded-w-md border p-2', tone)}>
+            <li key={b.key} className={cn('grid gap-1 rounded-w-lg border p-2', tone)}>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs text-muted-foreground">
                   {b.src === null ? '새 문단' : KIND_LABEL[b.kind]}

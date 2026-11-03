@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
   return apiPost(
     async () => {
       const staff = await loadWorkStaff(user.id)
-      if (!staff) throw ApiError.forbidden('업무툴을 쓸 수 없습니다.')
+      if (!staff) throw ApiError.forbidden('이사회 구성원(이사·감사)과 관리자만 쓸 수 있습니다.')
       const limited = await consumeWorkWrite(user.id)
       if (!limited.ok) throw ApiError.tooManyRequests(limited.message)
 

@@ -44,7 +44,7 @@ export default function CollapsibleBody({ body, children }: { body: string; chil
         aria-expanded={expanded}
         aria-controls={id}
         onClick={() => setExpanded(v => !v)}
-        className="mt-0.5 inline-flex items-center gap-0.5 rounded text-xs font-medium text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+        className="mt-0.5 inline-flex items-center gap-0.5 rounded-w-lg text-xs font-medium text-primary outline-none hover:underline"
       >
         {expanded ? (
           <>

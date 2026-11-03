@@ -2,14 +2,20 @@
 
 import { useState } from 'react'
 import Link from '@work/lib/nav/link'
-import { usePathname } from '@work/lib/nav/navigation'
+import { usePathname, useRouter, useSearchParams } from '@work/lib/nav/navigation'
 import {
   AtSignIcon,
   BellIcon,
   BookmarkIcon,
+  FileTextIcon,
   MessageSquareReplyIcon,
+  MessagesSquareIcon,
+  NotebookTextIcon,
+  PaperclipIcon,
   PlusIcon,
+  SearchIcon,
   SmilePlusIcon,
+  UsersIcon,
 } from 'lucide-work'
 import { splitPinnedRecent } from '@work/lib/channels/sort'
 import { cn } from '@work/lib/utils'
@@ -25,20 +31,10 @@ import SubTitle from './SubTitle'
 import FilesPaneContent from './FilesPaneContent'
 import { EmptyState } from './page'
 import { activeChannelId } from './active-channel'
-import { activeSection, sectionByKey, type SectionKey } from './nav-sections'
+import { hasWorkListPane, workSection } from './work-layout'
 import type { ChannelListItem } from './channel-items'
 
 export const LIST_PANE_ID = 'list-pane'
-
-/** 목록 패널이 항상 있는 섹션 (관리는 셸 밖 레이아웃이 따로 그린다, 위키는 트리를 받았을 때만) */
-// ggac 이식: 할 일(2b)·자료실(2a)을 켰다. 결재·위키(가져오지 않음)의 목록 패널은 없다
-const PANE_SECTIONS: readonly SectionKey[] = ['activity', 'chat', 'channels', 'tasks', 'files']
-
-/** wikiAvailable: 위키 트리를 받았는가(게스트는 위키를 못 쓰므로 받지 않는다) */
-export function hasListPane(section: SectionKey | null, wikiAvailable = false): boolean {
-  if (section === 'wiki') return wikiAvailable
-  return section !== null && PANE_SECTIONS.includes(section)
-}
 
 function PaneHeader({
   title,
@@ -222,12 +218,7 @@ function ActivityPaneContent({
             <Icon aria-hidden="true" className="size-4 shrink-0" />
             {label}
             {badge > 0 && (
-              <span
-                className={cn(
-                  COUNT_BADGE_CLASS,
-                  'ml-auto bg-mention-solid text-mention-solid-foreground'
-                )}
-              >
+              <span data-badge="mention" className={cn(COUNT_BADGE_CLASS, 'ml-auto')}>
                 <span aria-hidden="true">{badge > 99 ? '99+' : badge}</span>
                 <span className="sr-only">
                   {href === '/inbox' && activityCount > 0
@@ -243,6 +234,163 @@ function ActivityPaneContent({
   )
 }
 
+/** 이름으로 대화 거르기(대소문자·NFC 무시) */
+function matchesName(item: Pick<ChannelListItem, 'name' | 'slug'>, q: string): boolean {
+  const needle = q.normalize('NFC').toLowerCase()
+  return [item.name, item.slug ?? '']
+    .map(v => v.normalize('NFC').toLowerCase())
+    .some(v => v.includes(needle))
+}
+
+/**
+ * 목록 칸 머리의 찾기 입력(03 §2-3: 원본 상단바 검색의 자리). `onFilter`를 주면 그 자리에서 목록을 거르고(대화),
+ * 없으면 Enter 로 전체 검색(`/search?q=`)을 연다. ⌘K 빠른 이동은 단축키로 남아 있다.
+ */
+function PaneFind({
+  label,
+  placeholder,
+  value,
+  onFilter,
+}: {
+  label: string
+  placeholder: string
+  value?: string
+  onFilter?: (q: string) => void
+}) {
+  const router = useRouter()
+  const [draft, setDraft] = useState('')
+  return (
+    <form
+      role="search"
+      aria-label={label}
+      className="shrink-0 border-b border-sidebar-border px-3 py-2"
+      onSubmit={e => {
+        e.preventDefault()
+        if (onFilter) return
+        const q = draft.trim()
+        router.push(q ? `/search?q=${encodeURIComponent(q)}` : '/search')
+      }}
+    >
+      <label className="flex h-8 items-center gap-2 rounded-w-lg border bg-background px-2 text-sm pointer-coarse:h-11">
+        <SearchIcon aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+        <span className="sr-only">{label}</span>
+        <input
+          type="search"
+          value={onFilter ? (value ?? '') : draft}
+          onChange={e => (onFilter ? onFilter(e.target.value) : setDraft(e.target.value))}
+          placeholder={placeholder}
+          className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
+        />
+        <kbd className="hidden shrink-0 rounded-w-lg border px-1 font-sans text-[10px] text-muted-foreground lg:inline">
+          ⌘K
+        </kbd>
+      </label>
+    </form>
+  )
+}
+
+/** 대화(03 §8 결정 1): 채널과 메시지(DM·그룹)를 한 목록에서 두 묶음으로 */
+function ConversationsPaneContent({
+  channels,
+  dms,
+  activeId,
+  isGuest,
+  onCreateChannel,
+}: {
+  channels: ChannelListItem[]
+  dms: ChannelListItem[]
+  activeId: string | null
+  isGuest: boolean
+  onCreateChannel: () => void
+}) {
+  const [q, setQ] = useState('')
+  const {
+    channelSort = 'section',
+    onChannelSortChange,
+    chatSort = 'recent',
+    onChatSortChange,
+  } = useShellData()
+  const query = q.trim()
+  const shownChannels = query ? channels.filter(c => matchesName(c, query)) : channels
+  const shownDms = query ? dms.filter(d => matchesName(d, query)) : dms
+  return (
+    <>
+      <PaneFind label="대화 찾기" placeholder="채널·사람 찾기" value={q} onFilter={setQ} />
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
+        <section aria-labelledby="pane-channels">
+          <div className="flex items-center gap-1 pr-1">
+            <div id="pane-channels" className="min-w-0 flex-1">
+              <SubTitle>채널</SubTitle>
+            </div>
+            {!isGuest && <ChannelAddMenu onCreate={onCreateChannel} className="mt-2" />}
+            {onChannelSortChange && (
+              <ChannelSortMenu sort={channelSort} onChange={onChannelSortChange} className="mt-2" />
+            )}
+          </div>
+          {query && shownChannels.length === 0 ? (
+            <p className="px-3 py-1 text-xs text-muted-foreground">찾는 채널이 없습니다</p>
+          ) : (
+            <ChannelsPaneContent channels={shownChannels} activeId={activeId} />
+          )}
+        </section>
+        <section aria-labelledby="pane-messages">
+          <div className="flex items-center gap-1 pr-1">
+            <div id="pane-messages" className="min-w-0 flex-1">
+              <SubTitle>메시지</SubTitle>
+            </div>
+            <Link href="/chat?new=1" className={cn(PANE_ACTION_CLASS, 'mt-2')} aria-label="새 채팅">
+              <PlusIcon aria-hidden="true" className="size-3.5" />
+            </Link>
+            {onChatSortChange && (
+              <ChatSortMenu sort={chatSort} onChange={onChatSortChange} className="mt-2" />
+            )}
+          </div>
+          {query && shownDms.length === 0 ? (
+            <p className="px-3 py-1 text-xs text-muted-foreground">찾는 대화가 없습니다</p>
+          ) : (
+            <ChatsPaneContent dms={shownDms} activeId={activeId} />
+          )}
+        </section>
+      </div>
+    </>
+  )
+}
+
+/** 검색(03 §3): 결과 종류로 바로 가기 — 결과 화면의 각 묶음 제목(`search-*`)으로 옮긴다 */
+const SEARCH_KINDS = [
+  { id: 'search-messages', label: '메시지', icon: MessagesSquareIcon },
+  { id: 'search-notes', label: '메모', icon: NotebookTextIcon },
+  { id: 'search-files', label: '파일', icon: PaperclipIcon },
+  { id: 'search-documents', label: '문서 내용', icon: FileTextIcon },
+  { id: 'search-people', label: '사람', icon: UsersIcon },
+] as const
+
+function SearchPaneContent() {
+  const searchParams = useSearchParams()
+  const searching = Boolean(searchParams?.get('q') || searchParams?.get('author'))
+  return (
+    <nav aria-label="검색 결과 종류">
+      <SubTitle>결과 종류</SubTitle>
+      {searching ? (
+        <ul className="space-y-px">
+          {SEARCH_KINDS.map(({ id, label, icon: Icon }) => (
+            <li key={id}>
+              <a href={`#${id}`} className={ROW_CLASS}>
+                <Icon aria-hidden="true" className="size-4 shrink-0" />
+                {label}
+              </a>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="px-3 py-1 text-xs text-muted-foreground">
+          검색하면 메시지·메모·파일·문서 내용·사람으로 나눠 보여 줍니다.
+        </p>
+      )}
+    </nav>
+  )
+}
+
 export type ListPaneProps = {
   /** 공개·비공개 채널(내가 멤버인 것) */
   channels: ChannelListItem[]
@@ -254,14 +402,15 @@ export type ListPaneProps = {
   mentionCount?: number
   /** 새 스레드 답글·반응 수(활동 패널 '전체' 배지에 멘션과 합산) */
   activityCount?: number
-  /** 사용자가 접어 둔 상태(kw-list-collapsed) 또는 좁은 화면에서 우측 패널과 겹쳐 일시 접힘 */
-  collapsed?: boolean
+  /** 좁은 화면(lg 미만)에서도 보인다 — 대화 첫 화면은 목록이 곧 화면이다(메일함과 같은 목록 → 상세) */
+  onMobile?: boolean
   className?: string
 }
 
 /**
- * 목록 패널(260px) — 레일에서 고른 섹션의 목록(설계 03 §2-1). 섹션은 pathname 으로 정한다.
- * 목록이 없는 섹션(위키 트리 없음·검색·설정 등)이거나 접힌 상태면 아무것도 그리지 않는다.
+ * 목록 칸(w-72) — 이사회실 메뉴 '업무' 묶음에서 고른 갈래의 목록(docs/board-work/03-통합-재설계.md §3).
+ * 갈래는 pathname 으로 정한다: 대화 = 채널·메시지 / 활동 = 알림 종류 / 할 일 = 보기·채널 / 자료실 = 폴더·형식 /
+ * 검색 = 결과 종류. 업무 설정은 1단이라 그리지 않는다. 머리에 찾기 입력이 있다.
  * 데이터는 props 로만 받는다(조회 없음). `ChannelList` 는 순수 컴포넌트 그대로 쓴다.
  */
 export default function ListPane({
@@ -270,50 +419,46 @@ export default function ListPane({
   isGuest = false,
   mentionCount = 0,
   activityCount = 0,
-  collapsed = false,
+  onMobile = false,
   className,
 }: ListPaneProps) {
   const pathname = usePathname() ?? '/'
   const [createOpen, setCreateOpen] = useState(false)
-  const {
-    channelSort = 'section',
-    onChannelSortChange,
-    chatSort = 'recent',
-    onChatSortChange,
-  } = useShellData()
-  const section = activeSection(pathname)
-  if (collapsed || !section || !hasListPane(section)) return null
+  const section = workSection(pathname)
+  if (!section || !hasWorkListPane(section)) return null
   const activeId = activeChannelId(pathname, [...channels, ...dms])
 
-  let header: { title: string; action?: { href: string; label: string } }
+  let title: string
   let actionSlot: React.ReactNode = undefined
   let body: React.ReactNode
+  let find: React.ReactNode = (
+    <PaneFind label="업무 전체 검색" placeholder="메시지·파일·사람 검색" />
+  )
   if (section === 'chat') {
-    header = { title: '채팅', action: { href: '/chat?new=1', label: '새 채팅' } }
-    if (onChatSortChange) {
-      actionSlot = <ChatSortMenu sort={chatSort} onChange={onChatSortChange} />
-    }
-    body = <ChatsPaneContent dms={dms} activeId={activeId} />
-  } else if (section === 'channels') {
-    header = { title: '채널' }
-    actionSlot = (
-      <>
-        {!isGuest && <ChannelAddMenu onCreate={() => setCreateOpen(true)} />}
-        {onChannelSortChange && (
-          <ChannelSortMenu sort={channelSort} onChange={onChannelSortChange} />
-        )}
-      </>
+    title = '대화'
+    find = null
+    body = (
+      <ConversationsPaneContent
+        channels={channels}
+        dms={dms}
+        activeId={activeId}
+        isGuest={isGuest}
+        onCreateChannel={() => setCreateOpen(true)}
+      />
     )
-    body = <ChannelsPaneContent channels={channels} activeId={activeId} />
   } else if (section === 'tasks') {
-    header = { title: '할 일' }
+    title = '할 일'
     actionSlot = <NewTaskPaneAction />
     body = <TasksPaneContent channels={channels} />
   } else if (section === 'files') {
-    header = { title: '자료실' }
+    title = '자료실'
     body = <FilesPaneContent channels={channels} isGuest={isGuest} />
+  } else if (section === 'search') {
+    title = '검색'
+    find = null
+    body = <SearchPaneContent />
   } else {
-    header = { title: sectionByKey(section).label }
+    title = '활동'
     body = (
       <ActivityPaneContent
         pathname={pathname}
@@ -326,15 +471,23 @@ export default function ListPane({
   return (
     <aside
       id={LIST_PANE_ID}
-      aria-label={`${header.title} 목록`}
+      aria-label={`${title} 목록`}
       className={cn(
-        'hidden w-sidebar shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex',
+        'w-full shrink-0 flex-col overflow-hidden rounded-w-lg border border-sidebar-border bg-sidebar text-sidebar-foreground lg:flex lg:w-72',
+        onMobile ? 'flex' : 'hidden',
         className
       )}
     >
-      <PaneHeader title={header.title} action={header.action} actionSlot={actionSlot} />
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">{body}</div>
-      {section === 'channels' && !isGuest && (
+      <PaneHeader title={title} actionSlot={actionSlot} />
+      {section === 'chat' ? (
+        body
+      ) : (
+        <>
+          {find}
+          <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">{body}</div>
+        </>
+      )}
+      {section === 'chat' && !isGuest && (
         <CreateChannelDialog
           open={createOpen}
           onOpenChange={setCreateOpen}

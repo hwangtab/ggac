@@ -17,12 +17,17 @@ type PageHeaderProps = {
   /** 오른쪽 작업 버튼 묶음 */
   actions?: ReactNode
   /**
-   * 모바일에서는 TopBar 가 섹션 이름을 그리므로 제목을 시각적으로 숨긴다(sr-only 로 h1 은 남긴다).
-   * actions 가 있으면 머리글 줄은 모바일에도 남아 작업 버튼만 보이고, 없으면 줄 전체가 숨는다.
+   * 원본: 모바일에서는 TopBar 가 섹션 이름을 그려 제목을 시각적으로 숨겼다.
+   * ggac 이식(03-통합-재설계 §2-3): 상단바가 없어져 **더 이상 숨기지 않는다** — 호출부 호환을 위해 prop 만 남긴다.
    */
   hideOnMobile?: boolean
   /** h1 대신 다른 태그(우측 패널 등 중첩 영역) */
   as?: 'h1' | 'h2'
+  /**
+   * 머리 모양(ggac 이식 R3, 03-통합-재설계 §4-5). `pane`(기본) = 목록·대화 칸 머리(h-12·`text-base font-semibold`),
+   * `page` = 업무 설정 같은 1단 화면 — 이사회실 다른 화면의 h1(`text-2xl md:text-3xl font-bold`)과 같다
+   */
+  variant?: 'pane' | 'page'
   className?: string
 }
 
@@ -31,25 +36,27 @@ export function PageHeader({
   subtitle,
   icon: Icon,
   actions,
-  hideOnMobile = false,
   as: Heading = 'h1',
+  variant = 'pane',
   className,
 }: PageHeaderProps) {
+  if (variant === 'page') {
+    return (
+      // 본문(PageBody width="narrow")과 같은 폭·여백 안에 둬서 제목과 본문의 시작선이 하나다
+      <header className={cn('shrink-0', className)}>
+        <div className="mx-auto flex w-full max-w-2xl flex-wrap items-end gap-x-4 gap-y-2 px-4 pt-4 md:px-6 md:pt-5">
+          <div className="min-w-0 flex-1 space-y-1">
+            <Heading className="text-2xl font-bold text-foreground md:text-3xl">{title}</Heading>
+            {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
+          </div>
+          {actions && <div className="flex shrink-0 items-center gap-1">{actions}</div>}
+        </div>
+      </header>
+    )
+  }
   return (
-    <header
-      className={cn(
-        'flex h-12 shrink-0 items-center gap-2 border-b px-4',
-        hideOnMobile && !actions && 'hidden md:flex',
-        hideOnMobile && actions && 'justify-end md:justify-start',
-        className
-      )}
-    >
-      <div
-        className={cn(
-          'flex min-w-0 flex-1 items-baseline gap-2',
-          hideOnMobile && 'sr-only md:not-sr-only md:flex'
-        )}
-      >
+    <header className={cn('flex h-12 shrink-0 items-center gap-2 border-b px-4', className)}>
+      <div className="flex min-w-0 flex-1 items-baseline gap-2">
         <Heading className="flex min-w-0 items-center gap-1.5 text-base font-semibold">
           {Icon && <Icon aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />}
           <span className="truncate">{title}</span>
@@ -209,7 +216,7 @@ export function NoticeBanner({
       className={cn(
         'flex items-start gap-2 text-sm',
         variant === 'box' ? 'rounded-w-lg border px-4 py-3' : 'shrink-0 border-b px-4 py-2',
-        tone === 'muted' && 'bg-muted/50',
+        tone === 'muted' && 'bg-subtle',
         tone === 'destructive' && 'bg-destructive/5 text-destructive',
         tone === 'destructive' && variant === 'box' && 'border-destructive/30',
         className

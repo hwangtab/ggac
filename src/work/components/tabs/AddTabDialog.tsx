@@ -207,7 +207,7 @@ export default function AddTabDialog({
                 return (
                   <label
                     key={k}
-                    className={`flex cursor-pointer items-center gap-1.5 rounded-w-lg border px-3 py-1.5 text-sm has-[:checked]:border-primary has-[:checked]:bg-muted has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
+                    className={`flex cursor-pointer items-center gap-1.5 rounded-w-lg border px-3 py-1.5 text-sm has-[:checked]:border-primary has-[:checked]:bg-accent/60 has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
                   >
                     <input
                       type="radio"
@@ -272,7 +272,7 @@ export default function AddTabDialog({
                       <ul>
                         {fileOptions.map(f => (
                           <li key={f.id}>
-                            <label className="flex cursor-pointer items-center gap-2 px-4 py-2 text-sm hover:bg-muted has-[:checked]:bg-muted has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring">
+                            <label className="flex cursor-pointer items-center gap-2 px-4 py-2 text-sm hover:bg-accent has-[:checked]:bg-accent/60">
                               <input
                                 type="radio"
                                 name={`${uid}-file`}

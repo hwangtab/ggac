@@ -71,7 +71,7 @@ export function canEditFile(actor: EditActor, target: EditTarget): boolean {
 
 /** 거절 문구(서버 액션) — 판정과 같은 순서. 편집할 수 있으면 null */
 export function editDeniedMessage(actor: EditActor, target: EditTarget): string | null {
-  if (actor.isGuest) return '서브관리자는 파일을 수정할 수 없습니다.'
+  if (actor.isGuest) return '외부 참여자는 파일을 수정할 수 없습니다.'
   if (target.messageDeleted) return '삭제된 게시물의 파일입니다.'
   if (!actor.isMember) return '이 채널의 멤버만 파일 버전을 올릴 수 있습니다.'
   if (target.channelArchived) return '보관된 채널의 파일은 수정할 수 없습니다.'

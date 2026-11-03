@@ -11,6 +11,7 @@ import {
 import { consumeWorkSync } from '@/lib/server/boardWorkRateLimit'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { listChangedMessageIds } from '@/db/queries/work/messages'
+import { countMyOpenTaskRecords } from '@/db/queries/work/tasks'
 import { getDisplayNames } from '@/db/queries/work/directory'
 import {
   getChannelRevs,
@@ -46,6 +47,7 @@ export const dynamic = 'force-dynamic'
  *    읽을 수 없는 채널은 rev·메시지 id·고정 여부가 하나도 응답에 나오지 않는다(있는지조차 알리지 않는다).
  *    관리자도 자기가 없는 DM·그룹은 읽지 못한다.
  * 4. 입력 중 신호는 그 채널의 **멤버**일 때만 기록하고, **멤버에게만** 돌려준다(원본 채널 토픽 읽기·쓰기 인가와 같다).
+ * 5. 배지의 열린 할 일 수(`badges.openTaskCount`)도 3의 읽기 범위 안 채널만 센다(사이드바 '할 일' 배지와 같은 규칙).
  */
 export async function POST(request: NextRequest) {
   const auth = await requireBoardMember()
@@ -55,7 +57,7 @@ export async function POST(request: NextRequest) {
   return apiPost(
     async () => {
       const staff = await loadWorkStaff(user.id)
-      if (!staff) throw ApiError.forbidden('업무툴을 쓸 수 없습니다.')
+      if (!staff) throw ApiError.forbidden('이사회 구성원(이사·감사)과 관리자만 쓸 수 있습니다.')
       const limited = await consumeWorkSync(user.id, request)
       if (!limited.ok) throw ApiError.tooManyRequests(limited.message)
 
@@ -123,7 +125,12 @@ export async function POST(request: NextRequest) {
         req.membershipRev !== undefined &&
         req.membershipRev !== membershipRev
 
-      const badges = await loadSidebarBadges({ user: { id: user.id }, staff })
+      const [sidebarBadges, openTaskCount] = await Promise.all([
+        loadSidebarBadges({ user: { id: user.id }, staff }),
+        // 메뉴 '할 일' 배지 — 업무 화면 밖에서도 주기마다 맞춘다. 위에서 구한 읽기 범위(readable) 안의 채널만 센다
+        countMyOpenTaskRecords({ userId: user.id, readable }),
+      ])
+      const badges = { ...sidebarBadges, openTaskCount }
 
       const visible = await visibleStaffIds(viewer)
       // 입력 중 표시는 그 채널의 **멤버**에게만 보인다. 원본은 채널 토픽(typing broadcast)을 멤버만 받았다

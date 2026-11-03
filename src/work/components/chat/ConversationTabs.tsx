@@ -88,7 +88,7 @@ export default function ConversationTabs({
       {overflow.length > 0 && (
         <DropdownMenu>
           <DropdownMenuTrigger
-            className="my-auto flex h-8 shrink-0 items-center gap-1 rounded-w-md px-2 pointer-coarse:min-h-11 text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring focus-visible:ring-ring/50"
+            className="my-auto flex h-8 shrink-0 items-center gap-1 rounded-w-lg px-2 pointer-coarse:min-h-11 text-sm text-muted-foreground outline-none hover:text-foreground"
             aria-label={`더 보기, 탭 ${overflow.length}개`}
           >
             더 보기

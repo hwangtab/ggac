@@ -51,7 +51,7 @@ export default function IosInstallGuide({
               3
             </span>
             <span>
-              홈 화면의 &ldquo;GAC&rdquo; 아이콘으로 열어 이사회 업무툴의 설정 &gt; 알림에서 켭니다.
+              홈 화면의 &ldquo;GAC&rdquo; 아이콘으로 열어 이사회실 업무 설정 &gt; 알림에서 켭니다.
             </span>
           </li>
         </ol>
