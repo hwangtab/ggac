@@ -26,7 +26,9 @@
  *
  * ## 그럼 인가는 무엇이 지키는가 — **E2E다**
  *
- * `npm run test:e2e:authz`(기준선 147 passed). 같은 감사에서 **E2E는 관리자 게이트
+ * `npm run test:e2e:authz`(기준선 210 passed, 총 211건 중 1 skipped. Blob 토큰·
+ * 토스 키 없이는 환경 의존 4건이 더 빨간불이다 — 206 passed·4 failed·1 skipped,
+ * 2026-11-02 실측). 같은 감사에서 **E2E는 관리자 게이트
  * 무력화를 실제로 잡았다.** 인가를 바꿨으면 그걸 돌려라. 이 파일이 초록불인 것은
  * 인가가 지켜진다는 증거가 아니다.
  *
@@ -1288,7 +1290,7 @@ const apiRouteFilesMissed = missingFrom(apiRouteFiles, apiRouteFilesExpected)
 // 예전 가드는 **손으로 적은 약 30개 경로 목록**이었다 — 내일 추가되는
 // admin 라우트를 구조적으로 못 잡는다. 그래서 트리 전체를 훑는다.
 const PRIVILEGED_ROUTE_TREES = ['src/app/api/admin', 'src/app/api/board-room']
-const PRIVILEGED_ROUTE_FILES_MIN = 35 // 현재 41 (admin 30 + board-room 11)
+const PRIVILEGED_ROUTE_FILES_MIN = 35 // 하한이다. 타임뱅크 관리자 6 + 이사회 보고 1이 더해졌다(계획 Task 9)
 const privilegedRouteFiles = PRIVILEGED_ROUTE_TREES.flatMap(tree =>
   globSync(`${tree}/**/route.@(ts|tsx)`, {
     cwd: root,
@@ -1715,6 +1717,104 @@ const requiredAuthHelperCallCounts = [
   {
     file: 'src/app/api/users/[id]/likes/route.ts',
     calls: [{ pattern: /requireUser\(\)/g, min: 1 }],
+  },
+  // 타임뱅크(2026-11-02, 계획 Task 7). 조합원 라우트는 memberAuth를 직접 import하지
+  // 않고 `src/lib/server/timebankAuth.ts`의 헬퍼를 부른다 — 그 헬퍼 몸통이
+  // requireActiveMember()를 부르는지와, 라우트마다 헬퍼 호출 수를 함께 고정한다.
+  // 읽기(Reader)·명단(Peer)·동의(Agreer)·쓰기(Participant)가 서로 다른 등급이라
+  // 쓰기 핸들러의 Participant가 Reader로 퇴화하는 것도 개수로 잡는다.
+  {
+    file: 'src/lib/server/timebankAuth.ts',
+    calls: [{ pattern: /requireActiveMember\(\)/g, min: 1 }],
+  },
+  {
+    // GET은 Reader, POST는 Participant.
+    file: 'src/app/api/timebank/listings/route.ts',
+    calls: [
+      { pattern: /requireTimebankReader\(\)/g, min: 1 },
+      { pattern: /requireTimebankParticipant\(\)/g, min: 1 },
+    ],
+  },
+  {
+    // GET·DELETE는 Reader, PATCH는 Participant.
+    file: 'src/app/api/timebank/listings/[id]/route.ts',
+    calls: [
+      { pattern: /requireTimebankReader\(\)/g, min: 2 },
+      { pattern: /requireTimebankParticipant\(\)/g, min: 1 },
+    ],
+  },
+  {
+    file: 'src/app/api/timebank/listings/[id]/comments/route.ts',
+    calls: [
+      { pattern: /requireTimebankReader\(\)/g, min: 1 },
+      { pattern: /requireTimebankParticipant\(\)/g, min: 1 },
+    ],
+  },
+  {
+    file: 'src/app/api/timebank/listings/[id]/comments/[commentId]/route.ts',
+    calls: [{ pattern: /requireTimebankReader\(\)/g, min: 1 }],
+  },
+  {
+    // POST(자원)는 Participant, DELETE(철회)는 Reader.
+    file: 'src/app/api/timebank/listings/[id]/volunteer/route.ts',
+    calls: [
+      { pattern: /requireTimebankParticipant\(\)/g, min: 1 },
+      { pattern: /requireTimebankReader\(\)/g, min: 1 },
+    ],
+  },
+  {
+    file: 'src/app/api/timebank/agree/route.ts',
+    calls: [{ pattern: /requireTimebankAgreer\(\)/g, min: 1 }],
+  },
+  {
+    file: 'src/app/api/timebank/profile/route.ts',
+    calls: [
+      { pattern: /requireTimebankReader\(\)/g, min: 1 },
+      { pattern: /requireTimebankParticipant\(\)/g, min: 1 },
+    ],
+  },
+  {
+    file: 'src/app/api/timebank/participants/route.ts',
+    calls: [{ pattern: /requireTimebankPeer\(\)/g, min: 1 }],
+  },
+  {
+    file: 'src/app/api/timebank/directory/route.ts',
+    calls: [{ pattern: /requireTimebankPeer\(\)/g, min: 1 }],
+  },
+  // 계획 Task 8 — 기록·결정·내 타임. 기록은 Participant, 확인은 Participant,
+  // 거절·취소(§7.2 꺼짐에도 허용)와 읽기는 Reader.
+  {
+    file: 'src/app/api/timebank/transfers/route.ts',
+    calls: [{ pattern: /requireTimebankParticipant\(\)/g, min: 1 }],
+  },
+  {
+    // confirm은 Participant, reject·cancel은 Reader. 둘 중 하나가 빠지면 confirm이
+    // 꺼짐·미동의에서 열리거나 reject·cancel이 꺼짐에서 막힌다.
+    file: 'src/app/api/timebank/transfers/[id]/[action]/route.ts',
+    calls: [
+      { pattern: /requireTimebankParticipant\(\)/g, min: 1 },
+      { pattern: /requireTimebankReader\(\)/g, min: 1 },
+    ],
+  },
+  {
+    file: 'src/app/api/timebank/me/route.ts',
+    calls: [{ pattern: /requireTimebankReader\(\)/g, min: 1 }],
+  },
+  {
+    file: 'src/app/api/timebank/me/transfers/route.ts',
+    calls: [{ pattern: /requireTimebankReader\(\)/g, min: 1 }],
+  },
+  {
+    file: 'src/app/api/timebank/me/transfers.csv/route.ts',
+    calls: [{ pattern: /requireTimebankReader\(\)/g, min: 1 }],
+  },
+  {
+    file: 'src/app/api/timebank/me/pending/route.ts',
+    calls: [{ pattern: /requireTimebankReader\(\)/g, min: 1 }],
+  },
+  {
+    file: 'src/app/api/timebank/stats/route.ts',
+    calls: [{ pattern: /requireTimebankReader\(\)/g, min: 1 }],
   },
 ]
 const requiredAuthHelperCallViolations = requiredAuthHelperCallCounts.flatMap(({ file, calls }) => {
@@ -7264,7 +7364,7 @@ if (trackedFiles === null) {
 }
 
 // ---------------------------------------------------------------------------
-// 이사회 **전용 화면**(일정 투표·메일함)은 미들웨어 말고도 서버에서 한 번 더
+// 이사회 **전용 화면**(일정 투표·메일함·타임뱅크 보고)은 미들웨어 말고도 서버에서 한 번 더
 // 판정한다.
 //
 // 왜 검사하는가: 두 화면은 예전에 `'use client'`뿐이라 서버 인가가 전혀 없었고,
@@ -7279,6 +7379,7 @@ if (trackedFiles === null) {
   const guardedBoardPages = [
     'src/app/[locale]/board-room/schedule/page.tsx',
     'src/app/[locale]/board-room/mailbox/page.tsx',
+    'src/app/[locale]/board-room/timebank/page.tsx',
   ]
   const unguardedBoardPages = []
 
@@ -7492,6 +7593,96 @@ if (trackedFiles === null) {
     )
   }
 }
+// 조합원 타임뱅크 관리자·이사회 API(계획 Task 9, 스펙 §6·§7.3·§7.4·§9.2).
+//
+// 특권 트리 가드(위)는 `auth`가 'admin'·'board-member'·createSettingsAdminAuth() 중
+// 하나인지만 본다. 타임뱅크 관리자 쓰기(조합 업무 지급·조정·승인·취소·설정)는
+// **관리자만**이어야 한다 — 'board-member'로 퇴화하면 이사·감사가 크레딧을 발행할
+// 수 있는데 그 가드는 초록이다. 그래서 이 트리는 'admin' 하나만 받는다. 이사회
+// 보고는 반대로 'board-member'여야 한다(이사·감사가 읽는다).
+//
+// **증명하지 않는 것**: 도달 가능성·실행 순서. 진짜 그물은 Task 13의 authz E2E다.
+{
+  const timebankFailures = []
+  const adminTimebankRoutes = globSync('src/app/api/admin/timebank/**/route.@(ts|tsx)', {
+    cwd: root,
+    exclude: ['**/node_modules/**', '**/.next/**'],
+  }).sort()
+  // 글롭이 비면 아래 검사가 통째로 꺼진다. 현재 6개.
+  if (adminTimebankRoutes.length < 6) {
+    timebankFailures.push(
+      `타임뱅크 관리자 라우트 글롭이 비었거나 줄었습니다(${adminTimebankRoutes.length}) — 경로가 바뀌었다면 이 계약도 고쳐야 합니다`
+    )
+  }
+  for (const file of adminTimebankRoutes) {
+    const code = stripCommentsAndImports(readSourceAt(join(root, file)))
+    const codeNoStrings = stripStringLiterals(code)
+    const handlers = HTTP_METHODS.filter(m => new RegExp(`export const ${m}\\s*=`).test(code))
+    if (handlers.length === 0) {
+      timebankFailures.push(`${file}: defineApiRoute 핸들러를 찾지 못했습니다`)
+    }
+    const authKeys = [...codeNoStrings.matchAll(/\bauth:/g)]
+    const adminAuths = code.match(/\bauth:\s*'admin'/g) || []
+    if (authKeys.length !== handlers.length || adminAuths.length !== handlers.length) {
+      timebankFailures.push(
+        `${file}: 모든 핸들러가 auth: 'admin'이어야 합니다(핸들러 ${handlers.length}, auth ${authKeys.length}, 'admin' ${adminAuths.length})`
+      )
+    }
+    if (!/createUserKeyGenerator\('admin_timebank_[a-z_]+'\)/.test(code)) {
+      timebankFailures.push(
+        `${file}: 레이트리밋 키가 createUserKeyGenerator('admin_timebank_*')가 아닙니다`
+      )
+    }
+  }
+  const oversightFile = 'src/app/api/board-room/timebank/oversight/route.ts'
+  const oversightSource = existsSync(join(root, oversightFile))
+    ? stripCommentsAndImports(readSourceAt(join(root, oversightFile)))
+    : null
+  if (oversightSource === null) {
+    timebankFailures.push(`${oversightFile}: 파일이 없습니다`)
+  } else if (!/\bauth:\s*'board-member'/.test(oversightSource)) {
+    timebankFailures.push(`${oversightFile}: 이사회 보고는 auth: 'board-member'여야 합니다`)
+  }
+  // 조합 업무 지급은 원장이 순수 판정(judgeCoopCredit)으로 조건 전부를 본다 —
+  // 라우트가 확인 체크를 빠뜨려도 지급되지 않게.
+  const ledgerSource = readSourceAt(join(root, 'src/db/queries/timebankLedger.ts'))
+  if (
+    !/judgeCoopCredit\(\{/.test(ledgerSource) ||
+    !/notPaidElsewhere:\s*input\.notPaidElsewhere/.test(ledgerSource)
+  ) {
+    timebankFailures.push(
+      'src/db/queries/timebankLedger.ts: creditCoopTask가 judgeCoopCredit으로 확인 체크까지 판정하지 않습니다'
+    )
+  }
+  // 설정 백업 복원이 타임뱅크 설정(이사회 의결 사항)을 쓰지 않는다.
+  const backupSource = stripCommentsAndImports(readSourceAt(adminSettingsBackupApiPath))
+  if (
+    !/partitionRestorableSettings\(backupSettings\)/.test(backupSource) ||
+    !/for \(const setting of restorable\)/.test(backupSource)
+  ) {
+    timebankFailures.push(
+      `src/app/api/admin/settings/backup/route.ts: 복원이 partitionRestorableSettings로 걸러진 목록만 쓰지 않습니다(timebank_features 우회)`
+    )
+  }
+  // 설정 PUT은 의결 근거를 history에 남긴다.
+  const tbSettingsSource = readSourceAt(join(root, 'src/app/api/admin/timebank/settings/route.ts'))
+  if (
+    !/planTimebankSettingsChange\(/.test(tbSettingsSource) ||
+    !/changeReason:\s*plan\.resolution_ref/.test(tbSettingsSource)
+  ) {
+    timebankFailures.push(
+      'src/app/api/admin/timebank/settings/route.ts: 설정 PUT이 planTimebankSettingsChange·changeReason(의결 근거)을 거치지 않습니다'
+    )
+  }
+  if (timebankFailures.length > 0) {
+    failures.push(
+      `Timebank admin/board API contracts (plan Task 9). These pin strings only; the real net is the authz E2E (Task 13). Offending contract(s):\n${timebankFailures
+        .map(hit => `- ${hit}`)
+        .join('\n')}`
+    )
+  }
+}
+
 if (failures.length > 0) {
   console.error(failures.join('\n\n'))
   process.exit(1)

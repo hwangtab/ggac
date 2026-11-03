@@ -64,6 +64,16 @@ export const ACTIVITY_ACTION_TYPE = [
   // 등)를 사무국이 돌려준 일이라, 누가 왜 눌렀는지가 남아야 한다.
   // 타입 배열일 뿐 DB CHECK가 없으므로 마이그레이션 불필요.
   'ticket_reservation_refunded',
+  'timebank_agreed',
+  'timebank_transfer_recorded',
+  'timebank_transfer_decided',
+  'timebank_coop_credit',
+  'timebank_adjustment',
+  'timebank_adjustment_approved',
+  'timebank_settings_changed',
+  // 계획 Task 9: 조합 업무 글 등록, 관리자의 pending 취소(분쟁 정리).
+  'timebank_coop_task_created',
+  'timebank_transfer_admin_canceled',
 ] as const
 
 export const ACTIVITY_TARGET_TYPE = [
@@ -80,6 +90,9 @@ export const ACTIVITY_TARGET_TYPE = [
   'funding_campaign',
   'funding_pledge',
   'ticket_reservation',
+  // 타임뱅크 원장 행·게시판 글(계획 Task 9 관리자 기록). 타입 배열일 뿐 DB CHECK가 없다.
+  'timebank_transfer',
+  'timebank_listing',
 ] as const
 
 export const systemSettings = sqliteTable(

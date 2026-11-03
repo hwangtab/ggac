@@ -35,6 +35,14 @@ export type NotificationType =
   | 'market_outbid' // 내 입찰가를 누가 넘었다는 알림
   | 'market_auction_won' // 경매 낙찰 알림(낙찰자)
   | 'market_auction_ended' // 내 경매가 끝났다는 알림(판매자, 낙찰·유찰)
+  | 'timebank_pending' // 타임 기록 확인 요청(확인할 상대)
+  | 'timebank_confirmed' // 타임 기록 확인됨(다른 당사자)
+  | 'timebank_rejected' // 타임 기록 거절됨(다른 당사자)
+  | 'timebank_canceled' // 타임 기록 취소됨(다른 당사자)
+  | 'timebank_comment' // 내 타임뱅크 글에 댓글
+  | 'timebank_credited' // 타임 적립(가입·조합 업무·조정·환불)
+  | 'timebank_volunteer' // 조합 업무 글에 자원(글쓴 관리자)
+  | 'timebank_withdrawal_negative' // 음수 잔액 탈퇴 — 이사회 보고 대상(이사)
 
 /**
  * 알림 인터페이스

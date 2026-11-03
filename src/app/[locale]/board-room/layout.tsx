@@ -19,6 +19,7 @@ const BOARD_NAV_ITEMS = [
   { href: '/board-room/documents', label: '서류함' },
   { href: '/board-room/assembly', label: '정기총회' },
   { href: '/board-room/mailbox', label: '메일함' },
+  { href: '/board-room/timebank', label: '타임뱅크 보고' },
 ] as const
 
 // 조합원에게는 대시보드를 두지 않는다 — 그 화면은 이사회 회의 목록이고,

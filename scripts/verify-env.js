@@ -31,6 +31,11 @@ const requiredEnvVars = [
   'TURSO_DATABASE_URL',
   'TURSO_AUTH_TOKEN',
   'BETTER_AUTH_SECRET',
+  // 타임뱅크 재가입 키(HMAC) 전용 비밀값. 없으면 이용규칙 동의가 500이고
+  // 참여자의 탈퇴가 롤백된다(fail-closed, src/lib/timebank/rejoinKey.ts).
+  // **교체하지 않는다** — 바꾸면 저장된 timebank_withdrawn_keys가 전부 안 맞아
+  // 음수 잔액 탈퇴자가 재가입하면 가입 크레딧을 새로 받는다.
+  'TIMEBANK_REJOIN_SECRET',
   // 저장소는 Vercel Blob 하나뿐이다(단계 4 Task 5에서 제공자 분기가 사라졌다).
   // 셋 다 없으면 **에러 없이 화면만 망가지는** 종류의 사고를 낸다:
   //  · NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL이 비면 isBlobPublicUrl()이 항상 false

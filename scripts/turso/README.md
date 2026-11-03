@@ -218,13 +218,17 @@ TURSO_DATABASE_URL=http://127.0.0.1:8901 \
   node --experimental-strip-types scripts/testing/seed-authz-fixtures.mjs
 ```
 
-계정 **9개**(Better Auth `user`/`account` + `member_profiles`)와 글 1·댓글
-1·알림 1·좋아요 1·이사회 회의 2(scheduled·completed)·회의록 2·안건 1·안건 의견 3, 그리고 **`system_settings` 8행**(`site/maintenance_mode`,
+계정 **10개**(Better Auth `user`/`account` + `member_profiles`)와 글 1·댓글
+1·알림 1·좋아요 1·이사회 회의 2(scheduled·completed)·회의록 2·안건 1·안건 의견 3, 타임뱅크 픽스처(동의 프로필·글 2·대기 3·확정 1), 그리고 **`system_settings` 9행**(`site/maintenance_mode`,
 `site/registration_enabled`, `features/funding_features`,
 `security/email_verification`, 그리고 기능 스위치
-넷 — `board_features`·`artist_features`·`comment_features`·`file_upload`)과
+넷 — `board_features`·`artist_features`·`comment_features`·`file_upload` —
+과 `features/timebank_features`(enabled·coop_tasks_enabled 켬))과
 `default_settings` 16행을 채우는 멱등
-스크립트다. 두 번 돌려도 행이 늘지 않는다(id가 전부 고정값이다).
+스크립트다. 두 번 돌려도 행이 늘지 않는다(id가 전부 고정값이다). 타임뱅크
+원장 행은 지우고 다시 넣는다 — E2E DB는 `drizzle-kit push`로 만들어 원장 불변성
+트리거가 없기 때문에 가능하다. **마이그레이션을 적용한 DB에 이 시드를 돌리면
+트리거가 막아 실패한다.**
 
 | 계정             | 역할                                    | 로그인 |
 | ---------------- | --------------------------------------- | ------ |
@@ -236,6 +240,7 @@ TURSO_DATABASE_URL=http://127.0.0.1:8901 \
 | `approvalTarget` | 관리자 승인 액션의 대상(미승인)         | X      |
 | `withdrawalRequested` | 탈퇴 **신청** 중(여전히 승인·활성) | O |
 | `unverified`     | 승인·활성이지만 이메일 미인증           | X      |
+| `suspended`      | 정지(`is_suspended=1`, `is_active=0`) — 타임뱅크 동의는 돼 있음 | O |
 
 - `system_settings`가 없으면 `authz-maintenance.spec.ts`의 UPDATE가 0행에
   적용돼 유지보수 모드가 아예 켜지지 않는다. 스펙은 `rowsAffected`를 확인해
@@ -270,6 +275,8 @@ TURSO_DATABASE_URL=http://127.0.0.1:8901 \
 ```bash
 export E2E_TURSO_DATABASE_URL="http://127.0.0.1:8901"
 export BETTER_AUTH_SECRET="<아무 로컬 문자열>"
+# 타임뱅크 동의 성공 경로를 손으로 확인할 때 필요하다(32자 이상).
+export TIMEBANK_REJOIN_SECRET="<아무 로컬 문자열 32자 이상>"
 # 정책 36(첨부 업로드)만 필요로 한다. 공개 스토어 토큰만 쓴다.
 export PUBLIC_BLOB_READ_WRITE_TOKEN="<공개 Blob 스토어 토큰>"
 export NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL="<공개 Blob 베이스 URL>"
@@ -306,10 +313,21 @@ webServer에 `{...process.env, ...webServer.env}`를 넘긴다. e2e 전용 변�
 - `authz-setup`(6개 계정 로그인 → `e2e/.auth/*.json` storageState 저장)
 - `authz`: `authz-maintenance`·`authz-ownership`·`authz-personal`·
   `authz-remaining`·`authz-roles`·`authz-mailbox`·`authz-funding`·
-  `authz-features`·`authz-email-verification` 9개 스펙
+  `authz-features`·`authz-email-verification`·`authz-market`·`authz-timebank`
+  11개 스펙
 - `authz-public`: `authz-boundaries` 21건
 
-**실측 기준선(2026-09-26, 비조합원 개설자를 화면까지 들여보낸 뒤):** 총 148건 중
+**실측 기준선(2026-11-03, 타임뱅크 인가 스펙과 장터 경매를 합친 뒤):** 총 211건 중
+**210 passed, 0 failed, 1 skipped.** 스킵 1건은 메일함 첨부 다운로드 기록
+테스트다(실제 Blob 객체가 있어야 검증된다). Blob 토큰·토스 키 없이 돌리면 4건이
+**환경 탓으로** 더 빨간불이다 — 정책 36(첨부 업로드), 메일함 다운로드 2, 펀딩
+settle(같은 날 실측 206 passed·4 failed·1 skipped). 이 4건은 인가 변경과
+무관하므로, 197을 보면 회귀로 읽기 전에 위 3단계의 토큰부터 확인해라. 늘어난
+것은 `authz-timebank.spec.ts`(조합원 자격·동의 판·정지·탈퇴 신청 중의 읽기/쓰기,
+기록 위조, 확인·거절·취소 권한, 관리자 지급·조정·이중 승인, 이사회 보고,
+기능 스위치)다.
+
+**직전 기준선(2026-09-26, 비조합원 개설자를 화면까지 들여보낸 뒤):** 총 148건 중
 **147 passed, 0 failed, 1 skipped.** 정책 36(첨부 업로드)은 위 3단계의
 `PUBLIC_BLOB_READ_WRITE_TOKEN`을 준 경우다 — 토큰 없이 돌리면 그 1건이
 "토큰이 없으면 통과할 수 없다"로 실패하며, 이 저장소의 다른 변경과 무관하다.
@@ -1052,8 +1070,8 @@ EXPLAIN QUERY PLAN SELECT count(*) FROM notifications WHERE user_id = '<아무 �
 가드도 타입 검사도 통과한다. 가드는 **"이 문자열이 이 파일에 있는가"**만 보고
 도달 가능성·실행 순서·데이터 흐름을 보지 않는다.
 
-**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 147 passed, 실행 절차는
-위 "권한 E2E" 절). 같은 감사에서 **E2E는 관리자 게이트 무력화를 실제로 잡았다.**
+**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 210 passed — 토큰 없는
+환경 의존 실패 4건은 위 "권한 E2E" 절 참고, 실행 절차도 그 절). 같은 감사에서 **E2E는 관리자 게이트 무력화를 실제로 잡았다.**
 
 `assert-runtime-risks.mjs`가 여전히 값을 하는 자리는 **지워진 것**(게이트를 통째로
 삭제하면 개수가 0이 되어 실패), **되살아나는 것**(Supabase 임포트·쓰기), **문자열

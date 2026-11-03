@@ -950,7 +950,8 @@
       "roleArtist": "Artist",
       "roleMember": "Member",
       "helpPrompt": "Need help?",
-      "helpBody": "Please contact an admin."
+      "helpBody": "Please contact an admin.",
+      "timebank": "Time Bank"
     },
     "calendar": {
       "title": "My Calendar",
@@ -979,7 +980,13 @@
         "fri": "Fri",
         "sat": "Sat"
       }
-    }
+    },
+    "timebankCardTitle": "Time Bank",
+    "timebankCardDesc": "Record the help you trade with fellow members in time, and manage your hours.",
+    "timebankCardButton": "Manage my time",
+    "timebankCardBalance": "Balance {balance}",
+    "timebankCardNeedsAgreement": "Agree to the terms to start using the Time Bank.",
+    "timebankCardPending": "{count} to confirm"
   },
   "board": {
     "heading": "Member Board",
@@ -1000,7 +1007,8 @@
       "pendingInfo": "Your membership is pending approval. You will be able to write posts once approved.",
       "writeButton": "Write a Post",
       "boardOff": "Posting to the board is currently switched off. Reading still works.",
-      "marketLink": "Market"
+      "marketLink": "Market",
+      "timebankLink": "Time bank"
     },
     "write": {
       "noAccess": "Access Denied",
@@ -1167,6 +1175,293 @@
         "ended": "Sold",
         "no_bids": "No bids",
         "canceled": "Canceled"
+      }
+    }
+  },
+  "timebank": {
+    "kicker": "TIME BANK",
+    "heading": "Time Bank",
+    "subtitle": "Members help each other and count it in time. One hour is one hour, whoever does what.",
+    "notice": "The cooperative only helps members connect and does not guarantee the outcome of an exchange. Arrange times and places in the comments, and record the exchange on My Page once it is done.",
+    "scopeNotice": "Not accepted: commissions that hand over a finished work (songs, logos, videos, etc.), tasks with a risk of injury such as driving, work at height or childcare, and any exchange that also involves money. Do not write health information. Copyright in anything produced stays with its maker; the recipient may use it for non-commercial purposes only.",
+    "backToBoard": "← Back to board",
+    "write": "New post",
+    "mine": "My posts",
+    "empty": "No posts match these filters.",
+    "commentCount": "{count} comments",
+    "volunteerCount": "{count} volunteers",
+    "tabs": {
+      "all": "All",
+      "offer": "Offers",
+      "request": "Requests",
+      "coop_task": "Co-op tasks"
+    },
+    "kind": {
+      "offer": "Offer",
+      "request": "Request",
+      "coop_task": "Co-op task"
+    },
+    "category": {
+      "lesson": "Lessons",
+      "feedback": "Feedback",
+      "production_help": "Production help",
+      "moving": "Moving & transport",
+      "audience": "Audience",
+      "admin_help": "Admin help",
+      "daily": "Everyday help",
+      "etc": "Other"
+    },
+    "status": {
+      "open": "Open",
+      "closed": "Closed"
+    },
+    "filters": {
+      "all": "All categories",
+      "hideClosed": "Hide closed",
+      "showClosed": "Show closed"
+    },
+    "duration": {
+      "hours": "{hours} h",
+      "minutes": "{minutes} min",
+      "hoursMinutes": "{hours} h {minutes} min",
+      "undecided": "Not set"
+    },
+    "pagination": {
+      "prev": "← Previous",
+      "next": "Next →"
+    },
+    "gate": {
+      "unapproved": {
+        "title": "Members only",
+        "body": "The time bank is for approved members. You can use it once your membership is approved."
+      },
+      "disabled": {
+        "title": "The time bank is currently turned off.",
+        "body": "Posting, commenting, volunteering and recording are paused. You can still read posts and your own records, and decline or cancel pending records on My Page."
+      },
+      "not_agreed": {
+        "title": "Please agree to the time bank terms first.",
+        "body": "Once you agree, you can post, comment, volunteer and record exchanges. The cooperative issues 2 hours once when you first agree."
+      },
+      "terms_outdated": {
+        "title": "The terms have changed. Please agree to the new version.",
+        "body": "Until you agree to the new version you can only read posts and your records, and decline or cancel pending records."
+      },
+      "frozen": {
+        "title": "The time bank is unavailable while your withdrawal request is pending.",
+        "body": "You can still read posts and your records. If you withdraw the request, you can use the time bank again."
+      },
+      "inactive": {
+        "title": "Only approved members can use this.",
+        "body": "Please check your account status, or contact the office (contact@ggac.kr)."
+      },
+      "boardOff": {
+        "title": "Posting is currently unavailable",
+        "body": "New board posts are turned off. Please contact the office (contact@ggac.kr)."
+      },
+      "agreeLink": "Read and agree to the terms",
+      "backToList": "← Time bank"
+    },
+    "terms": {
+      "heading": "Gyeonggi Art Collective Time Bank Terms",
+      "version": "Version {version}",
+      "originalNotice": "The terms are provided in Korean only. The Korean original is the authoritative text you agree to.",
+      "previouslyAgreed": "You agreed to version {version}. The terms have changed, so please agree to the new version.",
+      "missing": "The text for this version of the terms could not be found. Please let the office (contact@ggac.kr) know.",
+      "checkbox": "I have read the terms in full and agree to them.",
+      "agree": "Agree",
+      "agreeing": "Processing…",
+      "error": "Could not process your agreement."
+    },
+    "form": {
+      "newTitle": "New time bank post",
+      "editTitle": "Edit time bank post",
+      "kind": "Post type",
+      "category": "Category",
+      "title": "Title",
+      "titlePlaceholder": "e.g. One hour of basic vocal coaching",
+      "description": "Description",
+      "descriptionPlaceholder": "Describe what you can offer (or need), and when and where you are available.",
+      "estimated": "Estimated time",
+      "estimatedNone": "Not set",
+      "contactWarning": "Do not put phone or bank account numbers in the post. Start contact through the comments.",
+      "submit": "Post",
+      "save": "Save",
+      "submitting": "Saving…",
+      "cancel": "Cancel",
+      "error": "Could not save."
+    },
+    "detail": {
+      "author": "Posted by",
+      "estimated": "Estimated time",
+      "taskDate": "Date",
+      "postedAt": "Posted",
+      "edit": "Edit",
+      "delete": "Delete",
+      "deleteConfirm": "Delete this post?",
+      "close": "Close",
+      "reopen": "Reopen",
+      "statusError": "Could not change the status.",
+      "deleteError": "Could not delete.",
+      "backToList": "← Time bank",
+      "coopNotice": "Taking part is entirely voluntary, and there is no disadvantage if you do not.",
+      "coopNoticeDetail": "The cooperative never names or assigns members. Work that was agreed to be paid is never replaced with credits."
+    },
+    "volunteer": {
+      "count": "{count} members have volunteered.",
+      "join": "I'll take part",
+      "withdraw": "Withdraw",
+      "joined": "You have volunteered.",
+      "withdrawConfirm": "Withdraw your offer to take part?",
+      "closed": "This co-op task is closed.",
+      "off": "Volunteering for co-op tasks is currently turned off.",
+      "error": "Could not process the request."
+    },
+    "comments": {
+      "heading": "Comments",
+      "placeholder": "Arrange a time and place or ask a question.",
+      "submit": "Comment",
+      "empty": "No comments yet.",
+      "deleted": "This comment was deleted.",
+      "delete": "Delete",
+      "deleteConfirm": "Delete this comment?",
+      "author": "Author",
+      "error": "Could not process the comment.",
+      "readOnly": {
+        "disabled": "The Time Bank is off, so comments are closed for now.",
+        "not_agreed": "Agree to the Time Bank terms to leave a comment.",
+        "terms_outdated": "Agree to the updated terms to leave a comment.",
+        "frozen": "You can't comment while your withdrawal request is pending.",
+        "inactive": "Only approved members can comment."
+      }
+    },
+    "transferKind": {
+      "exchange": "Exchange",
+      "market": "Market",
+      "reversal": "Reversal",
+      "signup_grant": "Sign-up credit",
+      "carryover": "Rejoin carryover",
+      "coop_task": "Co-op task",
+      "redeem": "Co-op service use",
+      "redeem_refund": "Co-op service refund",
+      "adjustment": "Adjustment",
+      "withdrawal_settlement": "Withdrawal settlement"
+    },
+    "transferStatus": {
+      "pending": "Awaiting confirmation",
+      "confirmed": "Confirmed",
+      "rejected": "Rejected",
+      "canceled": "Canceled"
+    },
+    "my": {
+      "title": "My Time",
+      "description": "See your balance, pending records, new records and history in one place. One person records after the work is done; it is confirmed when the other person confirms.",
+      "loadError": "Could not load. Please try again shortly.",
+      "actionError": "Could not process the request.",
+      "coop": "Co-op",
+      "fromCounterparty": "Received from {name}",
+      "toCounterparty": "Given to {name}",
+      "recordedByMe": "Recorded by me",
+      "balance": {
+        "heading": "Balance",
+        "balance": "My balance",
+        "roomToFloor": "Time left above the floor",
+        "floor": "Floor {floor}",
+        "coopTask": "Co-op tasks received in {month} / monthly cap",
+        "pending": "Pending",
+        "toConfirm": "{count} for me to confirm",
+        "awaitingOther": "{count} waiting for the other person"
+      },
+      "pending": {
+        "heading": "Pending",
+        "toConfirm": "Records for me to confirm",
+        "awaitingOther": "My records (waiting for the other person)",
+        "emptyToConfirm": "Nothing to confirm.",
+        "emptyAwaiting": "No records waiting for the other person.",
+        "confirm": "Confirm",
+        "reject": "Reject",
+        "cancel": "Cancel",
+        "rejectConfirm": "Reject this record?",
+        "cancelConfirm": "Cancel this record?",
+        "confirmDone": "Record confirmed.",
+        "rejectDone": "Record rejected.",
+        "cancelDone": "Record canceled.",
+        "stale": "Over 7 days"
+      },
+      "record": {
+        "heading": "Record",
+        "help": "Record after the help has been given. It is confirmed when the other person confirms, and does not count toward balances until then.",
+        "noParticipants": "There are no other participants to record with yet.",
+        "role": "I",
+        "role_received": "received help",
+        "role_gave": "gave help",
+        "counterparty": "With",
+        "counterpartyPlaceholder": "Choose a participant",
+        "minutes": "Time",
+        "categoryNone": "No category",
+        "memo": "Memo (optional)",
+        "memoPlaceholder": "What did you do?",
+        "memoHelp": "Keep it short. Do not include health information.",
+        "submit": "Save record",
+        "submitting": "Saving…",
+        "done": "Record saved. It is confirmed once the other person confirms it.",
+        "error": "Could not save the record."
+      },
+      "history": {
+        "heading": "History",
+        "csv": "Download {month} CSV",
+        "channel": "Channel",
+        "channelAll": "All channels",
+        "channels": {
+          "exchange": "Exchanges",
+          "reversal": "Reversals",
+          "coop_task": "Co-op tasks",
+          "signup": "Sign-up & carryover",
+          "adjustment": "Adjustments & settlements"
+        },
+        "month": "Month (KST)",
+        "allMonths": "All time",
+        "totals": "Confirmed in {month} — received {received}, given {given}",
+        "empty": "No records match.",
+        "relatedPost": "Related post",
+        "reverse": "Request reversal",
+        "reverseConfirm": "Record a reversal of this exchange? It is confirmed when the other person confirms.",
+        "reverseDone": "Reversal requested. It is confirmed when the other person confirms."
+      },
+      "posts": {
+        "heading": "My posts",
+        "viewAll": "See all on the board",
+        "mine": "My offers and requests",
+        "empty": "No posts yet.",
+        "volunteered": "Co-op tasks I joined",
+        "emptyVolunteered": "You have not joined any co-op tasks."
+      },
+      "profile": {
+        "heading": "Profile",
+        "readOnly": {
+          "disabled": "The Time Bank is off, so your profile can't be edited for now.",
+          "not_agreed": "Agree to the terms to edit your profile.",
+          "terms_outdated": "Agree to the updated terms to edit your profile.",
+          "frozen": "You can't edit your profile while your withdrawal request is pending.",
+          "inactive": "Only approved members can edit their profile."
+        },
+        "offers": "What I can offer",
+        "needs": "What I need",
+        "visible": "Show in the participant directory",
+        "visibleHelp": "Other participants will see what you offer, what you need and your categories.",
+        "save": "Save profile",
+        "saving": "Saving…",
+        "saved": "Profile saved.",
+        "error": "Could not save the profile."
+      },
+      "agreement": {
+        "heading": "Terms agreement",
+        "current": "Current version",
+        "agreed": "My agreement",
+        "agreedValue": "Version {version} · {date}",
+        "none": "Not agreed yet.",
+        "needsAgreement": "You need to agree to the current version. Read and agree to the terms in the notice above.",
+        "unavailable": "You need to agree to the current version, but agreement is not available right now. See the notice above."
       }
     }
   },

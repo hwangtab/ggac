@@ -268,6 +268,14 @@ export type SecurityEventType =
   // 유일한 경로라, 멈춰 있으면 Resend 보관 기한(30일)이 지나며 본문이 영영
   // 사라진다.
   | 'MAILBOX_BACKFILL_CRON_FAILED'
+  // 조합원 타임뱅크 관리자 쓰기(조합 업무 글·지급·조정·승인·pending 취소). 스펙
+  // §7.3 "모든 관리자 쓰기는 user_activities와 보안 로그에 남긴다".
+  | 'TIMEBANK_ADMIN_WRITE'
+  // 타임뱅크 설정(이사회 의결 사항, §9.2) 변경. 의결 근거와 바뀐 칸을 함께 남긴다.
+  | 'TIMEBANK_SETTINGS_CHANGED'
+  // 위 쓰기의 활동 기록(`user_activities`)이 실패한 경우. 쓰기는 이미 커밋됐다.
+  | 'TIMEBANK_ADMIN_AUDIT_FAILED'
+  | 'TIMEBANK_ADMIN_API_ERROR'
 
 export type SecurityEventSeverity = 'low' | 'medium' | 'high'
 

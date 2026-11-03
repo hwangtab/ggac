@@ -183,6 +183,13 @@
       "when": 1789300000000,
       "tag": "0025_market_auction",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1789400000000,
+      "tag": "0026_timebank",
+      "breakpoints": true
     }
   ]
 }

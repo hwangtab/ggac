@@ -30,6 +30,8 @@ import {
   userSettings,
 } from '../schema/index.ts'
 
+import { withdrawTimebankTx } from './timebankWithdrawal.ts'
+
 /**
  * 탈퇴를 신청한다. 승인 상태인 조합원만 신청할 수 있다.
  *
@@ -93,7 +95,17 @@ export interface ArtistPhotoCleanup {
  * `deleteBillingKey`를, 호출부가 커밋 뒤에 Blob 삭제를 부른다).
  */
 export type WithdrawOutcome =
-  | { ok: true; revokedBillingKeys: string[]; artistPhotoCleanup: ArtistPhotoCleanup | null }
+  | {
+      ok: true
+      revokedBillingKeys: string[]
+      artistPhotoCleanup: ArtistPhotoCleanup | null
+      /**
+       * 타임뱅크 잔액이 음수인 채로 탈퇴했으면 조합이 떠안은 분(양수). 호출부가
+       * 커밋 뒤 이사에게 알린다(`notifyNegativeWithdrawal`, 스펙 §9.3 4단계).
+       * 음수가 아니면 **키 자체가 없다** — 기존 호출부·테스트의 결과 모양을 바꾸지 않는다.
+       */
+      timebankNegativeMinutes?: number
+    }
   | { ok: false; reason: 'not_requested' | 'last_admin' }
 
 /**
@@ -209,11 +221,21 @@ export async function withdrawMember(userId: string): Promise<WithdrawOutcome> {
     // (`artists.id`(uuid)가 아니다) 매칭되는 행이 없을 수도 있다(끊어진 참조,
     // `src/app/api/mypage/artist/photo/route.ts` 주석 참고) — 아래에서
     // 존재를 확인한다.
+    //
+    // 이메일·전화도 **같은 이유로 여기서** 읽는다(타임뱅크 재가입 키, 스펙 §9.3
+    // 순서 주의). 아래 첫 UPDATE가 `email`을 묘비 주소로, `phoneNumber`를
+    // null(`PII_NULL_FIELDS`)로 바꾼다 — 그 뒤에 읽으면 묘비 이메일로 키를
+    // 만들게 되어 재가입 승계가 조용히 무력화된다(`timebankWithdrawal.test.mjs`가 고정).
     const [beforeRow] = await tx
-      .select({ artistId: memberProfiles.artistId })
+      .select({
+        artistId: memberProfiles.artistId,
+        email: memberProfiles.email,
+        phone: memberProfiles.phoneNumber,
+      })
       .from(memberProfiles)
       .where(eq(memberProfiles.id, userId))
     const priorArtistLegacyId = beforeRow?.artistId ?? null
+    const priorIdentity = { email: beforeRow?.email ?? null, phone: beforeRow?.phone ?? null }
 
     // 상태 전이 + 마지막 관리자 차단을 **한 UPDATE 안에서** 원자적으로 한다.
     // 읽고-판단하고-쓰면 관리자가 둘 동시에 눌렀을 때 둘 다 통과한다.
@@ -345,6 +367,12 @@ export async function withdrawMember(userId: string): Promise<WithdrawOutcome> {
         )
       await recomputeLiveAuctions(tx, liveBidListings)
     }
+
+    // ③-4 타임뱅크 — pending 취소, 잔액 정산, 재가입 키, 프로필·글·자원 정리,
+    // 원장 이름 묘비(스펙 §9.3 일곱 단계, `timebankWithdrawal.ts`). **이 트랜잭션
+    // 안에서** 한다 — 아래에서 무엇이든 실패하면 이것도 함께 롤백된다. 키는 위에서
+    // 미리 읽은 원래 이메일·전화로 만든다.
+    const timebank = await withdrawTimebankTx(tx, userId, priorIdentity, new Date())
 
     // ④ 결제 수단 — 지운다. 결제·회비 기록은 남긴다(회계 증빙).
     // 토스 해지에 쓸 키를 **지우기 전에** 읽어 둔다. 커밋 뒤 라우트가 부른다.
@@ -525,6 +553,13 @@ export async function withdrawMember(userId: string): Promise<WithdrawOutcome> {
       throw new Error('탈퇴 처리 후에도 펀딩 후원에 개인정보가 남았다 — 전체를 롤백한다')
     }
 
-    return { ok: true, revokedBillingKeys, artistPhotoCleanup }
+    return timebank.negativeMinutes === null
+      ? { ok: true, revokedBillingKeys, artistPhotoCleanup }
+      : {
+          ok: true,
+          revokedBillingKeys,
+          artistPhotoCleanup,
+          timebankNegativeMinutes: timebank.negativeMinutes,
+        }
   })
 }

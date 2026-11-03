@@ -40,6 +40,12 @@ const POST_CUTOVER_TABLES = new Set([
   'market_comments', // 0024
   'market_auctions', // 0025 장터 경매
   'market_bids', // 0025
+  'timebank_profiles', // 0026 조합원 타임뱅크
+  'timebank_listings', // 0026
+  'timebank_comments', // 0026
+  'timebank_task_volunteers', // 0026
+  'timebank_transfers', // 0026
+  'timebank_withdrawn_keys', // 0026
 ])
 
 export function comparePgToSqlite(pgSnapshot, sqliteSchema) {

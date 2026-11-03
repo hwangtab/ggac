@@ -18,6 +18,10 @@ const ACCOUNTS = [
     email: 'authz-withdrawal-requested@test.local',
     password: 'Authz!WithdrawReq2026',
   },
+  // 정지 회원(타임뱅크 계획 결정 6) — `is_suspended=true`, `is_active=false`.
+  // 정지는 로그인을 막지 않으므로 storageState를 만든다. 조합원 라우트가
+  // `requireActiveMember()`에서 403인지 `authz-timebank.spec.ts`가 이 상태로 본다.
+  { role: 'suspended', email: 'authz-suspended@test.local', password: 'Authz!Suspend2026' },
 ]
 
 for (const account of ACCOUNTS) {
