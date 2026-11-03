@@ -19,6 +19,8 @@ import { loadChannelFiles } from '@work/lib/files/channel-files-load'
 import { folderCrumbs, folderSummary, parentFolder } from '@work/lib/files/folders'
 import { getFilterOptions, listFiles } from '@work/lib/files/queries'
 import { parseFilesSearch } from '@work/lib/files/schema'
+import { parseBoardFolder } from '@work/lib/files/board-folders'
+import BoardDocumentsFolder from '@work/components/files/board-documents/BoardDocumentsFolder'
 
 export const metadata: Metadata = { title: '자료실' }
 
@@ -33,6 +35,8 @@ export const dynamic = 'force-dynamic'
  * ggac 이식: 게스트(서브관리자)는 1단계부터 쓰지 않아 원본의 게스트 분기(채널 지정 링크만·올린 사람 후보 한정)를 뺐다.
  * 폴더 탐색일 때 새 문서 만들기(NewDocumentMenu — 편집기 출처 env·PC 일 때만 보인다, 3단계).
  * `data-testid="board-work-files"`는 권한 E2E 표식이다.
+ *
+ * `?board=<분류>`면 '이사회 서류' 폴더다(03 §10 — 서류함 통합): `board_documents`를 분류별로 보인다(BoardDocumentsFolder).
  */
 export default async function FilesPage({
   searchParams,
@@ -41,6 +45,11 @@ export default async function FilesPage({
 }) {
   const supabase = await requireWorkStaff()
   const raw = await searchParams
+  const boardFolder = parseBoardFolder(raw.board)
+  if (boardFolder) {
+    const doc = Array.isArray(raw.doc) ? raw.doc[0] : raw.doc
+    return <BoardDocumentsFolder ctx={supabase} category={boardFolder} openDocId={doc ?? null} />
+  }
   const search = parseFilesSearch(raw)
 
   // 폴더 탐색: 채널 지정 + 검색·형식·올린 사람·기간 필터 없음. 그 밖에는 평면 목록(path 무시)

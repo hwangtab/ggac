@@ -837,3 +837,79 @@ export async function getDocumentForDownload(id: string): Promise<{
     visibility: row.visibility,
   }
 }
+
+export interface DocumentPreviewRow {
+  id: string
+  title: string
+  category: string
+  file_path: string
+  file_name: string | null
+  file_size: number | null
+  mime_type: string | null
+  visibility: string
+}
+
+/**
+ * 자료실(업무 화면)의 이사회 서류 미리보기 — `/api/board-room/work/board-documents/[id]*`(03 §10). 다운로드 조회
+ * (`getDocumentForDownload`)와 같은 열에 크기·제목을 더했다(미리보기는 크기 상한을 먼저 본다).
+ * 권한을 모른다 — 호출부가 `requireBoardMember()` 뒤에 `visibility`로 다시 판정한다.
+ */
+export async function getDocumentForPreview(id: string): Promise<DocumentPreviewRow | null> {
+  const [row] = await db
+    .select({
+      id: boardDocuments.id,
+      title: boardDocuments.title,
+      category: boardDocuments.category,
+      filePath: boardDocuments.filePath,
+      fileName: boardDocuments.fileName,
+      fileSize: boardDocuments.fileSize,
+      mimeType: boardDocuments.mimeType,
+      visibility: boardDocuments.visibility,
+    })
+    .from(boardDocuments)
+    .where(eq(boardDocuments.id, id))
+    .limit(1)
+  if (!row) return null
+  return {
+    id: row.id,
+    title: row.title,
+    category: row.category,
+    file_path: row.filePath,
+    file_name: row.fileName,
+    file_size: row.fileSize,
+    mime_type: row.mimeType,
+    visibility: row.visibility,
+  }
+}
+
+/**
+ * 업무 검색의 '이사회 서류' 묶음(03 §10). 검색어(호출부가 `splitTerms`로 나눈 것)마다 제목·파일 이름·본문
+ * (`body_markdown` — 정관처럼 본문을 둔 서류) 중 하나에 들어 있어야 한다(AND). `instr(lower(…))`라 `%`·`_`가 와일드카드가
+ * 아니다(업무 검색과 같은 일치 규칙). 첨부 파일 속 글자(PDF·HWP 본문)는 찾지 않는다 — 본문 추출은 업무툴 첨부만 한다.
+ *
+ * `visibility`는 **필수다**(`listDocuments`와 같은 이유). 권한 판정은 호출부 몫이다.
+ */
+export async function searchDocuments(filter: {
+  terms: readonly string[]
+  visibility: readonly string[]
+  limit: number
+}): Promise<(DocumentRow & { body_matched: boolean })[]> {
+  if (filter.terms.length === 0 || filter.visibility.length === 0) return []
+  const termWhere = filter.terms.map(
+    t =>
+      sql`(instr(lower(${boardDocuments.title}), lower(${t})) > 0 or instr(lower(coalesce(${boardDocuments.fileName}, '')), lower(${t})) > 0 or instr(lower(coalesce(${boardDocuments.bodyMarkdown}, '')), lower(${t})) > 0)`
+  )
+  const rows = await db
+    .select()
+    .from(boardDocuments)
+    .where(and(inArray(boardDocuments.visibility, [...filter.visibility]), ...termWhere))
+    .orderBy(desc(boardDocuments.createdAt))
+    .limit(filter.limit)
+  return rows.map(row => {
+    const head = `${row.title}\n${row.fileName ?? ''}`.toLowerCase()
+    return {
+      ...rowToDocument(row),
+      body_matched: filter.terms.some(t => !head.includes(t.toLowerCase())),
+    }
+  })
+}

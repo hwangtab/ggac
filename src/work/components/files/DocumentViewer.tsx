@@ -21,6 +21,7 @@ import {
   type RenderedSheet,
 } from '@work/lib/files/render-types'
 import { cn } from '@work/lib/utils'
+import { useFileApiBase, WORK_FILE_API_BASE } from './file-api-base'
 
 export type DocumentViewerFile = { id: string; name: string }
 
@@ -31,13 +32,13 @@ type State =
 
 const ERROR_CODES = new Set<string>(Object.keys(RENDER_ERROR_MESSAGE))
 
-export function renderUrl(id: string): string {
-  return `/api/board-room/work/files/${id}/render`
+export function renderUrl(id: string, base: string = WORK_FILE_API_BASE): string {
+  return `${base}/${id}/render`
 }
 
 /** HWP·HWPX 원본 모양 — manifest(`?view=layout`)·쪽 SVG(`&page=n`) */
-export function layoutUrl(id: string, page?: number): string {
-  return `${renderUrl(id)}?view=layout${page ? `&page=${page}` : ''}`
+export function layoutUrl(id: string, page?: number, base: string = WORK_FILE_API_BASE): string {
+  return `${renderUrl(id, base)}?view=layout${page ? `&page=${page}` : ''}`
 }
 
 /**
@@ -94,11 +95,12 @@ function Notice({ children, role }: { children: React.ReactNode; role?: 'status'
 }
 
 function TruncatedNotice({ file, limit }: { file: DocumentViewerFile; limit: string }) {
+  const base = useFileApiBase()
   return (
     <p className="flex flex-wrap items-center gap-2 border-t bg-subtle px-3 py-2 text-xs text-muted-foreground">
       <span>{limit}</span>
       <a
-        href={`/api/board-room/work/files/${file.id}?download=1`}
+        href={`${base}/${file.id}?download=1`}
         download={file.name}
         className={cn(buttonVariants({ variant: 'outline', size: 'xs' }), 'gap-1')}
       >
@@ -239,6 +241,7 @@ function LayoutPageView({
   const [attempt, setAttempt] = useState(0)
   const [waiting, setWaiting] = useState(false)
   const [broken, setBroken] = useState(false)
+  const base = useFileApiBase()
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(
     () => () => {
@@ -267,7 +270,7 @@ function LayoutPageView({
   }
 
   // 다시 시도할 때는 주소를 바꿔 브라우저가 실패한 응답을 다시 쓰지 않게 한다(서버는 모르는 쿼리를 무시)
-  const src = `${layoutUrl(file.id, page.page)}${attempt > 0 ? `&retry=${attempt}` : ''}`
+  const src = `${layoutUrl(file.id, page.page, base)}${attempt > 0 ? `&retry=${attempt}` : ''}`
   return (
     <figure className="m-0 flex flex-col items-center gap-1">
       <div
@@ -352,10 +355,11 @@ function LayoutView({ file, manifest }: { file: DocumentViewerFile; manifest: La
 function HwpViewer({ file }: { file: DocumentViewerFile }) {
   const [layout, setLayout] = useState<LayoutState>({ status: 'loading' })
   const [mode, setMode] = useState<'layout' | 'text'>('layout')
+  const base = useFileApiBase()
 
   useEffect(() => {
     const ctrl = new AbortController()
-    fetch(layoutUrl(file.id), { signal: ctrl.signal })
+    fetch(layoutUrl(file.id, undefined, base), { signal: ctrl.signal })
       .then(async res => {
         const body: unknown = res.ok ? await res.json().catch(() => null) : null
         setLayout(
@@ -366,7 +370,7 @@ function HwpViewer({ file }: { file: DocumentViewerFile }) {
         if (!ctrl.signal.aborted) setLayout({ status: 'failed' })
       })
     return () => ctrl.abort()
-  }, [file.id])
+  }, [file.id, base])
 
   const failed = layout.status === 'failed'
   const showText = failed || mode === 'text'
@@ -423,11 +427,12 @@ function HwpViewer({ file }: { file: DocumentViewerFile }) {
 
 function TextDocumentViewer({ file }: { file: DocumentViewerFile }) {
   const [state, setState] = useState<State>({ status: 'loading' })
+  const base = useFileApiBase()
 
   useEffect(() => {
     const ctrl = new AbortController()
     setState({ status: 'loading' })
-    fetch(renderUrl(file.id), { signal: ctrl.signal })
+    fetch(renderUrl(file.id, base), { signal: ctrl.signal })
       .then(async res => {
         if (!res.ok) {
           const body = (await res.json().catch(() => null)) as { error?: string } | null
@@ -444,7 +449,7 @@ function TextDocumentViewer({ file }: { file: DocumentViewerFile }) {
         setState({ status: 'error', code: 'server', message: RENDER_ERROR_MESSAGE.server })
       })
     return () => ctrl.abort()
-  }, [file.id])
+  }, [file.id, base])
 
   if (state.status === 'loading') {
     return (

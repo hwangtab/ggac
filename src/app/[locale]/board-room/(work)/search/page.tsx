@@ -6,7 +6,54 @@ import { parseSearchParams } from '@work/lib/search/params'
 import { loadSearchFilters, searchAll, EMPTY_RESULT } from '@work/lib/search/search'
 import { EmptyState, NoticeBanner, PageBody, PageHeader } from '@work/components/layout/page'
 import SearchForm from '@work/components/search/SearchForm'
-import SearchResults from '@work/components/search/SearchResults'
+import SearchResults, { type BoardDocumentHit } from '@work/components/search/SearchResults'
+import { splitTerms } from '@work/lib/search/text'
+import { searchDocuments } from '@/db/queries/board'
+import { visibilityScopeFor } from '@/lib/server/boardRoomAuth'
+
+/** 이사회 서류 결과 상한(업무 검색의 파일·문서 상한과 같다) */
+const BOARD_DOCUMENT_LIMIT = 20
+
+/**
+ * 자료실 '이사회 서류'(03 §10)도 함께 찾는다 — 검색어만 있고 채널·작성자 필터가 없을 때(서류는 채널·작성자가 없다).
+ * 이 화면은 `requireWorkStaff()`를 지났으므로 이사·감사·관리자다 → 열람 범위 `visibilityScopeFor(true)`.
+ * 기간 필터는 올린 날(KST)로 거른다.
+ */
+async function searchBoardDocuments(params: {
+  q: string
+  channel: string | null
+  author: string | null
+  from: string | null
+  to: string | null
+}): Promise<{ hits: BoardDocumentHit[]; more: boolean }> {
+  const terms = splitTerms(params.q)
+  if (terms.length === 0 || params.channel || params.author) return { hits: [], more: false }
+  const rows = await searchDocuments({
+    terms,
+    visibility: visibilityScopeFor(true),
+    limit: BOARD_DOCUMENT_LIMIT + 1,
+  })
+  const day = (iso: string) =>
+    new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul' }).format(new Date(iso))
+  const inRange = rows.filter(
+    r =>
+      (!params.from || day(r.created_at) >= params.from) &&
+      (!params.to || day(r.created_at) <= params.to)
+  )
+  return {
+    hits: inRange.slice(0, BOARD_DOCUMENT_LIMIT).map(r => ({
+      id: r.id,
+      title: r.title,
+      category: r.category,
+      fileName: r.file_name,
+      size: r.file_size,
+      visibility: r.visibility,
+      createdAt: r.created_at,
+      bodyMatched: r.body_matched,
+    })),
+    more: inRange.length > BOARD_DOCUMENT_LIMIT,
+  }
+}
 
 export const metadata: Metadata = {
   title: '검색',
@@ -34,10 +81,15 @@ export default async function SearchPage({
   const searching = Boolean(params.q || params.author)
   const limited = searching ? await consumeWorkSearch(supabase.user.id) : { ok: true }
 
-  const [allFilters, found, visible] = await Promise.all([
+  const isGuest = staff.role === 'guest'
+  const [allFilters, found, visible, board] = await Promise.all([
     loadSearchFilters(supabase),
     searching && limited.ok ? searchAll(supabase, params) : Promise.resolve(EMPTY_RESULT),
     guestVisibleUserIds(supabase, staff),
+    // 외부 참여자(게스트)는 이사회 구성원이 아니다 — 이사회 서류를 찾지 않는다
+    searching && limited.ok && !isGuest
+      ? searchBoardDocuments(params)
+      : Promise.resolve({ hits: [], more: false }),
   ])
   // 게스트는 자기 채널 공동 멤버 밖의 사람을 찾을 수 없다(QA #6). 메시지·파일은 읽기 범위가 이미 거른다.
   const filters = {
@@ -56,12 +108,16 @@ export default async function SearchPage({
             {limited.message ?? '검색 요청이 너무 많습니다.'}
           </NoticeBanner>
         ) : searching ? (
-          <SearchResults result={result} />
+          <SearchResults
+            result={result}
+            boardDocuments={board.hits}
+            boardDocumentsMore={board.more}
+          />
         ) : (
           <EmptyState
             compact
             className="py-12"
-            title="검색어를 입력하면 메시지 본문, 파일 이름, 문서 내용, 사람을 한꺼번에 찾습니다."
+            title="검색어를 입력하면 메시지 본문, 파일 이름, 문서 내용, 이사회 서류, 사람을 한꺼번에 찾습니다."
           />
         )}
       </PageBody>

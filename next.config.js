@@ -26,6 +26,8 @@ const KORDOC_VIEWER_EXCLUDES = [
 // 키는 picomatch 글롭이라 동적 구간의 대괄호를 이스케이프한다(문자 집합으로 읽히지 않게).
 const KORDOC_ROUTES = [
   '/api/board-room/work/files/\\[id\\]/render',
+  // 자료실의 이사회 서류 미리보기(03 §10 — 첨부 render와 같은 변환기)
+  '/api/board-room/work/board-documents/\\[id\\]/render',
   // 이사회 업무툴 문서 편집(3단계 — HWP 양식 칸·문구 블록·초안·편집기 저장본 검증·초안 미리보기)
   '/api/board-room/work/files/\\[id\\]/form',
   '/api/board-room/work/files/\\[id\\]/blocks',

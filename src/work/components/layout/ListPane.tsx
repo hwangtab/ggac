@@ -12,6 +12,7 @@ import {
   MessagesSquareIcon,
   NotebookTextIcon,
   PaperclipIcon,
+  FolderLockIcon,
   PlusIcon,
   SearchIcon,
   SmilePlusIcon,
@@ -361,6 +362,7 @@ const SEARCH_KINDS = [
   { id: 'search-messages', label: '메시지', icon: MessagesSquareIcon },
   { id: 'search-notes', label: '메모', icon: NotebookTextIcon },
   { id: 'search-files', label: '파일', icon: PaperclipIcon },
+  { id: 'search-board-documents', label: '이사회 서류', icon: FolderLockIcon },
   { id: 'search-documents', label: '문서 내용', icon: FileTextIcon },
   { id: 'search-people', label: '사람', icon: UsersIcon },
 ] as const
@@ -384,7 +386,7 @@ function SearchPaneContent() {
         </ul>
       ) : (
         <p className="px-3 py-1 text-xs text-muted-foreground">
-          검색하면 메시지·메모·파일·문서 내용·사람으로 나눠 보여 줍니다.
+          검색하면 메시지·메모·파일·이사회 서류·문서 내용·사람으로 나눠 보여 줍니다.
         </p>
       )}
     </nav>

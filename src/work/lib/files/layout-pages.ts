@@ -42,7 +42,8 @@ export type LayoutTarget = {
   /** 첨부 id */
   id: string
   name: string
-  bucketPath: string
+  /** 원본 바이트(업무툴 첨부는 업무툴 저장소, 이사회 서류는 서류 저장소 — 권한 판정은 호출 전에 끝나 있다) */
+  readOriginal: () => Promise<Buffer>
   /** 레이아웃 캐시 버전(`layoutVersion()`) */
   version: string
   userId: string
@@ -111,7 +112,7 @@ async function renderAndStore(
 
   let original: Buffer
   try {
-    original = await downloadObject(t.bucketPath)
+    original = await t.readOriginal()
   } catch (e) {
     console.error('[layout-pages] 원본 읽기 실패:', e)
     return null
