@@ -7,6 +7,7 @@ import { SLUG_PATTERN } from '@work/lib/channels/schema'
 import { parseChannelFilesSearch } from '@work/lib/files/channel-files'
 import { loadChannelFiles } from '@work/lib/files/channel-files-load'
 import { loadChannelLinks } from '@work/lib/tabs/links-load'
+import { loadChannelDocumentHits } from '@work/lib/search/search'
 import ChannelLinksTab from '@work/components/files/ChannelLinksTab'
 import ChannelFilesTab from '@work/components/files/ChannelFilesTab'
 
@@ -33,8 +34,8 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
  * 읽을 수 없거나 없으면 404, 공개 채널은 멤버가 아니어도 열람(원본 can_read_channel). 폴더는 ?path= 로 공유한다.
  * `?view=links` 는 같은 탭 안의 하위 보기 "링크"(메시지에 붙은 주소 모음, work_message_links).
  *
- * ggac 이식: 대화 탭 바 데이터(`loadTabBarData`)는 2단계 탭(2b)이 채운다 — 지금은 기본 탭만. 문서 본문 검색 결과
- * (원본 documentHits)는 4단계다. `data-testid="board-work-files"`는 권한 E2E 표식이다.
+ * ggac 이식: 대화 탭 바 데이터(`loadTabBarData`)는 2단계 탭(2b)이 채운다 — 지금은 기본 탭만. 검색어가 있으면 파일명
+ * 결과에 없는 첨부를 문서 본문에서 더 찾는다(4단계 — 읽기 범위 안에서만). `data-testid="board-work-files"`는 권한 E2E 표식이다.
  */
 export default async function BoardWorkChannelFilesPage({
   params,
@@ -66,12 +67,22 @@ export default async function BoardWorkChannelFilesPage({
     loadChannelFiles(ctx, channel.id, search),
     getMyMembership(ctx, channel.id, user.id),
   ])
+  // 검색어가 있으면 파일명 결과에 없는 첨부를 문서 본문에서 더 찾는다(0029). 이 채널을 읽을 수 있을 때만 찾는다.
+  const documentHits = search.q
+    ? await loadChannelDocumentHits(
+        ctx,
+        { id: channel.id, name: channel.name, slug: channel.slug, kind: channel.kind },
+        search.q,
+        data.items.map(i => i.id)
+      )
+    : []
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="board-work-files">
       <ChannelFilesTab
         channel={channel}
         search={search}
         data={data}
+        documentHits={documentHits}
         createDocActor={{
           isGuest: staff.role === 'guest',
           isMember: membership !== null,
