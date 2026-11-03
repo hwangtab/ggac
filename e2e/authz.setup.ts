@@ -10,6 +10,8 @@ const ACCOUNTS = [
   // 관리자가 아닌 이사. 이사회 경계(`authz-roles.spec.ts`)의 허용 쪽이다 —
   // 계정 정의는 `scripts/testing/seed-authz-fixtures.mjs`의 ACCOUNTS와 짝이다.
   { role: 'director', email: 'authz-director@test.local', password: 'Authz!Direct2026' },
+  // 감사. 이사회 업무툴 경계(`authz-board-work.spec.ts`)의 허용 쪽 — 비공개 채널 owner이자 이사와의 DM 당사자다.
+  { role: 'auditor', email: 'authz-auditor@test.local', password: 'Authz!Audit2026' },
   // 탈퇴 "신청" 상태(Task 8) — `registration_status`는 여전히 'approved'라
   // 정상 로그인된다. 신청 중에도 마이페이지·게시판 접근이 그대로임을
   // `authz-roles.spec.ts`가 이 storageState로 확인한다.
@@ -24,9 +26,18 @@ const ACCOUNTS = [
   { role: 'suspended', email: 'authz-suspended@test.local', password: 'Authz!Suspend2026' },
 ]
 
-for (const account of ACCOUNTS) {
+ACCOUNTS.forEach((account, index) => {
   setup(`${account.role} 로그인 상태를 저장한다`, async ({ page }) => {
     assertLocalTurso()
+
+    // 계정마다 다른 클라이언트 IP(TEST-NET-2, RFC 5737)로 로그인한다. 운영 빌드에서는
+    // Better Auth의 내장 레이트리밋이 켜진다(`rateLimit.enabled`의 기본값이 운영 여부다) —
+    // 로그인은 **IP당 10초에 3회**라, 일곱 계정을 연달아 로그인하면 네 번째부터 429
+    // ("요청이 너무 많습니다")로 막힌다(실측). dev 서버에서는 그 리미터가 꺼져 있다.
+    // 앱 자체 리미터(`AUTH_API`, IP당 분당 10회)도 같은 키(X-Forwarded-For)를 본다 — `authz-email-verification.spec.ts`가
+    // 같은 이유로 테스트마다 대역을 나누는 것과 같은 방식이다. 이 헤더는 이 페이지에만
+    // 걸리고 storageState에는 남지 않는다.
+    await page.setExtraHTTPHeaders({ 'X-Forwarded-For': `198.51.100.${index + 1}` })
 
     await page.goto('/login')
     // 라벨 텍스트(`이메일 주소`/`비밀번호`)는 messages/ko.json에서 오므로 문구가
@@ -50,4 +61,4 @@ for (const account of ACCOUNTS) {
 
     await page.context().storageState({ path: storageStatePath(account.role) })
   })
-}
+})

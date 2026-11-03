@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Link, usePathname } from '@/i18n/navigation'
 import { fetchSessionProfile, canAccessBoardRoom } from '@/utils/sessionProfile'
+import { BOARD_WORK_HOME, isBoardWorkPath } from '@/lib/boardWork/paths'
 
 // 메뉴는 역할에 따라 **순서와 이름이 다르다.** 이사에게 이 공간은 회의를
 // 굴리는 곳이라 대시보드가 먼저지만, 조합원에게는 조합을 알아보는 곳이라
@@ -20,6 +21,7 @@ const BOARD_NAV_ITEMS = [
   { href: '/board-room/assembly', label: '정기총회' },
   { href: '/board-room/mailbox', label: '메일함' },
   { href: '/board-room/timebank', label: '타임뱅크 보고' },
+  { href: BOARD_WORK_HOME, label: '업무툴' },
 ] as const
 
 // 조합원에게는 대시보드를 두지 않는다 — 그 화면은 이사회 회의 목록이고,
@@ -64,6 +66,10 @@ export default function BoardRoomLayout({ children }: { children: React.ReactNod
 
   const visibleNavItems: readonly { href: string; label: string; exact?: boolean }[] =
     isBoardMember === null ? [] : isBoardMember ? BOARD_NAV_ITEMS : MEMBER_NAV_ITEMS
+
+  // 업무툴은 자기 앱 셸(`(work)/layout.tsx`)을 쓴다 — 이사회실 메뉴로 감싸지 않는다.
+  // 훅은 위에서 모두 부른 뒤에 갈라야 한다(경로가 바뀌어도 훅 순서가 같게).
+  if (isBoardWorkPath(pathname)) return <>{children}</>
 
   const isActive = (item: { href: string; exact?: boolean }) =>
     item.exact ? pathname === item.href : pathname.startsWith(item.href)

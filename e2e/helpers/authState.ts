@@ -10,6 +10,8 @@ export type Fixtures = {
     | 'other'
     | 'pending'
     | 'director'
+    // 감사(is_auditor만) — 이사회 업무툴 경계의 허용 쪽(`authz-board-work.spec.ts`).
+    | 'auditor'
     // 탈퇴 "신청" 상태(Task 8) — `registration_status`는 여전히 'approved'라
     // 정상 로그인하고 storageState도 만든다.
     | 'withdrawalRequested'
@@ -28,6 +30,48 @@ export type Fixtures = {
   >
   postId: string
   commentId: string
+  /** 이사회 업무툴 공개 채널 — 관리자가 만들었고 이사·감사가 멤버다 */
+  workPublicChannelId: string
+  workPublicChannelSlug: string
+  /** 비공개 채널 — 감사가 owner, **이사는 멤버가 아니다**(관리자는 0037 규칙으로 읽는다) */
+  workPrivateChannelId: string
+  workPrivateChannelSlug: string
+  /** 이사·감사 DM — **관리자도 읽지 못한다** */
+  workDmChannelId: string
+  workPublicMessageId: string
+  workPrivateMessageId: string
+  workDmMessageId: string
+  /** 2b 대화 탭 — 비공개 채널(감사 owner)·이사–감사 DM에 메모 탭·할 일 탭·할 일이 하나씩 있다 */
+  workPrivateNoteTabId: string
+  workPrivateNoteId: string
+  workPrivateTasksTabId: string
+  workPrivateTaskId: string
+  workDmNoteTabId: string
+  workDmNoteId: string
+  workDmTasksTabId: string
+  workDmTaskId: string
+  /** 2b 두 브라우저 E2E 전용 공개 채널(이사 owner, 감사 멤버) — 메모 탭·할 일 탭 */
+  workTabsChannelId: string
+  workTabsChannelSlug: string
+  workTabsNoteTabId: string
+  workTabsTasksTabId: string
+  /** 업무툴 첨부(2a) — 각 채널 메시지에 하나씩. Blob 객체는 없다(파일 라우트는 권한을 지나면 503) */
+  workPublicAttachmentId: string
+  workPrivateAttachmentId: string
+  workDmAttachmentId: string
+  /** 3단계 편집 경계: 비공개 채널(감사 owner)의 HWP 첨부·이사–감사 DM 의 DOCX 첨부(객체 없음) */
+  workPrivateHwpAttachmentId: string
+  workDmDocxAttachmentId: string
+  workPublicFileName: string
+  workPrivateFileName: string
+  workDmFileName: string
+  /** 4단계 검색 경계 — 첨부 본문 추출 결과(공개 PDF·비공개 HWP·DM DOCX). 낱말 authz-e2e 를 셋 다 담는다 */
+  workSearchTexts: { public: string; private: string; dm: string }
+  /** 승격하지 않은 임시 업로드 — 감사(비공개 채널)·이사(공개 채널). 업로드 토큰 경계용 */
+  workAuditorPendingId: string
+  workAuditorPendingPath: string
+  workDirectorPendingId: string
+  workDirectorPendingPath: string
   notificationId: string
   /** 이사회 안건 토론 경계용 — `director`가 작성자다. */
   boardMeetingId: string

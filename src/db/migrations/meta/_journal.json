@@ -190,6 +190,48 @@
       "when": 1789400000000,
       "tag": "0026_timebank",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "6",
+      "when": 1789500000000,
+      "tag": "0027_board_work_chat",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "6",
+      "when": 1789600000000,
+      "tag": "0028_board_work_files",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "6",
+      "when": 1789700000000,
+      "tag": "0029_board_work_tabs",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "6",
+      "when": 1789800000000,
+      "tag": "0030_board_work_versions",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "6",
+      "when": 1789900000000,
+      "tag": "0031_board_work_texts",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1790000000000,
+      "tag": "0032_board_work_push",
+      "breakpoints": true
     }
   ]
 }

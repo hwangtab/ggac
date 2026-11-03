@@ -72,9 +72,18 @@ export async function readMiddlewareSession(request: NextRequest): Promise<{ id:
   // 비로그인으로 취급하는 결함이었다. 캐시 실패는 조용히 넘기지 않고 반드시
   // 로그로 남긴다 — 그러지 않으면 운영에서 캐시가 늘 깨져 있어도 아무도
   // 모른다.
+  //
+  // `isSecure`는 **요청의 프로토콜로** 정한다. 지정하지 않으면 better-auth는
+  // `NODE_ENV === 'production'`만 보고 `__Secure-` 접두사가 붙은 이름을 찾는데,
+  // 쿠키를 **쓰는** 쪽(Better Auth 서버)은 요청·baseURL이 https일 때만 그 접두사를
+  // 붙인다(`node_modules/better-auth/dist/cookies/index.mjs`의 `secureCookiePrefix`).
+  // 운영(https)에서는 둘이 같아 차이가 없지만, 운영 빌드를 http로 띄우면
+  // (권한 E2E의 `next start`) 캐시가 한 번도 맞지 않아 **모든 요청**이
+  // `/api/auth/get-session` 왕복으로 떨어졌고, 그 왕복이 Better Auth 레이트리밋
+  // (IP당 10초에 100회)에 걸리면 로그인된 세션이 `/login`으로 튕겼다(실측).
   let cached: Awaited<ReturnType<typeof getCookieCache>> | null = null
   try {
-    cached = await getCookieCache(request)
+    cached = await getCookieCache(request, { isSecure: request.nextUrl.protocol === 'https:' })
   } catch (error) {
     log.warn('getCookieCache 실패 — fetchVerifiedSession 폴백으로 진행', error)
   }

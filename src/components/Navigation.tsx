@@ -13,6 +13,7 @@ import {
 
 import NotificationDropdown from './NotificationDropdown'
 import LocaleSwitcher from './LocaleSwitcher'
+import { releaseDevicePushSubscription } from '@work/lib/push/device'
 
 type NavProfile = {
   is_director: boolean
@@ -166,6 +167,9 @@ const Navigation = () => {
   const handleLogout = async () => {
     try {
       setLoading(true)
+      // 이사회 업무툴 푸시 구독(이 기기)을 로그아웃 **전에** 해지한다 — 다음 사람이 이 브라우저를 쓰면 앞사람의
+      // 멘션·DM 알림이 뜨지 않게. 업무툴 서비스 워커가 없는 브라우저는 아무 요청도 보내지 않고, 실패해도 던지지 않는다.
+      await releaseDevicePushSubscription()
       const response = await fetch('/api/auth/logout', {
         method: 'POST',
         credentials: 'include',

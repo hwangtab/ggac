@@ -132,6 +132,16 @@ const {
 } = await import('@/db/schema/timebank')
 const { TIMEBANK_DEFAULTS } = await import('@/lib/timebank/settings')
 const { eq, and, inArray, notInArray, or } = await import('drizzle-orm')
+const { workChannels: tursoWorkChannels } = await import('@/db/schema/work')
+const { createChannelRow, addChannelMemberRows, openDmRow } = await import(
+  '@/db/queries/work/channels'
+)
+const { insertMessage } = await import('@/db/queries/work/messages')
+const { insertTabRow } = await import('@/db/queries/work/tabs')
+const { saveNoteRow } = await import('@/db/queries/work/notes')
+const { insertTaskRow } = await import('@/db/queries/work/tasks')
+const { insertPendingUploads, promotePendingUpload } = await import('@/db/queries/work/files')
+const { upsertAttachmentText } = await import('@/db/queries/work/texts')
 
 // id는 전부 고정값이다. 예전에는 Supabase가 만들어준 uuid를 그대로 받아
 // 썼는데, 그쪽이 사라진 지금 매번 새로 뽑으면 재실행마다 계정이 늘고
@@ -182,6 +192,23 @@ export const ACCOUNTS = [
       is_active: true,
       is_director: true,
       director_title: '이사',
+    },
+  },
+  // 감사(auditor) — 이사회 업무툴 경계(`e2e/authz-board-work.spec.ts`)의 **허용 쪽**.
+  // 관리자도 이사도 아니라 `is_auditor`만으로 업무툴에 들어온다(`canAccessBoardRoom`).
+  // 비공개 채널의 owner이고, 이사(`director`)와 DM을 나눈다 — 이사는 그 비공개 채널을,
+  // 관리자는 그 DM을 읽지 못해야 한다(원본 can_read_channel 0037).
+  {
+    key: 'auditor',
+    // b00a는 타임뱅크의 `suspended`가 먼저 썼다(두 브랜치가 따로 같은 값을 골랐다 — main 병합 2026-11-03).
+    id: '00000000-0000-4000-8000-00000000b00b',
+    email: 'authz-auditor@test.local',
+    password: 'Authz!Audit2026',
+    profile: {
+      is_admin: false,
+      registration_status: 'approved',
+      is_active: true,
+      is_auditor: true,
     },
   },
   // 관리자 전용 **쓰기** 경계(회원 승인)의 대상. `pending` 계정을 그대로
@@ -1266,6 +1293,11 @@ async function main() {
   // readAt을 매 시드마다 null로 되돌린다 — e2e 스펙 안의
   // resetNotificationUnread()가 테스트 사이 상태를 되돌리는 것과 별개로,
   // 시드 자체도 항상 "안 읽음"에서 시작해야 최초 실행이 결정적이다.
+  //
+  // createdAt도 매번 지금으로 당긴다. 스위트 한 번이 `owner`에게 펀딩 알림을
+  // 열 개 남짓 새로 만들고(심사·승인·정산 경계), 알림 목록 API는 최신순
+  // 20건만 준다 — 같은 DB로 두세 번 돌리면 이 픽스처 알림이 첫 쪽에서 밀려나
+  // `authz-personal.spec.ts`의 "자기 알림이 있다"가 앱과 무관하게 실패했다(실측).
   const notificationValues = {
     id: NOTIFICATION_ID,
     userId: ids.owner,
@@ -1273,6 +1305,7 @@ async function main() {
     title: 'authz 픽스처 알림',
     message: '소유권 경계 테스트용',
     readAt: null,
+    createdAt: new Date(),
   }
   await db
     .insert(tursoNotifications)
@@ -1547,6 +1580,253 @@ async function main() {
       })
   }
 
+  // ── 이사회 업무툴(채팅) — `e2e/authz-board-work.spec.ts` ──────────────────
+  // 쓰기는 쿼리 계층 함수로 한다(생성자 owner 등록·rev 올리기가 앱과 같은 경로로 생긴다).
+  // 재실행에 안전하도록 고정 id의 채널을 먼저 지운다(멤버·메시지는 cascade).
+  const WORK_PUBLIC_CHANNEL_ID = '00000000-0000-4000-8000-00000000c001'
+  const WORK_PRIVATE_CHANNEL_ID = '00000000-0000-4000-8000-00000000c002'
+  const WORK_PUBLIC_MESSAGE_ID = '00000000-0000-4000-8000-00000000c011'
+  const WORK_PRIVATE_MESSAGE_ID = '00000000-0000-4000-8000-00000000c012'
+  const WORK_DM_MESSAGE_ID = '00000000-0000-4000-8000-00000000c013'
+  // 2b 대화 탭 동기화 E2E(`board-work-tabs.spec.ts`) 전용 공개 채널 — 채팅 E2E의 공개 채널과 섞이지 않게 따로 둔다
+  const WORK_TABS_CHANNEL_ID = '00000000-0000-4000-8000-00000000c003'
+  const workDmKey = [ids.director, ids.auditor]
+    .map(v => v.toLowerCase())
+    .sort()
+    .join(':')
+  await db
+    .delete(tursoWorkChannels)
+    .where(
+      inArray(tursoWorkChannels.id, [
+        WORK_PUBLIC_CHANNEL_ID,
+        WORK_PRIVATE_CHANNEL_ID,
+        WORK_TABS_CHANNEL_ID,
+      ])
+    )
+  await db.delete(tursoWorkChannels).where(eq(tursoWorkChannels.dmKey, workDmKey))
+
+  const seededPublic = await createChannelRow({
+    id: WORK_PUBLIC_CHANNEL_ID,
+    kind: 'public',
+    name: 'authz-e2e 공개',
+    slug: 'authz-e2e-public',
+    topic: null,
+    categoryId: null,
+    creatorId: ids.admin,
+  })
+  const seededPrivate = await createChannelRow({
+    id: WORK_PRIVATE_CHANNEL_ID,
+    kind: 'private',
+    name: 'authz-e2e 비공개',
+    slug: 'authz-e2e-private',
+    topic: null,
+    categoryId: null,
+    creatorId: ids.auditor,
+  })
+  if (seededPublic.status !== 'created' || seededPrivate.status !== 'created') {
+    throw new Error(
+      `업무툴 채널 시드 실패: public=${seededPublic.status} private=${seededPrivate.status}`
+    )
+  }
+  await addChannelMemberRows(WORK_PUBLIC_CHANNEL_ID, [ids.director, ids.auditor])
+  const { id: WORK_DM_CHANNEL_ID } = await openDmRow({
+    key: workDmKey,
+    creatorId: ids.director,
+    memberIds: [ids.director, ids.auditor],
+  })
+  for (const [id, channelId, authorId, body] of [
+    [WORK_PUBLIC_MESSAGE_ID, WORK_PUBLIC_CHANNEL_ID, ids.director, 'authz-e2e 공개 채널 글'],
+    [WORK_PRIVATE_MESSAGE_ID, WORK_PRIVATE_CHANNEL_ID, ids.auditor, 'authz-e2e 비공개 채널 글'],
+    [WORK_DM_MESSAGE_ID, WORK_DM_CHANNEL_ID, ids.auditor, 'authz-e2e 이사와 감사의 DM'],
+  ]) {
+    const r = await insertMessage({ id, channelId, authorId, body, canPostRestricted: true })
+    if (r.status !== 'created') throw new Error(`업무툴 메시지 시드 실패: ${id} ${r.status}`)
+  }
+
+  // ── 2b: 대화 탭·메모·할 일 — 비공개 채널(감사 owner)과 이사–감사 DM에 메모 탭·할 일 탭·할 일 하나씩 ──
+  // id는 쿼리 계층이 만든다(채널을 지우면 cascade로 함께 지워지므로 재실행에 안전하다).
+  async function seedTabs(channelId, authorId, label) {
+    const noteTab = await insertTabRow({
+      channelId,
+      kind: 'note',
+      title: `${label} 메모`,
+      config: {},
+      createdBy: authorId,
+      canWriteArchived: false,
+    })
+    const noteId = String(noteTab.config.noteId)
+    const saved = await saveNoteRow({
+      noteId,
+      expectedVersion: 1,
+      body: `authz-e2e ${label} 메모 본문`,
+      actorId: authorId,
+      canWriteArchived: false,
+    })
+    if (saved?.status !== 'saved') throw new Error(`업무툴 메모 시드 실패: ${label}`)
+    const tasksTab = await insertTabRow({
+      channelId,
+      kind: 'tasks',
+      title: '할 일',
+      config: {},
+      createdBy: authorId,
+      canWriteArchived: false,
+    })
+    const task = await insertTaskRow({
+      channelId,
+      createdBy: authorId,
+      actorIsAdmin: false,
+      title: `authz-e2e ${label} 할 일`,
+    })
+    return { noteTabId: noteTab.id, noteId, tasksTabId: tasksTab.id, taskId: task.id }
+  }
+  const privateTabs = await seedTabs(WORK_PRIVATE_CHANNEL_ID, ids.auditor, '비공개')
+  const dmTabs = await seedTabs(WORK_DM_CHANNEL_ID, ids.director, 'DM')
+
+  const seededTabsChannel = await createChannelRow({
+    id: WORK_TABS_CHANNEL_ID,
+    kind: 'public',
+    name: 'authz-e2e 탭',
+    slug: 'authz-e2e-tabs',
+    topic: null,
+    categoryId: null,
+    creatorId: ids.director,
+  })
+  if (seededTabsChannel.status !== 'created') {
+    throw new Error(`업무툴 탭 채널 시드 실패: ${seededTabsChannel.status}`)
+  }
+  await addChannelMemberRows(WORK_TABS_CHANNEL_ID, [ids.auditor])
+  const tabsNote = await insertTabRow({
+    channelId: WORK_TABS_CHANNEL_ID,
+    kind: 'note',
+    title: '회의 메모',
+    config: {},
+    createdBy: ids.director,
+    canWriteArchived: false,
+  })
+  const tabsTasks = await insertTabRow({
+    channelId: WORK_TABS_CHANNEL_ID,
+    kind: 'tasks',
+    title: '할 일',
+    config: {},
+    createdBy: ids.director,
+    canWriteArchived: false,
+  })
+  // ── 이사회 업무툴(파일, 2a) — 첨부 행만 만든다. **Blob 객체는 만들지 않는다**(운영 저장소 오염 방지 — 이 스위트의
+  // 저장소 토큰은 빈 값이라 파일 라우트는 권한을 지난 뒤 503 "저장소 미설정"으로 끝난다: 그게 허용 쪽 표식이다).
+  // 승격은 앱과 같은 쿼리 계층 함수로 한다(첨부 수·rev가 같은 경로로 오른다). 키는 업무툴 규약 모양이다.
+  const workFile = async ({ uploadId, channelId, messageId, uploaderId, name, safeName, mime }) => {
+    const blobPath = `board-work/files/${uploadId}/${safeName}`
+    const inserted = await insertPendingUploads(
+      [{ id: uploadId, channelId, uploaderId, blobPath, name, mime, size: 1234 }],
+      { maxPerUser: 100 }
+    )
+    if (!inserted) throw new Error(`업무툴 임시 업로드 시드 실패: ${uploadId}`)
+    const attachment = await promotePendingUpload({
+      uploadId,
+      messageId,
+      actorId: uploaderId,
+      size: 1234,
+    })
+    return attachment.id
+  }
+  const WORK_PUBLIC_FILE_NAME = 'authz-e2e 공개 회의자료.pdf'
+  const WORK_PRIVATE_FILE_NAME = 'authz-e2e 비공개 감사보고.pdf'
+  const WORK_DM_FILE_NAME = 'authz-e2e DM 개인자료.pdf'
+  const workPublicAttachmentId = await workFile({
+    uploadId: '00000000-0000-4000-8000-00000000c021',
+    channelId: WORK_PUBLIC_CHANNEL_ID,
+    messageId: WORK_PUBLIC_MESSAGE_ID,
+    uploaderId: ids.director,
+    name: WORK_PUBLIC_FILE_NAME,
+    safeName: 'authz-e2e_public.pdf',
+    mime: 'application/pdf',
+  })
+  const workPrivateAttachmentId = await workFile({
+    uploadId: '00000000-0000-4000-8000-00000000c022',
+    channelId: WORK_PRIVATE_CHANNEL_ID,
+    messageId: WORK_PRIVATE_MESSAGE_ID,
+    uploaderId: ids.auditor,
+    name: WORK_PRIVATE_FILE_NAME,
+    safeName: 'authz-e2e_private.pdf',
+    mime: 'application/pdf',
+  })
+  const workDmAttachmentId = await workFile({
+    uploadId: '00000000-0000-4000-8000-00000000c023',
+    channelId: WORK_DM_CHANNEL_ID,
+    messageId: WORK_DM_MESSAGE_ID,
+    uploaderId: ids.auditor,
+    name: WORK_DM_FILE_NAME,
+    safeName: 'authz-e2e_dm.pdf',
+    mime: 'application/pdf',
+  })
+  // 3단계(버전·앱 안 편집) 경계용 — 편집 대상 형식(HWP·DOCX)이어야 편집 화면·문서 편집 라우트가 형식 검사 앞의
+  // 권한 판정까지 간다. 객체는 역시 만들지 않는다(허용 쪽은 원본을 읽는 단계에서 503 "원본 파일을 읽지 못했습니다"로 끝난다).
+  const WORK_PRIVATE_HWP_NAME = 'authz-e2e 비공개 감사의견.hwp'
+  const WORK_DM_DOCX_NAME = 'authz-e2e DM 초안.docx'
+  const workPrivateHwpAttachmentId = await workFile({
+    uploadId: '00000000-0000-4000-8000-00000000c024',
+    channelId: WORK_PRIVATE_CHANNEL_ID,
+    messageId: WORK_PRIVATE_MESSAGE_ID,
+    uploaderId: ids.auditor,
+    name: WORK_PRIVATE_HWP_NAME,
+    safeName: 'authz-e2e_private.hwp',
+    mime: 'application/x-hwp',
+  })
+  const workDmDocxAttachmentId = await workFile({
+    uploadId: '00000000-0000-4000-8000-00000000c025',
+    channelId: WORK_DM_CHANNEL_ID,
+    messageId: WORK_DM_MESSAGE_ID,
+    uploaderId: ids.auditor,
+    name: WORK_DM_DOCX_NAME,
+    safeName: 'authz-e2e_dm.docx',
+    mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  })
+  // ── 4단계(검색): 첨부 본문 추출 결과 — 추출기·Blob 없이 결과 행만 넣는다(검색 경계 E2E `authz-board-work.spec.ts`).
+  // 같은 낱말(authz-e2e)이 세 채널에 다 있어, 한 번의 검색으로 "보이는 것"과 "안 보이는 것"을 짝으로 본다.
+  const WORK_SEARCH_TEXTS = {
+    public: 'authz-e2e 공개문서본문 — 누구나 찾는 회의 자료',
+    private: 'authz-e2e 비공개문서본문 — 감사 의견 기밀',
+    dm: 'authz-e2e 디엠문서본문 — 이사와 감사만',
+  }
+  for (const [attachmentId, ext, content] of [
+    [workPublicAttachmentId, 'pdf', WORK_SEARCH_TEXTS.public],
+    [workPrivateHwpAttachmentId, 'hwp', WORK_SEARCH_TEXTS.private],
+    [workDmDocxAttachmentId, 'docx', WORK_SEARCH_TEXTS.dm],
+  ]) {
+    await upsertAttachmentText({
+      attachmentId,
+      ext,
+      content,
+      truncated: false,
+      status: 'ok',
+      extractorVersion: 'authz-seed',
+      attempts: 1,
+    })
+  }
+
+  // 업로드 토큰 경계용 임시 업로드(승격하지 않는다): 감사가 비공개 채널에, 이사가 공개 채널에 준비해 둔 것
+  const WORK_AUDITOR_PENDING_ID = '00000000-0000-4000-8000-00000000c031'
+  const WORK_DIRECTOR_PENDING_ID = '00000000-0000-4000-8000-00000000c032'
+  for (const [uploadId, channelId, uploaderId, safeName] of [
+    [WORK_AUDITOR_PENDING_ID, WORK_PRIVATE_CHANNEL_ID, ids.auditor, 'auditor_pending.pdf'],
+    [WORK_DIRECTOR_PENDING_ID, WORK_PUBLIC_CHANNEL_ID, ids.director, 'director_pending.pdf'],
+  ]) {
+    const ok = await insertPendingUploads(
+      [
+        {
+          id: uploadId,
+          channelId,
+          uploaderId,
+          blobPath: `board-work/files/${uploadId}/${safeName}`,
+          name: safeName,
+          mime: 'application/pdf',
+          size: 1234,
+        },
+      ],
+      { maxPerUser: 100 }
+    )
+    if (!ok) throw new Error(`업무툴 임시 업로드 시드 실패: ${uploadId}`)
+  }
   await seedTimebank(ids, {
     listingId: TIMEBANK_LISTING_ID,
     taskId: TIMEBANK_TASK_ID,
@@ -1558,6 +1838,39 @@ async function main() {
 
   const fixtures = {
     users: ids,
+    workPublicChannelId: WORK_PUBLIC_CHANNEL_ID,
+    workPublicChannelSlug: 'authz-e2e-public',
+    workPrivateChannelId: WORK_PRIVATE_CHANNEL_ID,
+    workPrivateChannelSlug: 'authz-e2e-private',
+    workDmChannelId: WORK_DM_CHANNEL_ID,
+    workPublicMessageId: WORK_PUBLIC_MESSAGE_ID,
+    workPrivateMessageId: WORK_PRIVATE_MESSAGE_ID,
+    workDmMessageId: WORK_DM_MESSAGE_ID,
+    workPrivateNoteTabId: privateTabs.noteTabId,
+    workPrivateNoteId: privateTabs.noteId,
+    workPrivateTasksTabId: privateTabs.tasksTabId,
+    workPrivateTaskId: privateTabs.taskId,
+    workDmNoteTabId: dmTabs.noteTabId,
+    workDmNoteId: dmTabs.noteId,
+    workDmTasksTabId: dmTabs.tasksTabId,
+    workDmTaskId: dmTabs.taskId,
+    workTabsChannelId: WORK_TABS_CHANNEL_ID,
+    workTabsChannelSlug: 'authz-e2e-tabs',
+    workTabsNoteTabId: tabsNote.id,
+    workTabsTasksTabId: tabsTasks.id,
+    workPublicAttachmentId,
+    workPrivateAttachmentId,
+    workDmAttachmentId,
+    workPrivateHwpAttachmentId,
+    workDmDocxAttachmentId,
+    workPublicFileName: WORK_PUBLIC_FILE_NAME,
+    workPrivateFileName: WORK_PRIVATE_FILE_NAME,
+    workDmFileName: WORK_DM_FILE_NAME,
+    workSearchTexts: WORK_SEARCH_TEXTS,
+    workAuditorPendingId: WORK_AUDITOR_PENDING_ID,
+    workAuditorPendingPath: `board-work/files/${WORK_AUDITOR_PENDING_ID}/auditor_pending.pdf`,
+    workDirectorPendingId: WORK_DIRECTOR_PENDING_ID,
+    workDirectorPendingPath: `board-work/files/${WORK_DIRECTOR_PENDING_ID}/director_pending.pdf`,
     postId: POST_ID,
     commentId: COMMENT_ID,
     notificationId: NOTIFICATION_ID,
@@ -1622,7 +1935,8 @@ async function main() {
       `이사회 회의 2(scheduled·completed)·회의록 2·안건 1·안건 의견 3, ` +
       `펀딩 캠페인 6(draft·submitted 3·closed·active)·리워드 6·후원 2(회원·비회원), ` +
       `타임뱅크 동의 5·글 2(제공·조합 업무)·원장 4(대기 3·확정 1), ` +
-      `system_settings ${settingRows.length}행, default_settings ${DEFAULT_SETTINGS.length}행 (전부 Turso)`
+      `system_settings ${settingRows.length}행, default_settings ${DEFAULT_SETTINGS.length}행, ` +
+      `업무툴 채널 3(공개·비공개·탭)·DM 1·메시지 3·첨부 5(PDF 3·HWP·DOCX)·본문 3·임시 업로드 2·탭 6(메모 3·할 일 3)·할 일 2 (전부 Turso)`
   )
 }
 

@@ -647,6 +647,58 @@ export const DISTRIBUTED_RATE_LIMIT_CONFIGS = {
     message: '관리자 API 요청이 너무 많습니다.',
   },
 
+  // 이사회 업무툴 폴링(`POST /api/board-room/work/sync`, 분당 60회 — 사용자 단위).
+  // 채널을 보는 동안 3초마다 한 번(분당 20회)이라 탭 세 개까지 여유가 있다(docs/board-work/01-설계.md §6-3).
+  WORK_SYNC: {
+    name: 'work_sync',
+    windowMs: 60 * 1000,
+    maxRequests: 60,
+    message: '동기화 요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요.',
+  },
+
+  // 이사회 업무툴 쓰기(메시지·반응·고정·채널 변경 server action, 분당 60회 — 사용자 단위).
+  // POST_CREATION(분당 5회)은 채팅에 너무 좁다. 읽음 표시처럼 스크롤마다 불리는 action은 세지 않는다.
+  WORK_WRITE: {
+    name: 'work_write',
+    windowMs: 60 * 1000,
+    maxRequests: 60,
+    message: '너무 빠르게 보내고 있습니다. 잠시 후 다시 시도해 주세요.',
+  },
+
+  // 이사회 업무툴 문서 미리보기 변환(kordoc — 캐시 적중은 세지 않는다, 사용자 단위 분당 20회).
+  // 원본 kosmart-work render-guard의 프로세스 메모리 리미터 자리 — 서버리스 인스턴스마다 따로 세지 않게 분산 리미터로 둔다.
+  WORK_RENDER: {
+    name: 'work_render',
+    windowMs: 60 * 1000,
+    maxRequests: 20,
+    message: '미리보기 변환 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
+  },
+
+  // 같은 변환의 파일 상세 썸네일 몫(분당 30회) — 자료실을 넘겨 보기만 해도 썸네일 변환이 돌아 미리보기와 따로 센다.
+  WORK_RENDER_THUMB: {
+    name: 'work_render_thumb',
+    windowMs: 60 * 1000,
+    maxRequests: 30,
+    message: '미리보기 변환 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
+  },
+
+  // 이사회 업무툴 문서 편집 읽기(HWP 양식 칸·문구 블록 — kordoc 파싱, 사용자 단위 분당 20회).
+  // 원본 kosmart-work doc-edit-route의 프로세스 메모리 리미터 자리(readLimiter = 분당 10 × 2).
+  WORK_DOC_EDIT_READ: {
+    name: 'work_doc_edit_read',
+    windowMs: 60 * 1000,
+    maxRequests: 20,
+    message: '너무 자주 요청했습니다. 잠시 뒤 다시 시도해 주세요.',
+  },
+
+  // 같은 영역의 초안 만들기·저장본 검증(kordoc 변환 + 쪽 렌더, 사용자 단위 분당 10회 — 원본 draftLimiter).
+  WORK_DOC_EDIT_DRAFT: {
+    name: 'work_doc_edit_draft',
+    windowMs: 60 * 1000,
+    maxRequests: 10,
+    message: '너무 자주 요청했습니다. 잠시 뒤 다시 시도해 주세요.',
+  },
+
   // 대량 작업 (시간당 5회)
   BULK_OPERATIONS: {
     name: 'bulk_operations',

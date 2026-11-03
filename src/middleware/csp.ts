@@ -1,5 +1,12 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { getOfficeEditorOrigin } from '@work/lib/files/office-edit'
+
+/** frame-src 에 더할 편집기 출처(앞 공백 포함). env 가 없거나 올바르지 않으면 빈 문자열 */
+function officeEditorFrameSrc(): string {
+  const origin = getOfficeEditorOrigin()
+  return origin ? ` ${origin}` : ''
+}
 
 /**
  * Configure Content Security Policy (CSP)
@@ -56,14 +63,21 @@ export function applyCSP(request: NextRequest, response: NextResponse) {
         : "media-src 'self' https://www.youtube.com https://r8qnr9c7mestxusj.public.blob.vercel-storage.com",
       // 토스 결제창·Turnstile 위젯 둘 다 iframe으로 뜬다. 빠지면 결제 버튼이나
       // 가입 화면의 사람 확인이 먹통이 된다.
-      "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://*.tosspayments.com https://challenges.cloudflare.com",
+      // 이사회 업무툴 앱 안 편집기(ONLYOFFICE·rhwp 정적 사이트, 설계 §8-1)도 iframe이다. 출처는 env
+      // `NEXT_PUBLIC_OFFICE_EDITOR_ORIGIN`에서 온다(없으면 아무것도 더하지 않는다). next.config.js와 함께 고친다.
+      `frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://*.tosspayments.com https://challenges.cloudflare.com${officeEditorFrameSrc()}`,
+      // 이사회 업무툴 첨부는 브라우저가 비공개 Blob에 직접 올린다(`@vercel/blob/client` upload — 토큰은 같은 출처,
+      // 본문은 https://vercel.com/api/blob). 빠지면 업로드가 조용히 막힌다(docs/board-work/01-설계.md §7-5).
+      // next.config.js·src/utils/security.ts와 함께 고친다.
       process.env.NODE_ENV === 'development'
-        ? "connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:* https://*.tosspayments.com"
-        : "connect-src 'self' https://*.tosspayments.com",
+        ? "connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:* https://*.tosspayments.com https://vercel.com"
+        : "connect-src 'self' https://*.tosspayments.com https://vercel.com",
       "object-src 'none'",
       "base-uri 'self'",
       // 결제창이 카드사 인증 페이지로 폼을 제출한다(next.config.js의 같은 항목 참고).
       "form-action 'self' https://*.tosspayments.com",
+      // 업무툴 PDF 미리보기는 같은 출처 iframe에 뜬다 — 그 응답(/api/board-room/work/files/<id>/<name>)만 라우트가
+      // SAMEORIGIN·'self'를 직접 붙인다. /api/* 는 이 미들웨어 CSP와 next.config 전역 헤더 둘 다 타지 않는다.
       "frame-ancestors 'none'",
       "worker-src 'self' blob:",
       "manifest-src 'self'",

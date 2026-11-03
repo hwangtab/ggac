@@ -1,0 +1,253 @@
+/*
+ * 이사회 업무툴 전용 스타일 — 원본 kosmart-work `src/app/globals.css`의 v3 짝(docs/board-work/01-설계.md §9).
+ *
+ * 원본은 `:root`에 토큰을 두지만, 여기서는 **업무툴 루트(`[data-work-app]`) 안에서만** 정한다 — 공개 사이트의
+ * 포스터 테마(`data-poster`)와 섞이지 않게. 색 이름은 tailwind.config.js `workColors`가 이 변수를 가리킨다.
+ *
+ * 테마: `data-work-theme="light|dark"`가 있으면 그것을, 없으면 OS 설정을 따른다(원본 data-theme 규칙과 같다).
+ *
+ * 이 파일은 `@tailwind` 지시문 없이 처리되므로 `@layer`를 쓰지 않는다(Tailwind v3는 짝 없는 @layer를 거부한다).
+ * 대신 기본 규칙은 `:where()`로 감싸 명시도를 0으로 둔다 — 유틸리티 클래스가 항상 이긴다.
+ */
+
+/*
+ * 이 아래 토큰·기본 규칙은 **`body:has([data-work-app])`에도** 건다. 대화상자·메뉴·툴팁(@base-ui Portal)은
+ * `document.body`에 바로 그려져 업무툴 루트의 자손이 아니다 — 루트에만 토큰을 두면 그 팝업의 배경(`bg-popover`)이
+ * 투명해지고 다크 테마도 닿지 않는다(3단계 버전 기록 대화상자에서 실측, 2026-11-02). 업무툴 화면일 때만 body가
+ * 걸리므로 공개 사이트에는 영향이 없다.
+ */
+/* ── 라이트(기본) ── */
+[data-work-app],
+body:has([data-work-app]) {
+  color-scheme: light;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.2 0.02 250);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2 0.02 250);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.2 0.02 250);
+  --primary: oklch(0.5 0.13 200);
+  --primary-foreground: oklch(0.98 0 0);
+  --secondary: oklch(0.97 0.004 250);
+  --secondary-foreground: oklch(0.22 0.02 250);
+  --muted: oklch(0.97 0.004 250);
+  --muted-foreground: oklch(0.48 0.02 250);
+  --accent: oklch(0.92 0.025 220);
+  --accent-foreground: oklch(0.22 0.02 250);
+  --destructive: oklch(0.47 0.22 27.325);
+  --border: oklch(0.92 0.004 250);
+  --input: oklch(0.62 0.004 250);
+  --ring: oklch(0.5 0.13 200);
+  --radius: 0.625rem;
+  /* 원본 `@theme`가 만들던 반경 변수 — `rounded-[min(var(--radius-md),10px)]`처럼 클래스 안에서 직접 쓴다 */
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+  /* 원본 `@theme`의 레이아웃 폭 변수 — 앱 레일이 `w-[calc(var(--spacing-rail)+env(safe-area-inset-left))]`로 직접 쓴다.
+     값은 tailwind.config.js `spacing.rail·sidebar·panel`과 같다 */
+  --spacing-rail: 64px;
+  --spacing-sidebar: 260px;
+  --spacing-panel: 360px;
+  --sidebar: oklch(0.975 0.004 250);
+  --sidebar-foreground: oklch(0.25 0.02 250);
+  --sidebar-primary: oklch(0.5 0.13 200);
+  --sidebar-primary-foreground: oklch(0.98 0 0);
+  --sidebar-accent: oklch(0.9 0.025 220);
+  --sidebar-accent-foreground: oklch(0.2 0.02 250);
+  --sidebar-border: oklch(0.92 0.004 250);
+  --sidebar-ring: oklch(0.5 0.13 200);
+  --unread: oklch(0.2 0.02 250);
+  --mention: oklch(0.577 0.245 27.325);
+  --mention-solid: oklch(0.577 0.245 27.325);
+  --mention-solid-foreground: oklch(1 0 0);
+  --online: oklch(0.6 0.16 150);
+  --highlight: oklch(0.92 0.12 95);
+
+  background-color: var(--background);
+  color: var(--foreground);
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+/* ── 다크 — 같은 값 두 벌: OS 다크(수동 지정 없음) / 수동 다크 ── */
+@media (prefers-color-scheme: dark) {
+  [data-work-app]:not([data-work-theme]),
+  body:has([data-work-app]:not([data-work-theme])) {
+    color-scheme: dark;
+    --background: oklch(0.17 0.01 250);
+    --foreground: oklch(0.96 0 0);
+    --card: oklch(0.21 0.01 250);
+    --card-foreground: oklch(0.96 0 0);
+    --popover: oklch(0.21 0.01 250);
+    --popover-foreground: oklch(0.96 0 0);
+    --primary: oklch(0.72 0.12 200);
+    --primary-foreground: oklch(0.17 0.01 250);
+    --secondary: oklch(0.27 0.01 250);
+    --secondary-foreground: oklch(0.96 0 0);
+    --muted: oklch(0.27 0.01 250);
+    --muted-foreground: oklch(0.72 0.01 250);
+    --accent: oklch(0.33 0.03 220);
+    --accent-foreground: oklch(0.96 0 0);
+    --destructive: oklch(0.704 0.191 22.216);
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 40%);
+    --ring: oklch(0.72 0.12 200);
+    --sidebar: oklch(0.2 0.01 250);
+    --sidebar-foreground: oklch(0.9 0 0);
+    --sidebar-primary: oklch(0.72 0.12 200);
+    --sidebar-primary-foreground: oklch(0.17 0.01 250);
+    --sidebar-accent: oklch(0.28 0.02 220);
+    --sidebar-accent-foreground: oklch(0.98 0 0);
+    --sidebar-border: oklch(1 0 0 / 10%);
+    --sidebar-ring: oklch(0.72 0.12 200);
+    --unread: oklch(0.98 0 0);
+    --mention: oklch(0.704 0.191 22.216);
+    --mention-solid: oklch(0.52 0.2 27);
+    --mention-solid-foreground: oklch(1 0 0);
+    --online: oklch(0.75 0.17 150);
+    --highlight: oklch(0.45 0.09 95);
+  }
+}
+
+[data-work-app][data-work-theme='dark'],
+body:has([data-work-app][data-work-theme='dark']) {
+  color-scheme: dark;
+  --background: oklch(0.17 0.01 250);
+  --foreground: oklch(0.96 0 0);
+  --card: oklch(0.21 0.01 250);
+  --card-foreground: oklch(0.96 0 0);
+  --popover: oklch(0.21 0.01 250);
+  --popover-foreground: oklch(0.96 0 0);
+  --primary: oklch(0.72 0.12 200);
+  --primary-foreground: oklch(0.17 0.01 250);
+  --secondary: oklch(0.27 0.01 250);
+  --secondary-foreground: oklch(0.96 0 0);
+  --muted: oklch(0.27 0.01 250);
+  --muted-foreground: oklch(0.72 0.01 250);
+  --accent: oklch(0.33 0.03 220);
+  --accent-foreground: oklch(0.96 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 40%);
+  --ring: oklch(0.72 0.12 200);
+  --sidebar: oklch(0.2 0.01 250);
+  --sidebar-foreground: oklch(0.9 0 0);
+  --sidebar-primary: oklch(0.72 0.12 200);
+  --sidebar-primary-foreground: oklch(0.17 0.01 250);
+  --sidebar-accent: oklch(0.28 0.02 220);
+  --sidebar-accent-foreground: oklch(0.98 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.72 0.12 200);
+  --unread: oklch(0.98 0 0);
+  --mention: oklch(0.704 0.191 22.216);
+  --mention-solid: oklch(0.52 0.2 27);
+  --mention-solid-foreground: oklch(1 0 0);
+  --online: oklch(0.75 0.17 150);
+  --highlight: oklch(0.45 0.09 95);
+}
+
+/*
+ * 원본 `@layer base { * { @apply border-border outline-ring/50 } }`의 짝.
+ * ggac 전역 기본 테두리색(흰 15%, 포스터 테마용)을 업무툴 안에서만 원본 토큰으로 되돌린다.
+ */
+:where([data-work-app], [data-work-app] *, body:has([data-work-app]) *) {
+  border-color: var(--border);
+  outline-color: color-mix(in oklch, var(--ring) 50%, transparent);
+}
+
+/*
+ * ggac 전역 포커스 윤곽(globals.css "Enhanced Focus Styles": `button|a|input|select|textarea:focus-visible`에
+ * 하늘색 outline !important + border-radius 4px)이 업무툴 안에서는 각 컴포넌트의 ring과 겹쳐 이중 테두리가 되고
+ * (입력창 안에 상자가 하나 더 보인다), 둥근 단추가 포커스 때 4px로 각진다. 업무툴 안에서만 되돌린다 —
+ * 포커스 표시는 원본처럼 각 컴포넌트의 `focus-visible:ring-*`이 맡는다. globals.css는 건드리지 않는다.
+ */
+body:has([data-work-app]) .focus-visible:focus,
+body:has([data-work-app]) :is(button, a, input, select, textarea):focus-visible {
+  outline: none !important;
+  outline-offset: 0 !important;
+}
+body:has([data-work-app]) .rounded-w-sm:focus-visible {
+  border-radius: var(--radius-sm);
+}
+body:has([data-work-app]) .rounded-w-md:focus-visible {
+  border-radius: var(--radius-md);
+}
+body:has([data-work-app]) .rounded-w-lg:focus-visible {
+  border-radius: var(--radius-lg);
+}
+body:has([data-work-app]) .rounded-w-xl:focus-visible {
+  border-radius: var(--radius-xl);
+}
+body:has([data-work-app]) .rounded-w-4xl:focus-visible {
+  border-radius: var(--radius-4xl);
+}
+body:has([data-work-app]) .rounded-full:focus-visible {
+  border-radius: 9999px;
+}
+body:has([data-work-app]) .rounded-none:focus-visible,
+body:has([data-work-app]) :is(input, textarea, select):not([class*='rounded']):focus-visible {
+  border-radius: 0;
+}
+
+/* v4 preflight는 버튼 커서를 default로 둔다 — 원본은 눌러지는 것을 손 모양으로 되돌렸다. v3도 같게 고정. */
+:where(body:has([data-work-app]))
+  :where(button:not(:disabled), [role='button']:not([aria-disabled='true'])) {
+  cursor: pointer;
+}
+
+/* 메시지 본문 마크다운 타이포그래피(.post-markdown = prose) */
+body:has([data-work-app]) .post-markdown {
+  --tw-prose-body: var(--foreground);
+  --tw-prose-headings: var(--foreground);
+  --tw-prose-bold: var(--foreground);
+  --tw-prose-links: var(--primary);
+  --tw-prose-code: var(--foreground);
+  --tw-prose-quotes: var(--muted-foreground);
+  --tw-prose-quote-borders: var(--border);
+  --tw-prose-bullets: var(--muted-foreground);
+  --tw-prose-counters: var(--muted-foreground);
+  --tw-prose-hr: var(--border);
+}
+
+/* 터치 기기 입력 글자 16px 이상 — iOS Safari 포커스 확대 방지(원본 그대로) */
+@media (hover: none) and (pointer: coarse) {
+  body:has([data-work-app])
+    input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='color']),
+  body:has([data-work-app]) textarea,
+  body:has([data-work-app]) select {
+    font-size: max(16px, 1em);
+  }
+}
+
+/* 길게 누르기로 메시지 작업을 여는 터치 기기에서 iOS 링크·이미지 콜아웃 끄기 */
+@media (hover: none) {
+  body:has([data-work-app]) [data-message-id] {
+    -webkit-touch-callout: none;
+  }
+}
+
+/* 열고 닫는 애니메이션(tailwind.config.js workAnimations의 wa-in·wa-out) — tw-animate-css 키프레임과 같은 식 */
+@keyframes wa-enter {
+  from {
+    opacity: var(--tw-enter-opacity, 1);
+    transform: translate3d(var(--tw-enter-translate-x, 0), var(--tw-enter-translate-y, 0), 0)
+      scale3d(var(--tw-enter-scale, 1), var(--tw-enter-scale, 1), var(--tw-enter-scale, 1));
+  }
+}
+@keyframes wa-exit {
+  to {
+    opacity: var(--tw-exit-opacity, 1);
+    transform: translate3d(var(--tw-exit-translate-x, 0), var(--tw-exit-translate-y, 0), 0)
+      scale3d(var(--tw-exit-scale, 1), var(--tw-exit-scale, 1), var(--tw-exit-scale, 1));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  body:has([data-work-app]) .wa-in,
+  body:has([data-work-app]) .wa-out {
+    animation-duration: 1ms;
+  }
+}

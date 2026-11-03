@@ -6,9 +6,84 @@ const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts')
 
 const IMAGE_ALLOWED_QUALITIES = [50, 65, 75, 80, 85, 90, 100]
 
+/** kordoc이 createRequire로 런타임에 불러오는 모듈(+ 그 의존성) — kosmart-work next.config.ts와 같다 */
+const KORDOC_RUNTIME_REQUIRES = [
+  './node_modules/cfb/**',
+  './node_modules/adler-32/**',
+  './node_modules/crc-32/**',
+]
+const KORDOC_VIEWER_EXCLUDES = [
+  './node_modules/onnxruntime-node/**',
+  './node_modules/@hyzyla/**',
+  './node_modules/pdfjs-dist/**',
+  './node_modules/@napi-rs/**',
+  './node_modules/@huggingface/**',
+]
+/**
+ * kordoc을 쓰는 라우트 — 이사회 업무툴 문서 미리보기(docs/board-work/01-설계.md §7-3). 라우트를 더하면 여기에도 적는다
+ * (빠지면 운영에서 "Cannot find module 'cfb'"로 HWP·XLS 변환이 전부 실패하고, 제외가 빠지면 번들이 250MB를 넘는다).
+ */
+// 키는 picomatch 글롭이라 동적 구간의 대괄호를 이스케이프한다(문자 집합으로 읽히지 않게).
+const KORDOC_ROUTES = [
+  '/api/board-room/work/files/\\[id\\]/render',
+  // 이사회 업무툴 문서 편집(3단계 — HWP 양식 칸·문구 블록·초안·편집기 저장본 검증·초안 미리보기)
+  '/api/board-room/work/files/\\[id\\]/form',
+  '/api/board-room/work/files/\\[id\\]/blocks',
+  '/api/board-room/work/files/\\[id\\]/draft',
+  '/api/board-room/work/files/\\[id\\]/drafts/\\[uploadId\\]/verify',
+  '/api/board-room/work/files/\\[id\\]/drafts/\\[uploadId\\]/render',
+  '/api/board-room/work/files/new-drafts/\\[uploadId\\]/verify',
+  '/api/board-room/work/files/new-drafts/\\[uploadId\\]/render',
+]
+/**
+ * 이사회 업무툴 본문 추출 크론(설계 §8-2). PDF 를 읽으므로 pdfjs-dist(+ DOMMatrix 폴리필 @napi-rs/canvas)는 남기고
+ * OCR 쪽 무거운 것만 뺀다 — kosmart-work next.config.ts 의 '/api/internal/extract-texts'와 같다.
+ */
+const KORDOC_EXTRACT_ROUTE = '/api/internal/board-work/extract-texts'
+/**
+ * pdfjs-dist 는 Node 에서 DOMMatrix·Path2D 폴리필로 @napi-rs/canvas 를 동적으로 require 해 파일 추적이 놓친다
+ * (2026-11-03 실측: 추적 결과에 pdfjs-dist 3.0MB 는 있고 @napi-rs 는 0). 플랫폼 바이너리 패키지까지 명시로 넣는다.
+ */
+const KORDOC_EXTRACT_INCLUDES = [...KORDOC_RUNTIME_REQUIRES, './node_modules/@napi-rs/canvas*/**']
+const KORDOC_EXTRACT_EXCLUDES = [
+  './node_modules/onnxruntime-node/**',
+  './node_modules/@hyzyla/**',
+  './node_modules/@huggingface/**',
+]
+
+/**
+ * 이사회 업무툴 앱 안 편집기 출처(설계 §8-1) — `NEXT_PUBLIC_OFFICE_EDITOR_ORIGIN`(예 https://ggac-office.vercel.app).
+ * 비었거나 https(로컬은 http://localhost·127.0.0.1)가 아니면 빈 값 — frame-src 에 아무것도 더하지 않는다(편집 기능도 숨는다).
+ * 판정은 src/work/lib/files/office-edit.ts getOfficeEditorOrigin 과 같다(미들웨어 CSP 는 그 함수를 쓴다).
+ */
+function officeEditorFrameOrigin(raw) {
+  const value = (raw || '').trim()
+  if (!value) return ''
+  try {
+    const u = new URL(value)
+    const local = u.hostname === 'localhost' || u.hostname === '127.0.0.1'
+    if (u.protocol === 'https:' || (u.protocol === 'http:' && local)) return u.origin
+  } catch {
+    // 잘못된 주소
+  }
+  return ''
+}
+const OFFICE_EDITOR_FRAME_SRC = officeEditorFrameOrigin(
+  process.env.NEXT_PUBLIC_OFFICE_EDITOR_ORIGIN
+)
+  ? ` ${officeEditorFrameOrigin(process.env.NEXT_PUBLIC_OFFICE_EDITOR_ORIGIN)}`
+  : ''
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // 권한 E2E의 운영 빌드(`playwright.config.ts`)만 `.next-e2e`로 뺀다 — 같은 워크트리의
+  // `next dev`가 쓰는 `.next`를 빌드가 덮어 `Cannot find module './NNNN.js'`로 서로 깨뜨리지 않게.
+  // 배포·`npm run build`는 이 변수를 주지 않으므로 그대로 `.next`다.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
+  // 파일 추적 루트를 이 저장소로 고정한다 — 홈 디렉터리의 다른 lockfile 때문에 Next가 루트를 잘못 짚어
+  // 추적 경로(outputFileTracingIncludes)가 어긋났다(이사회 업무툴 0단계 스파이크 실측, 설계 §7-5).
+  outputFileTracingRoot: __dirname,
   allowedDevOrigins: ['127.0.0.1'],
 
   // data/*.json은 src/lib/data.ts가 process.cwd() 기반 동적 경로로 fs 읽기하므로
@@ -16,7 +91,19 @@ const nextConfig = {
   // (sitemap.xml의 artists/projects ENOENT 5개월 — 전 라우트에 명시 포함으로 해소)
   outputFileTracingIncludes: {
     '/**': ['./data/**/*'],
+    // kordoc은 cfb(HWP5·XLS의 OLE 컨테이너)를 createRequire로 불러 파일 추적이 놓친다
+    // (kosmart-work 운영에서 "Cannot find module 'cfb'"로 모든 변환이 실패했다). kordoc을 쓰는 라우트마다 넣는다.
+    ...Object.fromEntries(KORDOC_ROUTES.map(r => [r, KORDOC_RUNTIME_REQUIRES])),
+    [KORDOC_EXTRACT_ROUTE]: KORDOC_EXTRACT_INCLUDES,
   },
+  // kordoc의 선택 의존성(OCR·PDF 엔진) 중 쓰지 않는 무거운 것을 함수 번들에서 뺀다
+  // (onnxruntime-node만 약 300MB — 250MB 한도 초과). 뷰어는 OCR을 끄고 PDF는 변환하지 않는다.
+  outputFileTracingExcludes: {
+    ...Object.fromEntries(KORDOC_ROUTES.map(r => [r, KORDOC_VIEWER_EXCLUDES])),
+    [KORDOC_EXTRACT_ROUTE]: KORDOC_EXTRACT_EXCLUDES,
+  },
+  // kordoc은 번들하지 않고 node_modules에서 그대로 로드한다(createRequire·동적 import 때문).
+  serverExternalPackages: ['kordoc'],
 
   env: {
     NEXT_PUBLIC_IMAGE_ALLOWED_QUALITIES: IMAGE_ALLOWED_QUALITIES.join(','),
@@ -468,11 +555,15 @@ const nextConfig = {
                 : "media-src 'self' https://www.youtube.com https://r8qnr9c7mestxusj.public.blob.vercel-storage.com",
               // 토스 결제창·Turnstile 위젯은 iframe으로 뜬다. 이 항목이 없으면 결제
               // 버튼이나 가입 화면의 사람 확인이 먹통이 된다(콘솔에만 CSP 위반이 찍힌다).
-              "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://*.tosspayments.com https://challenges.cloudflare.com",
+              // 이사회 업무툴 편집기(ONLYOFFICE·rhwp 정적 사이트)도 iframe이다 — 출처는 env에서 온다(OFFICE_EDITOR_FRAME_SRC).
+              // src/middleware/csp.ts와 함께 고친다.
+              `frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://*.tosspayments.com https://challenges.cloudflare.com${OFFICE_EDITOR_FRAME_SRC}`,
               // dev 분기의 로컬 호스트 허용은 로컬 API/HMR용이다.
+              // https://vercel.com: 이사회 업무툴 첨부의 브라우저 직접 업로드(@vercel/blob/client — 본문은
+              // vercel.com/api/blob). src/middleware/csp.ts·src/utils/security.ts와 함께 고친다(설계 §7-5).
               process.env.NODE_ENV === 'development'
-                ? "connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:* https://*.tosspayments.com"
-                : "connect-src 'self' https://*.tosspayments.com",
+                ? "connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:* https://*.tosspayments.com https://vercel.com"
+                : "connect-src 'self' https://*.tosspayments.com https://vercel.com",
               "object-src 'none'",
               "base-uri 'self'",
               // 결제창은 카드사 인증 페이지로 폼을 제출한다. 'self'만 두면 카드를
@@ -480,6 +571,8 @@ const nextConfig = {
               // 달라 미리 다 알 수 없으므로, 실제 결제를 끝까지 통과시켜 보며
               // 필요한 도메인을 확인해 추가한다.
               "form-action 'self' https://*.tosspayments.com",
+              // 업무툴 PDF 미리보기 응답(/api/board-room/work/files/<id>/<name>)은 이 규칙(api 제외) 밖이고,
+              // 라우트가 SAMEORIGIN·frame-ancestors 'self'를 직접 붙인다.
               "frame-ancestors 'none'",
               "worker-src 'self' blob:",
               "manifest-src 'self'",

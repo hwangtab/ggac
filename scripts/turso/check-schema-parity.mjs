@@ -46,6 +46,30 @@ const POST_CUTOVER_TABLES = new Set([
   'timebank_task_volunteers', // 0026
   'timebank_transfers', // 0026
   'timebank_withdrawn_keys', // 0026
+  'work_member_prefs', // 0027 이사회 업무툴 채팅
+  'work_channel_categories', // 0027
+  'work_channels', // 0027
+  'work_channel_members', // 0027
+  'work_messages', // 0027
+  'work_reactions', // 0027
+  'work_mentions', // 0027
+  'work_bookmarks', // 0027
+  'work_pins', // 0027
+  'work_message_links', // 0027
+  'work_activity_reads', // 0027
+  'work_presence', // 0027
+  'work_typing', // 0027
+  'work_pending_uploads', // 0028 이사회 업무툴 파일
+  'work_attachments', // 0028
+  'work_conversation_tabs', // 0029 이사회 업무툴 대화 탭·메모·할 일
+  'work_conversation_notes', // 0029
+  'work_note_revisions', // 0029
+  'work_tasks', // 0029
+  'work_file_lineages', // 0030 이사회 업무툴 문서 버전(최종본·수정 중)
+  'work_attachment_texts', // 0031 이사회 업무툴 첨부 본문 추출(검색)
+  'work_push_subscriptions', // 0032 이사회 업무툴 푸시·다이제스트·크론 장부
+  'work_digest_state', // 0032
+  'work_cron_runs', // 0032
 ])
 
 export function comparePgToSqlite(pgSnapshot, sqliteSchema) {

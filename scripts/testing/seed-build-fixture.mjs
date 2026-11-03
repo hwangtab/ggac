@@ -24,9 +24,27 @@ if (!url) {
   console.error('TURSO_DATABASE_URL이 없다.')
   process.exit(2)
 }
-if (!url.startsWith('file:')) {
+/**
+ * 권한 E2E의 운영 빌드(`playwright.config.ts`)도 같은 이유로 이 시드가 필요하다 — 그쪽 DB는
+ * 파일이 아니라 `turso dev`의 루프백 HTTP 엔드포인트다(유지보수 판정이 Edge 미들웨어에서 읽기
+ * 때문이다 — `e2e/helpers/authState.ts`의 `assertLocalTurso()` 주석). 그래서 허용 목록에 루프백
+ * http(s)를 더한다. 원격은 여전히 전부 거부한다.
+ */
+function isLocalTarget(target) {
+  if (target.startsWith('file:')) return true
+  try {
+    const { protocol, hostname } = new URL(target)
+    return (
+      (protocol === 'http:' || protocol === 'https:') &&
+      ['127.0.0.1', 'localhost', '[::1]'].includes(hostname)
+    )
+  } catch {
+    return false
+  }
+}
+if (!isLocalTarget(url)) {
   // 운영·원격에 실수로 심는 것을 구조적으로 막는다.
-  console.error(`안전장치: 파일 DB에만 심는다. 받은 URL의 스킴이 file:이 아니다.`)
+  console.error(`안전장치: 로컬 DB(file: 또는 루프백 http)에만 심는다. 받은 URL이 로컬이 아니다.`)
   process.exit(2)
 }
 

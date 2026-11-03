@@ -455,7 +455,8 @@ export const generateCSPPolicy = (): string => {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "img-src 'self' data: https: blob:",
     "font-src 'self' https://fonts.gstatic.com",
-    "connect-src 'self' https://vercel.live",
+    // https://vercel.com — 이사회 업무툴 첨부의 브라우저 직접 업로드(@vercel/blob/client). 미들웨어·next.config와 같이 둔다
+    "connect-src 'self' https://vercel.live https://vercel.com",
     "media-src 'self' https:",
     "object-src 'none'",
     "base-uri 'self'",
