@@ -2,7 +2,8 @@
   "src/work/components/chat/ChannelBrowser.tsx": {
     "source": "src/components/chat/ChannelBrowser.tsx",
     "commit": "eaafbfa",
-    "sha256": "41904a14e221b790"
+    "sha256": "41904a14e221b790",
+    "modified": "R1 구조(docs/board-work/03-통합-재설계.md §4-2): 모바일 분기 md → lg"
   },
   "src/work/components/chat/ChannelHeader.tsx": {
     "source": "src/components/chat/ChannelHeader.tsx",
@@ -22,7 +23,8 @@
   "src/work/components/chat/ChatHome.tsx": {
     "source": "src/components/chat/ChatHome.tsx",
     "commit": "eaafbfa",
-    "sha256": "c86ea78e55c78e25"
+    "sha256": "c86ea78e55c78e25",
+    "modified": "R1 구조(docs/board-work/03-통합-재설계.md §4-2): 모바일 분기 md → lg"
   },
   "src/work/components/chat/ChatMarkdown.tsx": {
     "source": "src/components/chat/ChatMarkdown.tsx",
@@ -307,7 +309,8 @@
   "src/work/components/files/hwp-edit/HwpEditScreen.tsx": {
     "source": "src/components/files/hwp-edit/HwpEditScreen.tsx",
     "commit": "6a085c3",
-    "sha256": "eff11a9dab59d565"
+    "sha256": "eff11a9dab59d565",
+    "modified": "R1 구조(docs/board-work/03-통합-재설계.md §4-2): h-dvh → h-full, main → div(이사회실 레이아웃 안)"
   },
   "src/work/components/files/hwp-edit/HwpEditorFrame.tsx": {
     "source": "src/components/files/hwp-edit/HwpEditorFrame.tsx",
@@ -322,12 +325,14 @@
   "src/work/components/files/office-edit/DesktopOnlyGate.tsx": {
     "source": "src/components/files/office-edit/DesktopOnlyGate.tsx",
     "commit": "6a085c3",
-    "sha256": "785d743d2a1e23c0"
+    "sha256": "785d743d2a1e23c0",
+    "modified": "R1 구조(docs/board-work/03-통합-재설계.md §4-2): h-dvh → h-full, main → div(이사회실 레이아웃 안)"
   },
   "src/work/components/files/office-edit/OfficeEditScreen.tsx": {
     "source": "src/components/files/office-edit/OfficeEditScreen.tsx",
     "commit": "6a085c3",
-    "sha256": "968a73e9f334bac9"
+    "sha256": "968a73e9f334bac9",
+    "modified": "R1 구조(docs/board-work/03-통합-재설계.md §4-2): h-dvh → h-full, main → div(이사회실 레이아웃 안)"
   },
   "src/work/components/files/office-edit/OfficeEditorFrame.tsx": {
     "source": "src/components/files/office-edit/OfficeEditorFrame.tsx",
@@ -417,17 +422,20 @@
   "src/work/components/layout/AppRail.tsx": {
     "source": "src/components/layout/AppRail.tsx",
     "commit": "eaafbfa",
-    "sha256": "4d6e62a8e5a36c4e"
+    "sha256": "4d6e62a8e5a36c4e",
+    "removed": "R1 구조(docs/board-work/03-통합-재설계.md §4-2): 레일을 없앴다 — 이사회실 메뉴 '업무' 묶음이 대신한다"
   },
-  "src/work/components/layout/AppShell.tsx": {
+  "src/work/components/layout/WorkShell.tsx": {
     "source": "src/components/layout/AppShell.tsx",
     "commit": "eaafbfa",
-    "sha256": "838d4a8408b34895"
+    "sha256": "838d4a8408b34895",
+    "modified": "R1 구조(docs/board-work/03-통합-재설계.md §4-2): AppShell을 WorkShell로 쪼갰다(레일·상단바·하단 탭·로그아웃·목록 접기 제거, 이사회실 콘텐츠 칸 안 배치, 메뉴 배지 연동)"
   },
   "src/work/components/layout/BottomTabs.tsx": {
     "source": "src/components/layout/BottomTabs.tsx",
     "commit": "eaafbfa",
-    "sha256": "506e8ec60c28781c"
+    "sha256": "506e8ec60c28781c",
+    "removed": "R1 구조(docs/board-work/03-통합-재설계.md §4-2): 모바일 하단 탭을 없앴다 — 이사회실 모바일 가로 탭이 대신한다"
   },
   "src/work/components/layout/CategoryMenu.tsx": {
     "source": "src/components/layout/CategoryMenu.tsx",
@@ -462,7 +470,8 @@
   "src/work/components/layout/ListPane.tsx": {
     "source": "src/components/layout/ListPane.tsx",
     "commit": "eaafbfa",
-    "sha256": "13397cae6d06ff15"
+    "sha256": "13397cae6d06ff15",
+    "modified": "R1 구조(docs/board-work/03-통합-재설계.md §4-2): 대화(채널+메시지) 한 목록, 머리 찾기 입력, 검색 결과 종류, lg 기준 목록 → 상세"
   },
   "src/work/components/layout/QuickSwitcher.tsx": {
     "source": "src/components/layout/QuickSwitcher.tsx",
@@ -472,12 +481,14 @@
   "src/work/components/layout/RightPanel.tsx": {
     "source": "src/components/layout/RightPanel.tsx",
     "commit": "eaafbfa",
-    "sha256": "13ae2d23e9ce79b9"
+    "sha256": "13ae2d23e9ce79b9",
+    "modified": "R1 구조(docs/board-work/03-통합-재설계.md §4-2): 2xl 세 번째 칸 / 그보다 좁으면 대화 칸을 덮는 패널, `← 대화`"
   },
   "src/work/components/layout/SectionBadgeMark.tsx": {
     "source": "src/components/layout/SectionBadgeMark.tsx",
     "commit": "eaafbfa",
-    "sha256": "72a3ebcf2c9347be"
+    "sha256": "72a3ebcf2c9347be",
+    "removed": "R1 구조(docs/board-work/03-통합-재설계.md §4-2): 레일·하단 탭 배지 — 이사회실 메뉴 배지(board-room/layout.tsx)가 대신한다"
   },
   "src/work/components/layout/SubTitle.tsx": {
     "source": "src/components/layout/SubTitle.tsx",
@@ -492,7 +503,8 @@
   "src/work/components/layout/TopBar.tsx": {
     "source": "src/components/layout/TopBar.tsx",
     "commit": "eaafbfa",
-    "sha256": "0ae6879525fd7cc7"
+    "sha256": "0ae6879525fd7cc7",
+    "removed": "R1 구조(docs/board-work/03-통합-재설계.md §4-2): 상단바를 없앴다 — 목록 칸 찾기 입력·⌘K·업무 설정(상태 메시지)·전역 내비 로그아웃이 대신한다"
   },
   "src/work/components/layout/active-channel.ts": {
     "source": "src/components/layout/active-channel.ts",
@@ -527,7 +539,8 @@
   "src/work/components/layout/page.tsx": {
     "source": "src/components/layout/page.tsx",
     "commit": "eaafbfa",
-    "sha256": "71cb66e68e1226de"
+    "sha256": "71cb66e68e1226de",
+    "modified": "R1 구조(docs/board-work/03-통합-재설계.md §4-2): PageHeader hideOnMobile을 더 이상 숨기지 않는다(상단바 없음)"
   },
   "src/work/components/layout/pane-styles.ts": {
     "source": "src/components/layout/pane-styles.ts",
@@ -562,7 +575,8 @@
   "src/work/components/layout/use-section-shortcuts.ts": {
     "source": "src/components/layout/use-section-shortcuts.ts",
     "commit": "eaafbfa",
-    "sha256": "13e0c086759a4a58"
+    "sha256": "13e0c086759a4a58",
+    "removed": "R1 구조(docs/board-work/03-통합-재설계.md §4-2): 레일 단축키(Alt+숫자) — 레일과 함께 없앴다"
   },
   "src/work/components/layout/use-unread-indicators.ts": {
     "source": "src/components/layout/use-unread-indicators.ts",
@@ -722,7 +736,8 @@
   "src/work/components/tasks/NewTaskForm.tsx": {
     "source": "src/components/tasks/NewTaskForm.tsx",
     "commit": "22a6bdc",
-    "sha256": "44f6472bbe74a127"
+    "sha256": "44f6472bbe74a127",
+    "modified": "R1 구조(docs/board-work/03-통합-재설계.md §4-2): 주석(lg)"
   },
   "src/work/components/tasks/TaskRow.tsx": {
     "source": "src/components/tasks/TaskRow.tsx",
@@ -737,7 +752,8 @@
   "src/work/components/tasks/TasksView.tsx": {
     "source": "src/components/tasks/TasksView.tsx",
     "commit": "22a6bdc",
-    "sha256": "484d3d32eff50000"
+    "sha256": "484d3d32eff50000",
+    "modified": "R1 구조(docs/board-work/03-통합-재설계.md §4-2): 모바일 분기 md → lg"
   },
   "src/work/components/tasks/use-today.ts": {
     "source": "src/components/tasks/use-today.ts",

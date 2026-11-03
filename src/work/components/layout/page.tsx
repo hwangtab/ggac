@@ -17,8 +17,8 @@ type PageHeaderProps = {
   /** 오른쪽 작업 버튼 묶음 */
   actions?: ReactNode
   /**
-   * 모바일에서는 TopBar 가 섹션 이름을 그리므로 제목을 시각적으로 숨긴다(sr-only 로 h1 은 남긴다).
-   * actions 가 있으면 머리글 줄은 모바일에도 남아 작업 버튼만 보이고, 없으면 줄 전체가 숨는다.
+   * 원본: 모바일에서는 TopBar 가 섹션 이름을 그려 제목을 시각적으로 숨겼다.
+   * ggac 이식(03-통합-재설계 §2-3): 상단바가 없어져 **더 이상 숨기지 않는다** — 호출부 호환을 위해 prop 만 남긴다.
    */
   hideOnMobile?: boolean
   /** h1 대신 다른 태그(우측 패널 등 중첩 영역) */
@@ -31,25 +31,12 @@ export function PageHeader({
   subtitle,
   icon: Icon,
   actions,
-  hideOnMobile = false,
   as: Heading = 'h1',
   className,
 }: PageHeaderProps) {
   return (
-    <header
-      className={cn(
-        'flex h-12 shrink-0 items-center gap-2 border-b px-4',
-        hideOnMobile && !actions && 'hidden md:flex',
-        hideOnMobile && actions && 'justify-end md:justify-start',
-        className
-      )}
-    >
-      <div
-        className={cn(
-          'flex min-w-0 flex-1 items-baseline gap-2',
-          hideOnMobile && 'sr-only md:not-sr-only md:flex'
-        )}
-      >
+    <header className={cn('flex h-12 shrink-0 items-center gap-2 border-b px-4', className)}>
+      <div className="flex min-w-0 flex-1 items-baseline gap-2">
         <Heading className="flex min-w-0 items-center gap-1.5 text-base font-semibold">
           {Icon && <Icon aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />}
           <span className="truncate">{title}</span>

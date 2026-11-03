@@ -21,10 +21,10 @@ export default function DesktopOnlyGate({
   children: ReactNode
 }) {
   const desktop = useDesktopEditorKnown()
-  if (desktop === null) return <div className="h-dvh" aria-hidden="true" />
+  if (desktop === null) return <div className="h-full" aria-hidden="true" />
   if (!desktop) {
     return (
-      <main id="main-content" className="flex min-h-dvh flex-col" data-testid="desktop-only-notice">
+      <div className="flex h-full flex-col" data-testid="desktop-only-notice">
         <EmptyState
           icon={MonitorIcon}
           as="h1"
@@ -35,7 +35,7 @@ export default function DesktopOnlyGate({
             돌아가기
           </Link>
         </EmptyState>
-      </main>
+      </div>
     )
   }
   return <>{children}</>

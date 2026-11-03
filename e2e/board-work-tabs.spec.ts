@@ -111,7 +111,7 @@ test.describe('업무툴 대화 탭 — 폴링 동기화', () => {
 
       await director.page.screenshot({ path: 'test-results/board-work-tabs-tasks-desktop.png' })
 
-      // /board-room/tasks(전체 보기)에도 같은 할 일이 있다 — 레일·목록 패널의 '할 일' 섹션
+      // /board-room/tasks(전체 보기)에도 같은 할 일이 있다 — 이사회실 메뉴 '업무' 묶음의 '할 일'
       await auditor.page.goto('/board-room/tasks?view=all', { waitUntil: 'domcontentloaded' })
       await expect(auditor.page.getByTestId('board-work-tasks')).toBeVisible({ timeout: 20_000 })
       await expect(auditor.page.getByText(title).first()).toBeVisible()
@@ -128,12 +128,12 @@ test.describe('업무툴 대화 탭 — 폴링 동기화', () => {
     const mobile = await openTab(browser, 'director', tabPath('note'), { width: 390, height: 844 })
     try {
       await expect(mobile.page.getByRole('navigation', { name: '대화 탭' })).toBeVisible()
-      await expect(mobile.page.getByRole('link', { name: '뒤로' })).toBeVisible()
+      await expect(mobile.page.getByRole('link', { name: '대화', exact: true })).toBeVisible()
       await mobile.page.screenshot({ path: 'test-results/board-work-tabs-note-mobile.png' })
 
       await mobile.page.goto('/board-room/tasks', { waitUntil: 'domcontentloaded' })
       await expect(mobile.page.getByTestId('board-work-tasks')).toBeVisible({ timeout: 20_000 })
-      await expect(mobile.page.getByRole('navigation', { name: '앱 하단 메뉴' })).toBeVisible()
+      await expect(mobile.page.getByRole('navigation', { name: '이사회 메뉴' })).toBeVisible()
       await mobile.page.screenshot({ path: 'test-results/board-work-tasks-page-mobile.png' })
     } finally {
       await mobile.context.close()

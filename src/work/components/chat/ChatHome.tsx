@@ -30,14 +30,14 @@ export default function ChatHome({
         icon={MessagesSquareIcon}
         title={title}
         description={description}
-        className="hidden md:flex"
+        className="hidden lg:flex"
       >
         <Link href="/chat?new=1" className={buttonVariants({ size: 'sm' })}>
           <MessageSquarePlusIcon aria-hidden="true" />새 채팅
         </Link>
       </EmptyState>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-2 md:hidden">
+      <div className="min-h-0 flex-1 overflow-y-auto p-2 lg:hidden">
         <h1 className="sr-only">채팅</h1>
         <div className="mb-2 flex items-center gap-1">
           <Link href="/chat?new=1" className={buttonVariants({ className: 'flex-1' })}>

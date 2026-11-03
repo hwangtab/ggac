@@ -32,7 +32,7 @@ export default function NewTaskForm({
   onCreated: (task: TaskItem) => void
   /** 폼을 닫거나 만든 뒤 부른다 — URL 로 열린 폼이면 호출한 쪽이 `new` 파라미터를 지운다 */
   onDismiss?: () => void
-  /** 닫힌 상태의 `+ 새 할 일` 버튼 클래스 — /tasks 데스크톱은 목록 패널 머리글에 같은 버튼이 있어 `md:hidden` 으로 숨긴다 */
+  /** 닫힌 상태의 `+ 새 할 일` 버튼 클래스 — /tasks 넓은 화면은 목록 칸 머리글에 같은 버튼이 있어 `lg:hidden` 으로 숨긴다 */
   triggerClassName?: string
 }) {
   const uid = useId()

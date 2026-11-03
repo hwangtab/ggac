@@ -118,7 +118,7 @@ export default function TasksView({
     lockedChannelId === undefined && !readOnly && canCreate && channels.length > 0 && !prefill ? (
       <Link
         href={tasksHref({ view, channel: channelFilter, extra: { new: '1' } })}
-        className={cn(buttonVariants({ size: 'sm' }), 'hidden md:inline-flex')}
+        className={cn(buttonVariants({ size: 'sm' }), 'hidden lg:inline-flex')}
       >
         <PlusIcon aria-hidden="true" />새 할 일 만들기
       </Link>
@@ -245,7 +245,7 @@ export default function TasksView({
             lockChannel={lockedChannelId !== undefined}
             onCreated={task => dispatch({ type: 'add', task })}
             onDismiss={onDismissPrefill}
-            triggerClassName={lockedChannelId === undefined ? 'md:hidden' : undefined}
+            triggerClassName={lockedChannelId === undefined ? 'lg:hidden' : undefined}
           />
         )}
         {readOnly && (
@@ -359,7 +359,7 @@ function TaskViewNav({
 }) {
   const options = channels.filter(c => c.kind !== 'dm')
   return (
-    <nav aria-label="할 일 보기" className="space-y-2 md:hidden">
+    <nav aria-label="할 일 보기" className="space-y-2 lg:hidden">
       <ul className="flex flex-wrap gap-1.5">
         {TASK_VIEWS.map(v => {
           const active = !channelFilter && view === v
