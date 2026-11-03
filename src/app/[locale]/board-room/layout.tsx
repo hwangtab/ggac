@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { FiChevronsLeft, FiChevronsRight } from 'react-icons/fi'
 import { Link, usePathname } from '@/i18n/navigation'
 import { fetchSessionProfile, canAccessBoardRoom } from '@/utils/sessionProfile'
@@ -90,6 +90,20 @@ export default function BoardRoomLayout({ children }: { children: React.ReactNod
   }, [inEdit])
   const menuCollapsed = inEdit && !editMenuOpen
 
+  // 모바일 가로 탭 줄에서는 지금 화면의 항목이 보이게 가로 스크롤을 맞춘다. 업무 묶음이 줄 끝에 있어 업무 화면에
+  // 들어와도 탭 줄 첫머리(대시보드·정관…)만 보이던 것(통합 재설계 R1 남은 문제 3). 세로 메뉴(lg)는 넘치지 않아 건너뛴다.
+  // scrollIntoView를 쓰지 않는 이유: 페이지 세로 스크롤까지 움직일 수 있다 — 탭 줄 안의 가로 위치만 바꾼다.
+  const navRef = useRef<HTMLElement>(null)
+  useEffect(() => {
+    const nav = navRef.current
+    if (!nav || nav.scrollWidth <= nav.clientWidth) return
+    const current = nav.querySelector<HTMLElement>('[aria-current="page"]')
+    if (!current) return
+    const offset =
+      current.getBoundingClientRect().left - nav.getBoundingClientRect().left + nav.scrollLeft
+    nav.scrollTo({ left: Math.max(0, offset - (nav.clientWidth - current.offsetWidth) / 2) })
+  }, [pathname, isBoardMember])
+
   const isActive = (item: { href: string; exact?: boolean }) =>
     item.exact ? pathname === item.href : pathname.startsWith(item.href)
 
@@ -133,6 +147,7 @@ export default function BoardRoomLayout({ children }: { children: React.ReactNod
                 </button>
               )}
               <nav
+                ref={navRef}
                 id="board-room-menu"
                 aria-label={
                   isBoardMember === null

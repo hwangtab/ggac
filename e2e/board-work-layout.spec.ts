@@ -188,6 +188,17 @@ test.describe('업무 화면 — 이사회실 레이아웃 안', () => {
       await page.goto('/board-room/chat', { waitUntil: 'domcontentloaded' })
       const list = page.getByRole('complementary', { name: '대화 목록' })
       await expect(list).toBeVisible({ timeout: 20_000 })
+      // 가로 탭 줄이 지금 화면의 항목(대화)을 보이는 자리로 스크롤해 둔다 — 업무 묶음은 줄 끝이라
+      // 맞추지 않으면 첫머리(대시보드·정관…)만 보인다
+      const menu = page.getByRole('navigation', { name: '이사회 메뉴' })
+      const current = menu.locator('[aria-current="page"]')
+      await expect(current).toContainText('대화')
+      await expect
+        .poll(async () => {
+          const [m, c] = await Promise.all([menu.boundingBox(), current.boundingBox()])
+          return !!m && !!c && c.x >= m.x - 1 && c.x + c.width <= m.x + m.width + 1
+        })
+        .toBe(true)
       await page.screenshot({ path: 'test-results/board-work-layout-list-mobile.png' })
 
       await list.getByRole('link', { name: /authz-e2e 공개/ }).click()
