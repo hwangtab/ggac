@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from '@work/lib/nav/link'
 import { usePathname } from '@work/lib/nav/navigation'
-import { EllipsisIcon, LandmarkIcon, SettingsIcon, type LucideIcon } from 'lucide-work'
+import { EllipsisIcon, LandmarkIcon, SearchIcon, SettingsIcon, type LucideIcon } from 'lucide-work'
 import { Sheet, SheetContent, SheetTitle } from '@work/components/ui/sheet'
 import { cn } from '@work/lib/utils'
 import SectionBadgeMark from './SectionBadgeMark'
@@ -77,7 +77,9 @@ export default function BottomTabs({
   const admin = adminSection({ isAdmin })
   // "더 보기" 안의 화면에 있으면 그 탭을 강조한다
   const moreActive =
-    (current !== null && !TAB_KEYS.includes(current)) || pathname.startsWith('/settings')
+    (current !== null && !TAB_KEYS.includes(current)) ||
+    pathname.startsWith('/search') ||
+    pathname.startsWith('/settings')
 
   return (
     <>
@@ -135,6 +137,13 @@ export default function BottomTabs({
               />
             ))}
             <MoreLink
+              href="/search"
+              icon={SearchIcon}
+              label="검색"
+              active={pathname.startsWith('/search')}
+              onNavigate={close}
+            />
+            <MoreLink
               href="/settings"
               icon={SettingsIcon}
               label="설정"
@@ -150,7 +159,7 @@ export default function BottomTabs({
                 onNavigate={close}
               />
             )}
-            {/* ggac 이식: 업무툴 밖 이사회실(회의·서류함)로 돌아가는 길. 검색(4단계)은 아직 없다 */}
+            {/* ggac 이식: 업무툴 밖 이사회실(회의·서류함)로 돌아가는 길 */}
             <MoreLink
               href="/board-room"
               icon={LandmarkIcon}

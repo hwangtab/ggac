@@ -16,6 +16,7 @@ import {
 } from './schema'
 import { STORAGE_RETRY_MESSAGE, StorageUnavailableError } from './storage-errors'
 import { StorageUnconfiguredError } from './storage'
+import { scheduleTextExtraction } from './extract-schedule'
 
 /**
  * 첨부 server action — 원본 kosmart-work `lib/files/actions.ts`와 같은 이름·반환 모양(설계 §7-2).
@@ -101,7 +102,8 @@ export async function attachUploads(
     }
   }
 
-  // 문서 본문 검색 색인은 4단계(추출 크론)다.
+  // 문서 본문 검색 색인 — 응답 뒤 추출 라우트에 맡긴다(실패해도 10분 크론이 따라잡는다)
+  scheduleTextExtraction(attached.map(a => a.id))
   return { ok: true, data: { attached, failed } }
 }
 

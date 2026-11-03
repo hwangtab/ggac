@@ -36,6 +36,7 @@ import { preparePromotion, PromoteRejected } from './promote'
 import { copyObject, removeObjects, StorageUnconfiguredError } from './storage'
 import { STORAGE_RETRY_MESSAGE, StorageUnavailableError } from './storage-errors'
 import { extensionOf } from './version-rules'
+import { scheduleTextExtraction } from './extract-schedule'
 
 /**
  * 새 문서 만들기(docs/16 §4)·사본으로 새 문서(§6) — 원본 kosmart-work `lib/files/create-actions.ts`와 같은 이름·입력·반환 모양.
@@ -171,6 +172,7 @@ export async function createDocument(input: unknown): Promise<ActionResult<Creat
     { type: 'attachment', id: created.attachment.id },
     { channel_id: channel.id, type: v.type }
   )
+  scheduleTextExtraction([created.attachment.id])
   return ok({
     attachmentId: created.attachment.id,
     fileName: created.attachment.name,
@@ -291,6 +293,7 @@ export async function copyAsNewDocument(
     { type: 'attachment', id: created.attachment.id },
     { channel_id: channel.id, source: src.id }
   )
+  scheduleTextExtraction([created.attachment.id])
   return ok({
     attachmentId: created.attachment.id,
     fileName: created.attachment.name,

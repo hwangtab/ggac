@@ -10,7 +10,7 @@ import {
   type AnySQLiteColumn,
 } from 'drizzle-orm/sqlite-core'
 
-import { createdAt, updatedAt, uuidPk } from './_shared.ts'
+import { createdAt, nowMs, updatedAt, uuidPk } from './_shared.ts'
 import { memberProfiles } from './identity.ts'
 
 /**
@@ -477,5 +477,52 @@ export const workFileLineages = sqliteTable(
     index('work_file_lineages_final_marked_by_idx')
       .on(table.finalMarkedBy)
       .where(sql`"final_marked_by" is not null`),
+  ]
+)
+
+// ── 4단계(본문 추출·검색) — 설계 §8-2·§8-3 ─────────────────────────────────────
+
+/**
+ * 첨부 문서 본문 추출 결과(원본 `attachment_texts`, 0029) — 첨부 1건에 1행. 추출 라우트
+ * (`/api/internal/board-work/extract-texts`, CRON_SECRET)만 쓴다. 첨부가 지워지면 cascade.
+ *
+ * 원본과 다른 점:
+ * - `ext`(소문자 확장자) 열을 더했다 — SQLite에는 정규식이 없어 이름에서 확장자를 뽑는 식을 SQL에 둘 수 없다
+ *   (설계 §4). 추출 시점의 확장자를 남겨 두어 형식별 집계·재추출 대상 고르기에 쓴다.
+ * - 상태·길이 CHECK(`status in (…)`, `char_length(content) <= 2000000`)는 DB에 두지 않는다(ggac 관례). 허용값과
+ *   상한은 `src/work/lib/files/extract-text.ts`(EXTRACT_MAX_CHARS)와 쓰기 함수(`src/db/queries/work/texts.ts`)가 지킨다.
+ * - pgroonga 전문 색인이 없다. 검색은 `instr(lower(content), lower(검색어))`다(§8-3 — FTS5는 나중).
+ * - 원본 RLS(`attachment_texts_select` = 첨부를 읽을 수 있고 메시지가 살아 있음)는 검색 쿼리의 WHERE가 대신한다.
+ */
+export const workAttachmentTexts = sqliteTable(
+  'work_attachment_texts',
+  {
+    attachmentId: text('attachment_id')
+      .primaryKey()
+      .references(() => workAttachments.id, { onDelete: 'cascade' }),
+    channelId: text('channel_id')
+      .notNull()
+      .references(() => workChannels.id, { onDelete: 'cascade' }),
+    /** 소문자 확장자(점 없음, 없으면 '') */
+    ext: text('ext').notNull().default(''),
+    /** 검색용 평문(최대 2,000,000자 — 넘으면 앞부분만 두고 truncated) */
+    content: text('content').notNull().default(''),
+    truncated: integer('truncated', { mode: 'boolean' }).notNull().default(false),
+    /** 'ok' | 'unsupported' | 'failed' | 'too_large' */
+    status: text('status').notNull(),
+    extractorVersion: text('extractor_version').notNull(),
+    /** 지금까지의 시도 횟수(선점할 때 1 오른다). failed 는 3회까지 다시 시도한다 */
+    attempts: integer('attempts').notNull().default(1),
+    extractedAt: integer('extracted_at', { mode: 'timestamp_ms' })
+      .notNull()
+      .default(nowMs())
+      .$defaultFn(() => new Date()),
+  },
+  table => [
+    index('work_attachment_texts_channel_idx').on(table.channelId),
+    /** 재시도 대상 조회(failed 만) */
+    index('work_attachment_texts_failed_idx')
+      .on(table.extractedAt)
+      .where(sql`"status" = 'failed'`),
   ]
 )

@@ -14,6 +14,9 @@ import {
   type ChannelFilesSearch,
 } from '@work/lib/files/channel-files'
 import { folderCrumbs } from '@work/lib/files/folders'
+import DocumentHitList from '@work/components/search/DocumentHitList'
+import type { DocumentHit } from '@work/lib/search/search'
+import { splitTerms } from '@work/lib/search/text'
 import type { CreateActor } from '@work/lib/files/create-rules'
 import ChannelFilesSubNav from './ChannelFilesSubNav'
 import NewDocumentMenu from './create-document/NewDocumentMenu'
@@ -30,6 +33,7 @@ export default function ChannelFilesTab({
   search,
   data,
   tabBar,
+  documentHits = [],
   createDocActor,
 }: {
   channel: ChannelDetail
@@ -37,14 +41,16 @@ export default function ChannelFilesTab({
   data: ChannelFilesData
   /** 대화 탭 바 데이터(추가 탭·권한). 없으면 기본 탭만 그린다 */
   tabBar?: TabBarData
+  /** 검색어가 있을 때, 파일명은 아니고 문서 본문에서만 찾은 첨부(0029) */
+  documentHits?: DocumentHit[]
   /** 새 문서 만들기 판정 재료(docs/16). 없으면 버튼을 그리지 않는다 */
   createDocActor?: Omit<CreateActor, 'inThread'>
 }) {
   const base = conversationBasePath(channel)
   const searching = Boolean(search.q)
   const crumbs = folderCrumbs(search.path)
-  // ggac 이식: 문서 본문 검색 결과(원본 documentHits·DocumentHitList, 0029)는 4단계(본문 추출·검색)다
-  const empty = data.items.length === 0 && data.folders.length === 0
+  const empty = data.items.length === 0 && data.folders.length === 0 && documentHits.length === 0
+  const terms = splitTerms(search.q ?? '')
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -73,9 +79,8 @@ export default function ChannelFilesTab({
               type="search"
               name="q"
               defaultValue={search.q ?? ''}
-              // ggac 이식: 문서 본문 검색은 4단계라 문구에서 뺐다
-              placeholder="이 채널의 파일명 검색"
-              aria-label="파일명 검색"
+              placeholder="이 채널의 파일명·문서 내용 검색"
+              aria-label="파일명·문서 내용 검색"
               className="pl-8"
             />
           </div>
@@ -174,6 +179,14 @@ export default function ChannelFilesTab({
                 view="list"
                 channelMode={{ base, folders: data.folders, search }}
               />
+            )}
+            {searching && documentHits.length > 0 && (
+              <section aria-labelledby="channel-document-hits" className="space-y-3">
+                <SectionHeading id="channel-document-hits" count={documentHits.length}>
+                  문서 내용에서 찾음
+                </SectionHeading>
+                <DocumentHitList hits={documentHits} terms={terms} />
+              </section>
             )}
           </>
         )}

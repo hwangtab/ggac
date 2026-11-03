@@ -11,6 +11,11 @@ const port = Number(process.env.PLAYWRIGHT_PORT || 3101)
 const baseURL = `http://127.0.0.1:${port}`
 const reuseExistingServer = process.env.PLAYWRIGHT_REUSE_SERVER === 'true'
 
+// 크론 라우트(`/api/internal/*`)의 CRON_SECRET — E2E 서버에는 **늘 로컬 시험값**을 준다. 주지 않으면 `.env.local`의
+// 운영 값이 서버에 실리고(Next 는 부모 환경에 없는 키만 .env.local 에서 채운다) 스펙은 그 값을 모르게 된다.
+// 스펙 워커도 같은 값을 읽도록 process.env 에 심는다(이사회 업무툴 본문 추출 E2E — authz-board-work·board-work-search).
+process.env.E2E_CRON_SECRET ||= 'e2e-local-cron-secret-not-for-production'
+
 // 권한 E2E는 계정을 만들고 글을 쓰고 유지보수 모드를 토글한다 — 대상이 운영
 // Turso면 그게 전부 실제 회원 데이터 위에서 벌어진다. 그래서 대상 지정을
 // `TURSO_DATABASE_URL`이 아니라 **별도 이름**(`E2E_TURSO_DATABASE_URL`)으로
@@ -127,7 +132,7 @@ export default defineConfig({
         ...(process.env.CI ? {} : { channel: 'chrome' as const }),
       },
       // board-work-chat·tabs·files: 로그인 상태(authz-setup)와 로컬 Turso 시드가 필요해 authz 프로젝트에서만 돈다
-      testIgnore: /authz[.-]|board-work-(chat|tabs|files|editors)\.spec\.ts/,
+      testIgnore: /authz[.-]|board-work-(chat|tabs|files|editors|search)\.spec\.ts/,
     },
     // authz 계열은 로컬 Turso(`turso dev`)와 픽스처 시드가 있어야 도는 로컬 전용
     // 프로젝트다(CI는 돌리지 않는다). 단계 4 Task 5로 앱에서 Supabase가 사라진 뒤로
@@ -143,7 +148,7 @@ export default defineConfig({
     {
       name: 'authz',
       testMatch:
-        /(authz-(ownership|personal|remaining|maintenance|roles|mailbox|funding|features|email-verification|market|board-work)|board-work-(chat|tabs|files|editors))\.spec\.ts/,
+        /(authz-(ownership|personal|remaining|maintenance|roles|mailbox|funding|features|email-verification|market|board-work)|board-work-(chat|tabs|files|editors|search))\.spec\.ts/,
       dependencies: ['authz-setup'],
       use: { ...devices['Desktop Chrome'], channel: 'chrome' },
     },
@@ -266,6 +271,8 @@ export default defineConfig({
         // authz-setup의 로그인 자체가 항상 실패했다 — 여기서 `baseURL`로 맞춘다.
         BETTER_AUTH_URL: baseURL,
         NEXT_PUBLIC_SITE_URL: baseURL,
+        // 업무툴 업로드 직후 추출 훅(`scheduleTextExtraction`)이 NEXT_PUBLIC_SITE_URL + 이 값으로 자기 자신을 부른다
+        CRON_SECRET: process.env.E2E_CRON_SECRET,
       },
       url: `${baseURL}/robots.txt`,
       reuseExistingServer,

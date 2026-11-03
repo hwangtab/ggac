@@ -23,8 +23,8 @@ export type QuickSwitcherWikiDoc = { slug: string; title: string; category: stri
 /** ⌘K "사람" 후보 — 활성 staff(서브관리자 포함, 나는 '이름 (나)' = 나와의 채팅). 고르면 DM 을 연다(이력이 없어도 만든다) */
 export type QuickSwitcherPerson = { userId: string; name: string; title: string | null }
 
-/** ggac 이식: 전체 검색(/search, 4단계)을 켰는가. 끈 동안은 ⌘Enter·빈 결과의 "전체 검색"도 숨긴다 */
-const SEARCH_ENABLED = false
+/** ggac 이식: 전체 검색(/search)을 켰는가 — 4단계에서 켰다. 끄면 ⌘Enter·빈 결과의 "전체 검색"도 숨는다 */
+const SEARCH_ENABLED = true
 
 /** 빠른 이동에 보이는 위키 후보 최대 수 */
 export const WIKI_CANDIDATE_LIMIT = 8
@@ -235,7 +235,6 @@ export default function QuickSwitcher({
               ))}
             </CommandGroup>
           )}
-          {/* ggac 이식: 전체 검색(/search)은 4단계 — 그때 SEARCH_ENABLED를 켠다 */}
           {SEARCH_ENABLED && query.trim() && (
             <CommandGroup heading="전체 검색">
               <CommandItem

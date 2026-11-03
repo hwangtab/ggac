@@ -86,15 +86,14 @@ export default function TopBar({
       <button
         type="button"
         onClick={onOpenSwitcher}
-        aria-label="채널·사람 찾기"
+        aria-label="채널·사람·메시지 검색"
         className={cn(
           'flex h-8 shrink-0 items-center justify-center rounded-w-md text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring',
           'size-8 pointer-coarse:size-11 hover:bg-muted md:h-8 md:w-full md:max-w-[560px] md:flex-[0_1_560px] md:justify-start md:gap-2 md:border md:bg-muted md:px-3 md:text-sm'
         )}
       >
         <SearchIcon aria-hidden="true" className="size-4" />
-        {/* ggac 이식: 메시지·파일 전체 검색은 4단계 — 지금은 채널·사람 빠른 이동만 */}
-        <span className="hidden flex-1 text-left md:inline">채널·사람 찾기</span>
+        <span className="hidden flex-1 text-left md:inline">채널·사람·메시지 검색</span>
         <kbd className="hidden rounded-w-md border px-1.5 font-sans text-xs md:inline">⌘K</kbd>
       </button>
 

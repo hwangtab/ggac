@@ -35,6 +35,21 @@ const KORDOC_ROUTES = [
   '/api/board-room/work/files/new-drafts/\\[uploadId\\]/verify',
   '/api/board-room/work/files/new-drafts/\\[uploadId\\]/render',
 ]
+/**
+ * 이사회 업무툴 본문 추출 크론(설계 §8-2). PDF 를 읽으므로 pdfjs-dist(+ DOMMatrix 폴리필 @napi-rs/canvas)는 남기고
+ * OCR 쪽 무거운 것만 뺀다 — kosmart-work next.config.ts 의 '/api/internal/extract-texts'와 같다.
+ */
+const KORDOC_EXTRACT_ROUTE = '/api/internal/board-work/extract-texts'
+/**
+ * pdfjs-dist 는 Node 에서 DOMMatrix·Path2D 폴리필로 @napi-rs/canvas 를 동적으로 require 해 파일 추적이 놓친다
+ * (2026-11-03 실측: 추적 결과에 pdfjs-dist 3.0MB 는 있고 @napi-rs 는 0). 플랫폼 바이너리 패키지까지 명시로 넣는다.
+ */
+const KORDOC_EXTRACT_INCLUDES = [...KORDOC_RUNTIME_REQUIRES, './node_modules/@napi-rs/canvas*/**']
+const KORDOC_EXTRACT_EXCLUDES = [
+  './node_modules/onnxruntime-node/**',
+  './node_modules/@hyzyla/**',
+  './node_modules/@huggingface/**',
+]
 
 /**
  * 이사회 업무툴 앱 안 편집기 출처(설계 §8-1) — `NEXT_PUBLIC_OFFICE_EDITOR_ORIGIN`(예 https://ggac-office.vercel.app).
@@ -79,11 +94,13 @@ const nextConfig = {
     // kordoc은 cfb(HWP5·XLS의 OLE 컨테이너)를 createRequire로 불러 파일 추적이 놓친다
     // (kosmart-work 운영에서 "Cannot find module 'cfb'"로 모든 변환이 실패했다). kordoc을 쓰는 라우트마다 넣는다.
     ...Object.fromEntries(KORDOC_ROUTES.map(r => [r, KORDOC_RUNTIME_REQUIRES])),
+    [KORDOC_EXTRACT_ROUTE]: KORDOC_EXTRACT_INCLUDES,
   },
   // kordoc의 선택 의존성(OCR·PDF 엔진) 중 쓰지 않는 무거운 것을 함수 번들에서 뺀다
   // (onnxruntime-node만 약 300MB — 250MB 한도 초과). 뷰어는 OCR을 끄고 PDF는 변환하지 않는다.
   outputFileTracingExcludes: {
     ...Object.fromEntries(KORDOC_ROUTES.map(r => [r, KORDOC_VIEWER_EXCLUDES])),
+    [KORDOC_EXTRACT_ROUTE]: KORDOC_EXTRACT_EXCLUDES,
   },
   // kordoc은 번들하지 않고 node_modules에서 그대로 로드한다(createRequire·동적 import 때문).
   serverExternalPackages: ['kordoc'],

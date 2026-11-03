@@ -10,6 +10,12 @@ import { applyRateLimit, RATE_LIMITS } from '@/lib/server/rateLimit'
  */
 const ACTION_REQUEST_URL = 'https://board-work.internal/server-action'
 
+/**
+ * 전체 검색(`/board-room/search`, 설계 §8-3) — 공용 SEARCH_API(분당 30)와 같은 한도를 쓰되 **이름을 따로** 둔다.
+ * 같은 이름이면 키(`rate_limit:<name>:<userId>`)가 다른 검색 소비자와 겹칠 수 있다. 읽기라 장애 때 fail-open 이다.
+ */
+const WORK_SEARCH = { ...RATE_LIMITS.SEARCH_API, name: 'work_search' }
+
 /** strict: false라 판별 유니온 대신 한 모양으로 둔다 */
 export type WorkRateLimitResult = { ok: boolean; message?: string }
 
@@ -20,7 +26,8 @@ async function consume(
     | (typeof RATE_LIMITS)['WORK_RENDER']
     | (typeof RATE_LIMITS)['WORK_RENDER_THUMB']
     | (typeof RATE_LIMITS)['WORK_DOC_EDIT_READ']
-    | (typeof RATE_LIMITS)['WORK_DOC_EDIT_DRAFT'],
+    | (typeof RATE_LIMITS)['WORK_DOC_EDIT_DRAFT']
+    | typeof WORK_SEARCH,
   userId: string,
   request?: NextRequest
 ): Promise<WorkRateLimitResult> {
@@ -74,5 +81,17 @@ export function consumeWorkDocEdit(
     new NextRequest('https://board-work.internal/doc-edit', {
       method: kind === 'draft' ? 'POST' : 'GET',
     })
+  )
+}
+
+/**
+ * 전체 검색(WORK_SEARCH, 분당 30) — 검색어(또는 작성자)가 있어 실제로 찾을 때만 센다. 페이지(서버 컴포넌트)가 부르므로
+ * GET 표식 요청을 넘긴다(장애 때 읽기 기본값 fail-open). instr 검색은 본문 전체를 훑으므로 연타를 막는다.
+ */
+export function consumeWorkSearch(userId: string): Promise<WorkRateLimitResult> {
+  return consume(
+    WORK_SEARCH,
+    userId,
+    new NextRequest('https://board-work.internal/search', { method: 'GET' })
   )
 }

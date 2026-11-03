@@ -21,6 +21,7 @@ import { preparePromotion, PromoteRejected } from './promote'
 import { StorageUnconfiguredError } from './storage'
 import { STORAGE_RETRY_MESSAGE, StorageUnavailableError } from './storage-errors'
 import { extensionOf, shouldPostTopLevel } from './version-rules'
+import { scheduleTextExtraction } from './extract-schedule'
 
 /**
  * 문서 편집(HWP 양식 채우기·문구 고치기, docs/10 §3-3) 저장 액션 — 원본 kosmart-work `lib/files/doc-edit-actions.ts`와
@@ -151,6 +152,7 @@ export async function saveDraftAsNewFile(input: unknown): Promise<ActionResult<S
     }
   )
 
+  scheduleTextExtraction([created.attachment.id])
   return ok({
     attachmentId: created.attachment.id,
     fileName: created.attachment.name,

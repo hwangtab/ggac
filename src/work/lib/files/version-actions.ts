@@ -74,6 +74,7 @@ import {
   type FileCheckout,
   type FileVersionState,
 } from './version-rules'
+import { scheduleTextExtraction } from './extract-schedule'
 
 /**
  * 문서 버전 서버 액션 — 원본 kosmart-work `lib/files/version-actions.ts`(0032, docs/09 §2)와 같은 이름·입력·반환 모양.
@@ -86,7 +87,7 @@ import {
  * 함께 안 생긴다 — 그래서 원본의 removeMessage·fixVersionMessageBody 가 필요 없다(본문의 번호도 실제 번호로 쓴다).
  *
  * 버전 게시물은 같은 트랜잭션에서 채널 rev 를 올린다 — 다른 사람 화면은 폴링(§6)으로 새 게시물·첨부를 다시 읽는다.
- * 문서 본문 추출(scheduleTextExtraction)은 4단계라 부르지 않는다. 감사 기록은 구조화 로그(`logAudit`)다.
+ * 새 버전은 저장 뒤 문서 본문 추출을 예약한다(scheduleTextExtraction — 4단계). 감사 기록은 구조화 로그(`logAudit`)다.
  */
 
 type Staffed = WorkGuardContext
@@ -403,6 +404,7 @@ export async function saveFileVersion(input: unknown): Promise<ActionResult<Save
     )
   }
 
+  scheduleTextExtraction([created.attachment.id])
   return ok({
     status: 'saved',
     attachmentId: created.attachment.id,
@@ -504,6 +506,7 @@ export async function restoreFileVersion(
       to_no: created.attachment.version_no,
     }
   )
+  scheduleTextExtraction([created.attachment.id])
   return ok({ attachmentId: created.attachment.id, versionNo: created.attachment.version_no })
 }
 
