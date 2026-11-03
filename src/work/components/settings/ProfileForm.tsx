@@ -1,6 +1,6 @@
 'use client'
 
-import { Field, FieldLabel, FieldHint, FieldError } from '@work/components/ui/field'
+import { Field, FieldLabel, FieldDescription, FieldError } from '@work/components/ui/field'
 import { useActionState } from 'react'
 import { Button } from '@work/components/ui/button'
 import { Input } from '@work/components/ui/input'
@@ -10,12 +10,20 @@ import { updateStaffProfile } from '@work/lib/settings/actions'
 
 const INITIAL: ProfileFormState = { status: 'idle' }
 
+/**
+ * 표시 이름 + 업무툴 직함(03 §10). 직함 칸의 값은 **업무툴 직함**(`work_title`)이다 — 비워 두면 업무 화면에 이사회
+ * 직함(`officialTitle`)이 보인다. 이사회 직함 자체는 관리자가 정하고 이 폼이 바꾸지 않는다.
+ */
 export default function ProfileForm({
   displayName,
   title,
+  officialTitle,
 }: {
   displayName: string
+  /** 업무툴 직함(없으면 빈 칸) */
   title: string | null
+  /** 이사회 직함 — 안내 문구에만 쓴다 */
+  officialTitle: string | null
 }) {
   const [state, action, pending] = useActionState(updateStaffProfile, INITIAL)
   const fieldErrors = state.status === 'error' ? state.fieldErrors : undefined
@@ -39,21 +47,20 @@ export default function ProfileForm({
         )}
       </Field>
       <Field>
-        <FieldLabel htmlFor="title">
-          직함 <FieldHint>(관리자가 정합니다)</FieldHint>
-        </FieldLabel>
+        <FieldLabel htmlFor="title">직함</FieldLabel>
         <Input
           id="title"
           name="title"
           defaultValue={title ?? ''}
           maxLength={50}
-          placeholder="예: 이사"
-          // ggac 이식: 직함은 관리자가 정한다(이사회 직함 director_title) — 읽기 전용으로 보여 주고 값은 그대로 보낸다
-          readOnly
+          placeholder={officialTitle ?? '예: 총무 담당'}
           className="h-9"
           aria-invalid={fieldErrors?.title ? true : undefined}
-          aria-describedby={fieldErrors?.title ? 'title-error' : undefined}
+          aria-describedby={fieldErrors?.title ? 'title-hint title-error' : 'title-hint'}
         />
+        <FieldDescription id="title-hint">
+          업무 화면에만 보입니다. 비워 두면 이사회 직함({officialTitle ?? '없음'})이 보입니다.
+        </FieldDescription>
         {fieldErrors?.title && <FieldError id="title-error">{fieldErrors.title}</FieldError>}
       </Field>
       <div className="flex items-center justify-between gap-3">

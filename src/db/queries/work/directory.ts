@@ -5,7 +5,7 @@
  * 그래서 여기서는 **후보**만 넓게 읽는다 — 지금 이사·감사·관리자인 사람 + 업무툴에 흔적(멤버십·작성 글)이 남은 사람
  * (이사에서 빠진 사람의 옛 글에도 이름이 붙게 — 원본 staff 행이 status 'left'로 남던 것과 같은 자리).
  *
- * 개인정보: 화면에 쓰는 이름·직함과 권한 판정 필드만 꺼낸다(연락처·계좌·실명은 읽지 않는다).
+ * 개인정보: 화면에 쓰는 이름·직함(이사회 직함 + 업무툴 직함)과 권한 판정 필드만 꺼낸다(연락처·계좌·실명은 읽지 않는다).
  */
 import { and, eq, inArray, or, sql } from 'drizzle-orm'
 
@@ -17,7 +17,10 @@ import { iso } from './_shared.ts'
 export type WorkPersonRow = {
   user_id: string
   display_name: string
+  /** 이사회 공식 직함(출석·회의 화면과 같은 값) */
   director_title: string | null
+  /** 업무 화면에만 보이는 직함(0033). 화면은 `resolveWorkTitle(work_title, director_title)`로 고른다 */
+  work_title: string | null
   /** canAccessBoardRoom 판정용 */
   is_admin: boolean
   is_director: boolean
@@ -41,6 +44,7 @@ const personColumns = {
   statusEmoji: workMemberPrefs.statusEmoji,
   statusText: workMemberPrefs.statusText,
   statusUntil: workMemberPrefs.statusUntil,
+  workTitle: workMemberPrefs.workTitle,
 }
 
 type PersonSelect = {
@@ -55,6 +59,7 @@ type PersonSelect = {
   statusEmoji: string | null
   statusText: string | null
   statusUntil: Date | null
+  workTitle: string | null
 }
 
 function toPerson(r: PersonSelect): WorkPersonRow {
@@ -62,6 +67,7 @@ function toPerson(r: PersonSelect): WorkPersonRow {
     user_id: r.userId,
     display_name: r.displayName?.trim() || '이름 없음',
     director_title: r.directorTitle?.trim() || null,
+    work_title: r.workTitle?.trim() || null,
     is_admin: r.isAdmin,
     is_director: r.isDirector,
     is_auditor: r.isAuditor,

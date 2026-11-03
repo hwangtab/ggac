@@ -20,6 +20,7 @@ import {
   type WorkChannelRecord,
 } from '@/db/queries/work/channels'
 import { getDisplayNames, listWorkPeople, type WorkPersonRow } from '@/db/queries/work/directory'
+import { resolveWorkTitle } from '@work/lib/staff/work-title'
 import type { ChannelListItem } from '@work/components/layout/channel-items'
 import type { WorkServerClient } from '@work/lib/supabase/server'
 import type { ChannelCategory } from './sections'
@@ -272,7 +273,8 @@ function toStaffSummary(p: WorkPersonRow): StaffSummary {
   return {
     user_id: p.user_id,
     display_name: p.display_name,
-    title: p.director_title,
+    // 업무 화면 직함: 업무툴 직함 → 이사회 직함(03 §10)
+    title: resolveWorkTitle(p.work_title, p.director_title),
     role: active && p.is_admin ? 'admin' : 'member',
     status: active ? 'active' : 'left',
     status_emoji: p.status_emoji,

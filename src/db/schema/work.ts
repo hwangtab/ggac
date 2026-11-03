@@ -48,6 +48,11 @@ export const workMemberPrefs = sqliteTable('work_member_prefs', {
   statusText: text('status_text'),
   statusUntil: integer('status_until', { mode: 'timestamp_ms' }),
   /**
+   * 업무 화면에만 보이는 직함(0033). NULL이면 이사회 직함(`member_profiles.director_title`)이 보인다 —
+   * `resolveWorkTitle`(src/work/lib/staff/work-title.ts). 공식 직함은 업무툴이 쓰지 않는다.
+   */
+  workTitle: text('work_title'),
+  /**
    * 사용자 단위 변경 번호(§6) — 새 채널에 들어감·새 DM처럼 **사이드바 목록 자체**가 바뀔 때 올린다.
    * 원본 `user:<uid>` 토픽의 MEMBER_ADDED·DM_MESSAGE 신호 자리다.
    */

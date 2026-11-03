@@ -232,6 +232,13 @@
       "when": 1790000000000,
       "tag": "0032_board_work_push",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1790100000000,
+      "tag": "0033_board_work_title",
+      "breakpoints": true
     }
   ]
 }
