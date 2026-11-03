@@ -139,18 +139,52 @@ body:has([data-work-app]) mark.bg-highlight {
   cursor: pointer;
 }
 
-/* 메시지 본문 마크다운 타이포그래피(.post-markdown = prose) */
+/*
+ * 메시지 본문 마크다운 타이포그래피(.post-markdown = prose).
+ * 원본은 다크에서 `dark:prose-invert`로 뒤집었지만 이제 `dark:`는 켜지지 않는다(tailwind.config.js darkMode) —
+ * 그래서 prose 변수를 여기서 전부 다크 값으로 정한다. 공개 사이트 포스터의 `[data-poster] .prose` 규칙과 같은 값이다.
+ */
 body:has([data-work-app]) .post-markdown {
   --tw-prose-body: var(--foreground);
   --tw-prose-headings: var(--foreground);
+  --tw-prose-lead: var(--muted-foreground);
   --tw-prose-bold: var(--foreground);
-  --tw-prose-links: var(--primary);
+  /* 포스터의 `.prose a`와 같은 앰버 */
+  --tw-prose-links: #fbd9a5;
   --tw-prose-code: var(--foreground);
+  --tw-prose-pre-code: var(--foreground);
+  --tw-prose-pre-bg: var(--card);
   --tw-prose-quotes: var(--muted-foreground);
   --tw-prose-quote-borders: var(--border);
   --tw-prose-bullets: var(--muted-foreground);
   --tw-prose-counters: var(--muted-foreground);
   --tw-prose-hr: var(--border);
+  --tw-prose-captions: var(--muted-foreground);
+  --tw-prose-kbd: var(--foreground);
+  --tw-prose-th-borders: var(--border);
+  --tw-prose-td-borders: var(--border);
+}
+/* tailwind.config.js typography 커스텀이 제목·굵게·기울임에 밝은 테마용 남색·주황을 직접 박아 변수로는 안 덮인다 */
+body:has([data-work-app]) .post-markdown :is(h1, h2, h3, h4, h5, h6, strong, em) {
+  color: var(--foreground);
+}
+/* 코드 조각은 면을 살짝 띄워 본문과 구분한다(포스터와 같다). pre 안의 code는 겹치지 않는다 */
+body:has([data-work-app]) .post-markdown :not(pre) > code {
+  background-color: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  padding: 0.1em 0.3em;
+}
+
+/*
+ * 날짜 입력 — globals.css가 브라우저 피커 배경을 지우려고 `background-color: white !important`로 고정한다.
+ * 공개 사이트는 `[data-poster] input[type='date']`가 되돌리는데 업무툴(과 그 포털)은 그 밖이라 여기서 같게 되돌린다.
+ */
+body:has([data-work-app]) input[type='date'] {
+  background-color: var(--background) !important;
+  color: var(--foreground);
+}
+body:has([data-work-app]) input[type='date']::-webkit-calendar-picker-indicator {
+  filter: invert(1);
 }
 
 /* 터치 기기 입력 글자 16px 이상 — iOS Safari 포커스 확대 방지(원본 그대로) */
