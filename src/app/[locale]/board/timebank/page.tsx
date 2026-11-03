@@ -11,6 +11,7 @@ import {
   formatTimebankMinutes,
 } from '@/components/timebank/timebankFormat'
 import { resolveTimebankViewer } from '@/lib/server/timebankPage'
+import { isBoardEnabled } from '@/lib/features/settings'
 import { parseListingQuery } from '@/lib/timebank/validate'
 import { listTimebankListings } from '@/db/queries/timebankBoard'
 import { TIMEBANK_CATEGORIES, TIMEBANK_LISTING_KINDS } from '@/constants/timebank'
@@ -57,8 +58,10 @@ export default async function TimebankPage({ params, searchParams }: TimebankPag
   if (viewer.kind !== 'member') return <TimebankGate state="unapproved" />
 
   // 읽기는 꺼짐·미동의여도 연다(API `requireTimebankReader`와 같다). 쓰기 단추만
-  // 참여 자격(`access === 'ok'`)에 따라 보인다.
+  // 참여 자격(`access === 'ok'`)에 따라 보인다. 게시판 새 글 스위치가 꺼졌으면 글쓰기
+  // 화면(`new/page.tsx`)이 `boardOff` 게이트를 내므로 단추 대신 그 이유를 적는다.
   const canWrite = viewer.access === 'ok'
+  const boardOff = canWrite && (await isBoardEnabled()) === false
   const query = parseListingQuery(rawParams)
   const { rows, hasNext } = await listTimebankListings({
     kind: query.kind,
@@ -105,13 +108,21 @@ export default async function TimebankPage({ params, searchParams }: TimebankPag
             <Link href={hrefWith({ mine: query.mine ? null : '1' })} className={chip(query.mine)}>
               {t('mine')}
             </Link>
-            {canWrite && (
+            {canWrite && !boardOff && (
               <Link
                 href="/board/timebank/new"
                 className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700"
               >
                 {t('write')}
               </Link>
+            )}
+            {boardOff && (
+              <span
+                data-testid="timebank-write-board-off"
+                className="self-center text-sm text-gray-500"
+              >
+                {t('gate.boardOff.title')}
+              </span>
             )}
           </div>
         </div>

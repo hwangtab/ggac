@@ -10,6 +10,7 @@ import {
   formatTimebankDate,
 } from '@/components/timebank/timebankFormat'
 import { resolveTimebankViewer } from '@/lib/server/timebankPage'
+import { isBoardEnabled } from '@/lib/features/settings'
 import { listTimebankListings, listVolunteeredTasks } from '@/db/queries/timebankBoard'
 import { createLogger } from '@/utils/logger'
 import MyTimebank from './MyTimebank'
@@ -52,6 +53,8 @@ export default async function MyTimebankPage({ params }: { params: Promise<{ loc
   if (viewer.kind !== 'member') return <TimebankGate state="unapproved" />
 
   const canWrite = viewer.access === 'ok'
+  // 게시판 새 글 스위치가 꺼졌으면 글쓰기 화면이 `boardOff` 게이트라 링크를 숨긴다.
+  const canPost = canWrite && (await isBoardEnabled()) !== false
 
   let myPosts: Awaited<ReturnType<typeof listTimebankListings>>['rows'] = []
   let volunteered: Awaited<ReturnType<typeof listVolunteeredTasks>> = []
@@ -92,7 +95,7 @@ export default async function MyTimebankPage({ params }: { params: Promise<{ loc
             >
               {t('my.posts.viewAll')}
             </Link>
-            {canWrite && (
+            {canPost && (
               <Link href="/board/timebank/new" className="text-primary-600 hover:underline">
                 {t('write')}
               </Link>
@@ -160,7 +163,7 @@ export default async function MyTimebankPage({ params }: { params: Promise<{ loc
       </section>
 
       <div className="mt-10">
-        <ProfilePanel canEdit={canWrite} />
+        <ProfilePanel access={viewer.access} />
       </div>
 
       <section

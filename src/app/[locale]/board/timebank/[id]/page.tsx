@@ -176,7 +176,7 @@ export default async function TimebankDetailPage({
           authorId={listing.author_id}
           viewerId={viewer.userId}
           isAdmin={viewer.isAdmin}
-          canWrite={canWrite}
+          access={viewer.access}
           initialComments={comments}
         />
       </div>

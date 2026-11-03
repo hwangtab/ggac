@@ -8,6 +8,7 @@ import {
   type TimebankCategory,
 } from '@/constants/timebank'
 import { timebankFetch } from '@/components/timebank/timebankFormat'
+import type { TimebankAccess } from '@/lib/timebank/access'
 
 type Profile = {
   offers: string
@@ -18,10 +19,12 @@ type Profile = {
 
 /**
  * 프로필(스펙 §8): 줄 수 있는 것·필요한 것, 분류, 디렉터리 공개. 읽기는 언제나
- * (`GET /api/timebank/profile`), 저장은 참여 자격이 있을 때만(`PATCH`).
+ * (`GET /api/timebank/profile`), 저장은 참여 자격이 있을 때만(`PATCH`). 고칠 수
+ * 없으면 그 이유(꺼짐·미동의·구판·동결)를 상태마다 다른 문구로 보인다.
  */
-export default function ProfilePanel({ canEdit }: { canEdit: boolean }) {
+export default function ProfilePanel({ access }: { access: TimebankAccess }) {
   const t = useTranslations('timebank')
+  const canEdit = access === 'ok'
   const [profile, setProfile] = useState<Profile>({
     offers: '',
     needs: '',
@@ -91,7 +94,11 @@ export default function ProfilePanel({ canEdit }: { canEdit: boolean }) {
       <h2 id="tb-profile-heading" className="mb-1 text-lg font-semibold text-gray-900">
         {t('my.profile.heading')}
       </h2>
-      {!canEdit && <p className="mb-3 text-sm text-gray-500">{t('my.profile.readOnly')}</p>}
+      {access !== 'ok' && (
+        <p className="mb-3 text-sm text-gray-500" data-testid="timebank-profile-readonly">
+          {t(`my.profile.readOnly.${access}`)}
+        </p>
+      )}
       <form onSubmit={e => void save(e)} className="space-y-4">
         <label className="block text-sm font-medium text-gray-700">
           {t('my.profile.offers')}

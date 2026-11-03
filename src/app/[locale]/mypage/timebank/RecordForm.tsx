@@ -168,17 +168,24 @@ export default function RecordForm({ onRecorded }: { onRecorded: () => void }) {
           </select>
         </label>
 
-        <label className="text-sm font-medium text-gray-700">
-          {t('my.record.memo')}
-          <input
-            className={field}
-            value={memo}
-            onChange={e => setMemo(e.target.value)}
-            maxLength={TIMEBANK_MEMO_MAX}
-            placeholder={t('my.record.memoPlaceholder')}
-            name="memo"
-          />
-        </label>
+        {/* 안내는 placeholder에 다 담지 않는다 — 좁은 화면(375px)에서 잘린다. */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700">
+            {t('my.record.memo')}
+            <input
+              className={field}
+              value={memo}
+              onChange={e => setMemo(e.target.value)}
+              maxLength={TIMEBANK_MEMO_MAX}
+              placeholder={t('my.record.memoPlaceholder')}
+              name="memo"
+              aria-describedby="tb-record-memo-help"
+            />
+          </label>
+          <p id="tb-record-memo-help" className="mt-1 text-xs text-gray-500">
+            {t('my.record.memoHelp')}
+          </p>
+        </div>
 
         <div className="md:col-span-2 flex flex-wrap items-center justify-between gap-3">
           {notice ? (

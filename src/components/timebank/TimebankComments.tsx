@@ -6,18 +6,20 @@ import { intlLocale } from '@/utils/intlLocale'
 import { SEOUL_TIME_ZONE } from '@/utils/date'
 import { TIMEBANK_COMMENT_MAX } from '@/constants/timebank'
 import type { TimebankCommentRow } from '@/db/queries/timebankBoard'
+import type { TimebankAccess } from '@/lib/timebank/access'
 
 /**
  * 타임뱅크 글 댓글 — 약속·일정을 정하는 자리(스펙 §5). 첫 목록은 서버가 렌더해
- * 내려주고, 쓰기·삭제 뒤에만 다시 읽는다. 쓰기는 참여자만(`canWrite`), 삭제는
- * 댓글 쓴이 또는 관리자(꺼짐·미동의여도 된다 — API와 같다).
+ * 내려주고, 쓰기·삭제 뒤에만 다시 읽는다. 쓰기는 참여자만(`access === 'ok'`), 삭제는
+ * 댓글 쓴이 또는 관리자(꺼짐·미동의여도 된다 — API와 같다). 쓸 수 없으면 그 이유
+ * (꺼짐·미동의·구판·동결)를 상태마다 다른 문구로 보인다.
  */
 export default function TimebankComments({
   listingId,
   authorId,
   viewerId,
   isAdmin,
-  canWrite,
+  access,
   initialComments,
 }: {
   listingId: string
@@ -25,10 +27,12 @@ export default function TimebankComments({
   authorId: string
   viewerId: string
   isAdmin: boolean
-  canWrite: boolean
+  /** 쓰기 판정(`classifyTimebankAccess` write 모드) 결과. */
+  access: TimebankAccess
   initialComments: TimebankCommentRow[]
 }) {
   const t = useTranslations('timebank.comments')
+  const canWrite = access === 'ok'
   const dateLocale = intlLocale(useLocale())
   const [comments, setComments] = useState(initialComments)
   const [content, setContent] = useState('')
@@ -169,7 +173,9 @@ export default function TimebankComments({
               {error}
             </p>
           )}
-          <p className="text-sm text-gray-500">{t('readOnly')}</p>
+          <p className="text-sm text-gray-500" data-testid="timebank-comments-readonly">
+            {t(`readOnly.${access}`)}
+          </p>
         </>
       )}
     </section>

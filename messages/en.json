@@ -1291,7 +1291,13 @@
       "deleteConfirm": "Delete this comment?",
       "author": "Author",
       "error": "Could not process the comment.",
-      "readOnly": "Only time bank participants can comment."
+      "readOnly": {
+        "disabled": "The Time Bank is off, so comments are closed for now.",
+        "not_agreed": "Agree to the Time Bank terms to leave a comment.",
+        "terms_outdated": "Agree to the updated terms to leave a comment.",
+        "frozen": "You can't comment while your withdrawal request is pending.",
+        "inactive": "Only approved members can comment."
+      }
     },
     "transferKind": {
       "exchange": "Exchange",
@@ -1358,7 +1364,8 @@
         "minutes": "Time",
         "categoryNone": "No category",
         "memo": "Memo (optional)",
-        "memoPlaceholder": "Briefly describe what was done. Do not include health information.",
+        "memoPlaceholder": "What did you do?",
+        "memoHelp": "Keep it short. Do not include health information.",
         "submit": "Save record",
         "submitting": "Saving…",
         "done": "Record saved. It is confirmed once the other person confirms it.",
@@ -1395,7 +1402,13 @@
       },
       "profile": {
         "heading": "Profile",
-        "readOnly": "You can edit this once you have agreed to the terms and the Time Bank is on.",
+        "readOnly": {
+          "disabled": "The Time Bank is off, so your profile can't be edited for now.",
+          "not_agreed": "Agree to the terms to edit your profile.",
+          "terms_outdated": "Agree to the updated terms to edit your profile.",
+          "frozen": "You can't edit your profile while your withdrawal request is pending.",
+          "inactive": "Only approved members can edit their profile."
+        },
         "offers": "What I can offer",
         "needs": "What I need",
         "visible": "Show in the participant directory",
