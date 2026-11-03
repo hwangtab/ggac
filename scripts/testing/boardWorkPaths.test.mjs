@@ -4,12 +4,13 @@ import assert from 'node:assert/strict'
 const {
   isBoardWorkPath,
   isBoardWorkEditPath,
-  boardWorkNavKey,
+  boardMenuKey,
   BOARD_WORK_HOME,
-  BOARD_WORK_NAV_ITEMS,
+  BOARD_MENU_GROUPS,
+  BOARD_MENU_SETTINGS,
 } = await import('../../src/lib/boardWork/paths.ts')
 
-// 이 판정은 이사회실 레이아웃(board-room/layout)이 쓴다 — 업무 화면의 폭 정책, '업무' 묶음의 활성 항목,
+// 이 판정은 이사회실 레이아웃(board-room/layout)이 쓴다 — 업무 화면의 폭 정책, 이사 메뉴의 묶음·활성 항목,
 // 편집 화면의 메뉴 접기(docs/board-work/03-통합-재설계.md §4-1).
 
 test('업무툴 경로는 로케일 접두사와 무관하게 업무툴이다', () => {
@@ -56,8 +57,16 @@ test('기존 이사회실 화면은 업무툴이 아니다', () => {
   }
 })
 
-test("'업무' 묶음 활성 항목: 채널·DM·채널 찾아보기는 '대화'다", () => {
+test('이사 메뉴 활성 항목: 채널·DM·채널 찾아보기는 대화, 서류함은 자료실, 검색·편집은 없음', () => {
   const cases = [
+    ['/board-room', 'dashboard'],
+    ['/board-room/', 'dashboard'],
+    ['/en/board-room', 'dashboard'],
+    ['/board-room/meetings', 'meetings'],
+    ['/board-room/meetings/1/edit', 'meetings'],
+    ['/board-room/schedule', 'schedule'],
+    ['/board-room/assembly', 'assembly'],
+    ['/board-room/charter', 'charter'],
     ['/board-room/chat', 'chat'],
     ['/board-room/chat?new=1', 'chat'],
     ['/board-room/c', 'chat'],
@@ -68,38 +77,50 @@ test("'업무' 묶음 활성 항목: 채널·DM·채널 찾아보기는 '대화'
     ['/en/board-room/dm/abc', 'chat'],
     ['/board-room/inbox', 'inbox'],
     ['/board-room/inbox/mentions', 'inbox'],
+    ['/board-room/mailbox', 'mailbox'],
     ['/board-room/tasks?view=all', 'tasks'],
     ['/board-room/files', 'files'],
+    ['/board-room/files?board=정관', 'files'],
     ['/board-room/files/7d0c8f7e-0000-4000-8000-000000000000', 'files'],
-    ['/board-room/search?q=정관', 'search'],
+    ['/board-room/documents', 'files'],
+    ['/en/board-room/documents', 'files'],
+    ['/board-room/timebank', 'timebank'],
     ['/board-room/settings', 'settings'],
     ['/board-room/settings/notifications', 'settings'],
   ]
-  for (const [p, key] of cases) assert.equal(boardWorkNavKey(p), key, p)
+  for (const [p, key] of cases) assert.equal(boardMenuKey(p), key, p)
   for (const p of [
-    '/board-room',
-    '/board-room/meetings',
-    '/board-room/mailbox',
+    '/board-room/search',
+    '/board-room/search?q=정관',
     '/board-room/edit/123',
     '/board-room/chatter',
     '/board-roomchat',
+    '/board',
     '',
     null,
   ]) {
-    assert.equal(boardWorkNavKey(p), null, String(p))
+    assert.equal(boardMenuKey(p), null, String(p))
   }
 })
 
-test("'업무' 묶음 항목은 활성 판정과 같은 키를 쓰고, 각 href는 자기 항목으로 판정된다", () => {
+test('이사 메뉴 묶음: 대시보드 / 이사회 / 소통 / 업무 / 설정 — 검색·서류함은 메뉴에 없다', () => {
   assert.deepEqual(
-    BOARD_WORK_NAV_ITEMS.map(i => i.label),
-    ['대화', '활동', '할 일', '자료실', '검색', '업무 설정']
+    BOARD_MENU_GROUPS.map(g => [g.label, g.items.map(i => i.label)]),
+    [
+      [null, ['대시보드']],
+      ['이사회', ['이사회 회의', '일정 투표', '정기총회', '정관']],
+      ['소통', ['대화', '활동', '메일함']],
+      ['업무', ['할 일', '자료실', '타임뱅크 보고']],
+    ]
   )
-  for (const item of BOARD_WORK_NAV_ITEMS) {
-    assert.equal(boardWorkNavKey(item.href), item.key, item.href)
-    assert.equal(isBoardWorkPath(item.href), true, item.href)
+  assert.equal(BOARD_MENU_SETTINGS.label, '설정')
+  const all = [...BOARD_MENU_GROUPS.flatMap(g => g.items), BOARD_MENU_SETTINGS]
+  // 각 href는 자기 항목으로 판정된다(활성 표시가 어긋나지 않는다)
+  for (const item of all) assert.equal(boardMenuKey(item.href), item.key, item.href)
+  assert.equal(new Set(all.map(i => i.key)).size, all.length)
+  for (const banned of ['검색', '서류함', '업무 설정', '업무툴']) {
+    assert.ok(!all.some(i => i.label.includes(banned)), banned)
   }
-  assert.ok(!BOARD_WORK_NAV_ITEMS.some(i => i.label.includes('업무툴')))
 })
 
 test('편집 화면 판정', () => {

@@ -39,12 +39,12 @@ test.describe('업무툴 진입', () => {
         timeout: 15000,
       })
       await expect(directorPage.getByTestId('board-work-staff')).toContainText('구성원')
-      // 업무 화면은 이사회실의 한 영역이다 — 전역 내비·이사회실 메뉴('업무' 묶음 포함) 안에서 그린다
+      // 업무 화면은 이사회실의 한 영역이다 — 전역 내비·이사회실 메뉴('소통' 묶음의 대화) 안에서 그린다
       // (docs/board-work/03-통합-재설계.md §4-1).
       const boardMenu = directorPage.getByRole('navigation', { name: '이사회 메뉴' })
       await expect(boardMenu).toBeVisible()
       await expect(
-        boardMenu.getByRole('group', { name: '업무' }).getByRole('link', { name: /^대화/ })
+        boardMenu.getByRole('group', { name: '소통' }).getByRole('link', { name: /^대화/ })
       ).toHaveAttribute('aria-current', 'page')
     } finally {
       await memberContext.close()
