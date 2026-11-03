@@ -1,6 +1,6 @@
 /**
  * 이사회 업무툴 색 토큰 — 원본(kosmart-work) globals.css `@theme inline`의 v3 짝.
- * 값은 `src/work/styles.css`가 `[data-work-app]` 범위에서 CSS 변수(oklch)로 정한다.
+ * 값은 `src/work/styles.css`가 `[data-work-app]` 범위에서 CSS 변수(포스터 팔레트 hex·rgba)로 정한다.
  * `bg-primary/10` 같은 불투명도 수식을 살리려고 color-mix로 감싼다(<alpha-value>를 Tailwind가 채운다).
  * 공개 사이트는 이 이름(bg-background·text-muted-foreground·bg-primary(숫자 없음) …)을 하나도 쓰지 않는다.
  */
@@ -28,14 +28,15 @@ const workColors = {
     border: wc('sidebar-border'),
     ring: wc('sidebar-ring'),
   },
-  unread: wc('unread'),
+  // 일반 안 읽음 = 굵은 글자(`text-unread`) + 작은 앰버 점(`bg-unread-dot`) — 03-통합-재설계 §8-4
+  unread: { DEFAULT: wc('unread'), dot: wc('unread-dot') },
   mention: {
     DEFAULT: wc('mention'),
     solid: wc('mention-solid'),
     'solid-foreground': wc('mention-solid-foreground'),
   },
   online: wc('online'),
-  highlight: wc('highlight'),
+  highlight: { DEFAULT: wc('highlight'), foreground: wc('highlight-foreground') },
 }
 
 /**
@@ -128,16 +129,10 @@ module.exports = {
     // 이사회 업무툴(kosmart-work 이식) — docs/board-work/01-설계.md §9
     './src/work/**/*.{js,ts,jsx,tsx,mdx}',
   ],
-  // 업무툴만 `dark:`를 쓴다(공개 사이트는 0건). 수동 지정(data-work-theme)이 우선, 없으면 OS 설정.
-  // 원본 globals.css의 `@custom-variant dark`를 업무툴 루트([data-work-app]) 범위로 옮긴 것이다.
-  darkMode: [
-    'variant',
-    [
-      // body:has(...) * — 대화상자·메뉴는 body에 바로 그려져(Portal) 업무툴 루트의 자손이 아니다(src/work/styles.css 머리 주석)
-      '&:where([data-work-theme=dark], [data-work-theme=dark] *, body:has([data-work-app][data-work-theme=dark]) *)',
-      '@media (prefers-color-scheme: dark) { &:where([data-work-app]:not([data-work-theme]), [data-work-app]:not([data-work-theme]) *, body:has([data-work-app]:not([data-work-theme])) *) }',
-    ],
-  ],
+  // 업무툴은 포스터 다크 한 벌만 쓴다(src/work/styles.css) — 테마 전환이 없으므로 `dark:` 변형은 **절대 켜지지
+  // 않게** 둔다. 이 키를 지우면 v3 기본값 'media'가 되어 OS 다크에서 업무툴에 남은 `dark:` 클래스가 다시 켜진다.
+  // `data-work-dark-disabled` 속성을 다는 요소는 없다. 공개 사이트는 `dark:`를 0건 쓴다.
+  darkMode: ['selector', '[data-work-dark-disabled]'],
   theme: {
     extend: {
       colors: {
@@ -174,7 +169,8 @@ module.exports = {
       borderColor: {
         DEFAULT: 'rgba(255, 255, 255, 0.15)',
       },
-      // 업무툴 반경(원본 @theme의 --radius 배수). ggac 전역 rounded-lg 등과 섞이지 않게 `w-` 접두사 —
+      // 업무툴 반경(원본 @theme의 --radius 배수 — --radius가 포스터 2px라 1.2~5.2px). ggac 전역 rounded-lg 등과
+      // 섞이지 않게 `w-` 접두사 —
       // 옮길 때 port-from-kosmart.mjs가 rounded-lg → rounded-w-lg로 바꾼다.
       borderRadius: {
         'w-sm': 'calc(var(--radius) * 0.6)',
