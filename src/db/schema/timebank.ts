@@ -25,7 +25,7 @@ import { memberProfiles } from './identity.ts'
  * 허용값은 `src/constants/timebank.ts`가 정본이다. DB CHECK는 `minutes > 0`
  * 하나뿐이다(상수와 무관한 불변식).
  *
- * **원장 불변성은 마이그레이션의 트리거 세 개가 지킨다**(`0025_timebank.sql`).
+ * **원장 불변성은 마이그레이션의 트리거 세 개가 지킨다**(`0026_timebank.sql`).
  * `drizzle-kit push`는 트리거를 모르므로 `db:push:local`로 만든 DB(E2E 포함)에는
  * 트리거가 없다 — 불변성은 `scripts/testing/timebankSchema.test.mjs`가 마이그레이션
  * 적용 DB로 증명한다.

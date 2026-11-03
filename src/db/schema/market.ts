@@ -3,6 +3,7 @@ import { sql } from 'drizzle-orm'
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 import {
+  MARKET_AUCTION_STATES,
   MARKET_CONDITIONS,
   MARKET_DEAL_TYPES,
   MARKET_ITEM_CATEGORIES,
@@ -82,4 +83,68 @@ export const marketComments = sqliteTable(
     updatedAt: updatedAt(),
   },
   table => [index('market_comments_listing_idx').on(table.listingId, table.createdAt)]
+)
+
+/**
+ * 경매 매물의 경매 칸. `market_listings`와 1:1이고 `deal_type = 'auction'`인
+ * 매물에만 있다. 사진·댓글·권한·탈퇴 처리는 매물 쪽을 그대로 쓴다.
+ *
+ * `current_price`·`current_bidder_id`·`bid_count`는 `market_bids`에서 계산할 수
+ * 있는 값을 **일부러 복제해 둔 것**이다. 입찰은 "지금 최고가보다 호가 단위
+ * 이상 높은가"를 조건으로 건 UPDATE 한 문장으로 받는다(`placeBid`) — 그 조건이
+ * 한 행 안에 있어야 동시에 들어온 두 입찰이 둘 다 이기지 못한다. 입찰 무효
+ * 처리 뒤에는 `recomputeAuction`이 `market_bids`에서 다시 맞춘다.
+ *
+ * 시각은 전부 서버 시각이다. `ends_at`은 막판 입찰로 늘어날 수 있고, 처음
+ * 정한 값은 `original_ends_at`에 남는다.
+ */
+export const marketAuctions = sqliteTable(
+  'market_auctions',
+  {
+    listingId: text('listing_id')
+      .primaryKey()
+      .references(() => marketListings.id, { onDelete: 'cascade' }),
+    startPrice: integer('start_price').notNull(),
+    minIncrement: integer('min_increment').notNull(),
+    currentPrice: integer('current_price'),
+    currentBidderId: text('current_bidder_id').references(() => memberProfiles.id, {
+      onDelete: 'set null',
+    }),
+    bidCount: integer('bid_count').notNull().default(0),
+    endsAt: integer('ends_at', { mode: 'timestamp_ms' }).notNull(),
+    originalEndsAt: integer('original_ends_at', { mode: 'timestamp_ms' }).notNull(),
+    state: text('state', { enum: MARKET_AUCTION_STATES }).notNull().default('live'),
+    winnerId: text('winner_id').references(() => memberProfiles.id, { onDelete: 'set null' }),
+    winningPrice: integer('winning_price'),
+    closedAt: integer('closed_at', { mode: 'timestamp_ms' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  table => [index('market_auctions_state_ends_idx').on(table.state, table.endsAt)]
+)
+
+/**
+ * 입찰 기록. 입찰자는 취소하지 못한다 — 관리자만 `voided_at`으로 무효 처리한다
+ * (오타 입찰·장난 입찰). 행은 지우지 않는다: 누가 언제 얼마를 불렀는지가 낙찰의
+ * 근거다.
+ */
+export const marketBids = sqliteTable(
+  'market_bids',
+  {
+    id: uuidPk(),
+    listingId: text('listing_id')
+      .notNull()
+      .references(() => marketListings.id, { onDelete: 'cascade' }),
+    bidderId: text('bidder_id')
+      .notNull()
+      .references(() => memberProfiles.id, { onDelete: 'cascade' }),
+    amount: integer('amount').notNull(),
+    voidedAt: integer('voided_at', { mode: 'timestamp_ms' }),
+    voidedBy: text('voided_by'),
+    createdAt: createdAt(),
+  },
+  table => [
+    index('market_bids_listing_idx').on(table.listingId, sql`\`amount\` DESC`),
+    index('market_bids_bidder_idx').on(table.bidderId),
+  ]
 )

@@ -343,7 +343,7 @@ export function derivedInvariants() {
 }
 
 /**
- * 원장 불변성 트리거 세 개(`0025_timebank.sql`). 이름은 마이그레이션 그대로다.
+ * 원장 불변성 트리거 세 개(`0026_timebank.sql`). 이름은 마이그레이션 그대로다.
  *
  * 존재 검사를 `db:parity`가 아니라 여기 둔 이유(계획 Task 2 후 결정):
  * `local.db`·authz E2E DB는 `drizzle-kit push`로 만들어 트리거가 없다. 이 검사는

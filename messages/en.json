@@ -814,8 +814,8 @@
       "emailLabel": "Email Address",
       "passwordLabel": "Password",
       "passwordPlaceholder": "At least 8 characters",
-      "displayNameLabel": "Display Name",
-      "displayNamePlaceholder": "Name shown on the board",
+      "displayNameLabel": "Display name",
+      "displayNamePlaceholder": "Name members see on the board and market (real or stage name)",
       "realNameLabel": "Full Name",
       "realNamePlaceholder": "Your legal name",
       "phoneLabel": "Phone Number",
@@ -1043,7 +1043,8 @@
     "deal": {
       "sell": "Selling",
       "buy": "Wanted",
-      "free": "Free"
+      "free": "Free",
+      "auction": "Auction"
     },
     "item": {
       "instrument": "Instruments",
@@ -1112,7 +1113,12 @@
       "save": "Save",
       "submitting": "Saving…",
       "cancel": "Cancel",
-      "error": "Could not save."
+      "error": "Could not save.",
+      "startPrice": "Starting price (KRW)",
+      "minIncrement": "Bid increment (KRW)",
+      "duration": "Duration",
+      "durationDays": "{count} days",
+      "auctionHelp": "Starting price, increment and duration can't be changed later. The cooperative doesn't handle payment; trade directly with the winner in the comments."
     },
     "detail": {
       "seller": "Seller",
@@ -1140,6 +1146,36 @@
       "seller": "Seller",
       "error": "Could not process the comment.",
       "loadError": "Could not load comments."
+    },
+    "auction": {
+      "startPrice": "Starting",
+      "currentPrice": "Current bid",
+      "winningPrice": "Winning bid",
+      "remaining": "Time left",
+      "endsAt": "Ends",
+      "closing": "Closing",
+      "leftMinutes": "{count}m left",
+      "leftHours": "{count}h left",
+      "leftDays": "{count}d left",
+      "countdownDays": "{d}d {hms}",
+      "bidCount": "{count} bids",
+      "increment": "Increment {amount}",
+      "amountLabel": "Bid amount (KRW)",
+      "bidButton": "Place bid",
+      "minimumHint": "Bid {amount} or more. Bids can't be withdrawn; a bid in the last 2 minutes extends the auction by 2 minutes.",
+      "sellerHint": "You can't bid on your own auction. Once someone bids, it can't be edited or deleted.",
+      "history": "Bid history",
+      "noBids": "No bids yet.",
+      "winnerLine": "{name} won this auction. Continue the trade in the comments below.",
+      "void": "Void",
+      "voidConfirm": "Void this bid? The current bid will be recalculated.",
+      "bidError": "Could not place the bid.",
+      "state": {
+        "live": "Live",
+        "ended": "Sold",
+        "no_bids": "No bids",
+        "canceled": "Canceled"
+      }
     }
   },
   "timebank": {

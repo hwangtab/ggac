@@ -101,9 +101,9 @@ const PersonalInfo: React.FC<PersonalInfoProps> = ({
           <p className="mt-1 text-xs text-gray-500">이메일은 변경할 수 없습니다.</p>
         </div>
 
-        {/* 표시 이름 */}
+        {/* 활동명 — 게시판·장터·경매에서 조합원에게 보이는 이름(`display_name`). */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">표시 이름 *</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">활동명 *</label>
           <input
             type="text"
             value={data.display_name}
@@ -113,8 +113,11 @@ const PersonalInfo: React.FC<PersonalInfoProps> = ({
                 ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
                 : 'border-gray-300'
             }`}
-            placeholder="홍길동"
+            placeholder="실명 또는 활동명"
           />
+          <p className="mt-1 text-xs text-gray-500">
+            게시판·장터·경매에서 조합원에게 이 이름으로 보입니다.
+          </p>
           {errors.display_name && (
             <p className="mt-1 text-xs text-red-600">{errors.display_name}</p>
           )}

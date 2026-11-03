@@ -5,7 +5,8 @@ import type { Locale } from '@/i18n/routing'
 import MarketGate from '@/components/market/MarketGate'
 import MarketForm from '@/components/market/MarketForm'
 import { resolveMarketViewer } from '@/lib/server/marketPage'
-import { getMarketListing } from '@/db/queries/market'
+import { getMarketListing, getMarketListingOwner } from '@/db/queries/market'
+import { blockEdit } from '@/lib/market/auctionRules'
 import { validateUUID } from '@/utils/validation'
 
 export const dynamic = 'force-dynamic'
@@ -43,6 +44,20 @@ export default async function MarketEditPage({
   // 남의 매물은 "없는 매물"과 같게 보인다. 수정 권한은 판매자 본인뿐이다
   // (`PATCH /api/market/[id]`와 같은 판정).
   if (!listing || listing.seller_id !== viewer.userId) notFound()
+
+  // 입찰이 들어왔거나 끝난 경매는 고칠 수 없다(`PATCH /api/market/[id]`와 같은 규칙).
+  const owner = await getMarketListingOwner(listingId)
+  const blocked = owner ? blockEdit(owner, listing.deal_type) : null
+  if (blocked) {
+    return (
+      <MarketGate
+        title={t('form.editTitle')}
+        body={blocked}
+        backLabel={t('detail.backToList')}
+        backHref={`/board/market/${listingId}`}
+      />
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 pt-20 md:pt-24">

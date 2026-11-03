@@ -85,7 +85,10 @@ export function getNotificationRoute(
       return getStoredUrlRoute(notification) ?? '/mypage/funding'
 
     // 장터 글은 `posts`가 아니라 `market_listings`라 `/board/{id}`로 보내면 404다.
-    case 'market_comment': {
+    case 'market_comment':
+    case 'market_outbid':
+    case 'market_auction_won':
+    case 'market_auction_ended': {
       const listingId = notification.related_post_id
       if (listingId && UUID_PATTERN.test(listingId)) return `/board/market/${listingId}`
       return options.fallbackToNotifications ? '/notifications' : null

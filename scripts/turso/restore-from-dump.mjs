@@ -60,7 +60,7 @@ export function splitSqlStatements(sql) {
   let i = 0
   const n = sql.length
   // `CREATE TRIGGER … BEGIN …; …; END;`는 본문 안에 세미콜론이 있다(타임뱅크 원장
-  // 트리거, 0025). 문장 첫 단어들로 트리거 정의임을 알아보고, 그 안에서는
+  // 트리거, 0026). 문장 첫 단어들로 트리거 정의임을 알아보고, 그 안에서는
   // BEGIN·CASE와 END의 짝이 맞을 때의 세미콜론에서만 끊는다. CASE도 END로 닫히므로
   // 함께 센다.
   let leadWords = []

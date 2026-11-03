@@ -6,7 +6,7 @@ import { createClient } from '@libsql/client'
 import { applyMigrations, migrationFiles } from './apply-migrations.mjs'
 
 /**
- * 타임뱅크 표(마이그레이션 `0025_timebank.sql`)를 **마이그레이션을 적용한 파일 DB**로
+ * 타임뱅크 표(마이그레이션 `0026_timebank.sql`)를 **마이그레이션을 적용한 파일 DB**로
  * 검증한다. 트리거는 `drizzle-kit push`가 모르기 때문에 `db:push:local`로 만든
  * DB(E2E 포함)에는 없다 — 원장 불변성은 여기서만 증명된다(계획 "스펙과 다르게
  * 가는 곳" 3).
