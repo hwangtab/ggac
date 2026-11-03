@@ -624,6 +624,31 @@
     "commit": "22a6bdc",
     "sha256": "8a650344c903aeba"
   },
+  "src/work/components/search/ChannelLabel.tsx": {
+    "source": "src/components/search/ChannelLabel.tsx",
+    "commit": "f2edce0",
+    "sha256": "f9cb99e9fd61aa14"
+  },
+  "src/work/components/search/DocumentHitList.tsx": {
+    "source": "src/components/search/DocumentHitList.tsx",
+    "commit": "f2edce0",
+    "sha256": "662ad90772c307d2"
+  },
+  "src/work/components/search/Highlight.tsx": {
+    "source": "src/components/search/Highlight.tsx",
+    "commit": "f2edce0",
+    "sha256": "ad9def0b9698742b"
+  },
+  "src/work/components/search/SearchForm.tsx": {
+    "source": "src/components/search/SearchForm.tsx",
+    "commit": "f2edce0",
+    "sha256": "568f64515f111ed4"
+  },
+  "src/work/components/search/SearchResults.tsx": {
+    "source": "src/components/search/SearchResults.tsx",
+    "commit": "f2edce0",
+    "sha256": "6cafca3a31c10b4b"
+  },
   "src/work/components/settings/ProfileForm.tsx": {
     "source": "src/app/(app)/settings/ProfileForm.tsx",
     "commit": "eaafbfa",
@@ -919,6 +944,26 @@
     "commit": "6a085c3",
     "sha256": "2214754d28c55be0"
   },
+  "src/work/lib/files/extract-health.ts": {
+    "source": "src/lib/files/extract-health.ts",
+    "commit": "f2edce0",
+    "sha256": "bfeef086619dd554"
+  },
+  "src/work/lib/files/extract-schedule.ts": {
+    "source": "src/lib/files/extract-schedule.ts",
+    "commit": "f2edce0",
+    "sha256": "8b57a8abfbc71b69"
+  },
+  "src/work/lib/files/extract-store.ts": {
+    "source": "src/lib/files/extract-store.ts",
+    "commit": "f2edce0",
+    "sha256": "5401c86aa778d4d8"
+  },
+  "src/work/lib/files/extract-text.ts": {
+    "source": "src/lib/files/extract-text.ts",
+    "commit": "f2edce0",
+    "sha256": "37c5ed88428498ad"
+  },
   "src/work/lib/files/folder-actions.ts": {
     "source": "src/lib/files/folder-actions.ts",
     "commit": "22a6bdc",
@@ -1193,6 +1238,31 @@
     "source": "src/lib/ops/chunk-reload.ts",
     "commit": "eaafbfa",
     "sha256": "a8ae34dac811df22"
+  },
+  "src/work/lib/search/documents.ts": {
+    "source": "src/lib/search/documents.ts",
+    "commit": "f2edce0",
+    "sha256": "ec67147f3923b5e7"
+  },
+  "src/work/lib/search/format.ts": {
+    "source": "src/lib/search/format.ts",
+    "commit": "f2edce0",
+    "sha256": "875c3d94452051e5"
+  },
+  "src/work/lib/search/lineage.ts": {
+    "source": "src/lib/search/lineage.ts",
+    "commit": "f2edce0",
+    "sha256": "86b62095812695d9"
+  },
+  "src/work/lib/search/params.ts": {
+    "source": "src/lib/search/params.ts",
+    "commit": "f2edce0",
+    "sha256": "b75aa3c651c8fc27"
+  },
+  "src/work/lib/search/search.ts": {
+    "source": "src/lib/search/search.ts",
+    "commit": "f2edce0",
+    "sha256": "b862fde20cbe3315"
   },
   "src/work/lib/search/text.ts": {
     "source": "src/lib/search/text.ts",

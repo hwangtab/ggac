@@ -37,6 +37,10 @@
     {
       "path": "/api/internal/grant-digest/publish",
       "schedule": "17 11 * * 1"
+    },
+    {
+      "path": "/api/internal/board-work/extract-texts",
+      "schedule": "*/10 * * * *"
     }
   ]
 }
