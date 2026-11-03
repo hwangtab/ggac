@@ -42,7 +42,8 @@ const BoardWorkBadgesContext = createContext<BoardWorkBadgesValue | null>(null)
  *   아예 부르지 않는다.
  * - 폴러는 탭당 하나(`realtime.ts`)라 주기는 거기서 정해진다: 업무 화면 밖(배지만)은 10초, 채널·스레드를 보는 중이면 3초,
  *   탭이 숨으면 멈춘다(02-sync.md §5). 여기서 주기를 따로 두지 않는다.
- * - 업무 화면 밖에서는 대화 종류·뮤트·열린 할 일 수를 `getWorkMenuSummary`로 읽는다(경로가 바뀔 때마다 한 번).
+ * - 업무 화면 밖에서는 대화 종류·뮤트를 `getWorkMenuSummary`로 읽는다(경로가 바뀔 때, 그리고 폴링이 내 대화 목록
+ *   변경(`membershipChanged` — 새 DM·채널 초대)을 알릴 때 한 번씩). 열린 할 일 수는 폴링 응답의 `badges.openTaskCount`.
  *   업무 화면 안에서는 셸이 올린 값(`setShellInput`)을 쓴다.
  */
 export function BoardWorkBadgesProvider({
@@ -56,11 +57,15 @@ export function BoardWorkBadgesProvider({
   const [live, setLive] = useState<BoardWorkBadgeLive | null>(null)
   const [summary, setSummary] = useState<WorkMenuSummary | null>(null)
   const [shellInput, setShellInputState] = useState<MenuBadgeInput | null>(null)
+  // 내 대화 목록이 바뀐 횟수(폴링의 membershipChanged) — 바뀌면 요약(대화 종류·뮤트)을 다시 읽는다
+  const [membershipTick, setMembershipTick] = useState(0)
 
   useEffect(() => {
     if (!enabled) return
     let lastJson = ''
-    return subscribeBadges((snapshot, requestedAt) => {
+    return subscribeBadges((snapshot, requestedAt, membershipChanged) => {
+      // 새 DM·채널 초대: 요약에 아직 없는 대화는 "뮤트 아닌 채널"로 보여(점) DM인데도 숫자 배지가 안 뜬다
+      if (membershipChanged) setMembershipTick(t => t + 1)
       // 폴마다 레이아웃 전체를 다시 그리지 않게 — 숫자가 그대로면 넘긴다
       const json = JSON.stringify(snapshot)
       if (json === lastJson) return
@@ -69,7 +74,8 @@ export function BoardWorkBadgesProvider({
     })
   }, [enabled])
 
-  // 셸이 없는 화면(업무 밖·편집 화면)에서만 요약을 읽는다. 경로가 바뀔 때마다 한 번 — 할 일 수가 그때 맞춰진다.
+  // 셸이 없는 화면(업무 밖·편집 화면)에서만 요약을 읽는다. 경로가 바뀔 때와 내 대화 목록이 바뀔 때(새 DM 등) 한 번씩.
+  // 열린 할 일 수는 폴링 응답(`badges.openTaskCount`)이 주기마다 맞춘다 — 요약 값은 첫 응답 전까지만 쓴다.
   const needsSummary = enabled && (!isBoardWorkPath(pathname) || isBoardWorkEditPath(pathname))
   useEffect(() => {
     if (!needsSummary) return
@@ -84,7 +90,7 @@ export function BoardWorkBadgesProvider({
     return () => {
       cancelled = true
     }
-  }, [needsSummary, pathname])
+  }, [needsSummary, pathname, membershipTick])
 
   const setShellInput = useCallback((input: MenuBadgeInput | null) => {
     setShellInputState(input)
@@ -100,7 +106,7 @@ export function BoardWorkBadgesProvider({
         : [],
       mentionCount: live?.snapshot.mentionCount ?? 0,
       activityCount: live?.snapshot.activityCount ?? 0,
-      openTaskCount: summary?.openTaskCount ?? 0,
+      openTaskCount: live?.snapshot.openTaskCount ?? summary?.openTaskCount ?? 0,
     })
   }, [enabled, shellInput, live, summary])
 

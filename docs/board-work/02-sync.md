@@ -70,6 +70,8 @@ Content-Type: application/json
     "channels": { "<channelId>": { "unread": 2, "mentions": 1 } },
     "mentionCount": 1,
     "activityCount": 0,
+    // (ggac에서 더함, R3) 내 열린 할 일 수 — 이사회실 메뉴 '할 일' 배지. 읽기 범위 안 채널만 센다
+    "openTaskCount": 5,
   },
   "typing": [
     // focus 채널에서 5초 안에 입력한 사람(나 제외)
@@ -150,6 +152,11 @@ Content-Type: application/json
   `clearTyping`). 행이 5초 남으면 보낸 뒤에도 "입력 중…"이 다시 실렸다. 화면의
   표시 유지 시간은 3초 폴과 맞게 5초다(원본 3초).
 - 접속 수(채널 머리글)는 워크스페이스 접속자를 그 대화의 멤버로 좁혀 센다.
+- `subscribeBadges`의 listener는 세 번째 인자로 `membershipChanged`를
+  받는다(R3). 이사회실 메뉴 (`BoardWorkBadgesProvider`)가 업무 화면 밖에서 이
+  신호를 받으면 대화 종류·뮤트 요약(`getWorkMenuSummary`)을 다시 읽는다 — 새로
+  받은 DM이 다음 경로 이동 전까지 "채널"로 보여 숫자 배지 대신 점으로 나오던
+  것을 막는다.
 
 ### 2b 구현 메모(대화 탭·메모·할 일)
 

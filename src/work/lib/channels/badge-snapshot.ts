@@ -12,6 +12,11 @@ export type SidebarBadgeSnapshot = {
   mentionCount: number
   /** 새 스레드 답글·반응 수 */
   activityCount: number
+  /**
+   * 내 열린 할 일 수(이사회실 메뉴 '할 일' 배지 — ggac에서 더한 값). 폴링 응답(`/api/board-room/work/sync`)만 싣는다 —
+   * 서버 액션 `getSidebarBadges`는 싣지 않아 없을 수 있다. 읽기 범위 안의 채널만 센다(countMyOpenTaskRecords)
+   */
+  openTaskCount?: number
   /** 결재 배지(0045). 서브관리자는 없다 */
   expense?: { approvalPending: number; paymentPending: number; myUnseen: number }
 }
