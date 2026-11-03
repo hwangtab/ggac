@@ -33,11 +33,14 @@ type HistoryResponse = {
 export default function HistoryPanel({
   refreshKey,
   canRecord,
+  coopTasksEnabled,
   onChanged,
 }: {
   refreshKey: number
   /** 되돌리기 요청은 새 기록이라 참여 자격이 있어야 한다. */
   canRecord: boolean
+  /** 꺼져 있으면 필터에서 조합 업무를 뺀다(게시판·마이페이지의 다른 조합 업무 화면과 같다). */
+  coopTasksEnabled: boolean
   onChanged: () => void
 }) {
   const t = useTranslations('timebank')
@@ -124,7 +127,7 @@ export default function HistoryPanel({
             name="channel"
           >
             <option value="">{t('my.history.channelAll')}</option>
-            {CHANNELS.map(c => (
+            {CHANNELS.filter(c => coopTasksEnabled || c !== 'coop_task').map(c => (
               <option key={c} value={c}>
                 {t(`my.history.channels.${c}`)}
               </option>
