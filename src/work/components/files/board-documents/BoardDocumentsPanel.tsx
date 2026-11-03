@@ -127,12 +127,12 @@ export default function BoardDocumentsPanel({
         <DataTable caption={`이사회 서류 — ${category}`} className="@container">
           <THead>
             <Th>제목</Th>
-            <Th className="hidden @2xl:table-cell">올린 사람</Th>
+            <Th className="hidden @xl:table-cell">올린 사람</Th>
             <Th className="hidden @lg:table-cell">열람</Th>
             <Th numeric className="hidden @md:table-cell">
               크기
             </Th>
-            <Th className="hidden @4xl:table-cell">올린 날짜</Th>
+            <Th className="hidden @xl:table-cell">올린 날짜</Th>
             <Th className="text-right">
               <span className="sr-only">동작</span>
             </Th>
@@ -156,15 +156,27 @@ export default function BoardDocumentsPanel({
                         className="mt-0.5 shrink-0"
                       />
                       <span className="min-w-0">
-                        <span className="block font-medium break-all">{doc.title}</span>
+                        <span className="block font-medium break-keep break-words">
+                          {doc.title}
+                        </span>
                         <span className="block text-xs break-all text-muted-foreground">
                           {doc.fileName}
                           <span className="@md:hidden"> · {formatBytes(doc.size)}</span>
+                          <span className="@xl:hidden">
+                            {' '}
+                            · {doc.uploaderName} · {formatDateTime(doc.createdAt)}
+                          </span>
+                          <span className="@lg:hidden">
+                            {' '}
+                            · {BOARD_VISIBILITY_LABEL[doc.visibility] ?? doc.visibility}
+                          </span>
                         </span>
                       </span>
                     </button>
                   </Td>
-                  <Td className="hidden @2xl:table-cell">{doc.uploaderName}</Td>
+                  <Td nowrap className="hidden @xl:table-cell">
+                    {doc.uploaderName}
+                  </Td>
                   <Td className="hidden @lg:table-cell">
                     <Badge variant={doc.visibility === 'members' ? 'success' : 'secondary'}>
                       {BOARD_VISIBILITY_LABEL[doc.visibility] ?? doc.visibility}
@@ -173,7 +185,7 @@ export default function BoardDocumentsPanel({
                   <Td numeric className="hidden @md:table-cell">
                     {formatBytes(doc.size)}
                   </Td>
-                  <Td nowrap className="hidden @4xl:table-cell">
+                  <Td nowrap className="hidden @xl:table-cell">
                     {formatDateTime(doc.createdAt)}
                   </Td>
                   <Td nowrap className="text-right">

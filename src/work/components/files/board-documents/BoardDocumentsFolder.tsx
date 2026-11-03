@@ -6,6 +6,7 @@ import { isWorkAdminRole, type WorkGuardContext } from '@/lib/server/boardWorkAu
 import { PageBody, PageHeader } from '@work/components/layout/page'
 import { canUploadToBoardFolder } from '@work/lib/files/board-folders'
 import BoardDocumentsPanel, { type BoardDocumentItem } from './BoardDocumentsPanel'
+import BoardFolderNav from './BoardFolderNav'
 
 /**
  * 자료실 '이사회 서류' 폴더 하나(03 §10 — 서류함 통합 (가)). `/board-room/files?board=<분류>`.
@@ -49,6 +50,7 @@ export default async function BoardDocumentsFolder({
         subtitle={`${items.length.toLocaleString('ko-KR')}개`}
       />
       <PageBody width="wide" innerClassName="space-y-4">
+        <BoardFolderNav active={category} />
         <BoardDocumentsPanel
           category={category}
           items={items}

@@ -21,6 +21,7 @@ import { getFilterOptions, listFiles } from '@work/lib/files/queries'
 import { parseFilesSearch } from '@work/lib/files/schema'
 import { parseBoardFolder } from '@work/lib/files/board-folders'
 import BoardDocumentsFolder from '@work/components/files/board-documents/BoardDocumentsFolder'
+import BoardFolderNav from '@work/components/files/board-documents/BoardFolderNav'
 
 export const metadata: Metadata = { title: '자료실' }
 
@@ -91,6 +92,7 @@ export default async function FilesPage({
         }
       />
       <PageBody width="wide" innerClassName="space-y-4">
+        {supabase.staff.role !== 'guest' && <BoardFolderNav active={null} />}
         <FilesFilters search={search} options={options} />
 
         <div className="flex items-center justify-end gap-2">

@@ -1,5 +1,6 @@
 import { test, expect, type Browser } from '@playwright/test'
 import { createClient } from '@libsql/client'
+import JSZip from 'jszip'
 
 import { assertLocalTurso, readFixtures, storageStatePath } from './helpers/authState'
 
@@ -23,6 +24,24 @@ const TAG = 'R4자료실표식'
 const BOARD_ONLY_TITLE = `${TAG} 이사회 전용 계약서`
 const MEMBERS_TITLE = `${TAG} 조합원 공개 계약서`
 
+/** 본문 한 줄짜리 최소 DOCX — 업무툴 문서 뷰어(kordoc)가 서류 저장소의 바이트를 변환하는지 본다 */
+async function tinyDocx(text: string): Promise<Buffer> {
+  const zip = new JSZip()
+  zip.file(
+    '[Content_Types].xml',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
+  )
+  zip.file(
+    '_rels/.rels',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>'
+  )
+  zip.file(
+    'word/document.xml',
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:body></w:document>`
+  )
+  return zip.generateAsync({ type: 'nodebuffer' })
+}
+
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL! })
 }
@@ -41,7 +60,7 @@ async function seedDocuments(): Promise<void> {
                  uploaded_by, body_markdown, visibility, created_at)
               VALUES (?, ?, '계약', ?, ?, 2048, 'application/pdf', ?, NULL, ?, ?)
               ON CONFLICT(id) DO UPDATE SET title = excluded.title, visibility = excluded.visibility`,
-        args: [id, title, `authz-e2e-fixtures/${file}`, file, admin, visibility, Date.now()],
+        args: [id, title, `seed/${file}`, file, admin, visibility, Date.now()],
       })
     }
   } finally {
@@ -303,7 +322,7 @@ test.describe('자료실 — 이사회 서류 올리기·미리보기·지우기
     'BOARD_WORK_TEST_BLOB_TOKEN(시험용 Blob 저장소)이 없어 실제 업로드 E2E를 건너뛴다'
   )
 
-  test('이사가 기타 폴더에 텍스트 서류를 올려 미리 보고 지운다 — 조합원에게는 보이지 않는다', async ({
+  test('이사가 기타 폴더에 텍스트·DOCX 서류를 올려 미리 보고 지운다 — 조합원에게는 보이지 않는다', async ({
     browser,
   }) => {
     test.setTimeout(120_000)
@@ -313,6 +332,7 @@ test.describe('자료실 — 이사회 서류 올리기·미리보기·지우기
     const director = await newPage(browser, 'director')
     const member = await newPage(browser, 'other')
     let uploadedId: string | null = null
+    let docxId: string | null = null
     try {
       const { page } = director
       await page.goto('/board-room/files?board=%EA%B8%B0%ED%83%80', {
@@ -378,11 +398,36 @@ test.describe('자료실 — 이사회 서류 올리기·미리보기·지우기
       await page.getByRole('dialog').getByRole('button', { name: '삭제', exact: true }).click()
       await expect(row).toHaveCount(0, { timeout: 20_000 })
       uploadedId = null
+
+      // DOCX — 업무툴 문서 뷰어(`/render`)가 서류 저장소의 원본을 변환해 그린다
+      const docxTitle = `R4 문서 미리보기 ${stamp}`
+      const docxText = `board document render ${stamp}`
+      await expect(async () => {
+        const toggle = page.getByRole('button', { name: '서류 올리기' })
+        if (await toggle.isVisible()) await toggle.click()
+        await expect(form).toBeVisible({ timeout: 2_000 })
+      }).toPass({ timeout: 20_000 })
+      await form.getByLabel('파일').setInputFiles({
+        name: `r4-${stamp}.docx`,
+        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        buffer: await tinyDocx(docxText),
+      })
+      await form.getByLabel('제목').fill(docxTitle)
+      await form.getByRole('button', { name: '기타에 올리기' }).click()
+      const docxRow = page.locator('[data-board-document]').filter({ hasText: docxTitle })
+      await expect(docxRow).toBeVisible({ timeout: 20_000 })
+      docxId = await docxRow.getAttribute('data-board-document')
+      await docxRow
+        .getByRole('button', { name: `${docxTitle} 미리보기` })
+        .first()
+        .click()
+      await expect(page.getByRole('dialog').getByText(docxText)).toBeVisible({ timeout: 30_000 })
+      await page.screenshot({ path: 'test-results/board-work-library-preview-docx-desktop.png' })
+      await page.keyboard.press('Escape')
     } finally {
-      if (uploadedId) {
-        await director.context.request
-          .delete(`/api/board-room/documents/${uploadedId}`)
-          .catch(() => {})
+      for (const id of [uploadedId, docxId]) {
+        if (!id) continue
+        await director.context.request.delete(`/api/board-room/documents/${id}`).catch(() => {})
       }
       await director.context.close()
       await member.context.close()

@@ -148,9 +148,9 @@ export default function BoardRoomLayout({ children }: { children: React.ReactNod
                 aria-busy={isBoardMember === null}
                 hidden={menuCollapsed}
                 // `hidden` 속성만으로는 `flex` 유틸리티가 이겨 보인다 — 클래스로도 숨긴다
-                className={`${menuCollapsed ? 'hidden' : 'flex'} gap-1 overflow-x-auto pb-1 lg:flex-col lg:gap-0.5 lg:overflow-visible lg:pb-0 ${
-                  inEdit ? '' : 'lg:sticky lg:top-24'
-                }`}
+                className={`${menuCollapsed ? 'hidden' : 'flex'} gap-1 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0 ${
+                  isBoardMember ? 'lg:gap-0.5' : ''
+                } ${inEdit ? '' : 'lg:sticky lg:top-24'}`}
               >
                 {memberNavItems.map(item => {
                   const active = pathname.startsWith(item.href)
@@ -159,7 +159,7 @@ export default function BoardRoomLayout({ children }: { children: React.ReactNod
                       key={item.href}
                       href={item.href}
                       aria-current={active ? 'page' : undefined}
-                      className={`${NAV_ITEM_CLASS} ${active ? NAV_ITEM_ACTIVE : NAV_ITEM_IDLE}`}
+                      className={`${MEMBER_ITEM_CLASS} ${active ? NAV_ITEM_ACTIVE : NAV_ITEM_IDLE}`}
                     >
                       {item.label}
                     </Link>
@@ -178,9 +178,12 @@ export default function BoardRoomLayout({ children }: { children: React.ReactNod
   )
 }
 
-// 메뉴 항목은 하나의 크기·굵기다(배지가 있어도 굵기를 바꾸지 않는다 — 안 읽음은 배지가 알린다)
+// 조합원 메뉴 항목 — 예전 그대로(R4는 이사 메뉴만 바꿨다)
+const MEMBER_ITEM_CLASS =
+  'whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-medium transition-colors'
+// 이사 메뉴 항목은 하나의 크기·굵기다(배지가 있어도 굵기를 바꾸지 않는다 — 안 읽음은 배지가 알린다)
 const NAV_ITEM_CLASS =
-  'flex items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-medium transition-colors'
+  'flex items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-medium transition-colors lg:py-2'
 const NAV_ITEM_ACTIVE = 'bg-primary-600 text-white shadow-sm'
 const NAV_ITEM_IDLE = 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
 
@@ -189,7 +192,7 @@ const NAV_ITEM_IDLE = 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
  * tracking-widest`)이라 각주가 아니라 제목으로 읽힌다. 모바일 가로 탭 줄에서는 왼쪽 헤어라인이 붙은 작은 구분 라벨이다.
  */
 const GROUP_HEADING_CLASS =
-  'flex items-center whitespace-nowrap border-l border-gray-200 pl-3 pr-1 text-xs font-semibold tracking-widest text-gray-400 lg:border-l-0 lg:px-4 lg:pb-1.5 lg:pt-5 lg:text-sm'
+  'flex items-center whitespace-nowrap border-l border-gray-200 pl-3 pr-1 text-xs font-semibold tracking-widest text-gray-400 lg:border-l-0 lg:px-4 lg:pb-1 lg:pt-4 lg:text-sm'
 
 /**
  * 이사·감사·관리자 메뉴(03 §10) — 대시보드 / 이사회 / 소통 / 업무 / ── / 설정. 모바일에서는 같은 가로 탭 줄에 이어
@@ -239,7 +242,7 @@ function BoardMenu({ pathname }: { pathname: string }) {
       <span
         role="separator"
         // 헤어라인 — 포스터에서 `border-gray-*`는 흰 15% 선이다(`bg-gray-200` 면은 바탕과 같아 보이지 않는다)
-        className="mx-1 shrink-0 self-stretch border-l border-gray-200 lg:mx-4 lg:my-4 lg:border-l-0 lg:border-t"
+        className="mx-1 shrink-0 self-stretch border-l border-gray-200 lg:mx-4 lg:my-3 lg:border-l-0 lg:border-t"
       />
       {renderItem(BOARD_MENU_SETTINGS)}
     </>
