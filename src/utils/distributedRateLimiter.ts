@@ -699,6 +699,24 @@ export const DISTRIBUTED_RATE_LIMIT_CONFIGS = {
     message: '너무 자주 요청했습니다. 잠시 뒤 다시 시도해 주세요.',
   },
 
+  // 조합원 내 문서함 쓰기(업로드 준비·토큰·새 문서·새 버전·되돌리기·이름·삭제, 사용자 단위 분당 30회).
+  // docs/board-work/04-조합원-문서함.md §4. 쓰기라 리미터 장애 때 fail-closed 다.
+  MEMBER_DOCUMENT_WRITE: {
+    name: 'member_document_write',
+    windowMs: 60 * 1000,
+    maxRequests: 30,
+    message: '너무 자주 요청했습니다. 잠시 뒤 다시 시도해 주세요.',
+  },
+
+  // 같은 영역의 HWP·HWPX 편집기 저장본 검사(kordoc 두 번 읽기 + 쪽 수 비교, 사용자 단위 분당 10회 —
+  // 업무툴 WORK_DOC_EDIT_DRAFT 와 같은 한도를 이름만 따로 센다).
+  MEMBER_DOCUMENT_VERIFY: {
+    name: 'member_document_verify',
+    windowMs: 60 * 1000,
+    maxRequests: 10,
+    message: '너무 자주 저장했습니다. 잠시 뒤 다시 시도해 주세요.',
+  },
+
   // 대량 작업 (시간당 5회)
   BULK_OPERATIONS: {
     name: 'bulk_operations',

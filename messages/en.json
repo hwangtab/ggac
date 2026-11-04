@@ -951,7 +951,8 @@
       "roleMember": "Member",
       "helpPrompt": "Need help?",
       "helpBody": "Please contact an admin.",
-      "timebank": "Time Bank"
+      "timebank": "Time Bank",
+      "documents": "My documents"
     },
     "calendar": {
       "title": "My Calendar",

@@ -14,6 +14,7 @@ import {
 import NotificationDropdown from './NotificationDropdown'
 import LocaleSwitcher from './LocaleSwitcher'
 import { releaseDevicePushSubscription } from '@work/lib/push/device'
+import { MEMBER_DOCUMENT_EDITOR_USED_KEY } from '@/lib/memberDocuments/rules'
 
 type NavProfile = {
   is_director: boolean
@@ -181,6 +182,19 @@ const Navigation = () => {
         }
       } else {
         await releaseDevicePushSubscription()
+      }
+      // 내 문서함 편집기(docs/board-work/04-조합원-문서함.md §8)를 이 브라우저에서 연 적이 있으면 편집기 출처의 저장소도
+      // 비운다(rhwp 자동 복구 초안 등 — 다음 사용자에게 남지 않게). 이사·감사·관리자는 위 정리가 이미 했다. 던지지 않는다.
+      try {
+        if (window.localStorage.getItem(MEMBER_DOCUMENT_EDITOR_USED_KEY)) {
+          if (!isBoardMember) {
+            const { purgeOfficeEditorStorage } = await import('@work/lib/files/office-purge')
+            await purgeOfficeEditorStorage()
+          }
+          window.localStorage.removeItem(MEMBER_DOCUMENT_EDITOR_USED_KEY)
+        }
+      } catch (cleanupError) {
+        console.error('[Navigation] 문서함 편집기 정리 실패:', cleanupError)
       }
       const response = await fetch('/api/auth/logout', {
         method: 'POST',
