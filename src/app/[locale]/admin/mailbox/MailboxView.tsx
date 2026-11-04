@@ -287,6 +287,15 @@ export default function MailboxView({ className = '' }: { className?: string }) 
         // (json.error가 곧 메시지 — json.error.message가 아니다).
         throw new Error(json?.error || '답장 발송에 실패했습니다.')
       }
+      if (json?.data?.status === 'unknown') {
+        // 요청이 Resend에 닿았는지 모른다 — 다시 보내면 같은 답장이 한 번 더 나갈 수 있다.
+        setReplyTarget(null)
+        setReplyBody('')
+        alert(
+          '답장이 나갔는지 확인할 수 없습니다. 같은 답장을 다시 보내지 말고 Resend 대시보드에서 확인해 주세요.'
+        )
+        return
+      }
       const recorded = json?.data?.recorded ?? true
       const targetId = replyTarget.id
       setReplyTarget(null)
