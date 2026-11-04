@@ -179,23 +179,26 @@ export default function DocumentsList({
         </div>
       ) : (
         <div className="overflow-hidden rounded-lg border border-gray-200">
-          <table className="w-full text-sm">
+          <table className="w-full table-fixed text-sm">
             <caption className="sr-only">내 문서 목록</caption>
             <thead className="border-b border-gray-200 text-left text-xs text-gray-500">
               <tr>
                 <th scope="col" className="px-4 py-2 font-medium">
                   이름
                 </th>
-                <th scope="col" className="hidden px-4 py-2 font-medium sm:table-cell">
+                <th scope="col" className="hidden w-28 px-4 py-2 font-medium sm:table-cell">
                   형식
                 </th>
-                <th scope="col" className="hidden px-4 py-2 text-right font-medium sm:table-cell">
+                <th
+                  scope="col"
+                  className="hidden w-24 px-4 py-2 text-right font-medium sm:table-cell"
+                >
                   크기
                 </th>
-                <th scope="col" className="hidden px-4 py-2 font-medium md:table-cell">
+                <th scope="col" className="hidden w-44 px-4 py-2 font-medium md:table-cell">
                   고친 때
                 </th>
-                <th scope="col" className="px-4 py-2 text-right font-medium">
+                <th scope="col" className="w-14 px-4 py-2 text-right font-medium">
                   <span className="sr-only">내려받기</span>
                 </th>
               </tr>
@@ -207,7 +210,7 @@ export default function DocumentsList({
                   className="border-b border-gray-200 last:border-b-0"
                   data-testid="member-document-row"
                 >
-                  <td className="max-w-0 px-4 py-3">
+                  <td className="px-4 py-3">
                     <Link
                       href={`/mypage/documents/${doc.id}`}
                       className="block truncate font-medium text-gray-900 hover:underline"
