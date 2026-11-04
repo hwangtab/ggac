@@ -7,7 +7,7 @@ import {
   appendThreadReference,
   updateInboundStatus,
 } from '@/db/queries/mailbox'
-import { sendEmail } from '@/lib/mail/send'
+import { MailSendError, sendEmail } from '@/lib/mail/send'
 import { sanitizePostHtml } from '@/utils/sanitizePostHtml'
 import { logSecurityEvent } from '@/utils/security'
 import { validateUUID } from '@/utils/validation'
@@ -71,12 +71,30 @@ export const POST = defineApiRoute<{ body_html?: string }>({
     // 여기서 던져 재시도를 유도하는 것이 옳다. 상태를 `replied`로 옮기는 것도
     // 회신 원장에 줄을 남기는 것도 이 await 뒤에만 일어난다 — 나간 것이
     // 확인된 메일만 "답장함"이 된다.
-    const resendMessageId = await sendEmail({
-      to: String(email.from_address),
-      subject,
-      html,
-      headers: Object.keys(headers).length > 0 ? headers : undefined,
-    })
+    let resendMessageId: string | null
+    try {
+      resendMessageId = await sendEmail({
+        to: String(email.from_address),
+        subject,
+        html,
+        headers: Object.keys(headers).length > 0 ? headers : undefined,
+      })
+    } catch (error) {
+      // 타임아웃·네트워크 오류는 요청이 Resend에 닿았는지 모른다 — 메일이 이미 나갔을 수 있다.
+      // 실패(500)로 돌려주면 화면이 "실패"를 보여 주고 관리자가 다시 눌러 같은 답장이 한 번 더
+      // 나간다. 그래서 던지지 않고 "확인 필요"로 돌려주며, 여기서는 기록도 남기지 않는다(나갔는지
+      // 모르는 메일을 "답장함"으로 만들지 않는다). 키 누락·HTTP 거절은 안 나간 것이 확실하므로
+      // 예전처럼 던져 재시도를 유도한다.
+      if (error instanceof MailSendError && error.kind === 'unknown') {
+        logSecurityEvent(
+          'MAILBOX_REPLY_SEND_UNKNOWN',
+          { emailId: id, error: error.message },
+          'high'
+        )
+        return ApiSuccess.ok({ id, subject, recorded: false, status: 'unknown' })
+      }
+      throw error
+    }
 
     // 여기서부터는 메일이 이미 나간 뒤다 — 발송은 되돌릴 수 없다. 아래
     // 기록(회신 원장·스레드 참조·상태 전이) 중 하나가 실패해도 던지지
@@ -113,6 +131,6 @@ export const POST = defineApiRoute<{ body_html?: string }>({
       )
     }
 
-    return ApiSuccess.ok({ id, subject, recorded })
+    return ApiSuccess.ok({ id, subject, recorded, status: 'sent' })
   },
 })
