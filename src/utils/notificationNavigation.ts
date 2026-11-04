@@ -117,6 +117,11 @@ export function getNotificationRoute(
     case 'timebank_withdrawal_negative':
       return '/board-room/timebank'
 
+    // 내 문서함 — 문서가 지워졌을 수 있어 목록으로 보낸다.
+    case 'member_document_expiring':
+    case 'member_document_deleted':
+      return '/mypage/documents'
+
     default:
       return (
         getStoredUrlRoute(notification) ??
