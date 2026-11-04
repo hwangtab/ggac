@@ -496,6 +496,11 @@ export async function insertOutboundAttachment(input: {
   })
 }
 
+/** 발송이 안 나간 것이 확실할 때 올려 둔 첨부 행을 지운다(Blob은 호출부가 따로 지운다). */
+export async function deleteOutboundAttachmentsForEmail(emailId: string): Promise<void> {
+  await db.delete(outboundEmailAttachments).where(eq(outboundEmailAttachments.emailId, emailId))
+}
+
 export async function listOutboundAttachments(emailId: string): Promise<Record<string, unknown>[]> {
   const rows = await db
     .select()

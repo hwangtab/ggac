@@ -345,7 +345,7 @@ export default function MailboxView({ className = '' }: { className?: string }) 
       <div
         className={`${
           selectedId !== null ? 'hidden lg:flex' : 'flex'
-        } items-center justify-between mb-4 shrink-0`}
+        } flex-wrap items-center justify-between gap-3 mb-4 shrink-0`}
       >
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center text-primary-600">
@@ -360,7 +360,7 @@ export default function MailboxView({ className = '' }: { className?: string }) 
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div
             role="tablist"
             aria-label="편지함 전환"
@@ -380,7 +380,7 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                   setView(key)
                   closeDetail()
                 }}
-                className={`px-3 py-2 transition-colors ${
+                className={`whitespace-nowrap px-3 py-2 transition-colors ${
                   view === key ? 'bg-primary-600 text-white' : 'text-gray-600 hover:bg-gray-50'
                 }`}
               >
@@ -391,14 +391,14 @@ export default function MailboxView({ className = '' }: { className?: string }) 
           {canManage && composeEnabled && (
             <button
               onClick={() => setComposeOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors"
+              className="flex items-center gap-2 whitespace-nowrap px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors"
             >
               <FiEdit className="w-4 h-4" />새 메일
             </button>
           )}
           <button
             onClick={view === 'inbox' ? fetchEmails : () => setSentRefresh(n => n + 1)}
-            className="flex items-center gap-2 px-4 py-2 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            className="flex items-center gap-2 whitespace-nowrap px-4 py-2 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
           >
             <FiRefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             새로고침

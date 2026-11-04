@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { FiArrowLeft, FiPaperclip } from 'react-icons/fi'
 
 import { buildBodySrcDoc, formatBytes, formatDate } from './mailboxUtils'
@@ -107,7 +107,13 @@ export default function SentMailbox({
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState<string | null>(null)
 
+  // 응답이 요청 순서대로 오지 않을 수 있다(A→B를 빠르게 누르면 A가 늦게 도착한다). 가장 최근 요청의
+  // 응답만 화면에 반영한다.
+  const listSeq = useRef(0)
+  const detailSeq = useRef(0)
+
   const fetchList = useCallback(async () => {
+    const seq = ++listSeq.current
     setLoading(true)
     setError(null)
     try {
@@ -119,13 +125,15 @@ export default function SentMailbox({
       const res = await fetch(`/api/admin/mailbox/outbound?${params}`)
       if (!res.ok) throw new Error('보낸 편지함을 불러오지 못했습니다.')
       const json = await res.json()
+      if (seq !== listSeq.current) return
       setItems(json.data?.items ?? [])
       setTotal(json.data?.total_count ?? 0)
       onMeta({ total: json.data?.total_count ?? 0 })
     } catch (err) {
+      if (seq !== listSeq.current) return
       setError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.')
     } finally {
-      setLoading(false)
+      if (seq === listSeq.current) setLoading(false)
     }
   }, [kind, offset, onMeta])
 
@@ -135,6 +143,7 @@ export default function SentMailbox({
   }, [fetchList, refreshKey])
 
   const open = async (item: SentItem) => {
+    const seq = ++detailSeq.current
     setSelected(item)
     setDetail(null)
     setDetailError(null)
@@ -144,6 +153,7 @@ export default function SentMailbox({
         const res = await fetch(`/api/admin/mailbox/outbound/${item.id}`)
         if (!res.ok) throw new Error('상세를 불러오지 못했습니다.')
         const { data } = await res.json()
+        if (seq !== detailSeq.current) return
         const email = data?.email ?? {}
         setDetail({
           subject: email.subject,
@@ -163,6 +173,7 @@ export default function SentMailbox({
         const res = await fetch(`/api/admin/mailbox/${item.related_email_id}`)
         if (!res.ok) throw new Error('상세를 불러오지 못했습니다.')
         const { data } = await res.json()
+        if (seq !== detailSeq.current) return
         const reply = (data?.replies ?? []).find((r: { id: string }) => r.id === item.id)
         if (!reply) throw new Error('답장을 찾을 수 없습니다.')
         setDetail({
@@ -178,9 +189,10 @@ export default function SentMailbox({
         })
       }
     } catch (err) {
+      if (seq !== detailSeq.current) return
       setDetailError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.')
     } finally {
-      setDetailLoading(false)
+      if (seq === detailSeq.current) setDetailLoading(false)
     }
   }
 

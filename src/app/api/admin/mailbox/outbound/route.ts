@@ -8,6 +8,7 @@ import type { BoardAuthSuccess } from '@/lib/server/boardRoomAuth'
 import {
   countInboundSince,
   countOutboundRecipientsSince,
+  deleteOutboundAttachmentsForEmail,
   insertOutboundAttachment,
   insertOutboundSending,
   listSentMail,
@@ -179,6 +180,14 @@ export const POST = defineApiRoute<undefined, AdminAuthSuccess>({
       logSecurityEvent('MAILBOX_OUTBOUND_QUOTA_PRESSURE', { outboundCount, inboundCount }, 'high')
     }
 
+    // 메일이 **안 나간 것이 확실**할 때 올려 둔 첨부(Blob + 행)를 치운다. 안 치우면 실패한 시도마다
+    // 비공개 저장소에 아무도 못 보는 파일이 쌓인다. `unknown`(나갔는지 모름)은 치우지 않는다 — 나갔다면
+    // 보낸 편지함에서 첨부를 확인할 수 있어야 한다.
+    const discardAttachments = async (paths: string[]) => {
+      await Promise.allSettled(paths.map(p => deleteObject('private', p)))
+      await deleteOutboundAttachmentsForEmail(id).catch(() => undefined)
+    }
+
     // 첨부를 먼저 저장한다 — 여기서 실패해도 아직 아무것도 나가지 않았다.
     const stored: string[] = []
     const toSend: { filename: string; content: Buffer }[] = []
@@ -206,7 +215,7 @@ export const POST = defineApiRoute<undefined, AdminAuthSuccess>({
         toSend.push({ filename: attachmentMeta[i].name, content: buffer })
       }
     } catch (error) {
-      await Promise.allSettled(stored.map(p => deleteObject('private', p)))
+      await discardAttachments(stored)
       await markOutboundStatus(id, 'failed', '첨부 저장 실패').catch(() => undefined)
       logSecurityEvent(
         'ADMIN_MAILBOX_OUTBOUND_API_ERROR',
@@ -243,6 +252,7 @@ export const POST = defineApiRoute<undefined, AdminAuthSuccess>({
         return ApiSuccess.ok({ id, status: 'unknown', recorded: true })
       }
       await markOutboundStatus(id, 'failed', message).catch(() => undefined)
+      await discardAttachments(stored)
       if (kind === 'config') {
         throw ApiError.internalServerError('메일 발송 설정이 올바르지 않습니다.')
       }

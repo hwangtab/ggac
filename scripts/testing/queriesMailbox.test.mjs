@@ -403,6 +403,31 @@ test('보낸 첨부는 메일에 붙어 저장되고 메일을 지우면 함께 
   assert.equal(await getOutboundAttachment(attId), null)
 })
 
+test('첨부 행 삭제는 그 메일의 행만 지우고 다른 메일의 행은 건드리지 않는다', async () => {
+  const {
+    insertOutboundSending,
+    insertOutboundAttachment,
+    deleteOutboundAttachmentsForEmail,
+    listOutboundAttachments,
+  } = await loadFreshMailboxModule()
+  const a = await insertOutboundSending(outboundInput())
+  const b = await insertOutboundSending(outboundInput())
+  for (const row of [a.row, b.row]) {
+    const attId = crypto.randomUUID()
+    await insertOutboundAttachment({
+      id: attId,
+      email_id: row.id,
+      filename: 'x.pdf',
+      content_type: null,
+      size_bytes: 1,
+      blob_path: `mailbox-sent/${row.id}/${attId}.pdf`,
+    })
+  }
+  await deleteOutboundAttachmentsForEmail(a.row.id)
+  assert.equal((await listOutboundAttachments(a.row.id)).length, 0)
+  assert.equal((await listOutboundAttachments(b.row.id)).length, 1)
+})
+
 test('보낸 편지함은 새 메일과 답장을 최신순으로 합치고 kind로 거른다', async () => {
   const { insertInboundEmail, insertReply, insertOutboundSending, listSentMail } =
     await loadFreshMailboxModule()
