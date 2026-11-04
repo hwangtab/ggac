@@ -9,6 +9,7 @@ import {
   validateAttachments,
   validateCompose,
 } from '../../src/lib/mail/composeValidation.ts'
+import { classifyFailedResponse } from '../../src/lib/mail/composeOutcome.ts'
 import {
   DEFAULT_DAILY_OUTBOUND_LIMIT,
   DEFAULT_DAILY_TOTAL_GUARD,
@@ -184,6 +185,35 @@ test('첨부 개수·합계 용량·빈 파일을 검사한다', () => {
   )
 })
 
+test('끝의 점·공백과 방향 제어 문자로 확장자를 위장한 첨부도 거른다', () => {
+  assert.equal(sanitizeAttachmentName('a.exe.'), 'a.exe')
+  assert.equal(sanitizeAttachmentName('a.exe  '), 'a.exe')
+  assert.equal(sanitizeAttachmentName('inv\u202Efdp.exe'), 'invfdp.exe')
+  assert.equal(sanitizeAttachmentName('a\u200B.pdf'), 'a.pdf')
+  for (const name of ['setup.exe.', 'x.exe \t', 'inv\u202Eexe.scr', 'a.\u200Bexe']) {
+    assert.equal(validateAttachments([{ name, size: 10 }]).ok, false, JSON.stringify(name))
+  }
+})
+
+test('브라우저가 열어 실행하는 형식과 디스크 이미지도 거부한다', () => {
+  for (const name of [
+    'a.html',
+    'a.HTM',
+    'a.svg',
+    'a.iso',
+    'a.img',
+    'a.vhd',
+    'a.docm',
+    'a.xlsm',
+    'a.sh',
+  ]) {
+    assert.equal(validateAttachments([{ name, size: 10 }]).ok, false, name)
+  }
+  for (const name of ['a.pdf', 'a.png', 'a.jpg', 'a.docx', 'a.xlsx', 'a.txt', 'a.hwp']) {
+    assert.equal(validateAttachments([{ name, size: 10 }]).ok, true, name)
+  }
+})
+
 test('실행 파일 확장자는 대소문자와 무관하게 거부한다', () => {
   for (const name of ['setup.exe', 'RUN.BAT', 'x.js', 'a.b.scr', 'm.ps1']) {
     assert.equal(validateAttachments([{ name, size: 10 }]).ok, false, name)
@@ -240,17 +270,27 @@ test('작성 기능은 정확히 "true"일 때만 켜진다', () => {
   assert.equal(isComposeEnabled({ MAILBOX_COMPOSE_ENABLED: ' true ' }), true)
 })
 
-test('한도 환경변수는 양의 정수만 받고 아니면 기본값이다', () => {
+test('한도 환경변수는 0 이상의 정수만 받고 아니면 기본값이다', () => {
   assert.equal(dailyOutboundLimit({}), DEFAULT_DAILY_OUTBOUND_LIMIT)
   assert.equal(dailyTotalGuard({}), DEFAULT_DAILY_TOTAL_GUARD)
   assert.equal(dailyOutboundLimit({ MAILBOX_DAILY_OUTBOUND_LIMIT: '7' }), 7)
-  for (const bad of ['0', '-3', 'abc', '1.5', '']) {
+  for (const bad of ['-3', 'abc', '1.5', '', '  ']) {
     assert.equal(
       dailyOutboundLimit({ MAILBOX_DAILY_OUTBOUND_LIMIT: bad }),
       DEFAULT_DAILY_OUTBOUND_LIMIT,
-      bad
+      JSON.stringify(bad)
     )
   }
+})
+
+test('한도 0은 "발신 전면 차단"이다 — 기본값으로 바뀌지 않는다', () => {
+  // 운영자가 발신을 멈추려고 0을 넣었을 때 오히려 20통이 나가면 안 된다.
+  assert.equal(dailyOutboundLimit({ MAILBOX_DAILY_OUTBOUND_LIMIT: '0' }), 0)
+  assert.equal(dailyTotalGuard({ MAILBOX_DAILY_TOTAL_GUARD: '0' }), 0)
+  assert.deepEqual(evaluateQuota(1, 0, { outbound: 0, total: 70 }), {
+    allowed: false,
+    reason: 'outbound_limit',
+  })
 })
 
 test('발신 상한: 이번 요청을 포함해 넘으면 막고 정확히 상한이면 통과한다', () => {
@@ -270,4 +310,34 @@ test('여유가 크면 경고도 없다', () => {
     allowed: true,
     pressure: false,
   })
+})
+
+// ── 실패 응답에서 요청 키를 어떻게 할지 ───────────────────────────────────────
+
+test('서버가 JSON 오류로 판단을 끝냈으면 새 키를 쓴다', () => {
+  for (const status of [400, 403, 429, 500, 502]) {
+    assert.equal(
+      classifyFailedResponse(status, { success: false, error: '거절' }),
+      'rotate-key',
+      String(status)
+    )
+  }
+})
+
+test('JSON이 아닌 응답은 결과를 모르므로 키를 유지한다 — 플랫폼 504가 중복 발송이 되지 않게', () => {
+  for (const status of [500, 502, 503, 504]) {
+    assert.equal(classifyFailedResponse(status, null), 'keep-key', `${status} 본문 없음`)
+    assert.equal(classifyFailedResponse(status, '<html>Gateway Timeout</html>'), 'keep-key')
+    assert.equal(classifyFailedResponse(status, {}), 'keep-key', `${status} 빈 객체`)
+    assert.equal(classifyFailedResponse(status, { error: 123 }), 'keep-key')
+  }
+})
+
+test('409는 서버가 처리 중이라고 답한 것이라 JSON이어도 키를 유지한다', () => {
+  assert.equal(classifyFailedResponse(409, { success: false, error: '처리 중' }), 'keep-key')
+  assert.equal(classifyFailedResponse(409, null), 'keep-key')
+})
+
+test('성공 응답 모양의 본문은 오류로 인정하지 않는다', () => {
+  assert.equal(classifyFailedResponse(500, { success: true, error: 'x' }), 'keep-key')
 })

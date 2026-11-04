@@ -106,6 +106,8 @@ export default function SentMailbox({
   const [detail, setDetail] = useState<SentDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState<string | null>(null)
+  const [canManage, setCanManage] = useState(false)
+  const [resolving, setResolving] = useState(false)
 
   // 응답이 요청 순서대로 오지 않을 수 있다(A→B를 빠르게 누르면 A가 늦게 도착한다). 가장 최근 요청의
   // 응답만 화면에 반영한다.
@@ -155,6 +157,7 @@ export default function SentMailbox({
         const { data } = await res.json()
         if (seq !== detailSeq.current) return
         const email = data?.email ?? {}
+        setCanManage(data?.can_manage === true)
         setDetail({
           subject: email.subject,
           status: email.status,
@@ -193,6 +196,32 @@ export default function SentMailbox({
       setDetailError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.')
     } finally {
       if (seq === detailSeq.current) setDetailLoading(false)
+    }
+  }
+
+  // 운영자가 Resend 대시보드로 확인한 결과로 멈춘 행을 확정한다. 메일을 다시 보내지 않는다 — 장부만 바꾼다.
+  const resolve = async (next: 'sent' | 'failed') => {
+    if (!selected || resolving) return
+    const message =
+      next === 'sent'
+        ? 'Resend 대시보드에서 이 메일이 실제로 나간 것을 확인하셨나요? "나갔음"으로 표시합니다.'
+        : 'Resend 대시보드에서 이 메일이 나가지 않은 것을 확인하셨나요? "안 나갔음"으로 표시하면 오늘 한도에서 빠집니다.'
+    if (!window.confirm(message)) return
+    setResolving(true)
+    try {
+      const res = await fetch(`/api/admin/mailbox/outbound/${selected.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: next }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || '상태를 바꾸지 못했습니다.')
+      await fetchList()
+      await open({ ...selected, status: next })
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '상태를 바꾸지 못했습니다.')
+    } finally {
+      setResolving(false)
     }
   }
 
@@ -361,6 +390,26 @@ export default function SentMailbox({
                       <div className="mt-1 rounded bg-amber-50 p-2 text-xs text-amber-900">
                         발송 여부를 확인하지 못했습니다. 다시 보내지 말고 Resend 대시보드에서 확인해
                         주세요.
+                        {canManage && selected.kind === 'compose' && (
+                          <span className="mt-2 flex gap-2">
+                            <button
+                              type="button"
+                              disabled={resolving}
+                              onClick={() => resolve('sent')}
+                              className="rounded-md border border-amber-300 bg-white px-2.5 py-1 font-medium hover:bg-amber-100 disabled:opacity-50"
+                            >
+                              나갔음으로 표시
+                            </button>
+                            <button
+                              type="button"
+                              disabled={resolving}
+                              onClick={() => resolve('failed')}
+                              className="rounded-md border border-amber-300 bg-white px-2.5 py-1 font-medium hover:bg-amber-100 disabled:opacity-50"
+                            >
+                              안 나갔음으로 표시
+                            </button>
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>

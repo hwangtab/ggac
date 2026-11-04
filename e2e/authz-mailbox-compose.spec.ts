@@ -255,6 +255,7 @@ test.describe('관리자 발송 (수신자 @test.local)', () => {
     expect(rows[0].resend_message_id, '@test.local은 Resend를 부르지 않는다').toBeNull()
     expect(Number(rows[0].recipient_count), '테스트 수신자는 한도에 세지 않는다').toBe(0)
     expect(rows[0].sent_by).toBeTruthy()
+    expect(String(rows[0].sent_by_email), '보낸 사람 이메일은 세션에서 채운다').toContain('@')
   })
 
   test('같은 키로 다시 보내면 duplicate이고 행은 하나다 — 중복 클릭 방어', async () => {
@@ -453,6 +454,169 @@ test.describe('한도·발송 실패 경로', () => {
       await exec(
         `DELETE FROM outbound_emails WHERE to_addresses = '["authz-nobody@example.invalid"]'`
       )
+    }
+  })
+})
+
+test.describe('멈춘 행 확정과 답장 한도', () => {
+  const UNKNOWN_ID = '00000000-0000-4000-8000-00000000d0a1'
+  const FRESH_SENDING_ID = '00000000-0000-4000-8000-00000000d0a2'
+  const OLD_SENDING_ID = '00000000-0000-4000-8000-00000000d0a3'
+  const REPLY_QUOTA_SEED_ID = '00000000-0000-4000-8000-00000000d0f2'
+  let admin: APIRequestContext
+
+  test.beforeAll(async ({ playwright, baseURL }) => {
+    admin = await playwright.request.newContext({
+      baseURL,
+      storageState: storageStatePath('admin'),
+    })
+  })
+  test.afterAll(async () => {
+    await admin.dispose()
+  })
+
+  async function exec(sql: string, args: (string | number)[] = []) {
+    const client = db()
+    try {
+      return await client.execute({ sql, args })
+    } finally {
+      client.close()
+    }
+  }
+
+  async function statusOf(id: string): Promise<string> {
+    const r = await exec('SELECT status FROM outbound_emails WHERE id = ?', [id])
+    return String(r.rows[0]?.status)
+  }
+
+  /** 상태·생성 시각을 지정해 행을 (다시) 심는다. 테스트가 서로의 상태를 바꾸므로 매번 초기화한다. */
+  async function plant(id: string, status: string, ageMs: number) {
+    const created = Date.now() - ageMs
+    await exec('DELETE FROM outbound_emails WHERE id = ?', [id])
+    await exec(
+      `INSERT INTO outbound_emails
+        (id, idempotency_key, to_addresses, recipient_count, subject, body_html, status, created_at, updated_at)
+        VALUES (?, ?, '["authz-compose-to@test.local"]', 0, 'MAILBOX-E2E-STUCK', '<p>x</p>', ?, ?, ?)`,
+      [id, `authz-stuck-${id}`, status, created, created]
+    )
+  }
+
+  test('관리자는 unknown을 sent·failed로 확정할 수 있고 한 번 정해지면 다시 못 바꾼다', async () => {
+    await plant(UNKNOWN_ID, 'unknown', 60_000)
+    const res = await admin.patch(`/api/admin/mailbox/outbound/${UNKNOWN_ID}`, {
+      data: { status: 'sent' },
+    })
+    expect(res.status()).toBe(200)
+    expect(await statusOf(UNKNOWN_ID)).toBe('sent')
+    // 이미 확정된 행은 바꿀 수 없다 — 두 관리자가 동시에 눌러도 마지막이 이기지 않는다.
+    const again = await admin.patch(`/api/admin/mailbox/outbound/${UNKNOWN_ID}`, {
+      data: { status: 'failed' },
+    })
+    expect(again.status()).toBe(409)
+    expect(await statusOf(UNKNOWN_ID)).toBe('sent')
+
+    await plant(UNKNOWN_ID, 'unknown', 60_000)
+    expect(
+      (
+        await admin.patch(`/api/admin/mailbox/outbound/${UNKNOWN_ID}`, {
+          data: { status: 'failed' },
+        })
+      ).status()
+    ).toBe(200)
+    expect(await statusOf(UNKNOWN_ID)).toBe('failed')
+  })
+
+  test('방금 만든 sending은 확정할 수 없고, 5분이 지난 sending은 확정할 수 있다', async () => {
+    await plant(FRESH_SENDING_ID, 'sending', 5_000)
+    const fresh = await admin.patch(`/api/admin/mailbox/outbound/${FRESH_SENDING_ID}`, {
+      data: { status: 'failed' },
+    })
+    expect(fresh.status(), '지금 나가는 중일 수 있다').toBe(409)
+    expect(await statusOf(FRESH_SENDING_ID)).toBe('sending')
+
+    await plant(OLD_SENDING_ID, 'sending', 6 * 60_000)
+    const old = await admin.patch(`/api/admin/mailbox/outbound/${OLD_SENDING_ID}`, {
+      data: { status: 'failed' },
+    })
+    expect(old.status()).toBe(200)
+    expect(await statusOf(OLD_SENDING_ID)).toBe('failed')
+  })
+
+  test('잘못된 상태·없는 id·잘못된 id는 400·404이고 행을 바꾸지 않는다', async () => {
+    await plant(UNKNOWN_ID, 'unknown', 60_000)
+    for (const status of ['unknown', 'sending', 'blocked', 'bogus', '']) {
+      const res = await admin.patch(`/api/admin/mailbox/outbound/${UNKNOWN_ID}`, {
+        data: { status },
+      })
+      expect(res.status(), status).toBe(400)
+    }
+    expect(await statusOf(UNKNOWN_ID)).toBe('unknown')
+    expect(
+      (
+        await admin.patch(`/api/admin/mailbox/outbound/${randomUUID()}`, {
+          data: { status: 'sent' },
+        })
+      ).status()
+    ).toBe(404)
+    expect(
+      (
+        await admin.patch('/api/admin/mailbox/outbound/not-a-uuid', { data: { status: 'sent' } })
+      ).status()
+    ).toBe(400)
+  })
+
+  test('비로그인·일반 조합원·이사는 확정할 수 없다', async ({ baseURL, request }) => {
+    await plant(UNKNOWN_ID, 'unknown', 60_000)
+    const path = `/api/admin/mailbox/outbound/${UNKNOWN_ID}`
+    expect((await request.patch(path, { data: { status: 'sent' } })).status()).toBe(401)
+    for (const role of ['pending', 'other', 'director'] as const) {
+      const ctx = await apiRequest.newContext({ baseURL, storageState: storageStatePath(role) })
+      try {
+        expect((await ctx.patch(path, { data: { status: 'sent' } })).status(), role).toBe(403)
+      } finally {
+        await ctx.dispose()
+      }
+    }
+    expect(await statusOf(UNKNOWN_ID), '거부됐는데 상태가 바뀌었다').toBe('unknown')
+  })
+
+  test('답장도 일일 상한에 걸리면 429이고 발송을 시도하지 않는다', async () => {
+    await exec('DELETE FROM outbound_emails WHERE id = ?', [REPLY_QUOTA_SEED_ID])
+    await exec(
+      `INSERT INTO outbound_emails
+        (id, idempotency_key, to_addresses, recipient_count, subject, body_html, status, sent_at, created_at, updated_at)
+        VALUES (?, 'authz-compose-reply-quota-seed', '["quota@example.invalid"]', 20, 'quota seed', '<p>x</p>', 'sent', ?, ?, ?)`,
+      [REPLY_QUOTA_SEED_ID, Date.now(), Date.now(), Date.now()]
+    )
+    try {
+      const repliesBefore = Number(
+        (
+          await exec('SELECT count(*) AS n FROM inbound_email_replies WHERE email_id = ?', [
+            REPLY_PARENT_EMAIL_ID,
+          ])
+        ).rows[0].n
+      )
+      const res = await admin.post(`/api/admin/mailbox/${REPLY_PARENT_EMAIL_ID}/reply`, {
+        data: { body_html: '<p>한도 테스트 답장 — 나가면 안 된다</p>' },
+      })
+      // 한도 검사가 발송보다 앞이다. 검사가 없었다면 발송 단계(키가 비어 있어 500)까지 갔을 것이다.
+      expect(res.status()).toBe(429)
+      const repliesAfter = Number(
+        (
+          await exec('SELECT count(*) AS n FROM inbound_email_replies WHERE email_id = ?', [
+            REPLY_PARENT_EMAIL_ID,
+          ])
+        ).rows[0].n
+      )
+      expect(repliesAfter, '막혔는데 답장 기록이 생겼다').toBe(repliesBefore)
+    } finally {
+      await exec('DELETE FROM outbound_emails WHERE id = ?', [REPLY_QUOTA_SEED_ID])
+    }
+  })
+
+  test.afterAll(async () => {
+    for (const id of [UNKNOWN_ID, FRESH_SENDING_ID, OLD_SENDING_ID]) {
+      await exec('DELETE FROM outbound_emails WHERE id = ?', [id])
     }
   })
 })

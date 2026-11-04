@@ -473,6 +473,63 @@ export async function markOutboundStatus(
     .where(and(eq(outboundEmails.id, id), eq(outboundEmails.status, 'sending')))
 }
 
+/**
+ * 운영자가 Resend 대시보드로 확인한 뒤 멈춘 행을 확정한다.
+ *
+ * 바꿀 수 있는 것은 `unknown`과 `staleBeforeMs`보다 오래된 `sending`뿐이다 — 방금 만든 `sending`은 지금
+ * 발송 중인 요청일 수 있어, 그것을 `failed`로 바꾸면 이어서 나가는 메일이 "실패"로 남는다. 상태를 조건에
+ * 넣어 갱신하므로 동시에 다른 관리자가 먼저 확정했다면 `conflict`다.
+ */
+export async function resolveOutboundStatus(
+  id: string,
+  next: 'sent' | 'failed',
+  staleBeforeMs: number
+): Promise<'updated' | 'missing' | 'conflict'> {
+  const updated = await db
+    .update(outboundEmails)
+    .set({
+      status: next,
+      ...(next === 'sent' ? { sentAt: new Date() } : {}),
+      error: null,
+    })
+    .where(
+      and(
+        eq(outboundEmails.id, id),
+        or(
+          eq(outboundEmails.status, 'unknown'),
+          and(
+            eq(outboundEmails.status, 'sending'),
+            sql`${outboundEmails.createdAt} < ${staleBeforeMs}`
+          )
+        )
+      )
+    )
+    .returning({ id: outboundEmails.id })
+  if (updated.length > 0) return 'updated'
+  const [existing] = await db
+    .select({ id: outboundEmails.id })
+    .from(outboundEmails)
+    .where(eq(outboundEmails.id, id))
+    .limit(1)
+  return existing ? 'conflict' : 'missing'
+}
+
+/**
+ * 오래된 `sending`을 `unknown`으로 옮긴다(크론). 함수가 발송 도중 죽으면 행이 `sending`으로 남는데,
+ * 화면은 5분이 지나면 "확인 필요"로 그리지만 원장은 여전히 `sending`이라 둘이 어긋난다. `failed`로
+ * 옮기면 안 된다 — 메일이 이미 나갔을 수 있다.
+ */
+export async function markStaleSendingAsUnknown(olderThanMs: number): Promise<number> {
+  const updated = await db
+    .update(outboundEmails)
+    .set({ status: 'unknown', error: '발송 도중 응답이 끊겼습니다. 나갔는지 확인이 필요합니다.' })
+    .where(
+      and(eq(outboundEmails.status, 'sending'), sql`${outboundEmails.createdAt} < ${olderThanMs}`)
+    )
+    .returning({ id: outboundEmails.id })
+  return updated.length
+}
+
 export async function getOutboundEmail(id: string): Promise<Record<string, unknown> | null> {
   const [row] = await db.select().from(outboundEmails).where(eq(outboundEmails.id, id)).limit(1)
   return row ? rowToOutbound(row) : null

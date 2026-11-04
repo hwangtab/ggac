@@ -48,6 +48,19 @@ const BLOCKED_EXTENSIONS = new Set([
   'app',
   'dmg',
   'apk',
+  // 디스크 이미지·스크립트를 품은 문서·브라우저가 열어 실행하는 형식. 수신 측이 막거나 사람이 잘못 열기 쉽다.
+  'iso',
+  'img',
+  'vhd',
+  'vhdx',
+  'html',
+  'htm',
+  'svg',
+  'docm',
+  'xlsm',
+  'pptm',
+  'sh',
+  'command',
 ])
 
 const ADDRESS_PATTERN =
@@ -168,7 +181,11 @@ export function sanitizeAttachmentName(raw: string): string {
   // eslint-disable-next-line no-control-regex
   const cleaned = raw
     .replace(/[\u0000-\u001f\u007f]/g, '')
+    // 방향 제어·보이지 않는 문자. `invoice\u202Efdp.exe`처럼 확장자를 위장하는 데 쓰인다.
+    .replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/g, '')
     .replace(/[\\/]/g, '_')
+    // 끝의 점·공백 — Windows는 `a.exe.`를 `a.exe`로 읽는다.
+    .replace(/[.\s]+$/g, '')
     .trim()
   const name = cleaned.length > 120 ? cleaned.slice(-120) : cleaned
   return name || 'attachment'
