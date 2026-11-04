@@ -2,12 +2,15 @@ import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import {
+  countInboundSince,
+  countOutboundRecipientsSince,
   getInboundEmail,
   insertReply,
   appendThreadReference,
   updateInboundStatus,
 } from '@/db/queries/mailbox'
 import { MailSendError, sendEmail } from '@/lib/mail/send'
+import { dailyOutboundLimit, dailyTotalGuard, evaluateQuota } from '@/lib/mail/composeQuota'
 import { sanitizePostHtml } from '@/utils/sanitizePostHtml'
 import { logSecurityEvent } from '@/utils/security'
 import { validateUUID } from '@/utils/validation'
@@ -44,6 +47,29 @@ export const POST = defineApiRoute<{ body_html?: string }>({
     const email = await getInboundEmail(id)
     if (!email) {
       throw ApiError.notFound('메일을 찾을 수 없습니다.')
+    }
+
+    // 일일 상한 — 새 메일 작성과 **같은 쿼터**다. 답장은 한도에 세어지기만 하고 스스로는 막히지 않던 것을
+    // 바로잡는다(Resend 하루 쿼터는 인증·다이제스트 메일과 공유한다). 답장은 발송 전에 행을 쓰지 않으므로
+    // 이번 답장 한 통을 더해서 판정한다.
+    const sinceMs = Date.now() - 24 * 60 * 60 * 1000
+    const [outboundCount, inboundCount] = await Promise.all([
+      countOutboundRecipientsSince(sinceMs),
+      countInboundSince(sinceMs),
+    ])
+    const verdict = evaluateQuota(outboundCount + 1, inboundCount, {
+      outbound: dailyOutboundLimit(),
+      total: dailyTotalGuard(),
+    })
+    if (verdict.allowed === false) {
+      logSecurityEvent(
+        'MAILBOX_COMPOSE_DAILY_LIMIT_REACHED',
+        { via: 'reply', reason: verdict.reason, outboundCount, inboundCount },
+        'high'
+      )
+      throw ApiError.tooManyRequests(
+        '오늘 보낼 수 있는 메일 한도에 도달했습니다. 내일 다시 시도해 주세요.'
+      )
     }
 
     const originalSubject = String(email.subject ?? '(제목 없음)')

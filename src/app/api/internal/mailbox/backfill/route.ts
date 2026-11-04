@@ -30,6 +30,7 @@ import {
   markBodyFetchAttempted,
   markBodyFetchFailed,
   markAttachmentsExpired,
+  markStaleSendingAsUnknown,
 } from '@/db/queries/mailbox'
 import { ingestInboundEmail } from '@/lib/mail/ingestInbound'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
@@ -44,6 +45,9 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
 const BATCH_SIZE = 25
+
+/** 이보다 오래 `sending`이면 발송 도중 함수가 죽은 것으로 본다(Resend 30초 + Blob 업로드보다 훨씬 길다). */
+const STALE_SENDING_MS = 10 * 60 * 1000
 
 /** Resend Free/Pro/Scale 전 플랜 공통 — 수신 메일 보관 기한이 30일이다. */
 const RESEND_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
@@ -119,8 +123,18 @@ async function handleBackfill(request: NextRequest) {
       attempted += 1
     }
 
+    // 새 메일 작성의 원장 정리 — 같은 시간 단위 크론에 얹는다(크론 수를 늘리지 않는다).
+    // 실패해도 위의 본문 백필 결과를 막지 않는다.
+    let staleSending = 0
+    try {
+      staleSending = await markStaleSendingAsUnknown(now - STALE_SENDING_MS)
+    } catch (error) {
+      log.error('멈춘 보낸 메일 정리 실패', error)
+    }
+
     return ApiSuccess.ok({
       pending_before: pending.length,
+      stale_sending_marked_unknown: staleSending,
       // 재시도를 **건 수**다. `ingestInboundEmail`은 실패해도 던지지 않고
       // 상태로만 남기므로, 이 숫자는 성공 건수가 아니다.
       refetched: attempted,

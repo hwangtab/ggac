@@ -17,6 +17,7 @@ import {
   type SentMailKind,
 } from '@/db/queries/mailbox'
 import { logUserActivity } from '@/db/queries/activities'
+import { readSessionUser } from '@/lib/server/session'
 import { MailSendError, sendEmail } from '@/lib/mail/send'
 import {
   isTestRecipientAddress,
@@ -37,6 +38,11 @@ import { validateUUID } from '@/utils/validation'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
+/**
+ * 첨부 Blob 쓰기(최대 5회, 순차) + Resend 호출(첨부가 있으면 최대 30초)이 한 요청 안에 든다. 시간 제한이
+ * 이보다 짧으면 플랫폼이 함수를 먼저 끊어 `sending` 행이 남고, 클라이언트는 JSON 아닌 504를 받는다.
+ */
+export const maxDuration = 90
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const MAX_FIELD_JSON = 20_000
@@ -137,7 +143,9 @@ export const POST = defineApiRoute<undefined, AdminAuthSuccess>({
       subject: value.subject,
       body_html: html,
       sent_by: auth?.user?.id ?? null,
-      sent_by_email: null,
+      // 보낸 사람 프로필이 지워져도 누가 보냈는지 남긴다(`sent_by`는 ON DELETE SET NULL).
+      // 값은 검증된 세션에서만 얻는다 — 폼 값은 받지 않는다.
+      sent_by_email: (await readSessionUser())?.email?.trim().toLowerCase() || null,
     })
     const id = String(row.id)
 

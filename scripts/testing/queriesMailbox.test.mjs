@@ -342,7 +342,9 @@ test('24시간 수신자 수는 sending·sent·unknown만 세고 failed·blocked
     markOutboundStatus,
     countOutboundRecipientsSince,
   } = await loadFreshMailboxModule()
-  const base = await countOutboundRecipientsSince(Date.now() - 1000)
+  // 두 집계가 같은 창을 쓴다 — 부하로 삽입이 느려져도 행이 창 밖으로 빠져 기댓값이 어긋나지 않게.
+  const since = Date.now() - 60_000
+  const base = await countOutboundRecipientsSince(since)
 
   const sending = await insertOutboundSending(outboundInput({ recipient_count: 1 }))
   const sent = await insertOutboundSending(outboundInput({ recipient_count: 2 }))
@@ -355,16 +357,17 @@ test('24시간 수신자 수는 sending·sent·unknown만 세고 failed·blocked
   await markOutboundStatus(blocked.row.id, 'blocked', null)
 
   assert.equal(sending.created && sent.created && unknown.created, true)
-  assert.equal(await countOutboundRecipientsSince(Date.now() - 1000), base + 1 + 2 + 4)
+  assert.equal(await countOutboundRecipientsSince(since), base + 1 + 2 + 4)
 })
 
 test('24시간 수신자 수에는 같은 기간의 답장도 한 통씩 더해진다', async () => {
   const { insertInboundEmail, insertReply, countOutboundRecipientsSince } =
     await loadFreshMailboxModule()
   const mail = await insertInboundEmail(sample())
-  const before = await countOutboundRecipientsSince(Date.now() - 1000)
+  const since = Date.now() - 60_000
+  const before = await countOutboundRecipientsSince(since)
   await insertReply({ email_id: mail.id, subject: 'Re: x', body_html: '<p>x</p>' })
-  assert.equal(await countOutboundRecipientsSince(Date.now() - 1000), before + 1)
+  assert.equal(await countOutboundRecipientsSince(since), before + 1)
 })
 
 test('기준 시각보다 오래된 행은 24시간 합계에서 빠진다', async () => {
@@ -426,6 +429,78 @@ test('첨부 행 삭제는 그 메일의 행만 지우고 다른 메일의 행�
   await deleteOutboundAttachmentsForEmail(a.row.id)
   assert.equal((await listOutboundAttachments(a.row.id)).length, 0)
   assert.equal((await listOutboundAttachments(b.row.id)).length, 1)
+})
+
+test('멈춘 행 확정: unknown은 바로, sending은 오래됐을 때만 바꾼다', async () => {
+  const { insertOutboundSending, markOutboundStatus, resolveOutboundStatus, getOutboundEmail } =
+    await loadFreshMailboxModule()
+  const staleBefore = Date.now() + 60_000 // 지금 만든 행도 "오래된" 것으로 보이게
+  const freshBefore = Date.now() - 60_000 // 방금 만든 행은 "새것"
+
+  const unknown = await insertOutboundSending(outboundInput({ recipient_count: 3 }))
+  await markOutboundStatus(unknown.row.id, 'unknown', '타임아웃')
+  assert.equal(await resolveOutboundStatus(unknown.row.id, 'sent', freshBefore), 'updated')
+  const sent = await getOutboundEmail(unknown.row.id)
+  assert.equal(sent.status, 'sent')
+  assert.equal(typeof sent.sent_at, 'string')
+  assert.equal(sent.error, null)
+
+  const sendingNew = await insertOutboundSending(outboundInput())
+  assert.equal(
+    await resolveOutboundStatus(sendingNew.row.id, 'failed', freshBefore),
+    'conflict',
+    '지금 나가는 중일 수 있는 sending은 못 바꾼다'
+  )
+  assert.equal((await getOutboundEmail(sendingNew.row.id)).status, 'sending')
+
+  const sendingOld = await insertOutboundSending(outboundInput())
+  assert.equal(await resolveOutboundStatus(sendingOld.row.id, 'failed', staleBefore), 'updated')
+  assert.equal((await getOutboundEmail(sendingOld.row.id)).status, 'failed')
+})
+
+test('멈춘 행 확정: 이미 정해졌거나 없는 행은 conflict·missing이고 되돌리지 못한다', async () => {
+  const { insertOutboundSending, markOutboundSent, resolveOutboundStatus, getOutboundEmail } =
+    await loadFreshMailboxModule()
+  const done = await insertOutboundSending(outboundInput())
+  await markOutboundSent(done.row.id, 're_x')
+  assert.equal(await resolveOutboundStatus(done.row.id, 'failed', Date.now() + 60_000), 'conflict')
+  assert.equal((await getOutboundEmail(done.row.id)).status, 'sent')
+  assert.equal(await resolveOutboundStatus(crypto.randomUUID(), 'sent', Date.now()), 'missing')
+})
+
+test('확정한 failed는 24시간 한도에서 빠지고 unknown은 계속 센다', async () => {
+  const {
+    insertOutboundSending,
+    markOutboundStatus,
+    resolveOutboundStatus,
+    countOutboundRecipientsSince,
+  } = await loadFreshMailboxModule()
+  const since = Date.now() - 60_000
+  const base = await countOutboundRecipientsSince(since)
+  const a = await insertOutboundSending(outboundInput({ recipient_count: 6 }))
+  await markOutboundStatus(a.row.id, 'unknown', null)
+  assert.equal(await countOutboundRecipientsSince(since), base + 6)
+  await resolveOutboundStatus(a.row.id, 'failed', Date.now())
+  assert.equal(await countOutboundRecipientsSince(since), base)
+})
+
+test('오래된 sending만 unknown으로 옮기고 sent·failed는 건드리지 않는다', async () => {
+  const { insertOutboundSending, markOutboundSent, markStaleSendingAsUnknown, getOutboundEmail } =
+    await loadFreshMailboxModule()
+  const stuck = await insertOutboundSending(outboundInput())
+  const done = await insertOutboundSending(outboundInput())
+  await markOutboundSent(done.row.id, null)
+
+  // 방금 만든 행은 기준보다 새것이라 옮기지 않는다.
+  assert.equal(await markStaleSendingAsUnknown(Date.now() - 60_000), 0)
+  assert.equal((await getOutboundEmail(stuck.row.id)).status, 'sending')
+
+  const moved = await markStaleSendingAsUnknown(Date.now() + 60_000)
+  assert.ok(moved >= 1)
+  const after = await getOutboundEmail(stuck.row.id)
+  assert.equal(after.status, 'unknown')
+  assert.match(after.error, /확인이 필요/)
+  assert.equal((await getOutboundEmail(done.row.id)).status, 'sent')
 })
 
 test('보낸 편지함은 새 메일과 답장을 최신순으로 합치고 kind로 거른다', async () => {

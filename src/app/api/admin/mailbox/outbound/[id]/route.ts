@@ -1,8 +1,14 @@
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
+import type { AdminAuthSuccess } from '@/lib/server/adminAuth'
 import type { BoardAuthSuccess } from '@/lib/server/boardRoomAuth'
-import { getOutboundEmail, listOutboundAttachments } from '@/db/queries/mailbox'
+import {
+  getOutboundEmail,
+  listOutboundAttachments,
+  resolveOutboundStatus,
+} from '@/db/queries/mailbox'
+import { logUserActivity } from '@/db/queries/activities'
 import { logSecurityEvent } from '@/utils/security'
 import { validateUUID } from '@/utils/validation'
 
@@ -69,5 +75,74 @@ export const GET = defineApiRoute<undefined, BoardAuthSuccess>({
     )
 
     return ApiSuccess.ok({ email: safeEmail, attachments, can_manage: auth.isAdmin })
+  },
+})
+
+/** 이 시간보다 오래된 `sending`만 사람이 확정할 수 있다. 화면의 "확인 필요" 기준(5분)과 같다. */
+const STUCK_SENDING_MS = 5 * 60 * 1000
+
+// PATCH: 멈춘 보낸 메일(`unknown`·오래된 `sending`)을 운영자가 확인한 결과로 확정한다(관리자만)
+//
+// 이 라우트는 메일을 보내지 않는다 — 장부의 상태만 바꾼다. 운영자가 Resend 대시보드에서 실제로 나갔는지
+// 확인한 뒤 `sent`(나갔음) 또는 `failed`(안 나갔음)로 표시한다. `failed`로 바꾸면 24시간 한도 계산에서
+// 빠진다. 누가 무엇으로 바꿨는지는 활동 기록에 남는다.
+export const PATCH = defineApiRoute<{ status?: string }, AdminAuthSuccess>({
+  method: 'PATCH',
+  name: 'api/admin/mailbox/outbound/[id]',
+  rateLimit: {
+    ...RATE_LIMITS.ADMIN_API,
+    keyGenerator: createUserKeyGenerator('admin_mailbox'),
+  },
+  auth: 'admin',
+  body: {
+    invalidResponse: () => ApiError.badRequest('유효하지 않은 JSON 본문입니다.').toNextResponse(),
+  },
+  errorResponse: () => {
+    logSecurityEvent(
+      'ADMIN_MAILBOX_OUTBOUND_API_ERROR',
+      { error: '서버 오류가 발생했습니다.' },
+      'medium'
+    )
+    return ApiError.internalServerError('상태를 바꾸는 중 오류가 발생했습니다.').toNextResponse()
+  },
+  handler: async ({ body, params, auth, request }) => {
+    const idValidation = validateUUID(String(params.id ?? ''), '메일 ID')
+    if (!idValidation.isValid) throw ApiError.badRequest('유효한 id가 필요합니다.')
+    const id = idValidation.sanitized
+
+    const next = body?.status
+    if (next !== 'sent' && next !== 'failed') {
+      throw ApiError.badRequest('status는 sent 또는 failed여야 합니다.')
+    }
+
+    const outcome = await resolveOutboundStatus(id, next, Date.now() - STUCK_SENDING_MS)
+    if (outcome === 'missing') throw ApiError.notFound('메일을 찾을 수 없습니다.')
+    if (outcome === 'conflict') {
+      throw ApiError.conflict(
+        '확정할 수 없는 상태입니다. 이미 처리됐거나 아직 발송 중일 수 있습니다. 새로고침해 주세요.'
+      )
+    }
+
+    try {
+      await logUserActivity({
+        user_id: auth.user.id,
+        action_type: 'admin_action',
+        target_type: 'outbound_email',
+        target_id: id,
+        metadata: { action: 'mailbox_outbound_resolve', status: next },
+        ip_address:
+          request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || null,
+        user_agent: request.headers.get('user-agent') || null,
+      })
+    } catch (error) {
+      // 상태는 이미 바뀌었다. 기록 실패가 그 사실을 되돌리거나 오류로 보이게 하지 않는다.
+      logSecurityEvent(
+        'MAILBOX_COMPOSE_AUDIT_FAILED',
+        { id, error: error instanceof Error ? error.message : String(error) },
+        'high'
+      )
+    }
+
+    return ApiSuccess.ok({ id, status: next })
   },
 })

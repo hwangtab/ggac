@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react'
 import { FiPaperclip, FiX } from 'react-icons/fi'
 
+import { classifyFailedResponse } from '@/lib/mail/composeOutcome'
 import {
   COMPOSE_LIMITS,
   normalizeAddress,
@@ -161,6 +162,10 @@ export default function ComposeModal({ quota, onClose, onDone }: Props) {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [outcome, setOutcome] = useState<Outcome | null>(null)
+  // 결과를 알 수 없는 실패(응답 유실·처리 중) 뒤에는 입력을 잠근다. 키를 유지한 채 내용을 고치면 서버는 이전
+  // 행만 보고 "이미 보낸 메일"이라고 답해, 고친 내용이 나간 것처럼 보이기 때문이다.
+  const [locked, setLocked] = useState(false)
+  const frozen = sending || locked
 
   const validated = validateCompose({ to, cc, bcc, subject })
   const bodyOk = body.trim().length > 0
@@ -218,6 +223,19 @@ export default function ComposeModal({ quota, onClose, onDone }: Props) {
     onClose()
   }
 
+  const startOver = () => {
+    if (
+      !window.confirm(
+        '이전 시도가 이미 나갔는지 보낸 편지함에서 확인하셨나요? 확인 없이 새로 쓰면 같은 메일이 두 번 나갈 수 있습니다.'
+      )
+    ) {
+      return
+    }
+    keyRef.current = crypto.randomUUID()
+    setLocked(false)
+    setError(null)
+  }
+
   const send = async () => {
     if (validated.ok === false || sending) return
     setSending(true)
@@ -237,8 +255,18 @@ export default function ComposeModal({ quota, onClose, onDone }: Props) {
       const json = await res.json().catch(() => null)
 
       if (!res.ok) {
-        if (res.status !== 409) keyRef.current = crypto.randomUUID()
-        setError(json?.error || '메일을 보내지 못했습니다.')
+        // 서버가 JSON으로 판단을 끝냈을 때만 새 키를 쓴다. 플랫폼 504 같은 JSON 아닌 응답은 메일이 이미
+        // 나갔는데 응답만 잃은 것일 수 있다 — 새 키로 다시 누르면 같은 메일이 두 번 나간다.
+        if (classifyFailedResponse(res.status, json) === 'rotate-key') {
+          keyRef.current = crypto.randomUUID()
+          setError(json?.error || '메일을 보내지 못했습니다.')
+        } else {
+          setLocked(true)
+          setError(
+            json?.error ||
+              `서버가 응답을 끝내지 못했습니다(${res.status}). 메일이 이미 나갔을 수 있으니 보낸 편지함을 먼저 확인해 주세요.`
+          )
+        }
         setStep('edit')
         return
       }
@@ -265,6 +293,7 @@ export default function ComposeModal({ quota, onClose, onDone }: Props) {
       }
     } catch {
       // 요청이 서버에 닿았는지 모른다. 키를 유지하므로 다시 눌러도 중복 발송되지 않는다.
+      setLocked(true)
       setError(
         '연결이 끊겨 결과를 확인하지 못했습니다. 보낸 편지함을 확인한 뒤, 없으면 다시 보내기를 눌러 주세요(같은 요청으로 처리되어 중복 발송되지 않습니다).'
       )
@@ -338,7 +367,7 @@ export default function ComposeModal({ quota, onClose, onDone }: Props) {
                 label="받는 사람"
                 values={to}
                 max={COMPOSE_LIMITS.maxTo}
-                disabled={sending}
+                disabled={frozen}
                 onChange={setTo}
                 autoFocus
               />
@@ -348,14 +377,14 @@ export default function ComposeModal({ quota, onClose, onDone }: Props) {
                     label="참조"
                     values={cc}
                     max={COMPOSE_LIMITS.maxCc}
-                    disabled={sending}
+                    disabled={frozen}
                     onChange={setCc}
                   />
                   <AddressField
                     label="숨은참조"
                     values={bcc}
                     max={COMPOSE_LIMITS.maxBcc}
-                    disabled={sending}
+                    disabled={frozen}
                     onChange={setBcc}
                   />
                 </>
@@ -378,7 +407,7 @@ export default function ComposeModal({ quota, onClose, onDone }: Props) {
                   value={subject}
                   maxLength={COMPOSE_LIMITS.subjectMax}
                   onChange={e => setSubject(e.target.value)}
-                  disabled={sending}
+                  disabled={frozen}
                   className={inputClass}
                 />
               </div>
@@ -391,7 +420,7 @@ export default function ComposeModal({ quota, onClose, onDone }: Props) {
                   rows={10}
                   value={body}
                   onChange={e => setBody(e.target.value)}
-                  disabled={sending}
+                  disabled={frozen}
                   placeholder="내용을 입력하세요."
                   className={`${inputClass} resize-none`}
                 />
@@ -401,7 +430,7 @@ export default function ComposeModal({ quota, onClose, onDone }: Props) {
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    disabled={sending || files.length >= COMPOSE_LIMITS.maxAttachments}
+                    disabled={frozen || files.length >= COMPOSE_LIMITS.maxAttachments}
                     onClick={() => fileInputRef.current?.click()}
                     className="flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
                   >
@@ -433,7 +462,7 @@ export default function ComposeModal({ quota, onClose, onDone }: Props) {
                         </span>
                         <button
                           type="button"
-                          disabled={sending}
+                          disabled={frozen}
                           aria-label={`${file.name} 삭제`}
                           onClick={() => setFiles(files.filter((_, idx) => idx !== i))}
                           className="ml-2 text-gray-400 hover:text-gray-700"
@@ -457,6 +486,34 @@ export default function ComposeModal({ quota, onClose, onDone }: Props) {
                   {error}
                 </p>
               )}
+              {locked && (
+                <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                  <p>
+                    결과를 확인하지 못해 입력을 잠갔습니다. 같은 요청으로 다시 시도해도 중복
+                    발송되지 않습니다. 내용을 바꿔 보내려면 먼저 보낸 편지함에서 이미 나갔는지
+                    확인해 주세요.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setError(null)
+                        setStep('confirm')
+                      }}
+                      className="rounded-md border border-amber-300 bg-white px-2.5 py-1 font-medium hover:bg-amber-100"
+                    >
+                      같은 내용으로 다시 시도
+                    </button>
+                    <button
+                      type="button"
+                      onClick={startOver}
+                      className="rounded-md border border-amber-300 bg-white px-2.5 py-1 font-medium hover:bg-amber-100"
+                    >
+                      새로 쓰기
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-2 border-t border-gray-200 p-5">
@@ -468,7 +525,7 @@ export default function ComposeModal({ quota, onClose, onDone }: Props) {
               </button>
               <button
                 onClick={goConfirm}
-                disabled={sending || to.length === 0 || !subject.trim() || !bodyOk}
+                disabled={frozen || to.length === 0 || !subject.trim() || !bodyOk}
                 className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 다음

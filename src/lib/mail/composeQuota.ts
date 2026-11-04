@@ -18,17 +18,24 @@ export function isComposeEnabled(env: Record<string, string | undefined> = proce
   return env.MAILBOX_COMPOSE_ENABLED?.trim() === 'true'
 }
 
-function positiveInt(raw: string | undefined, fallback: number): number {
-  const n = Number(raw?.trim())
-  return Number.isInteger(n) && n > 0 ? n : fallback
+/**
+ * 0 이상의 정수만 받는다. **0은 "메일함 발신 전면 차단"이다** — 운영자가 발신을 멈추려고 0을 넣는 것이
+ * 가장 자연스러운 동작이라, 0을 기본값으로 바꿔 버리면 오히려 20통이 나간다. 비었거나 정수가 아닌
+ * 값은 기본값이다.
+ */
+function nonNegativeInt(raw: string | undefined, fallback: number): number {
+  const text = raw?.trim()
+  if (!text) return fallback
+  const n = Number(text)
+  return Number.isInteger(n) && n >= 0 ? n : fallback
 }
 
 export function dailyOutboundLimit(env: Record<string, string | undefined> = process.env): number {
-  return positiveInt(env.MAILBOX_DAILY_OUTBOUND_LIMIT, DEFAULT_DAILY_OUTBOUND_LIMIT)
+  return nonNegativeInt(env.MAILBOX_DAILY_OUTBOUND_LIMIT, DEFAULT_DAILY_OUTBOUND_LIMIT)
 }
 
 export function dailyTotalGuard(env: Record<string, string | undefined> = process.env): number {
-  return positiveInt(env.MAILBOX_DAILY_TOTAL_GUARD, DEFAULT_DAILY_TOTAL_GUARD)
+  return nonNegativeInt(env.MAILBOX_DAILY_TOTAL_GUARD, DEFAULT_DAILY_TOTAL_GUARD)
 }
 
 export type QuotaVerdict =
