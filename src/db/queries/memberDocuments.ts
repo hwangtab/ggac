@@ -68,11 +68,11 @@ export type MemberDocumentPendingRow = {
 
 /** 쓰기 거절 — 라우트가 상태 코드로 바꾼다 */
 export class MemberDocumentWriteError extends Error {
-  constructor(
-    readonly code: 'not_found' | 'conflict' | 'quota' | 'too_many',
-    message: string
-  ) {
+  // node --test(strip-only)는 매개변수 속성을 읽지 못한다 — 필드를 따로 둔다
+  readonly code: 'not_found' | 'conflict' | 'quota' | 'too_many'
+  constructor(code: 'not_found' | 'conflict' | 'quota' | 'too_many', message: string) {
     super(message)
+    this.code = code
     this.name = 'MemberDocumentWriteError'
   }
 }
@@ -418,12 +418,17 @@ export async function createMemberDocumentFromUpload(input: {
       createdAt: now,
       updatedAt: now,
     })
+    // 열을 하나씩 적는다 — 호출자가 넘긴 객체에 다른 키(id·documentId·ownerId)가 섞여 와도 덮어쓰지 못하게
     await tx.insert(memberDocumentVersions).values({
       id: input.uploadId,
       documentId,
       ownerId: input.ownerId,
       versionNo: 1,
-      ...input.version,
+      name: input.version.name,
+      mime: input.version.mime,
+      size: input.version.size,
+      blobPath: input.version.blobPath,
+      source: input.version.source,
       createdAt: now,
     })
     return { documentId, versionId: input.uploadId }
@@ -467,10 +472,15 @@ export async function addMemberDocumentVersion(input: {
     if (input.uploadId) await takeUpload(tx, input.ownerId, input.uploadId, input.documentId)
     const versionNo = doc.latestVersionNo + 1
     await tx.insert(memberDocumentVersions).values({
-      ...input.version,
+      id: input.version.id,
       documentId: doc.id,
       ownerId: input.ownerId,
       versionNo,
+      name: input.version.name,
+      mime: input.version.mime,
+      size: input.version.size,
+      blobPath: input.version.blobPath,
+      source: input.version.source,
       createdAt: now,
     })
     await tx
