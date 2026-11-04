@@ -71,6 +71,9 @@ const POST_CUTOVER_TABLES = new Set([
   'work_digest_state', // 0032
   'work_cron_runs', // 0032
   'work_board_document_texts', // 0034 이사회 서류 본문 추출(검색)
+  'member_documents', // 0035 조합원 내 문서함
+  'member_document_versions', // 0035
+  'member_document_uploads', // 0035
 ])
 
 export function comparePgToSqlite(pgSnapshot, sqliteSchema) {
