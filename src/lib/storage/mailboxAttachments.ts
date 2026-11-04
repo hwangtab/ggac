@@ -14,6 +14,12 @@
 
 export const MAILBOX_ATTACHMENT_PREFIX = 'mailbox'
 
+/**
+ * 우리가 **보낸** 메일의 첨부. 받은 메일 접두어(`mailbox/`)와 겹치지 않게 따로 둔다 —
+ * 받은 첨부 다운로드 라우트의 봉쇄 판정이 보낸 첨부 경로를 통과시키지 않고, 그 반대도 마찬가지다.
+ */
+export const MAILBOX_SENT_ATTACHMENT_PREFIX = 'mailbox-sent'
+
 /** 영숫자 1~10자만 확장자로 인정한다. 그 밖은 확장자 없이 저장한다. */
 function safeExtension(filename: string): string {
   const dot = filename.lastIndexOf('.')
@@ -26,8 +32,8 @@ function safeExtension(filename: string): string {
  * 경로가 자기 봉쇄 판정을 통과하지 못하면 예외를 던진다.
  * 저장소에 쓰기 전 쓰기 측에서 이 검사를 거쳐야 한다.
  */
-function assertSafe(path: string): string {
-  if (!isSafeMailboxAttachmentPath(path)) {
+function assertSafe(path: string, check: (p: string) => boolean): string {
+  if (!check(path)) {
     throw new Error('안전하지 않은 메일함 첨부 경로입니다')
   }
   return path
@@ -39,7 +45,16 @@ export function blobPathForAttachment(
   filename: string
 ): string {
   const path = `${MAILBOX_ATTACHMENT_PREFIX}/${emailId}/${attachmentId}${safeExtension(filename)}`
-  return assertSafe(path)
+  return assertSafe(path, isSafeMailboxAttachmentPath)
+}
+
+export function blobPathForSentAttachment(
+  outboundId: string,
+  attachmentId: string,
+  filename: string
+): string {
+  const path = `${MAILBOX_SENT_ATTACHMENT_PREFIX}/${outboundId}/${attachmentId}${safeExtension(filename)}`
+  return assertSafe(path, isSafeSentMailboxAttachmentPath)
 }
 
 /**
@@ -47,6 +62,15 @@ export function blobPathForAttachment(
  * 제어문자·역슬래시·절대경로·스킴·질의·프래그먼트·퍼센트인코딩을 전부 거부한다.
  */
 export function isSafeMailboxAttachmentPath(path: string): boolean {
+  return isSafeThreeSegmentPath(path, MAILBOX_ATTACHMENT_PREFIX)
+}
+
+/** `mailbox-sent/<outboundId>/<attachmentId>[.ext]` 세 조각만 통과시킨다. */
+export function isSafeSentMailboxAttachmentPath(path: string): boolean {
+  return isSafeThreeSegmentPath(path, MAILBOX_SENT_ATTACHMENT_PREFIX)
+}
+
+function isSafeThreeSegmentPath(path: string, prefix: string): boolean {
   if (typeof path !== 'string' || path.length === 0 || path.length > 300) return false
   // eslint-disable-next-line no-control-regex
   if (/[\u0000-\u001f\u007f]/.test(path)) return false
@@ -55,7 +79,7 @@ export function isSafeMailboxAttachmentPath(path: string): boolean {
 
   const segments = path.split('/')
   if (segments.length !== 3) return false
-  if (segments[0] !== MAILBOX_ATTACHMENT_PREFIX) return false
+  if (segments[0] !== prefix) return false
   return segments
     .slice(1)
     .every(

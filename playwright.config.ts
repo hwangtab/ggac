@@ -151,7 +151,7 @@ export default defineConfig({
     {
       name: 'authz',
       testMatch:
-        /(authz-(ownership|personal|remaining|maintenance|roles|mailbox|funding|features|email-verification|market|timebank|board-work|member-documents)|board-work-(chat|tabs|files|editors|search|cron|layout|library)|member-documents)\.spec\.ts/,
+        /(authz-(ownership|personal|remaining|maintenance|roles|mailbox|mailbox-compose|funding|features|email-verification|market|timebank|board-work|member-documents)|board-work-(chat|tabs|files|editors|search|cron|layout|library))\.spec\.ts/,
       dependencies: ['authz-setup'],
       use: { ...devices['Desktop Chrome'], channel: 'chrome' },
     },
@@ -280,6 +280,9 @@ export default defineConfig({
         // 업무툴 멘션 메일은 `log` 전송(보내지 않고 건수만 로그)으로 돌려 크론 경로는 끝까지 탄다(src/work/lib/digest/mailer.ts).
         // 웹 푸시는 VAPID 키가 비면 no-op이다(src/work/lib/push/send.ts).
         RESEND_API_KEY: '',
+        // 메일함 새 메일 작성(킬스위치). 기본은 꺼짐이라 E2E 서버에서만 켠다 — 위에서 RESEND_API_KEY를 비웠고
+        // 스펙은 수신자를 `@test.local`로만 써서 실제로는 아무것도 나가지 않는다(`sendEmail`이 걸러낸다).
+        MAILBOX_COMPOSE_ENABLED: 'true',
         BOARD_WORK_DIGEST_TRANSPORT: 'log',
         WEB_PUSH_PUBLIC_KEY: '',
         NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY: '',

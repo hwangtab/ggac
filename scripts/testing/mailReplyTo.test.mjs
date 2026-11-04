@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { sendEmail } from '../../src/lib/mail/send.ts'
+import { MailSendError, sendEmail } from '../../src/lib/mail/send.ts'
 import { sendAuthEmail } from '../../src/lib/auth/email.ts'
 
 /** globalThis.fetch를 가로채 payload를 잡아둔다. */
@@ -9,7 +9,7 @@ function captureFetch(responseBody = '{}') {
   const calls = []
   const original = globalThis.fetch
   globalThis.fetch = async (url, init) => {
-    calls.push({ url, body: JSON.parse(init.body) })
+    calls.push({ url, body: JSON.parse(init.body), headers: init.headers })
     return new Response(responseBody, {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
@@ -109,5 +109,133 @@ test('@test.local 수신자에게는 sendEmail·sendAuthEmail이 Resend를 호�
     assert.equal(f.calls.length, 1)
   } finally {
     f.restore()
+  }
+})
+
+test('여러 수신자·cc·bcc가 그대로 페이로드에 실린다', async () => {
+  process.env.RESEND_API_KEY = 'test-key'
+  const f = captureFetch()
+  try {
+    await sendEmail({
+      to: ['a@x.com', 'b@x.com'],
+      cc: ['c@x.com'],
+      bcc: ['d@x.com'],
+      subject: 's',
+      html: '<p>x</p>',
+    })
+    assert.deepEqual(f.calls[0].body.to, ['a@x.com', 'b@x.com'])
+    assert.deepEqual(f.calls[0].body.cc, ['c@x.com'])
+    assert.deepEqual(f.calls[0].body.bcc, ['d@x.com'])
+  } finally {
+    f.restore()
+  }
+})
+
+test('cc·bcc가 비어 있으면 키를 넣지 않는다', async () => {
+  process.env.RESEND_API_KEY = 'test-key'
+  const f = captureFetch()
+  try {
+    await sendEmail({ to: 'a@x.com', cc: [], bcc: [], subject: 's', html: '<p>x</p>' })
+    assert.equal('cc' in f.calls[0].body, false)
+    assert.equal('bcc' in f.calls[0].body, false)
+    assert.equal('attachments' in f.calls[0].body, false)
+    assert.equal('Idempotency-Key' in f.calls[0].headers, false)
+  } finally {
+    f.restore()
+  }
+})
+
+test('첨부는 base64로, idempotencyKey는 Idempotency-Key 헤더로 나간다', async () => {
+  process.env.RESEND_API_KEY = 'test-key'
+  const f = captureFetch()
+  try {
+    await sendEmail({
+      to: 'a@x.com',
+      subject: 's',
+      html: '<p>x</p>',
+      attachments: [{ filename: '견적서.pdf', content: Buffer.from('hello') }],
+      idempotencyKey: 'key-123',
+    })
+    assert.deepEqual(f.calls[0].body.attachments, [
+      { filename: '견적서.pdf', content: Buffer.from('hello').toString('base64') },
+    ])
+    assert.equal(f.calls[0].headers['Idempotency-Key'], 'key-123')
+  } finally {
+    f.restore()
+  }
+})
+
+test('to에서 @test.local만 걸러내고, 남는 수신자가 없으면 발송하지 않는다', async () => {
+  process.env.RESEND_API_KEY = 'test-key'
+  const f = captureFetch()
+  try {
+    const none = await sendEmail({
+      to: ['authz-admin@test.local', 'authz-owner@test.local'],
+      cc: ['x@test.local'],
+      subject: 's',
+      html: '<p>x</p>',
+    })
+    assert.equal(none, null)
+    assert.equal(f.calls.length, 0)
+
+    await sendEmail({
+      to: ['authz-admin@test.local', 'real@gmail.com'],
+      cc: ['x@test.local'],
+      subject: 's',
+      html: '<p>x</p>',
+    })
+    assert.deepEqual(f.calls[0].body.to, ['real@gmail.com'])
+    assert.equal('cc' in f.calls[0].body, false)
+  } finally {
+    f.restore()
+  }
+})
+
+test('키가 없으면 kind=config로 던지고 요청을 보내지 않는다', async () => {
+  delete process.env.RESEND_API_KEY
+  const f = captureFetch()
+  try {
+    await assert.rejects(
+      sendEmail({ to: 'a@x.com', subject: 's', html: '<p>x</p>' }),
+      e => e instanceof MailSendError && e.kind === 'config'
+    )
+    assert.equal(f.calls.length, 0)
+  } finally {
+    f.restore()
+  }
+})
+
+test('HTTP 오류는 kind=rejected이고 메시지에 (상태코드)가 남는다 — grantPublishWiring 호환', async () => {
+  process.env.RESEND_API_KEY = 'test-key'
+  const original = globalThis.fetch
+  globalThis.fetch = async () => new Response('rate limited', { status: 429 })
+  try {
+    await assert.rejects(
+      sendEmail({ to: 'a@x.com', subject: 's', html: '<p>x</p>' }),
+      e =>
+        e instanceof MailSendError &&
+        e.kind === 'rejected' &&
+        e.status === 429 &&
+        e.message.includes('(429)') &&
+        e instanceof Error
+    )
+  } finally {
+    globalThis.fetch = original
+  }
+})
+
+test('네트워크 오류·타임아웃은 kind=unknown이다 — 닿았는지 모른다', async () => {
+  process.env.RESEND_API_KEY = 'test-key'
+  const original = globalThis.fetch
+  globalThis.fetch = async () => {
+    throw new TypeError('fetch failed')
+  }
+  try {
+    await assert.rejects(
+      sendEmail({ to: 'a@x.com', subject: 's', html: '<p>x</p>' }),
+      e => e instanceof MailSendError && e.kind === 'unknown'
+    )
+  } finally {
+    globalThis.fetch = original
   }
 })

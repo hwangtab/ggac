@@ -267,3 +267,178 @@ test('기준 시각 이후 수신 건수를 센다 — 쿼터 감시용', async 
   const after = await countInboundSince(Date.now() - 60_000)
   assert.equal(after, before + 1)
 })
+
+// ── 새 메일 작성(보낸 메일) ───────────────────────────────────────────────────
+
+function outboundInput(overrides = {}) {
+  return {
+    idempotency_key: crypto.randomUUID(),
+    to_addresses: ['a@example.com'],
+    cc_addresses: [],
+    bcc_addresses: ['hidden@example.com'],
+    recipient_count: 2,
+    subject: '새 메일',
+    body_html: '<p>안녕하세요</p>',
+    sent_by: null,
+    sent_by_email: null,
+    ...overrides,
+  }
+}
+
+test('보낸 메일은 sending으로 시작하고 snake_case·ISO로 돌아온다', async () => {
+  const { insertOutboundSending } = await loadFreshMailboxModule()
+  const { created, row } = await insertOutboundSending(outboundInput())
+  assert.equal(created, true)
+  assert.equal(row.status, 'sending')
+  assert.equal(row.recipient_count, 2)
+  assert.deepEqual(JSON.parse(row.to_addresses), ['a@example.com'])
+  assert.equal(row.cc_addresses, null)
+  assert.equal(typeof row.created_at, 'string')
+  assert.equal(row.sent_at, null)
+})
+
+test('같은 idempotency_key로 다시 넣으면 새 행 없이 기존 행을 돌려준다 — 중복 발송 방어', async () => {
+  const { insertOutboundSending, countOutboundRecipientsSince } = await loadFreshMailboxModule()
+  const input = outboundInput({ recipient_count: 3 })
+  const before = await countOutboundRecipientsSince(0)
+  const first = await insertOutboundSending(input)
+  const second = await insertOutboundSending({ ...input, subject: '다른 제목' })
+  assert.equal(first.created, true)
+  assert.equal(second.created, false)
+  assert.equal(second.row.id, first.row.id)
+  assert.equal(second.row.subject, '새 메일')
+  assert.equal(await countOutboundRecipientsSince(0), before + 3)
+})
+
+test('sent 전이는 sending일 때만 일어나고 한 번 정해진 상태를 되돌리지 않는다', async () => {
+  const { insertOutboundSending, markOutboundSent, markOutboundStatus, getOutboundEmail } =
+    await loadFreshMailboxModule()
+  const { row } = await insertOutboundSending(outboundInput())
+  await markOutboundSent(row.id, 're_msg_1')
+  let got = await getOutboundEmail(row.id)
+  assert.equal(got.status, 'sent')
+  assert.equal(got.resend_message_id, 're_msg_1')
+  assert.equal(typeof got.sent_at, 'string')
+
+  await markOutboundStatus(row.id, 'failed', 'late failure')
+  got = await getOutboundEmail(row.id)
+  assert.equal(got.status, 'sent')
+})
+
+test('failed·unknown·blocked 전이는 사유를 200자로 자른다', async () => {
+  const { insertOutboundSending, markOutboundStatus, getOutboundEmail } =
+    await loadFreshMailboxModule()
+  const { row } = await insertOutboundSending(outboundInput())
+  await markOutboundStatus(row.id, 'unknown', 'x'.repeat(500))
+  const got = await getOutboundEmail(row.id)
+  assert.equal(got.status, 'unknown')
+  assert.equal(got.error.length, 200)
+})
+
+test('24시간 수신자 수는 sending·sent·unknown만 세고 failed·blocked는 세지 않는다', async () => {
+  const {
+    insertOutboundSending,
+    markOutboundSent,
+    markOutboundStatus,
+    countOutboundRecipientsSince,
+  } = await loadFreshMailboxModule()
+  const base = await countOutboundRecipientsSince(Date.now() - 1000)
+
+  const sending = await insertOutboundSending(outboundInput({ recipient_count: 1 }))
+  const sent = await insertOutboundSending(outboundInput({ recipient_count: 2 }))
+  await markOutboundSent(sent.row.id, null)
+  const unknown = await insertOutboundSending(outboundInput({ recipient_count: 4 }))
+  await markOutboundStatus(unknown.row.id, 'unknown', null)
+  const failed = await insertOutboundSending(outboundInput({ recipient_count: 8 }))
+  await markOutboundStatus(failed.row.id, 'failed', null)
+  const blocked = await insertOutboundSending(outboundInput({ recipient_count: 16 }))
+  await markOutboundStatus(blocked.row.id, 'blocked', null)
+
+  assert.equal(sending.created && sent.created && unknown.created, true)
+  assert.equal(await countOutboundRecipientsSince(Date.now() - 1000), base + 1 + 2 + 4)
+})
+
+test('24시간 수신자 수에는 같은 기간의 답장도 한 통씩 더해진다', async () => {
+  const { insertInboundEmail, insertReply, countOutboundRecipientsSince } =
+    await loadFreshMailboxModule()
+  const mail = await insertInboundEmail(sample())
+  const before = await countOutboundRecipientsSince(Date.now() - 1000)
+  await insertReply({ email_id: mail.id, subject: 'Re: x', body_html: '<p>x</p>' })
+  assert.equal(await countOutboundRecipientsSince(Date.now() - 1000), before + 1)
+})
+
+test('기준 시각보다 오래된 행은 24시간 합계에서 빠진다', async () => {
+  const { insertOutboundSending, countOutboundRecipientsSince } = await loadFreshMailboxModule()
+  await insertOutboundSending(outboundInput({ recipient_count: 5 }))
+  const future = Date.now() + 60_000
+  assert.equal(await countOutboundRecipientsSince(future), 0)
+})
+
+test('보낸 첨부는 메일에 붙어 저장되고 메일을 지우면 함께 지워진다', async () => {
+  const {
+    insertOutboundSending,
+    insertOutboundAttachment,
+    listOutboundAttachments,
+    getOutboundAttachment,
+  } = await loadFreshMailboxModule()
+  const { row } = await insertOutboundSending(outboundInput())
+  const attId = crypto.randomUUID()
+  await insertOutboundAttachment({
+    id: attId,
+    email_id: row.id,
+    filename: '견적서.pdf',
+    content_type: 'application/pdf',
+    size_bytes: 1234,
+    blob_path: `mailbox-sent/${row.id}/${attId}.pdf`,
+  })
+  const list = await listOutboundAttachments(row.id)
+  assert.equal(list.length, 1)
+  assert.equal(list[0].filename, '견적서.pdf')
+  assert.equal((await getOutboundAttachment(attId)).email_id, row.id)
+
+  const client = createClient({ url: `file:${DB_PATH}` })
+  await client.execute('PRAGMA foreign_keys = ON')
+  await client.execute({ sql: 'DELETE FROM outbound_emails WHERE id = ?', args: [row.id] })
+  client.close()
+  assert.equal(await getOutboundAttachment(attId), null)
+})
+
+test('보낸 편지함은 새 메일과 답장을 최신순으로 합치고 kind로 거른다', async () => {
+  const { insertInboundEmail, insertReply, insertOutboundSending, listSentMail } =
+    await loadFreshMailboxModule()
+  const mail = await insertInboundEmail(sample({ from_address: 'asker@example.com' }))
+  await insertReply({ email_id: mail.id, subject: 'Re: 합침', body_html: '<p>r</p>' })
+  await new Promise(r => setTimeout(r, 5))
+  const composed = await insertOutboundSending(outboundInput({ subject: '합침-새 메일' }))
+
+  const all = await listSentMail({ limit: 500, offset: 0, kind: 'all' })
+  const compose = await listSentMail({ limit: 500, offset: 0, kind: 'compose' })
+  const reply = await listSentMail({ limit: 500, offset: 0, kind: 'reply' })
+
+  assert.equal(all.total_count, compose.total_count + reply.total_count)
+  assert.ok(compose.items.every(i => i.kind === 'compose'))
+  assert.ok(reply.items.every(i => i.kind === 'reply'))
+
+  const idxCompose = all.items.findIndex(i => i.id === composed.row.id)
+  const replyItem = all.items.find(i => i.subject === 'Re: 합침')
+  assert.ok(idxCompose >= 0 && replyItem)
+  assert.ok(idxCompose < all.items.indexOf(replyItem), '더 늦게 보낸 새 메일이 앞에 와야 한다')
+
+  assert.deepEqual(JSON.parse(replyItem.to_addresses), ['asker@example.com'])
+  assert.equal(replyItem.related_email_id, mail.id)
+  assert.equal(replyItem.status, 'sent')
+  assert.equal(typeof replyItem.created_at, 'string')
+  assert.ok(!('bcc_addresses' in all.items[0]), '목록에는 BCC를 싣지 않는다')
+  assert.ok(!('body_html' in all.items[0]), '목록에는 본문을 싣지 않는다')
+})
+
+test('보낸 편지함 페이지네이션은 전체 개수를 유지한다', async () => {
+  const { insertOutboundSending, listSentMail } = await loadFreshMailboxModule()
+  for (let i = 0; i < 3; i++) await insertOutboundSending(outboundInput())
+  const page = await listSentMail({ limit: 2, offset: 0, kind: 'compose' })
+  const rest = await listSentMail({ limit: 2, offset: 2, kind: 'compose' })
+  assert.equal(page.items.length, 2)
+  assert.ok(page.total_count >= 3)
+  assert.equal(rest.total_count, page.total_count)
+  assert.ok(!page.items.some(a => rest.items.some(b => a.id === b.id)))
+})

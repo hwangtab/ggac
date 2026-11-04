@@ -5,7 +5,7 @@ import { createdAt, nowMs, updatedAt, uuidPk } from './_shared.ts'
 import { memberProfiles } from './identity.ts'
 
 /**
- * 조합원 '내 문서함'(docs/board-work/04-조합원-문서함.md §2). 마이그레이션 0035.
+ * 조합원 '내 문서함'(docs/board-work/04-조합원-문서함.md §2). 마이그레이션 0036(main의 0035_mailbox_outbound 뒤로 미뤘다).
  *
  * 업무툴 표(0027~0034)와 같은 규칙: 사람 FK는 `member_profiles`, enum·CHECK 없음(허용값은
  * `src/lib/memberDocuments/rules.ts`와 쿼리 계층이 지킨다), 시각은 epoch ms.

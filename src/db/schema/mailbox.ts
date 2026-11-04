@@ -89,3 +89,65 @@ export const inboundEmailReplies = sqliteTable(
   },
   table => [index('inbound_email_replies_email_idx').on(table.emailId)]
 )
+
+/**
+ * 관리자가 메일함에서 **새로 작성해** 보낸 메일(받은 메일에 대한 답장은 `inbound_email_replies`).
+ *
+ * 발송 **전에** `sending` 행을 먼저 쓴다. `idempotency_key`의 UNIQUE가 더블클릭·재전송의 중복
+ * 발송을 막고, 일일 상한은 이 표의 합계로 센다. 함수가 발송 도중 죽어도 `sending` 행이 흔적으로 남는다.
+ */
+export const outboundEmails = sqliteTable(
+  'outbound_emails',
+  {
+    id: uuidPk(),
+    /** 클라이언트가 만든 UUID. 같은 작성 화면에서 온 요청을 한 건으로 묶는다. */
+    idempotencyKey: text('idempotency_key').notNull().unique(),
+    /** JSON 배열 문자열. */
+    toAddresses: text('to_addresses').notNull(),
+    ccAddresses: text('cc_addresses'),
+    bccAddresses: text('bcc_addresses'),
+    /** 중복을 걸러낸 to+cc+bcc 수. 일일 상한 합산에 쓴다. */
+    recipientCount: integer('recipient_count').notNull(),
+    subject: text('subject').notNull(),
+    /** 정화한 뒤의 값. */
+    bodyHtml: text('body_html').notNull(),
+    sentBy: text('sent_by').references(() => memberProfiles.id, { onDelete: 'set null' }),
+    /** 보낸 사람 프로필이 지워져도 누가 보냈는지 남긴다. */
+    sentByEmail: text('sent_by_email'),
+    /**
+     * sending | sent | failed | unknown | blocked
+     * - unknown: 타임아웃 등으로 Resend에 닿았는지 모른다. 다시 보내지 말고 Resend 대시보드로 확인한다.
+     * - blocked: 일일 상한에 걸려 보내지 않았다.
+     */
+    status: text('status').notNull().default('sending'),
+    /** @test.local 건너뛰기·응답 파싱 실패면 null. */
+    resendMessageId: text('resend_message_id'),
+    /** 200자로 자른 실패 사유. API 키는 들어가지 않는다. */
+    error: text('error'),
+    sentAt: integer('sent_at', { mode: 'timestamp_ms' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  table => [
+    index('outbound_emails_created_idx').on(table.createdAt),
+    index('outbound_emails_status_idx').on(table.status),
+    index('outbound_emails_sent_by_idx').on(table.sentBy),
+  ]
+)
+
+export const outboundEmailAttachments = sqliteTable(
+  'outbound_email_attachments',
+  {
+    id: uuidPk(),
+    emailId: text('email_id')
+      .notNull()
+      .references(() => outboundEmails.id, { onDelete: 'cascade' }),
+    filename: text('filename').notNull(),
+    contentType: text('content_type'),
+    sizeBytes: integer('size_bytes').notNull(),
+    /** 비공개 Blob 경로. `mailbox-sent/` 접두어 아래에만 존재한다. */
+    blobPath: text('blob_path').notNull(),
+    createdAt: createdAt(),
+  },
+  table => [index('outbound_email_attachments_email_idx').on(table.emailId)]
+)

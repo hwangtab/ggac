@@ -9,7 +9,7 @@ import { registerAliasResolveHook } from './aliasResolveHook.mjs'
 registerAliasResolveHook(import.meta.url)
 
 /**
- * 조합원 내 문서함 쿼리 계층(마이그레이션 0035)을 실제 SQLite 파일 DB로 본다 — docs/board-work/04-조합원-문서함.md §2·§5·§6.
+ * 조합원 내 문서함 쿼리 계층(마이그레이션 0036)을 실제 SQLite 파일 DB로 본다 — docs/board-work/04-조합원-문서함.md §2·§5·§6.
  *
  * - **소유 경계는 데이터 규칙이다**: 남의 ownerId 로는 어떤 함수도 문서·버전·임시 업로드를 읽거나 바꾸지 못한다(null·false·not_found).
  * - 사용량은 모든 버전 + 24시간 안의 임시 업로드다. 임시 업로드를 만들 때와 승격할 때 같은 트랜잭션에서 다시 센다.
@@ -383,7 +383,7 @@ test('24시간이 지난 임시 업로드만 정리 대상이다', async () => {
   assert.equal(await Q.docs.deleteMemberDocumentUploadRows([stale.id]), 1)
 })
 
-test('마이그레이션 0035 가 만든 표·색인·FK 가 스키마 선언과 같다', async () => {
+test('마이그레이션 0036 이 만든 표·색인·FK 가 스키마 선언과 같다', async () => {
   const idx = await setupClient.execute(
     "select tbl_name, name from sqlite_master where type = 'index' and tbl_name like 'member_document%' and name not like 'sqlite_%' order by tbl_name, name"
   )

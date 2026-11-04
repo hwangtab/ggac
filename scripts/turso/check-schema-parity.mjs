@@ -32,6 +32,8 @@ const POST_CUTOVER_TABLES = new Set([
   'inbound_emails', // 0020 관리자 메일함
   'inbound_email_attachments', // 0020 관리자 메일함
   'inbound_email_replies', // 0020 관리자 메일함
+  'outbound_emails', // 0035 메일함 새 메일
+  'outbound_email_attachments', // 0035 메일함 새 메일
   'funding_campaigns', // 0022 조합원 프로젝트 펀딩
   'funding_rewards', // 0022
   'funding_pledges', // 0022
@@ -71,9 +73,9 @@ const POST_CUTOVER_TABLES = new Set([
   'work_digest_state', // 0032
   'work_cron_runs', // 0032
   'work_board_document_texts', // 0034 이사회 서류 본문 추출(검색)
-  'member_documents', // 0035 조합원 내 문서함
-  'member_document_versions', // 0035
-  'member_document_uploads', // 0035
+  'member_documents', // 0036 조합원 내 문서함
+  'member_document_versions', // 0036
+  'member_document_uploads', // 0036
 ])
 
 export function comparePgToSqlite(pgSnapshot, sqliteSchema) {

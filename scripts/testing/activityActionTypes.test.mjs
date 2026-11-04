@@ -58,6 +58,7 @@ test('승인·심사·관리 행위와 결제 전이도 브라우저가 적지 �
     'funding_fulfillment_updated',
     'ticket_reservation_refunded',
     'attachment_downloaded',
+    'mailbox_email_sent',
     'password_changed',
     'email_changed',
   ]) {
