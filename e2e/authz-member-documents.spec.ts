@@ -56,31 +56,38 @@ async function asRole(
 test.describe('내 문서함 권한 경계', () => {
   test.describe.configure({ mode: 'serial' })
 
+  // 시험 저장소에 심는 객체 키는 실행마다 새로 정한다 — 같은 키를 지웠다 다시 올리면 Blob 의 CDN 이 한동안 지운 상태(404)를
+  // 내준다(2026-11-04 실측: 연달아 두 번 돌린 두 번째 실행에서 주인 내려받기가 404). 시드 버전 행의 경로를 그 키로 바꾼다.
+  let seededPath: string | null = null
+
   test.beforeAll(async () => {
     await setSwitch(true)
     if (testToken) {
       const f = readFixtures()
-      await put(
-        `member-documents/${f.users.owner}/${f.memberDocumentVersionId}/authz_seed.docx`,
-        seedBytes,
-        {
-          access: 'private',
-          token: testToken,
-          contentType: DOCX_MIME,
-          addRandomSuffix: false,
-          allowOverwrite: true,
-        }
-      )
+      seededPath = `member-documents/${f.users.owner}/${f.memberDocumentVersionId}/authz_seed_${Date.now()}.docx`
+      await put(seededPath, seedBytes, {
+        access: 'private',
+        token: testToken,
+        contentType: DOCX_MIME,
+        addRandomSuffix: false,
+        allowOverwrite: true,
+      })
+      const client = db()
+      try {
+        await client.execute({
+          sql: 'UPDATE member_document_versions SET blob_path = ? WHERE id = ?',
+          args: [seededPath, f.memberDocumentVersionId],
+        })
+      } finally {
+        client.close()
+      }
     }
   })
 
   test.afterAll(async () => {
     await setSwitch(true)
-    if (testToken) {
-      const f = readFixtures()
-      await del(`member-documents/${f.users.owner}/${f.memberDocumentVersionId}/authz_seed.docx`, {
-        token: testToken,
-      }).catch(() => undefined)
+    if (testToken && seededPath) {
+      await del(seededPath, { token: testToken }).catch(() => undefined)
     }
   })
 
