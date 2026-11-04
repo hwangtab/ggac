@@ -101,6 +101,19 @@ async function seedFixtures(): Promise<void> {
         `mailbox-sent/${SEEDED_OUTBOUND_ID}/${SEEDED_ATTACHMENT_ID}.pdf`,
       ],
     })
+    // 답장이 매달릴 받은 메일 행. authz-mailbox.spec.ts도 같은 id를 심지만(그쪽은
+    // DO UPDATE로 덮는다) 두 스펙의 실행 순서는 보장되지 않는다 — 이 스펙이 먼저 돌면
+    // 외래 키가 깨져 beforeAll이 통째로 실패했다(2026-11-04 실측). 그래서 여기서도 심는다.
+    await client.execute({
+      sql: `INSERT INTO inbound_emails
+          (id, resend_email_id, message_id, from_address, to_addresses,
+           subject, body_html, status, body_fetch_status, received_at)
+        VALUES (?, 'authz-mailbox-done-fixture', '<authz-mailbox-done@fixture.local>',
+          'sender-done@example.com', ?, 'MAILBOX-E2E-DONE-FIXTURE', '<p>seeded</p>',
+          'unread', 'done', ?)
+        ON CONFLICT(id) DO NOTHING`,
+      args: [EMAIL_DONE_ID, JSON.stringify(['mailbox@ggac.kr']), now - 30_000],
+    })
     // 보낸 편지함의 "답장" 행.
     await client.execute({
       sql: `INSERT INTO inbound_email_replies (id, email_id, subject, body_html) VALUES (?, ?, ?, '<p>seeded reply</p>')

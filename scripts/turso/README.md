@@ -346,9 +346,10 @@ webServer에 `{...process.env, ...webServer.env}`를 넘긴다. e2e 전용 변�
   11개 스펙
 - `authz-public`: `authz-boundaries` 21건
 
-**실측 기준선(2026-11-04, 조합원 내 문서함(0035) 뒤, 운영 빌드 서버):**
-총 290건 중 **287 passed, 1 failed, 2 skipped**(5.5분). 실패 1건은 정책 36(`PUBLIC_BLOB_READ_WRITE_TOKEN` 없이 돌림),
-스킵 2건은 메일함 첨부 다운로드 기록과 내 문서함 새 HWPX 문서(`NEXT_PUBLIC_HWPX_EDITOR_ENABLED`가 없을 때)다. 늘어난 12건은
+**실측 기준선(2026-11-04, 조합원 내 문서함(0036)·메일함 새 메일(0035) 뒤, 운영 빌드 서버):**
+총 305건 중 **302 passed, 1 failed, 2 skipped**(5.7분). 실패 1건은 정책 36(`PUBLIC_BLOB_READ_WRITE_TOKEN` 없이 돌림),
+스킵 2건은 메일함 첨부 다운로드 기록과 내 문서함 새 HWPX 문서(`NEXT_PUBLIC_HWPX_EDITOR_ENABLED`가 없을 때)다. 직전 275에서
+늘어난 27건은 `authz-mailbox-compose.spec.ts` 15건(main이 넣고 기준선은 재지 않았다)과 내 문서함 12건 —
 `authz-member-documents.spec.ts` 7건(목록·남의 id 404 짝·화면 404·비로그인/미승인/정지·스위치·용량·크론 인증)과
 `member-documents.spec.ts` 5건(DOCX 올리기→편집기 저장 v2→되돌리기 v3·HWP 편집 저장·보존 크론·모바일·스위치 꺼진 화면)이다.
 시험 Blob 저장소 토큰과 편집기 env(`NEXT_PUBLIC_OFFICE_EDITOR_ORIGIN`·`NEXT_PUBLIC_HWP_EDITOR_ENABLED=1`)를 준 실행이다.
@@ -1142,7 +1143,7 @@ EXPLAIN QUERY PLAN SELECT count(*) FROM notifications WHERE user_id = '<아무 �
 가드도 타입 검사도 통과한다. 가드는 **"이 문자열이 이 파일에 있는가"**만 보고
 도달 가능성·실행 순서·데이터 흐름을 보지 않는다.
 
-**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 287 passed, 실행 절차는
+**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 302 passed, 실행 절차는
 위 "권한 E2E" 절). 같은 감사에서 **E2E는 관리자 게이트 무력화를 실제로 잡았다.**
 
 `assert-runtime-risks.mjs`가 여전히 값을 하는 자리는 **지워진 것**(게이트를 통째로

@@ -320,7 +320,9 @@ test.describe('내 문서함 권한 경계', () => {
       await page.goto('/mypage/documents')
       await expect(page.getByTestId('member-documents-off')).toBeVisible()
       await page.goto('/mypage')
-      await expect(page.getByRole('link', { name: '활동 내역' })).toBeVisible({ timeout: 15_000 })
+      await expect(page.getByRole('link', { name: '활동 내역', exact: true })).toBeVisible({
+        timeout: 15_000,
+      })
       await expect(page.getByRole('link', { name: '내 문서함' })).toHaveCount(0)
 
       await setSwitch(true)
