@@ -396,7 +396,7 @@ noreply@ggac.kr로 가서 유실된다), `MAILBOX_BACKFILL_CRON_TOKEN`(메일함
   **앱 코드가 전부 판정한다**. "RLS 정책을 고친다"는 접근은 아무것도 바꾸지
   않으면서 경계가 지켜진다고 믿게 만든다.
 - **권한의 안전망은 E2E다. 정적 가드가 아니다.** 인가를 바꿨으면
-  `npm run test:e2e:authz`(기준선 **302 passed**, 총 305건 — 1건은 정책 36으로
+  `npm run test:e2e:authz`(기준선 **305 passed**, 총 308건 — 1건은 정책 36으로
   `PUBLIC_BLOB_READ_WRITE_TOKEN` 없이 돌리면 실패하고, 2건은 스킵이다 — 메일함
   첨부 다운로드 기록 테스트가 실제 Blob 객체를 요구해서고, 내 문서함 새 HWPX
   테스트가 `NEXT_PUBLIC_HWPX_EDITOR_ENABLED`를 요구해서다. 시험 Blob 저장소
