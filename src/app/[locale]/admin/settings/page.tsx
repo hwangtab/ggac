@@ -56,6 +56,8 @@ interface AdminSettings {
     comments_enabled: boolean
     file_uploads_enabled: boolean
     funding_enabled: boolean
+    /** 조합원 내 문서함(기본 꺼짐) */
+    member_documents_enabled: boolean
     /** 조합원 요율(만분율). 화면은 퍼센트로 보여 준다. */
     funding_fee_rate_member_bp: number
     /** 비조합원 요율(만분율). */
@@ -999,6 +1001,28 @@ export default function AdminSettingsPage() {
                         사진입니다. 올라가 있는 파일은 그대로 내려받힙니다. 펀딩 표지 이미지는 펀딩
                         스위치가 다스리므로 이것과 무관하고, 메일함 수신 첨부와 이사회 서류함도
                         영향을 받지 않습니다.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={settings.features.member_documents_enabled === true}
+                          onChange={e =>
+                            updateSettings('features', 'member_documents_enabled', e.target.checked)
+                          }
+                          className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 mr-2"
+                        />
+                        <span className="text-sm font-medium text-gray-700">
+                          내 문서함 — 조합원 개인 문서 보관·앱 안 편집
+                        </span>
+                      </label>
+                      <p className="mt-1 ml-6 text-xs text-gray-500">
+                        켜면 승인된 조합원이 마이페이지의 &lsquo;내 문서함&rsquo;에서 자기 문서를
+                        올리고 고칠 수 있습니다(한 사람 200MB). 끄면 메뉴가 사라지고 문서함 화면과
+                        API가 모두 닫힙니다 — 올려 둔 문서는 지워지지 않고 다시 켜면 그대로
+                        보입니다.
                       </p>
                     </div>
 

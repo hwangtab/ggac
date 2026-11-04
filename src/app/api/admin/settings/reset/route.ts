@@ -248,6 +248,14 @@ const DEFAULT_SETTINGS = [
     description: '크라우드펀딩 기능 설정',
     is_sensitive: false,
   },
+  {
+    category: 'features',
+    setting_key: 'member_documents',
+    // 출시 전 기능 — 초기화는 꺼진 상태로 되돌린다(docs/board-work/04-조합원-문서함.md §7).
+    setting_value: { enabled: false },
+    description: '조합원 내 문서함 기능 설정',
+    is_sensitive: false,
+  },
 ]
 
 // POST: 모든 설정을 기본값으로 복원

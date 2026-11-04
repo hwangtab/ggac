@@ -38,6 +38,27 @@ async function setMaintenance(enabled: boolean) {
   } finally {
     client.close()
   }
+  await waitForMiddleware(enabled)
+}
+
+/**
+ * DB를 바꾼 직후의 첫 요청이 옛 값을 볼 수 있다. 캐시 TTL은 0이지만 미들웨어는
+ * **이미 날아가 있는 조회를 공유한다**(`settingsInFlight`) — 다른 워커의 요청이
+ * UPDATE 전에 띄운 조회가 이 요청에 돌아오면 유지보수가 켜졌는데도 200이 났다
+ * (2026-11-04 실측, 내 문서함 실제 업로드 스펙이 같이 돌던 회차). 그래서 미들웨어가
+ * 새 값을 반영할 때까지(최대 10초) 세션 없는 요청으로 확인한 뒤 돌아간다.
+ */
+async function waitForMiddleware(enabled: boolean) {
+  const base = `http://127.0.0.1:${Number(process.env.PLAYWRIGHT_PORT || 3101)}`
+  await expect
+    .poll(
+      async () => {
+        const res = await fetch(`${base}/board`, { redirect: 'manual' })
+        return res.status === 503
+      },
+      { timeout: 10_000, intervals: [100, 250, 500] }
+    )
+    .toBe(enabled)
 }
 
 /**

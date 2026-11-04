@@ -115,6 +115,8 @@ export function storageErrorResponse(e: unknown, where: string): NextResponse {
  *   - 단일 범위 → 저장소에 넘기고, 저장소가 `content-range`를 돌려주면 206(아니면 200 전체로 떨어진다)
  *   - 크기 밖 → 416 + `Content-Range: bytes * /<size>`
  * `headers`에는 Content-Type·Content-Disposition·프레임 정책을 담아 넘긴다.
+ * `read`는 저장소 계층(기본: 업무툴 `readObject` — `board-work/` 경로만). 조합원 내 문서함은 자기 경로 판정이 붙은
+ * 계층(`readMemberDocumentObject`)을 넘긴다(docs/board-work/04-조합원-문서함.md §3-3).
  */
 export async function streamObject(opts: {
   path: string
@@ -122,6 +124,7 @@ export async function streamObject(opts: {
   rangeHeader: string | null
   headers: Record<string, string>
   where: string
+  read?: typeof readObject
 }): Promise<NextResponse> {
   const range = parseByteRange(opts.rangeHeader, opts.size)
   const base = { ...NO_STORE, 'Accept-Ranges': 'bytes', ...opts.headers }
@@ -133,7 +136,7 @@ export async function streamObject(opts: {
   }
   let obj: Awaited<ReturnType<typeof readObject>>
   try {
-    obj = await readObject(opts.path, range.kind === 'range' ? { range } : {})
+    obj = await (opts.read ?? readObject)(opts.path, range.kind === 'range' ? { range } : {})
   } catch (e) {
     if (e instanceof RangeNotSatisfiableError) {
       return new NextResponse(null, {

@@ -129,6 +129,13 @@ interface SystemSettingsData {
      * 바꾸지 않고, 전용 라우트(`/api/admin/timebank/settings`)만 쓴다(§9.2).
      */
     timebank_features: TimebankSettings
+    /**
+     * 조합원 내 문서함(docs/board-work/04-조합원-문서함.md §7). `enabled === true`일 때만 켜짐 — 판정의 정본은
+     * `@/lib/memberDocuments/settings`다.
+     */
+    member_documents: {
+      enabled: boolean
+    }
   }
 }
 
@@ -261,6 +268,8 @@ function getDefaultSettings(): SystemSettingsData {
       },
       // 수치는 다시 적지 않는다 — 정본(`TIMEBANK_DEFAULTS`)을 복제해 쓴다.
       timebank_features: { ...TIMEBANK_DEFAULTS },
+      // 내 문서함은 출시 전 기능이라 꺼진 채로 시작한다(켜는 것은 관리자 설정 화면).
+      member_documents: { enabled: false },
     },
   }
 }

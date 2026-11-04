@@ -134,6 +134,12 @@ export const SETTING_MAPPINGS = {
       transform: (value: any) =>
         clampFeeRateBp(value?.platform_fee_rate_nonmember_bp, NONMEMBER_FEE_RATE_BP),
     },
+    // 조합원 내 문서함. 펀딩처럼 **값이 없으면 꺼짐**이다 — 출시 전 기능이라 행이 없는 운영 DB에서 켜진 쪽으로
+    // 기울면 안 된다. 소비처(`@/lib/memberDocuments/settings`)도 `enabled === true`만 켜짐으로 읽는다.
+    member_documents_enabled: {
+      key: 'member_documents',
+      transform: (value: any) => value?.enabled === true,
+    },
   },
 }
 
@@ -216,6 +222,7 @@ export const SystemSettingsUpdateSchema = z
         // 상한 `MAX_FEE_RATE_BP`와 같은 숫자다.
         funding_fee_rate_member_bp: z.number().int().min(0).max(MAX_FEE_RATE_BP).optional(),
         funding_fee_rate_nonmember_bp: z.number().int().min(0).max(MAX_FEE_RATE_BP).optional(),
+        member_documents_enabled: z.boolean().optional(),
       })
       .partial()
       .strict()

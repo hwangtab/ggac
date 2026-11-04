@@ -136,6 +136,11 @@ export type Fixtures = {
    * `authz-timebank.spec.ts`가 각각 거절·취소로 소모한다(시드가 되돌린다).
    */
   timebankSuspendedPendingIds: { bySuspended: string; toSuspended: string }
+  /** 내 문서함 — `owner`의 문서(v1, Blob 객체 없음)와 그 버전, `owner`의 임시 업로드(업로드 토큰 경계용) */
+  memberDocumentId: string
+  memberDocumentVersionId: string
+  memberDocumentPendingId: string
+  memberDocumentPendingPath: string
 }
 
 /**

@@ -131,6 +131,11 @@ const {
   timebankTransfers: tursoTimebankTransfers,
 } = await import('@/db/schema/timebank')
 const { TIMEBANK_DEFAULTS } = await import('@/lib/timebank/settings')
+const {
+  memberDocuments: tursoMemberDocuments,
+  memberDocumentVersions: tursoMemberDocumentVersions,
+  memberDocumentUploads: tursoMemberDocumentUploads,
+} = await import('@/db/schema/memberDocuments')
 const { eq, and, inArray, notInArray, or } = await import('drizzle-orm')
 const { workChannels: tursoWorkChannels } = await import('@/db/schema/work')
 const { createChannelRow, addChannelMemberRows, openDmRow } = await import(
@@ -777,6 +782,12 @@ async function main() {
   // 타임뱅크 경계(`e2e/authz-timebank.spec.ts`). 설정 행 하나, 글 둘(제공 글·조합
   // 업무 글), 원장 행 넷(대기·확정·정지 회원이 당사자인 대기 둘).
   const TIMEBANK_SETTING_ID = '00000000-0000-4000-8000-00000000a011'
+  // 조합원 내 문서함(`e2e/authz-member-documents.spec.ts`). 스위치 행 하나, `owner`의 문서 하나(v1 — Blob 객체는
+  // 없다: 내용 라우트는 권한을 지나면 저장소 503/404), `owner`의 임시 업로드 하나(업로드 토큰 경계용).
+  const MEMBER_DOCUMENTS_SETTING_ID = '00000000-0000-4000-8000-00000000a012'
+  const MEMBER_DOCUMENT_ID = '00000000-0000-4000-8000-00000000a050'
+  const MEMBER_DOCUMENT_VERSION_ID = '00000000-0000-4000-8000-00000000a051'
+  const MEMBER_DOCUMENT_PENDING_ID = '00000000-0000-4000-8000-00000000a052'
   const TIMEBANK_LISTING_ID = '00000000-0000-4000-8000-00000000a040'
   const TIMEBANK_TASK_ID = '00000000-0000-4000-8000-00000000a041'
   const TIMEBANK_PENDING_ID = '00000000-0000-4000-8000-00000000a042'
@@ -1446,6 +1457,17 @@ async function main() {
       description: 'authz E2E 픽스처',
       isSensitive: false,
     },
+    // 내 문서함 — **로컬 테스트 DB에서만** 켠다(운영 기본값은 꺼짐, `seed-member-documents-settings.mjs`).
+    // 꺼져 있으면 모든 라우트가 게이트 뒤 503이라 소유 경계 단정이 그 503에 가려진다.
+    // `e2e/authz-member-documents.spec.ts`가 껐다 다시 켠다.
+    {
+      id: MEMBER_DOCUMENTS_SETTING_ID,
+      category: 'features',
+      settingKey: 'member_documents',
+      settingValue: { enabled: true },
+      description: 'authz E2E 픽스처',
+      isSensitive: false,
+    },
   ]
   for (const row of settingRows) {
     await db
@@ -1836,6 +1858,44 @@ async function main() {
     suspendedPendingBId: TIMEBANK_SUSPENDED_PENDING_B_ID,
   })
 
+  // 내 문서함: owner·other 의 문서를 비우고(앞선 실행·실제 편집 E2E 가 남긴 것) owner 문서 하나·임시 업로드 하나를 둔다.
+  // 행만 지운다 — 앞선 실행이 시험 저장소에 남긴 객체는 그 스펙이 스스로 지운다.
+  const memberDocumentOwners = [ids.owner, ids.other, ids.pending, ids.suspended]
+  await db
+    .delete(tursoMemberDocumentUploads)
+    .where(inArray(tursoMemberDocumentUploads.ownerId, memberDocumentOwners))
+  await db
+    .delete(tursoMemberDocuments)
+    .where(inArray(tursoMemberDocuments.ownerId, memberDocumentOwners))
+  const memberDocumentPath = `member-documents/${ids.owner}/${MEMBER_DOCUMENT_VERSION_ID}/authz_seed.docx`
+  await db.insert(tursoMemberDocuments).values({
+    id: MEMBER_DOCUMENT_ID,
+    ownerId: ids.owner,
+    name: 'authz 시드 문서.docx',
+    latestVersionNo: 1,
+  })
+  await db.insert(tursoMemberDocumentVersions).values({
+    id: MEMBER_DOCUMENT_VERSION_ID,
+    documentId: MEMBER_DOCUMENT_ID,
+    ownerId: ids.owner,
+    versionNo: 1,
+    name: 'authz 시드 문서.docx',
+    mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    size: 3001,
+    blobPath: memberDocumentPath,
+    source: 'upload',
+  })
+  const memberDocumentPendingPath = `member-documents/${ids.owner}/${MEMBER_DOCUMENT_PENDING_ID}/authz_pending.pdf`
+  await db.insert(tursoMemberDocumentUploads).values({
+    id: MEMBER_DOCUMENT_PENDING_ID,
+    ownerId: ids.owner,
+    documentId: null,
+    blobPath: memberDocumentPendingPath,
+    name: 'authz_pending.pdf',
+    mime: 'application/pdf',
+    size: 1024,
+  })
+
   const fixtures = {
     users: ids,
     workPublicChannelId: WORK_PUBLIC_CHANNEL_ID,
@@ -1910,6 +1970,10 @@ async function main() {
       bySuspended: TIMEBANK_SUSPENDED_PENDING_A_ID,
       toSuspended: TIMEBANK_SUSPENDED_PENDING_B_ID,
     },
+    memberDocumentId: MEMBER_DOCUMENT_ID,
+    memberDocumentVersionId: MEMBER_DOCUMENT_VERSION_ID,
+    memberDocumentPendingId: MEMBER_DOCUMENT_PENDING_ID,
+    memberDocumentPendingPath,
   }
   writeFileSync(OUT_FILE, JSON.stringify(fixtures, null, 2) + '\n')
 

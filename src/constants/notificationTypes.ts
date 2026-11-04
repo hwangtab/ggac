@@ -55,6 +55,8 @@ export const NOTIFICATION_TYPE_COLOR: Record<NotificationType, string> = {
   timebank_credited: 'bg-emerald-100 text-emerald-800',
   timebank_volunteer: 'bg-indigo-100 text-indigo-800',
   timebank_withdrawal_negative: 'bg-rose-100 text-rose-800',
+  member_document_expiring: 'bg-amber-100 text-amber-800',
+  member_document_deleted: 'bg-gray-100 text-gray-800',
 }
 
 /** 목록에 보이는 한국어 이름. 영문 식별자가 그대로 보이던 것이 출발점이다. */
@@ -91,6 +93,8 @@ export const NOTIFICATION_TYPE_LABEL: Record<NotificationType, string> = {
   timebank_credited: '타임 적립',
   timebank_volunteer: '조합 업무 자원',
   timebank_withdrawal_negative: '타임뱅크 탈퇴 정산',
+  member_document_expiring: '문서함 삭제 예고',
+  member_document_deleted: '문서함 정리',
 }
 
 export function notificationTypeColor(type: NotificationType): string {

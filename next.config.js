@@ -36,6 +36,10 @@ const KORDOC_ROUTES = [
   '/api/board-room/work/files/\\[id\\]/drafts/\\[uploadId\\]/render',
   '/api/board-room/work/files/new-drafts/\\[uploadId\\]/verify',
   '/api/board-room/work/files/new-drafts/\\[uploadId\\]/render',
+  // 조합원 내 문서함(docs/board-work/04-조합원-문서함.md) — 미리보기와, HWP·HWPX 편집기 저장본을 검사하는 승격 라우트
+  '/api/mypage/documents/files/\\[versionId\\]/render',
+  '/api/mypage/documents',
+  '/api/mypage/documents/\\[id\\]/versions',
 ]
 /**
  * 이사회 업무툴 본문 추출 크론(설계 §8-2). PDF 를 읽으므로 pdfjs-dist(+ DOMMatrix 폴리필 @napi-rs/canvas)는 남기고

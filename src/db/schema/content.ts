@@ -56,6 +56,11 @@ export const NOTIFICATION_TYPE = [
   'timebank_credited',
   'timebank_volunteer',
   'timebank_withdrawal_negative',
+  // 조합원 내 문서함(2026-11-04, docs/board-work/04-조합원-문서함.md §6). 1년 동안 열지 않은 문서의 삭제 예고와
+  // 삭제 통지. 이동은 `/mypage/documents`(`src/utils/notificationNavigation.ts`). DB CHECK가 없어 마이그레이션이
+  // 필요 없다.
+  'member_document_expiring',
+  'member_document_deleted',
 ] as const
 
 export const posts = sqliteTable(

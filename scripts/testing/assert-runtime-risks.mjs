@@ -26,7 +26,7 @@
  *
  * ## 그럼 인가는 무엇이 지키는가 — **E2E다**
  *
- * `npm run test:e2e:authz`(기준선 275 passed, 총 277건 — 정책 36 1건은 공개 Blob 토큰 없이 실패, 1 skipped.
+ * `npm run test:e2e:authz`(기준선 305 passed, 총 308건 — 정책 36 1건은 공개 Blob 토큰 없이 실패, 2 skipped.
  * Blob 토큰·토스 키가 없으면 환경 의존 실패가 더 나온다 — dev 서버 시절 2026-11-02 실측 206 passed·4 failed·1 skipped).
  * 같은 감사에서 **E2E는 관리자 게이트
  * 무력화를 실제로 잡았다.** 인가를 바꿨으면 그걸 돌려라. 이 파일이 초록불인 것은
@@ -7740,6 +7740,105 @@ if (trackedFiles === null) {
   if (timebankFailures.length > 0) {
     failures.push(
       `Timebank admin/board API contracts (plan Task 9). These pin strings only; the real net is the authz E2E (Task 13). Offending contract(s):\n${timebankFailures
+        .map(hit => `- ${hit}`)
+        .join('\n')}`
+    )
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 조합원 내 문서함(docs/board-work/04-조합원-문서함.md §4) — `/api/mypage/documents/**`.
+//
+// 계약(문자열 검사 — 보조다. 안전망은 e2e/authz-member-documents.spec.ts):
+// - 모든 핸들러 본문 첫 단계가 `requireActiveMember()`다(비로그인·미승인·정지 차단). 글롭이라 새 라우트가 자동으로 들어온다.
+// - 메뉴용 `status` 말고는 모든 핸들러가 기능 스위치(`memberDocumentsOff()`)를 본다 — 꺼지면 읽기까지 닫힌다.
+// - 경로로 id 를 받는 라우트(`[id]`·`[versionId]`·`[uploadId]`)의 모든 핸들러는 그 id 를 **내 것으로만** 찾는 함수
+//   (owner_id 를 WHERE 에 넣는 쿼리·서비스)를 `auth.user.id`와 함께 부른다.
+// - 보존 크론은 `CRON_SECRET`을 타이밍 안전 비교(`isCronAuthorized`)로 본다.
+// - 문서함 저장소 계층은 문서함 경로 판정(`isSafeMemberDocumentPath`)으로만 만든다.
+// **증명하지 않는 것**: 판정의 순서·도달 가능성·데이터 흐름(예: 게이트를 부르고 결과를 버리는 것).
+{
+  const memberDocFailures = []
+  const memberDocRoutes = globSync('src/app/api/mypage/documents/**/route.@(ts|tsx)', {
+    cwd: root,
+    exclude: ['**/node_modules/**', '**/.next/**'],
+  }).sort()
+  // 글롭이 비면 아래 검사가 통째로 꺼진다. 현재 9개다.
+  if (memberDocRoutes.length < 9) {
+    memberDocFailures.push(
+      `문서함 라우트 글롭이 비었거나 줄었습니다(${memberDocRoutes.length}개) — 경로가 바뀌었다면 이 계약도 고쳐야 합니다`
+    )
+  }
+  const OWNERSHIP_CALLS =
+    /\b(getOwnedMemberDocument|getOwnedMemberDocumentVersion|discardMemberDocumentUpload|deleteMemberDocument|addUploadedVersion|restoreVersion)\(\s*auth\.user\.id\b/
+  for (const file of memberDocRoutes) {
+    const code = stripStringLiterals(stripCommentsAndImports(readSourceAt(join(root, file))))
+    const isStatus = file.endsWith('/documents/status/route.ts')
+    const hasParam = /\[(id|versionId|uploadId)\]/.test(file)
+    let handlers = 0
+    for (const method of HTTP_METHODS) {
+      if (new RegExp(`export const ${method}\\s*=`).test(code)) {
+        memberDocFailures.push(
+          `${file}: export const ${method} — 맨몸 함수로만 둡니다(본문을 검사할 수 없다)`
+        )
+        continue
+      }
+      const body = extractExportedFunctionBody(code, method)
+      if (body === null) continue
+      handlers += 1
+      const gate = body.indexOf('requireActiveMember()')
+      if (gate === -1) {
+        memberDocFailures.push(`${file} ${method}: requireActiveMember() 게이트가 없습니다`)
+        continue
+      }
+      if (!isStatus) {
+        const off = body.indexOf('memberDocumentsOff()')
+        if (off === -1 || off < gate) {
+          memberDocFailures.push(
+            `${file} ${method}: 게이트 뒤에 기능 스위치(memberDocumentsOff())를 보지 않습니다`
+          )
+        }
+      }
+      if (hasParam && !OWNERSHIP_CALLS.test(body)) {
+        memberDocFailures.push(
+          `${file} ${method}: 경로 id 를 내 것으로만 찾는 호출(getOwned…·서비스 — auth.user.id 첫 인자)이 없습니다`
+        )
+      }
+    }
+    if (handlers === 0)
+      memberDocFailures.push(`${file}: 핸들러를 찾지 못했습니다(가드 고장으로 취급합니다)`)
+  }
+
+  const retentionPath = 'src/app/api/internal/member-documents/retention/route.ts'
+  const retention = existsSync(join(root, retentionPath))
+    ? stripCommentsAndImports(readSourceAt(join(root, retentionPath)))
+    : ''
+  if (!/isCronAuthorized\(\s*request\.headers\.get\(/.test(retention)) {
+    memberDocFailures.push(
+      `${retentionPath}: CRON_SECRET 타이밍 안전 비교(isCronAuthorized)가 없습니다`
+    )
+  }
+  const vercelCrons = JSON.parse(readRawSourceAt(join(root, 'vercel.json'))).crons ?? []
+  if (!vercelCrons.some(c => c.path === '/api/internal/member-documents/retention')) {
+    memberDocFailures.push('vercel.json: 문서함 보존 크론이 등록돼 있지 않습니다')
+  }
+
+  const storePath = 'src/lib/memberDocuments/storage.ts'
+  const store = stripCommentsAndImports(readSourceAt(join(root, storePath)))
+  if (!/createGuardedPrivateStore\(isSafeMemberDocumentPath\)/.test(store)) {
+    memberDocFailures.push(
+      `${storePath}: 저장소 계층을 isSafeMemberDocumentPath 판정으로 만들지 않습니다`
+    )
+  }
+  const queryPath = 'src/db/queries/memberDocuments.ts'
+  const querySource = readSourceAt(join(root, queryPath))
+  if (/next\/server|next\/headers|requireActiveMember|memberAuth/.test(querySource)) {
+    memberDocFailures.push(`${queryPath}: 쿼리 계층이 인가·Next 모듈을 임포트합니다`)
+  }
+
+  if (memberDocFailures.length > 0) {
+    failures.push(
+      `Member documents API contracts (docs/board-work/04-조합원-문서함.md §4). These pin strings only; the real net is e2e/authz-member-documents.spec.ts. Offending contract(s):\n${memberDocFailures
         .map(hit => `- ${hit}`)
         .join('\n')}`
     )

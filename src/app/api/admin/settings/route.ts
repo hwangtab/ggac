@@ -359,6 +359,13 @@ export const PUT = defineApiRoute<Record<string, unknown>>({
           // 펀딩만 따로 받는다 — 이 그룹은 칸이 셋이라(스위치 + 요율 둘)
           // 위 묶음처럼 `enabled: frontendValue`로 덮으면 요율 숫자가
           // 스위치 칸에 들어앉는다. 판정은 매핑 모듈에 있다.
+          // 내 문서함 — 칸이 스위치 하나다. 저장된 다른 칸(장래에 생길 것)은 보존한다.
+          case 'member_documents':
+            settingGroups[mapping.key] = {
+              ...settingGroups[mapping.key],
+              enabled: frontendValue === true,
+            }
+            break
           case 'funding_features':
             settingGroups[mapping.key] = applyFundingFeatureField(
               settingGroups[mapping.key],

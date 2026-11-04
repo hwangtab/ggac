@@ -12,6 +12,7 @@ import {
   FiCalendar,
   FiHeart,
   FiClock,
+  FiFolder,
 } from 'react-icons/fi'
 import { MypageMenuItem } from '@/types'
 import PermissionCheck from './PermissionCheck'
@@ -26,6 +27,23 @@ const MypageNavigation: React.FC<MypageNavigationProps> = ({ currentPath }) => {
   const [user, setUser] = useState<any>(null)
   const [profile, setProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  // 내 문서함 — 기능 스위치(`features/member_documents`, 기본 꺼짐)가 켜졌을 때만 메뉴에 보인다. 조합원에게만 묻는다
+  // (라우트가 비조합원에게 403 이라 물을 필요가 없다). 실패하면 숨긴 채로 둔다.
+  const [documentsEnabled, setDocumentsEnabled] = useState(false)
+
+  useEffect(() => {
+    if (profile?.registration_status !== 'approved' || profile?.is_active !== true) return
+    let alive = true
+    fetch('/api/mypage/documents/status', { cache: 'no-store' })
+      .then(res => (res.ok ? res.json() : null))
+      .then(json => {
+        if (alive) setDocumentsEnabled(json?.data?.enabled === true)
+      })
+      .catch(() => undefined)
+    return () => {
+      alive = false
+    }
+  }, [profile?.registration_status, profile?.is_active])
 
   useEffect(() => {
     const getUser = async () => {
@@ -87,6 +105,19 @@ const MypageNavigation: React.FC<MypageNavigationProps> = ({ currentPath }) => {
       requiredPermission: 'member',
       isActive: currentPath === '/mypage/timebank',
     },
+    ...(documentsEnabled
+      ? [
+          {
+            id: 'documents',
+            label: t('nav.documents'),
+            href: '/mypage/documents',
+            icon: FiFolder,
+            requiredPermission: 'member' as const,
+            isActive:
+              currentPath === '/mypage/documents' || currentPath.startsWith('/mypage/documents/'),
+          },
+        ]
+      : []),
     {
       id: 'artist',
       label: t('nav.artist'),

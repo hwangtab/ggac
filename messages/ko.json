@@ -951,7 +951,8 @@
       "roleMember": "조합원",
       "helpPrompt": "도움이 필요하시면",
       "helpBody": "관리자에게 문의해 주세요.",
-      "timebank": "타임뱅크"
+      "timebank": "타임뱅크",
+      "documents": "내 문서함"
     },
     "calendar": {
       "title": "내 캘린더",

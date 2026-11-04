@@ -43,6 +43,8 @@ export type NotificationType =
   | 'timebank_credited' // 타임 적립(가입·조합 업무·조정·환불)
   | 'timebank_volunteer' // 조합 업무 글에 자원(글쓴 관리자)
   | 'timebank_withdrawal_negative' // 음수 잔액 탈퇴 — 이사회 보고 대상(이사)
+  | 'member_document_expiring' // 내 문서함 — 1년 동안 열지 않은 문서가 30일 뒤 지워진다는 예고
+  | 'member_document_deleted' // 내 문서함 — 예고한 문서를 지웠다는 통지
 
 /**
  * 알림 인터페이스
