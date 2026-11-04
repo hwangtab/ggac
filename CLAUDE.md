@@ -350,11 +350,40 @@ throw ApiError.internalServerError('Server error')
 noreply@ggac.kr로 가서 유실된다), `MAILBOX_BACKFILL_CRON_TOKEN`(메일함 백필 크론
 손호출용 — Vercel 크론 자체는 `CRON_SECRET`을 쓴다),
 `MAILBOX_DAILY_INBOUND_ALERT` (일일 수신 임계치, 기본 60 — 없어도 기본값으로
-동작한다), `WEB_PUSH_PUBLIC_KEY`(또는 `NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY`)·
+동작한다), `MAILBOX_COMPOSE_ENABLED`(**정확히 `true`일 때만** 메일함 새 메일
+작성이 켜진다 — 비면 꺼진 채가 정상이다), `MAILBOX_DAILY_OUTBOUND_LIMIT`(메일함
+발신 일일 상한, 수신자 수 기준, 기본 20)·`MAILBOX_DAILY_TOTAL_GUARD`(받은
+메일까지 합친 총량 가드, 기본 70 — 인증·다이제스트 몫을 남긴다),
+`WEB_PUSH_PUBLIC_KEY`(또는 `NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY`)·
 `WEB_PUSH_PRIVATE_KEY`(이사회 업무툴 웹 푸시 VAPID 키. **없으면 푸시가 no-op이고
 설정 화면의 알림 켜기가 잠긴다.** 키를 바꾸면 기존 구독이 전부 무효).
 
 정본은 `npm run env:check`(`scripts/verify-env.js`)다.
+
+### 메일함 새 메일 작성 (보낸 편지함)
+
+- 받은 메일에 대한 답장(`inbound_email_replies`)과 별개로, 관리자가 새로 작성해
+  보내는 메일은
+  `outbound_emails`·`outbound_email_attachments`(마이그레이션 0035)에 쌓인다.
+  보낸 편지함(`GET /api/admin/mailbox/outbound`)은 두 표를 합쳐 보여 준다.
+- **발송 전에 `sending` 행을 먼저 쓴다.** `idempotency_key` UNIQUE가 중복
+  클릭·재전송을 막고, 일일 상한은 이 표의 합계로 센다. 결과는
+  `sent`/`failed`/`unknown`/`blocked`다. `unknown`(타임아웃·네트워크 오류)은
+  **닿았는지 모르는 상태**라 재발송을 막고 사람이 Resend 대시보드로 확인한다.
+  발송 뒤의 기록 실패는 던지지 않는다(`recorded:false`).
+- 작성·발송은 `requireAdmin()`, 보낸 편지함 열람은 `requireBoardMember()`다.
+  **BCC 주소는 관리자에게만** 내려가고 이사·감사에게는 개수(`bcc_count`)만 간다
+  — 가림은 라우트가 한다.
+- 첨부는 multipart로 받아 비공개 Blob의 `mailbox-sent/` 접두어에 둔다(받은
+  첨부의 `mailbox/`와 판정이 서로를 통과시키지 않는다). 합계 4MB·5개, 실행 파일
+  확장자 거부 — Vercel 요청 본문 한도(4.5MB) 때문이다.
+- **`@test.local` 수신자는 어디서도 실제로 발송되지
+  않는다**(`sendEmail`·`sendAuthEmail`). 이 규칙은 E2E가 실제 키로 일일 한도를
+  소진한 사고(2026-11-02, 하루 176건 반송)의 방어선이다. 테스트 전용 메일은
+  `recipient_count=0`으로 저장되어 일일 한도에 세지 않는다.
+- 킬스위치 `MAILBOX_COMPOSE_ENABLED`가 꺼져 있으면 POST는 403이고 화면은 버튼을
+  그리지 않는다. E2E 서버(`playwright.config.ts`)만 켠다 — 그 서버는
+  `RESEND_API_KEY`가 비어 있다.
 
 ### Database Migration Issues
 
