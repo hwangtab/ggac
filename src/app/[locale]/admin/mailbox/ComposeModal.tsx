@@ -203,8 +203,18 @@ export default function ComposeModal({ quota, onClose, onDone }: Props) {
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
+  // 바깥 클릭·Esc·X 한 번으로 쓰던 내용이 사라지지 않게 한다. 이미 보낸 뒤(outcome)에는 묻지 않는다.
+  const dirty =
+    to.length > 0 ||
+    cc.length > 0 ||
+    bcc.length > 0 ||
+    subject.trim() !== '' ||
+    body.trim() !== '' ||
+    files.length > 0
+
   const close = () => {
     if (sending) return
+    if (!outcome && dirty && !window.confirm('작성 중인 내용이 사라집니다. 닫을까요?')) return
     onClose()
   }
 

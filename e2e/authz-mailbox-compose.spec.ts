@@ -19,7 +19,9 @@ assertLocalTurso()
  * 않는다. 첨부는 **검증이 거부하는 경로**(실행 파일)와 **다운로드 라우트의 인가·스코프**만 본다.
  */
 
-const EMAIL_DONE_ID = '00000000-0000-4000-8000-00000000c002'
+// 보낸 편지함의 "답장" 행이 매달릴 받은 메일 — 이 스펙이 직접 심는다. `authz-mailbox.spec.ts`의 픽스처에 기대면
+// 빈 DB에서 파일 실행 순서에 따라 FK 오류가 난다(알파벳 순으로 이 파일이 먼저 돈다).
+const REPLY_PARENT_EMAIL_ID = '00000000-0000-4000-8000-00000000d0e1'
 // 이 스펙이 심는 보낸 메일 픽스처 — 고정 id, ON CONFLICT로 멱등.
 const SEEDED_OUTBOUND_ID = '00000000-0000-4000-8000-00000000d001'
 const SEEDED_ATTACHMENT_ID = '00000000-0000-4000-8000-00000000d002'
@@ -101,24 +103,18 @@ async function seedFixtures(): Promise<void> {
         `mailbox-sent/${SEEDED_OUTBOUND_ID}/${SEEDED_ATTACHMENT_ID}.pdf`,
       ],
     })
-    // 답장이 매달릴 받은 메일 행. authz-mailbox.spec.ts도 같은 id를 심지만(그쪽은
-    // DO UPDATE로 덮는다) 두 스펙의 실행 순서는 보장되지 않는다 — 이 스펙이 먼저 돌면
-    // 외래 키가 깨져 beforeAll이 통째로 실패했다(2026-11-04 실측). 그래서 여기서도 심는다.
     await client.execute({
       sql: `INSERT INTO inbound_emails
-          (id, resend_email_id, message_id, from_address, to_addresses,
-           subject, body_html, status, body_fetch_status, received_at)
-        VALUES (?, 'authz-mailbox-done-fixture', '<authz-mailbox-done@fixture.local>',
-          'sender-done@example.com', ?, 'MAILBOX-E2E-DONE-FIXTURE', '<p>seeded</p>',
-          'unread', 'done', ?)
+        (id, resend_email_id, from_address, to_addresses, subject, status, body_fetch_status, received_at)
+        VALUES (?, 'authz-compose-reply-parent', 'asker@example.invalid', '["mailbox@ggac.kr"]', 'MAILBOX-E2E-REPLY-PARENT', 'replied', 'done', ?)
         ON CONFLICT(id) DO NOTHING`,
-      args: [EMAIL_DONE_ID, JSON.stringify(['mailbox@ggac.kr']), now - 30_000],
+      args: [REPLY_PARENT_EMAIL_ID, now],
     })
     // 보낸 편지함의 "답장" 행.
     await client.execute({
       sql: `INSERT INTO inbound_email_replies (id, email_id, subject, body_html) VALUES (?, ?, ?, '<p>seeded reply</p>')
         ON CONFLICT(id) DO NOTHING`,
-      args: [SEEDED_REPLY_ID, EMAIL_DONE_ID, SEEDED_REPLY_SUBJECT],
+      args: [SEEDED_REPLY_ID, REPLY_PARENT_EMAIL_ID, SEEDED_REPLY_SUBJECT],
     })
   } finally {
     client.close()
@@ -379,6 +375,88 @@ test.describe('관리자 발송 (수신자 @test.local)', () => {
   })
 })
 
+test.describe('한도·발송 실패 경로', () => {
+  // 실제 주소로 가는 요청이다. E2E 서버는 RESEND_API_KEY가 비어 있어 어떤 경우에도 메일이 나가지 않는다 —
+  // 그래도 `.invalid` 도메인(절대 라우팅되지 않는다)을 써서, 서버 설정이 달라져도 실수로 나갈 곳이 없게 한다.
+  const REAL_TO = 'authz-nobody@example.invalid'
+  const QUOTA_SEED_ID = '00000000-0000-4000-8000-00000000d0f1'
+  let admin: APIRequestContext
+
+  test.beforeAll(async ({ playwright, baseURL }) => {
+    admin = await playwright.request.newContext({
+      baseURL,
+      storageState: storageStatePath('admin'),
+    })
+  })
+  test.afterAll(async () => {
+    await admin.dispose()
+  })
+
+  async function exec(sql: string, args: (string | number)[] = []) {
+    const client = db()
+    try {
+      return await client.execute({ sql, args })
+    } finally {
+      client.close()
+    }
+  }
+
+  test('키가 없어 발송이 안 되면 failed로 남고 같은 키로는 다시 보낼 수 없다', async () => {
+    const key = randomUUID()
+    const res = await admin.post('/api/admin/mailbox/outbound', {
+      multipart: composeForm({ idempotency_key: key, to: JSON.stringify([REAL_TO]) }),
+    })
+    expect(res.status(), '발송이 실패하면 5xx다').toBeGreaterThanOrEqual(500)
+    const rows = await rowsForKey(key)
+    expect(rows).toHaveLength(1)
+    expect(rows[0].status).toBe('failed')
+    expect(Number(rows[0].recipient_count)).toBe(1)
+    expect(rows[0].resend_message_id).toBeNull()
+
+    // 같은 키로 다시 보내도 새로 나가지 않는다 — 실패한 키는 재사용할 수 없다.
+    const again = await admin.post('/api/admin/mailbox/outbound', {
+      multipart: composeForm({ idempotency_key: key, to: JSON.stringify([REAL_TO]) }),
+    })
+    expect(again.status()).toBe(409)
+    expect(await rowsForKey(key)).toHaveLength(1)
+  })
+
+  test('일일 상한을 넘기면 429이고 blocked로 남으며 발송을 시도하지 않는다', async () => {
+    await exec('DELETE FROM outbound_emails WHERE id = ?', [QUOTA_SEED_ID])
+    // 상한(기본 20)을 채우는 행 — 이미 나간 메일처럼 센다.
+    await exec(
+      `INSERT INTO outbound_emails
+        (id, idempotency_key, to_addresses, recipient_count, subject, body_html, status, sent_at, created_at, updated_at)
+        VALUES (?, 'authz-compose-quota-seed', '["quota@example.invalid"]', 20, 'quota seed', '<p>x</p>', 'sent', ?, ?, ?)`,
+      [QUOTA_SEED_ID, Date.now(), Date.now(), Date.now()]
+    )
+    try {
+      const key = randomUUID()
+      const res = await admin.post('/api/admin/mailbox/outbound', {
+        multipart: composeForm({ idempotency_key: key, to: JSON.stringify([REAL_TO]) }),
+      })
+      expect(res.status()).toBe(429)
+      const rows = await rowsForKey(key)
+      expect(rows).toHaveLength(1)
+      expect(rows[0].status).toBe('blocked')
+      // 발송을 시도했다면 키가 비어 failed로 끝났을 것이다 — blocked는 그 앞에서 멈췄다는 증거다.
+      expect(rows[0].error).toContain('일일 상한')
+
+      // 테스트 수신자는 한도에 걸리지 않는다 — E2E가 업무 한도를 막으면 안 된다.
+      const testOnly = await admin.post('/api/admin/mailbox/outbound', {
+        multipart: composeForm({ idempotency_key: randomUUID() }),
+      })
+      expect(testOnly.status()).toBe(200)
+    } finally {
+      // 한도를 채운 행이 다른 실행에 남으면 안 된다.
+      await exec('DELETE FROM outbound_emails WHERE id = ?', [QUOTA_SEED_ID])
+      await exec(
+        `DELETE FROM outbound_emails WHERE to_addresses = '["authz-nobody@example.invalid"]'`
+      )
+    }
+  })
+})
+
 test.describe('화면', () => {
   test('관리자는 보낸 편지함 탭과 새 메일 버튼을 보고, 작성해서 보낼 수 있다', async ({
     browser,
@@ -419,6 +497,34 @@ test.describe('화면', () => {
       await expect(
         page.frameLocator('iframe[title="보낸 메일 본문"]').getByText('둘째 줄')
       ).toBeVisible({ timeout: 15000 })
+    } finally {
+      await ctx.close()
+    }
+  })
+
+  test('쓰던 내용이 있으면 바깥을 눌러도 확인 없이 닫히지 않는다', async ({ browser }) => {
+    const ctx = await browser.newContext({ storageState: storageStatePath('admin') })
+    try {
+      const page = await ctx.newPage()
+      const dialogs: string[] = []
+      let accept = false
+      page.on('dialog', d => {
+        dialogs.push(d.message())
+        void (accept ? d.accept() : d.dismiss())
+      })
+      await page.goto('/admin/mailbox', { waitUntil: 'domcontentloaded' })
+      await page.getByRole('button', { name: '새 메일' }).click({ timeout: 15000 })
+      const dialog = page.getByRole('dialog', { name: '새 메일 작성' })
+      await dialog.getByPlaceholder('내용을 입력하세요.').fill('쓰던 내용')
+
+      await dialog.getByRole('button', { name: '닫기' }).click()
+      expect(dialogs).toHaveLength(1)
+      await expect(dialog, '취소하면 모달이 남아 있어야 한다').toBeVisible()
+      await expect(dialog.getByPlaceholder('내용을 입력하세요.')).toHaveValue('쓰던 내용')
+
+      accept = true
+      await dialog.getByRole('button', { name: '닫기' }).click()
+      await expect(dialog).toHaveCount(0)
     } finally {
       await ctx.close()
     }
