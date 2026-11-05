@@ -28,6 +28,17 @@ npm run audit:security           # Security audit
 ANALYZE=true npm run build       # Bundle size analysis
 ```
 
+#### `test:unit`은 동시성 4로 돈다 — libsql 네이티브 크래시 때문이다
+
+`@libsql/client`의 `file:` 연결을 쓰는 테스트가 병렬로 많이 돌면 libsql 네이티브
+애드온이 GC finalizer 도중 **SIGSEGV로 프로세스째 죽는다**(`index.node`,
+`DrainFinalizerQueue`). 테스트는 통과한 채 파일 하나가 실패로 찍히고 어느
+파일인지는 매번 다르다 — 코드 버그가 아니다. 동시성 4 이하에서는 거의 안
+나고(8회 중 1회) 9에서는 5회 중 3회 난다. **`@libsql/client`를 0.18.0으로 올리지
+마라** — 네이티브 `libsql`은 그대로 0.5.29(최신)이고, `drizzle-orm@0.45.2`와
+맞물려 **같은 조건에서 50건이 매번 깨진다**(2026-11-05 실측). 올리려면
+drizzle-orm 호환부터 확인해라.
+
 #### 단위 테스트는 준비된 `local.db`를 요구한다
 
 `scripts/testing/ingestInbound.test.mjs`는 `TURSO_DATABASE_URL=file:local.db`로
@@ -381,6 +392,23 @@ noreply@ggac.kr로 가서 유실된다), `MAILBOX_BACKFILL_CRON_TOKEN`(메일함
   않는다**(`sendEmail`·`sendAuthEmail`). 이 규칙은 E2E가 실제 키로 일일 한도를
   소진한 사고(2026-11-02, 하루 176건 반송)의 방어선이다. 테스트 전용 메일은
   `recipient_count=0`으로 저장되어 일일 한도에 세지 않는다.
+- **보낸 편지함 검색은 제목·받는 사람·참조만 본다. 숨은참조(`bcc_addresses`)는
+  어떤 조건에도 넣지 마라**(`listSentMail`) — 이사·감사도 이 목록을 보므로 BCC를
+  검색 대상에 넣으면 "나온다/안 나온다"로 BCC 주소를 알아낼 수 있다.
+  관리자에게도 열지 않는다. E2E가 이를 단언한다.
+- **보관·정리(`lib/mail/outboundSweep.ts`, 메일함 백필 크론이 매시 호출).**
+  `failed`·`blocked`는 기본 30일 뒤 행·첨부를
+  지운다(`MAILBOX_OUTBOUND_FAILED_RETENTION_DAYS`, 최소 7). **나간
+  메일(`sent`)은 기본으로 지우지 않는다** — 누구에게 무엇을 보냈는지는 감사
+  기록이라 보관 기간은 조직이 정할 일이다. 정하면
+  `MAILBOX_OUTBOUND_RETENTION_DAYS`(최소 7)로 켠다. **`unknown`·`sending`은 어떤
+  기한으로도 지우지 않는다**(사람이 확정하는 행). `mailbox-sent/` 아래에서 DB에
+  참조되지 않고 올라온 지 24시간이 지난 Blob(고아)도 치운다 — 접두어 밖은 절대
+  건드리지 않는다. 한 번에 행 100개·고아 100개까지, Blob 목록은 1000개까지만
+  본다(커서 페이지네이션 없음).
+- 멈춘 `unknown`/오래된 `sending`은 관리자가 보낸 편지함에서 Resend 대시보드로
+  확인한 뒤 `PATCH /api/admin/mailbox/outbound/[id]`(화면 버튼)로 확정한다.
+  크론이 10분 지난 `sending`을 `unknown`으로 옮긴다.
 - 킬스위치 `MAILBOX_COMPOSE_ENABLED`가 꺼져 있으면 POST는 403이고 화면은 버튼을
   그리지 않는다. E2E 서버(`playwright.config.ts`)만 켠다 — 그 서버는
   `RESEND_API_KEY`가 비어 있다.

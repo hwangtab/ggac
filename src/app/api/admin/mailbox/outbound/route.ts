@@ -336,7 +336,15 @@ export const GET = defineApiRoute<undefined, BoardAuthSuccess>({
     const limit = Math.min(Math.max(Number(params.get('limit')) || 30, 1), 100)
     const offset = Math.max(Number(params.get('offset')) || 0, 0)
 
-    const { items, total_count } = await listSentMail({ limit, offset, kind })
+    // 검색어는 길이를 자른다. 쿼리 계층은 BCC를 검색하지 않는다(`listSentMail` 주석).
+    const search = (params.get('search') ?? '').trim().slice(0, 100)
+
+    const { items, total_count } = await listSentMail({
+      limit,
+      offset,
+      kind,
+      search: search || undefined,
+    })
 
     // 한도 현황은 관리자 화면의 작성 모달에만 쓴다.
     let quota: { used: number; limit: number } | null = null
