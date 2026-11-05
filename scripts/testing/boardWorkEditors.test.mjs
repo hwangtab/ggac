@@ -114,6 +114,10 @@ test('오피스 편집 진입 조건: 출처 env·확장자·50MB, 출처는 htt
   )
   // 편집기 iframe 은 최상위 이동·팝업 탈출·폼 제출을 허용하지 않는다
   assert.doesNotMatch(officeEdit.OFFICE_IFRAME_SANDBOX, /top-navigation|escape-sandbox|allow-forms/)
+  assert.doesNotMatch(officeEdit.OFFICE_IFRAME_SANDBOX, /allow-popups/)
+  // 한글 편집기는 인쇄 미리보기 새 창만 더 연다 — 그 창도 sandbox 를 물려받는다(탈출·최상위 이동·폼 제출은 여전히 없다)
+  assert.match(hwpEditor.HWP_IFRAME_SANDBOX, /(^| )allow-popups( |$)/)
+  assert.doesNotMatch(hwpEditor.HWP_IFRAME_SANDBOX, /top-navigation|escape-sandbox|allow-forms/)
 })
 
 // ── HWP·HWPX 편집기 저장본 검사 ──────────────────────────────────────────────

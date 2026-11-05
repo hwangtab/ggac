@@ -235,6 +235,11 @@ export const workMentions = sqliteTable(
       .notNull()
       .references(() => memberProfiles.id, { onDelete: 'cascade' }),
     readAt: integer('read_at', { mode: 'timestamp_ms' }),
+    /**
+     * 멘션된 시각(0046). 메시지를 고쳐 나중에 넣은 멘션은 메시지 시각보다 늦다 — 멘션 메일(다이제스트)이 이 시각으로 고른다.
+     * 0046 이전 행은 NULL(메시지 시각으로 본다).
+     */
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }),
   },
   table => [
     primaryKey({ columns: [table.messageId, table.userId] }),

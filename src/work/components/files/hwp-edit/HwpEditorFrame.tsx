@@ -75,6 +75,8 @@ export default function HwpEditorFrame({
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<RhwpEditor | null>(null)
+  /** 폴링이 마지막으로 알린 변경 여부 — 저장 뒤(markSaved) false 로 맞춘다 */
+  const lastDirtyRef = useRef(false)
   const readyRef = useRef(false)
   const saveSeq = useRef(0)
   const cb = useRef({ onPhase, onDirtyChange, onSaved, onError })
@@ -129,6 +131,10 @@ export default function HwpEditorFrame({
         } catch {
           // 구버전 편집기(capability 없음)여도 저장 자체는 끝났다 — 자동 복구 초안만 남는다
         }
+        // 화면이 저장 뒤 "변경 없음"으로 바꿨다 — 폴링이 기억하는 마지막 값도 맞춘다. 안 맞추면 저장 직후(다음 폴 전)에 친
+        // 글자는 편집기 쪽에서 dirty 가 true→false→true 로 돌아와 "바뀐 게 없다"로 보여, 변경 표시·떠날 때 확인이 빠졌다
+        // (2026-11-05 E2E 에서 드러남).
+        lastDirtyRef.current = false
       },
     }),
     [fileName, format, saveTimeoutMs]
@@ -169,13 +175,13 @@ export default function HwpEditorFrame({
       cb.current.onPhase?.('ready')
 
       // 사용자 편집은 이벤트로 오지 않는다(onDocumentChanged 는 에이전트 명령 전용) — 변경 여부를 주기적으로 묻는다
-      let last = false
+      lastDirtyRef.current = false
       poll = setInterval(() => {
         created
           .getDocumentState()
           .then(st => {
-            if (cancelled || st.dirty === last) return
-            last = st.dirty
+            if (cancelled || st.dirty === lastDirtyRef.current) return
+            lastDirtyRef.current = st.dirty
             cb.current.onDirtyChange?.(st.dirty)
           })
           .catch(() => undefined)

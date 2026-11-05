@@ -1,0 +1,13 @@
+-- 업무툴 멘션에 "언제 멘션됐는가"를 남긴다 — 메시지를 고쳐 나중에 넣은 멘션도 멘션 메일(다이제스트)에 잡히게.
+--
+-- ## 왜
+--
+-- 다이제스트는 "마지막 발송 이후·10분 지난" 멘션을 **메시지 작성 시각**(work_messages.created_at)으로 골랐다. 그래서 오래된
+-- 메시지를 고쳐 멘션을 더하면 그 메시지 시각이 이미 지난 발송 기준보다 앞이라 영영 메일이 가지 않았다(2026-11-05 점검).
+-- 멘션 행이 생긴 시각을 두고 다이제스트가 coalesce(mn.created_at, m.created_at)으로 고른다.
+--
+-- 칸은 NULL 허용이다(SQLite ADD COLUMN 은 상수가 아닌 기본값을 둘 수 없다). 기존 행은 NULL 이라 예전처럼 메시지 시각을 쓴다 —
+-- 백필하지 않는다(그 시각을 알 수 없고, 메시지 시각이 지금까지의 동작과 같다). 새 행은 앱(recordMentionRows)이 채운다.
+--
+-- 롤백: ALTER TABLE work_mentions DROP COLUMN created_at;
+ALTER TABLE `work_mentions` ADD `created_at` integer;

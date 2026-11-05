@@ -5,6 +5,9 @@
  * 상한 안에서 지운다. 지울 키는 전부 `isSafeBoardWorkPath`를 지난 것뿐이다 — 같은 비공개 저장소의 DB 백업·메일 첨부·
  * 이사회 서류는 건드리지 않는다(`src/work/lib/files/cleanup-plan.ts`).
  *
+ * 이어서 행 없이 남은 이사회 서류 객체(`board-documents/` — 올리고 등록하지 않은 업로드, 승격 전에 끊긴 앱 편집 저장본)를
+ * 같은 상한·대량 삭제 차단기로 지운다(`src/lib/boardDocuments/orphans.ts`). 이 단계의 실패는 응답을 바꾸지 않는다.
+ *
  * 인증: `CRON_SECRET` Bearer, 없으면 닫는다(`withBoardWorkCron`).
  */
 import { ApiError, ApiSuccess } from '@/utils/apiWrapper'

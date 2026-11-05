@@ -76,3 +76,34 @@ export async function listBoardDocumentVersionObjects(documentId: string): Promi
   }
   return out
 }
+
+/** 서류 객체의 공통 접두 — 고아 청소(`./orphans.ts`)가 이 아래만 훑는다 */
+export const BOARD_DOCUMENTS_LIST_PREFIX = 'board-documents/'
+
+/**
+ * 서류 객체 한 페이지(고아 청소용 — `board-documents/` 아래만). 저장소가 없으면 빈 페이지. 봉쇄 판정
+ * (`isSafeBoardDocumentBlobPath`)을 지나지 못한 키는 결과에서 뺀다(지울 후보가 되지 않게).
+ *
+ * 토큰은 이 파일의 다른 함수와 같은 `privateStoreToken()`이다 — 행 없는 객체를 만드는 두 경로(브라우저 직접 업로드
+ * `/documents/uploads`, 앱 편집 저장본 `/[id]/edit-uploads`)가 모두 이 토큰으로 발급한 업로드 토큰으로 쓰고, 지우는
+ * `removeBoardDocumentObjects`도 같은 토큰이다. 예전 multipart 경로(`privateProvider.ts`)는 `PRIVATE_BLOB_READ_WRITE_TOKEN`
+ * 으로 쓰지만 서버가 객체와 행을 함께 만들고 실패하면 객체를 되돌린다. 운영은 두 토큰이 같은 저장소라(위 머리 주석) 한 번
+ * 훑으면 전부 본다. 두 토큰이 다른 환경(E2E·시험 — `BOARD_WORK_BLOB_READ_WRITE_TOKEN`이 시험 저장소)에서는
+ * **일부러 `PRIVATE_BLOB_READ_WRITE_TOKEN` 쪽을 훑지 않는다** — 그 저장소가 이 DB 와 같은 환경이라는 보장이 없다.
+ */
+export async function listBoardDocumentObjectsPage(cursor?: string): Promise<{
+  objects: { pathname: string; uploadedAt: Date }[]
+  cursor: string | null
+  hasMore: boolean
+}> {
+  const token = privateStoreToken()
+  if (!token) return { objects: [], cursor: null, hasMore: false }
+  const res = await list({ prefix: BOARD_DOCUMENTS_LIST_PREFIX, cursor, limit: 1000, token })
+  return {
+    objects: res.blobs
+      .filter(b => isSafeBoardDocumentBlobPath(b.pathname))
+      .map(b => ({ pathname: b.pathname, uploadedAt: new Date(b.uploadedAt) })),
+    cursor: res.cursor ?? null,
+    hasMore: res.hasMore,
+  }
+}

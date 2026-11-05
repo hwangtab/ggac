@@ -324,6 +324,31 @@ test.describe('업무툴 앱 안 편집 — 실제 편집기(ggac-office)', () =
       )
       const head = (await v2.body()).subarray(0, 8)
       expect([...head]).toEqual([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1])
+
+      // 편집기 안 인쇄: 내장 모드에서도 파일 메뉴에 인쇄가 있고, 누르면 인쇄 미리보기 **새 창**이 열린다(편집기 사이트가 인쇄
+      // 명령을 되살리고, 이 iframe 에 allow-popups 를 준다 — 2026-11-05). 새 창은 편집기와 같은 출처다.
+      // 저장 결과 대화상자를 닫고 편집기로 돌아온다
+      await page
+        .getByRole('dialog')
+        .getByRole('button', { name: '닫기', exact: true })
+        .first()
+        .click()
+      await expect(page.getByRole('dialog')).toHaveCount(0)
+      const studio = page.frameLocator(frameSel)
+      await studio.locator('.menu-item[data-menu="file"]').first().click()
+      const printItem = studio.locator('[data-cmd="file:print"]').first()
+      await expect(printItem).toBeVisible({ timeout: 10_000 })
+      const popupOpened = page.context().waitForEvent('page', { timeout: 30_000 })
+      await printItem.click()
+      const preview = await popupOpened
+      // 새 창은 about:blank 로 열린 뒤 미리보기 주소로 간다 — 주소가 잡힐 때까지 기다린다
+      await expect.poll(() => preview.url(), { timeout: 30_000 }).toMatch(/^https?:\/\//)
+      expect(new URL(preview.url()).origin).toBe(new URL(ORIGIN).origin)
+      await preview.close()
+      // 인쇄 창을 닫은 뒤에도 계속 고칠 수 있다(입력이 막히지 않는다)
+      await page.waitForTimeout(1_500)
+      await typeInEditor(page, frameSel, ' 인쇄 뒤', { x: 0.5, y: 0.3 })
+      await expect(editorStatus(page)).toHaveText('저장 안 된 변경', { timeout: 30_000 })
     } finally {
       await director.context.close()
     }

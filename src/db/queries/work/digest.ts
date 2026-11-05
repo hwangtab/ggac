@@ -84,6 +84,9 @@ type RawRow = {
  * digest_mode 'hourly'의 추가 지연(50분)·이사회 권한·방해 금지는 `select.ts`가 본다.
  * 정렬: 받는 사람 → 작성 시각 → 메시지 id(원본 `order by 1, 11, 3`).
  */
+// 멘션 갈래의 시각은 **멘션된 시각**(work_mentions.created_at, 0046)이다 — 메시지를 고쳐 나중에 넣은 멘션도 마지막 발송 이후의 새
+// 멘션으로 잡힌다(2026-11-05). 0046 이전 행은 NULL 이라 메시지 시각을 쓴다. 이 값이 행의 `created_at`으로 나가 지연 판정·
+// 발송 기준(latestCreatedAt)·비교 후 교체가 모두 같은 시각을 본다.
 export async function listDigestCandidates(input: {
   cutoff: Date
   defaultSince: Date
@@ -95,7 +98,7 @@ export async function listDigestCandidates(input: {
       select mn.user_id as recipient_id, 'mention' as kind, m.id as message_id, m.parent_id as parent_id,
              m.kind as message_kind, c.id as channel_id, c.name as channel_name, c.slug as channel_slug,
              c.kind as channel_kind, a.display_name as author_name, m.body as body, m.sensitive as sensitive,
-             m.created_at as created_at, rp.email as recipient_email, cm.role as member_role,
+             coalesce(mn.created_at, m.created_at) as created_at, rp.email as recipient_email, cm.role as member_role,
              sp.digest_mode as digest_mode, sp.quiet_enabled as quiet_enabled, sp.quiet_start as quiet_start,
              sp.quiet_end as quiet_end, sp.quiet_weekends as quiet_weekends,
              rp.registration_status as registration_status, rp.is_active as is_active, rp.is_admin as is_admin,
@@ -113,9 +116,9 @@ export async function listDigestCandidates(input: {
         and (m.author_id is null or m.author_id <> mn.user_id)
         and coalesce(cm.notify_level, 'mentions') <> 'off'
         and coalesce(sp.digest_mode, 'off') <> 'off'
-        and m.created_at > cm.last_read_at
-        and m.created_at <= ${cutoff}
-        and m.created_at > coalesce(ds.last_sent_at, ${since})
+        and coalesce(mn.created_at, m.created_at) > cm.last_read_at
+        and coalesce(mn.created_at, m.created_at) <= ${cutoff}
+        and coalesce(mn.created_at, m.created_at) > coalesce(ds.last_sent_at, ${since})
       union all
       select cm.user_id as recipient_id, 'dm' as kind, m.id as message_id, m.parent_id as parent_id,
              m.kind as message_kind, c.id as channel_id, c.name as channel_name, c.slug as channel_slug,
