@@ -276,6 +276,169 @@ test('발신자 필터는 상태·검색과 함께 걸린다', async () => {
   )
 })
 
+function uniqueAddress(prefix = 'p') {
+  return `${prefix}-${Math.random().toString(36).slice(2)}@search.example`
+}
+
+async function attach(mod, emailId, overrides = {}) {
+  const id = crypto.randomUUID()
+  await mod.insertAttachment({
+    id,
+    email_id: emailId,
+    filename: 'file.pdf',
+    content_type: 'application/pdf',
+    content_id: null,
+    size_bytes: 10,
+    blob_path: `mailbox/${emailId}/${id}.pdf`,
+    ...overrides,
+  })
+}
+
+test('첨부 필터는 진짜 첨부만 본다 — cid로 박힌 인라인 이미지(서명 로고)는 세지 않는다', async () => {
+  const mod = await loadFreshMailboxModule()
+  const from = uniqueAddress('att')
+  const withPdf = await mod.insertInboundEmail(sample({ from_address: from }))
+  await attach(mod, withPdf.id)
+  const inlineOnly = await mod.insertInboundEmail(sample({ from_address: from }))
+  await attach(mod, inlineOnly.id, { content_type: 'image/png', content_id: '<logo@x>' })
+  const plainImage = await mod.insertInboundEmail(sample({ from_address: from }))
+  await attach(mod, plainImage.id, { content_type: 'image/jpeg', content_id: null })
+  await mod.insertInboundEmail(sample({ from_address: from }))
+
+  const result = await mod.listInboundEmails({
+    limit: 100,
+    offset: 0,
+    fromEmail: from,
+    hasAttachment: true,
+  })
+  assert.deepEqual(new Set(result.emails.map(e => e.id)), new Set([withPdf.id, plainImage.id]))
+  assert.equal(result.total_count, 2)
+
+  const all = await mod.listInboundEmails({ limit: 100, offset: 0, fromEmail: from })
+  const counts = Object.fromEntries(all.emails.map(e => [e.id, e.attachment_count]))
+  assert.equal(counts[withPdf.id], 1)
+  assert.equal(counts[inlineOnly.id], 0)
+})
+
+test('기간 필터는 시작은 포함하고 끝은 배타다', async () => {
+  const mod = await loadFreshMailboxModule()
+  const from = uniqueAddress('date')
+  const t0 = Date.parse('2026-03-01T00:00:00+09:00')
+  const atStart = await mod.insertInboundEmail(
+    sample({ from_address: from, received_at: new Date(t0) })
+  )
+  const before = await mod.insertInboundEmail(
+    sample({ from_address: from, received_at: new Date(t0 - 1) })
+  )
+  const atEnd = await mod.insertInboundEmail(
+    sample({ from_address: from, received_at: new Date(t0 + 86_400_000) })
+  )
+  const result = await mod.listInboundEmails({
+    limit: 100,
+    offset: 0,
+    fromEmail: from,
+    receivedFrom: new Date(t0),
+    receivedUntil: new Date(t0 + 86_400_000),
+  })
+  assert.deepEqual(
+    result.emails.map(e => e.id),
+    [atStart.id]
+  )
+  assert.ok(![before.id, atEnd.id].some(id => result.emails.some(e => e.id === id)))
+})
+
+test('검색은 본문(body_text)도 보되 HTML 태그 속성에는 걸리지 않는다', async () => {
+  const mod = await loadFreshMailboxModule()
+  const from = uniqueAddress('body')
+  const marker = `본문표지${Math.random().toString(36).slice(2)}`
+  const inText = await mod.insertInboundEmail(sample({ from_address: from, subject: '제목' }))
+  await mod.markBodyFetched(inText.id, {
+    body_html: '<p>x</p>',
+    body_text: `안녕하세요 ${marker} 입니다`,
+    headers: null,
+    subject: null,
+  })
+  const inHtmlOnly = await mod.insertInboundEmail(sample({ from_address: from, subject: '제목' }))
+  await mod.markBodyFetched(inHtmlOnly.id, {
+    body_html: `<p class="${marker}">x</p>`,
+    body_text: 'x',
+    headers: null,
+    subject: null,
+  })
+  const result = await mod.listInboundEmails({ limit: 100, offset: 0, search: marker })
+  assert.deepEqual(
+    result.emails.map(e => e.id),
+    [inText.id]
+  )
+})
+
+test('발신자 카드: 받은 수·기간·답장 수를 세고, 보낸 메일은 나간 것 중 받는 사람·참조만 센다', async () => {
+  const mod = await loadFreshMailboxModule()
+  const who = uniqueAddress('card')
+  const first = await mod.insertInboundEmail(
+    sample({ from_address: `옛이름 <${who}>`, received_at: new Date('2026-01-01T00:00:00Z') })
+  )
+  await mod.insertInboundEmail(
+    sample({
+      from_address: `새이름 <${who.toUpperCase()}>`,
+      received_at: new Date('2026-02-01T00:00:00Z'),
+    })
+  )
+  await mod.insertReply({ email_id: first.id, subject: 'Re: 문의', body_html: '<p>답</p>' })
+
+  const sentTo = await mod.insertOutboundSending(outboundInput({ to_addresses: [who] }))
+  await mod.markOutboundSent(sentTo.row.id, 're_card_1')
+  const sentCc = await mod.insertOutboundSending(
+    outboundInput({ to_addresses: ['other@example.com'], cc_addresses: [who] })
+  )
+  await mod.markOutboundSent(sentCc.row.id, 're_card_2')
+  // 숨은참조로만 받은 메일 — 세면 BCC 수신자가 드러난다.
+  const bccOnly = await mod.insertOutboundSending(
+    outboundInput({ to_addresses: ['other@example.com'], bcc_addresses: [who] })
+  )
+  await mod.markOutboundSent(bccOnly.row.id, 're_card_3')
+  // 실패한 메일은 "보낸 메일"이 아니다.
+  const failed = await mod.insertOutboundSending(outboundInput({ to_addresses: [who] }))
+  await mod.markOutboundStatus(failed.row.id, 'failed', 'x')
+
+  const card = await mod.getSenderSummary(who)
+  assert.equal(card.email, who)
+  assert.equal(card.name, '새이름')
+  assert.equal(card.inbound_count, 2)
+  assert.equal(card.first_received_at, '2026-01-01T00:00:00.000Z')
+  assert.equal(card.last_received_at, '2026-02-01T00:00:00.000Z')
+  assert.equal(card.reply_count, 1)
+  assert.equal(card.sent_count, 2)
+})
+
+test('발신자 카드: 메일이 없는 주소는 0과 null이다', async () => {
+  const mod = await loadFreshMailboxModule()
+  const card = await mod.getSenderSummary(uniqueAddress('none'))
+  assert.equal(card.inbound_count, 0)
+  assert.equal(card.first_received_at, null)
+  assert.equal(card.name, null)
+  assert.equal(card.sent_count, 0)
+})
+
+test('회원 매칭은 대소문자를 무시하고 배지에 필요한 칸만 돌려준다', async () => {
+  const mod = await loadFreshMailboxModule()
+  const id = crypto.randomUUID()
+  const address = uniqueAddress('member')
+  await setupClient.execute({
+    sql: `insert into member_profiles (id, display_name, email, phone_number, registration_status, is_active)
+          values (?, ?, ?, ?, 'approved', 1)`,
+    args: [id, '회원표지', address.toUpperCase(), '010-0000-0000'],
+  })
+  const member = await mod.findMemberByEmail(address)
+  assert.deepEqual(member, {
+    id,
+    display_name: '회원표지',
+    registration_status: 'approved',
+    is_active: true,
+  })
+  assert.equal(await mod.findMemberByEmail(uniqueAddress('stranger')), null)
+})
+
 test('References는 공백으로 이어 쌓인다', async () => {
   const { insertInboundEmail, appendThreadReference, getInboundEmail } =
     await loadFreshMailboxModule()

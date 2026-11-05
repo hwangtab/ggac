@@ -11,6 +11,7 @@ import {
   FiSearch,
   FiArrowLeft,
   FiUser,
+  FiSliders,
 } from 'react-icons/fi'
 
 import ComposeModal from './ComposeModal'
@@ -41,6 +42,27 @@ interface InboundEmail {
   received_at: string
   created_at: string
   updated_at: string
+  /** 목록 응답에만 있다. 인라인 이미지는 세지 않는다. */
+  attachment_count?: number
+}
+
+/** `GET /api/admin/mailbox/sender`. `member`는 관리자 응답에만 키가 있다. */
+interface SenderCard {
+  sender: {
+    email: string
+    name: string | null
+    inbound_count: number
+    first_received_at: string | null
+    last_received_at: string | null
+    reply_count: number
+    sent_count: number
+  }
+  member?: {
+    id: string
+    display_name: string
+    registration_status: string
+    is_active: boolean
+  } | null
 }
 
 interface InboundEmailDetail extends InboundEmail {
@@ -81,6 +103,13 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
 const STATUS_ORDER: InboundEmail['status'][] = ['unread', 'read', 'replied', 'archived', 'spam']
 
 const LIMIT = 30
+
+const REGISTRATION_LABELS: Record<string, string> = {
+  pending: '승인 대기',
+  rejected: '거절',
+  withdrawn: '탈퇴',
+  withdrawal_requested: '탈퇴 신청',
+}
 
 /** 발신자 필터 — 주소 하나(`from`) 또는 같은 기관(`domain`). URL 쿼리와 같은 이름이다. */
 type SenderFilter = { kind: 'from' | 'domain'; value: string }
@@ -141,6 +170,13 @@ export default function MailboxView({ className = '' }: { className?: string }) 
   // `window`가 없어 마운트 뒤에 읽고, 그 전에는 목록을 부르지 않는다(필터 없는 목록이 한 번 깜빡이지 않게).
   const [senderFilter, setSenderFilter] = useState<SenderFilter | null>(null)
   const [urlReady, setUrlReady] = useState(false)
+  const [senderCard, setSenderCard] = useState<SenderCard | null>(null)
+  // 상세 검색 — 첨부·기간. 날짜는 `<input type="date">`의 `YYYY-MM-DD`를 그대로 보내고 서버가 서울 기준으로 읽는다.
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [hasAttachment, setHasAttachment] = useState(false)
+  const [afterDate, setAfterDate] = useState('')
+  const [beforeDate, setBeforeDate] = useState('')
+  const [composeTo, setComposeTo] = useState<string[] | undefined>(undefined)
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [detail, setDetail] = useState<InboundEmailDetail | null>(null)
@@ -173,10 +209,17 @@ export default function MailboxView({ className = '' }: { className?: string }) 
       if (statusFilter !== 'all') params.set('status', statusFilter)
       if (search) params.set('search', search)
       if (senderFilter) params.set(senderFilter.kind, senderFilter.value)
+      if (hasAttachment) params.set('has', 'attachment')
+      if (afterDate) params.set('after', afterDate)
+      if (beforeDate) params.set('before', beforeDate)
       params.set('limit', String(LIMIT))
       params.set('offset', String(offset))
 
       const res = await fetch(`/api/admin/mailbox?${params}`)
+      if (res.status === 400) {
+        const json = await res.json().catch(() => null)
+        throw new Error(json?.error || '검색 조건이 올바르지 않습니다.')
+      }
       if (!res.ok) throw new Error('데이터를 불러오지 못했습니다.')
       const json = await res.json()
       setEmails(json.data?.emails ?? [])
@@ -187,7 +230,28 @@ export default function MailboxView({ className = '' }: { className?: string }) 
     } finally {
       setLoading(false)
     }
-  }, [statusFilter, search, offset, senderFilter])
+  }, [statusFilter, search, offset, senderFilter, hasAttachment, afterDate, beforeDate])
+
+  // 발신자 카드 — 주소 필터일 때만. 카드가 실패해도 목록은 그대로 보여야 하므로 오류는 카드만 지운다.
+  useEffect(() => {
+    if (senderFilter?.kind !== 'from') {
+      setSenderCard(null)
+      return
+    }
+    let cancelled = false
+    setSenderCard(null)
+    fetch(`/api/admin/mailbox/sender?email=${encodeURIComponent(senderFilter.value)}`)
+      .then(res => (res.ok ? res.json() : null))
+      .then(json => {
+        if (!cancelled) setSenderCard(json?.data ?? null)
+      })
+      .catch(() => {
+        if (!cancelled) setSenderCard(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [senderFilter])
 
   useEffect(() => {
     if (urlReady) fetchEmails()
@@ -384,6 +448,8 @@ export default function MailboxView({ className = '' }: { className?: string }) 
     setSearch(searchInput.trim())
   }
 
+  const advancedCount = (hasAttachment ? 1 : 0) + (afterDate ? 1 : 0) + (beforeDate ? 1 : 0)
+
   const filterButtons: { key: string; label: string }[] = [
     { key: 'all', label: '전체' },
     ...STATUS_ORDER.map(s => ({ key: s, label: STATUS_LABELS[s].label })),
@@ -446,7 +512,10 @@ export default function MailboxView({ className = '' }: { className?: string }) 
           </div>
           {canManage && composeEnabled && (
             <button
-              onClick={() => setComposeOpen(true)}
+              onClick={() => {
+                setComposeTo(undefined)
+                setComposeOpen(true)
+              }}
               className="flex items-center gap-2 whitespace-nowrap px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors"
             >
               <FiEdit className="w-4 h-4" />새 메일
@@ -498,7 +567,82 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                 >
                   <FiSearch className="w-4 h-4" />
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setShowAdvanced(v => !v)}
+                  aria-expanded={showAdvanced}
+                  aria-label="상세 검색"
+                  title="상세 검색"
+                  className={`relative flex items-center px-3 py-2 text-sm border rounded-lg transition-colors shrink-0 ${
+                    showAdvanced
+                      ? 'bg-primary-50 border-primary-300 text-primary-700'
+                      : 'bg-white border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  <FiSliders className="w-4 h-4" />
+                  {advancedCount > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 min-w-4 h-4 px-1 rounded-full bg-primary-600 text-white text-[10px] leading-4 text-center">
+                      {advancedCount}
+                    </span>
+                  )}
+                </button>
               </div>
+              {showAdvanced && (
+                <div className="space-y-2 rounded-lg bg-gray-50 p-2.5 text-xs text-gray-700">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={hasAttachment}
+                      onChange={e => {
+                        setHasAttachment(e.target.checked)
+                        setOffset(0)
+                      }}
+                      className="rounded border-gray-300"
+                    />
+                    첨부가 있는 메일만
+                  </label>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="shrink-0">받은 날</span>
+                    <input
+                      type="date"
+                      aria-label="받은 날 시작"
+                      value={afterDate}
+                      max={beforeDate || undefined}
+                      onChange={e => {
+                        setAfterDate(e.target.value)
+                        setOffset(0)
+                      }}
+                      className="rounded border border-gray-300 px-1.5 py-1"
+                    />
+                    <span>~</span>
+                    <input
+                      type="date"
+                      aria-label="받은 날 끝"
+                      value={beforeDate}
+                      min={afterDate || undefined}
+                      onChange={e => {
+                        setBeforeDate(e.target.value)
+                        setOffset(0)
+                      }}
+                      className="rounded border border-gray-300 px-1.5 py-1"
+                    />
+                  </div>
+                  {advancedCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHasAttachment(false)
+                        setAfterDate('')
+                        setBeforeDate('')
+                        setOffset(0)
+                      }}
+                      className="text-primary-700 hover:underline"
+                    >
+                      조건 지우기
+                    </button>
+                  )}
+                </div>
+              )}
               {senderFilter && (
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="inline-flex items-center gap-1.5 min-w-0 max-w-full pl-2.5 pr-1 py-1 text-xs rounded-full bg-primary-50 text-primary-800 border border-primary-200">
@@ -520,6 +664,62 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                       <FiX className="w-3 h-3" />
                     </button>
                   </span>
+                </div>
+              )}
+              {senderCard && (
+                <div
+                  data-testid="sender-card"
+                  className="rounded-lg border border-gray-200 p-2.5 text-xs text-gray-600 space-y-1"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      {senderCard.sender.name && (
+                        <div className="font-medium text-gray-900 truncate">
+                          {senderCard.sender.name}
+                        </div>
+                      )}
+                      <div className="truncate">{senderCard.sender.email}</div>
+                    </div>
+                    {canManage && composeEnabled && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setComposeTo([senderCard.sender.email])
+                          setComposeOpen(true)
+                        }}
+                        className="flex items-center gap-1 shrink-0 px-2 py-1 rounded border border-gray-300 bg-white hover:bg-gray-50"
+                      >
+                        <FiEdit className="w-3 h-3" />
+                        메일 쓰기
+                      </button>
+                    )}
+                  </div>
+                  <div>
+                    받은 메일 {senderCard.sender.inbound_count}통 · 답장{' '}
+                    {senderCard.sender.reply_count}통 · 보낸 메일 {senderCard.sender.sent_count}통
+                  </div>
+                  {senderCard.sender.first_received_at && senderCard.sender.last_received_at && (
+                    <div className="text-gray-400">
+                      처음 {formatDate(senderCard.sender.first_received_at)} · 최근{' '}
+                      {formatDate(senderCard.sender.last_received_at)}
+                    </div>
+                  )}
+                  {senderCard.member !== undefined && (
+                    <div>
+                      {senderCard.member ? (
+                        <span className="inline-flex px-2 py-0.5 rounded-full bg-green-100 text-green-800">
+                          회원 {senderCard.member.display_name}
+                          {senderCard.member.registration_status !== 'approved' &&
+                            ` (${REGISTRATION_LABELS[senderCard.member.registration_status] ?? senderCard.member.registration_status})`}
+                          {senderCard.member.registration_status === 'approved' &&
+                            !senderCard.member.is_active &&
+                            ' (비활성)'}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">가입한 회원 주소가 아닙니다</span>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
               <div className="flex gap-1.5 flex-wrap">
@@ -569,6 +769,12 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                           <span className="font-medium text-gray-900 truncate min-w-0 text-sm">
                             {email.subject || '(제목 없음)'}
                           </span>
+                          {(email.attachment_count ?? 0) > 0 && (
+                            <FiPaperclip
+                              className="w-3.5 h-3.5 text-gray-400 shrink-0"
+                              aria-label={`첨부 ${email.attachment_count}개`}
+                            />
+                          )}
                           <span
                             className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusInfo.color}`}
                           >
@@ -853,7 +1059,11 @@ export default function MailboxView({ className = '' }: { className?: string }) 
       {canManage && composeEnabled && composeOpen && (
         <ComposeModal
           quota={composeQuota}
-          onClose={() => setComposeOpen(false)}
+          initialTo={composeTo}
+          onClose={() => {
+            setComposeOpen(false)
+            setComposeTo(undefined)
+          }}
           onDone={() => {
             setSentRefresh(n => n + 1)
             fetchComposeMeta()
