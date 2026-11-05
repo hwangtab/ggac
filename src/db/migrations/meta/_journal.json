@@ -288,6 +288,13 @@
       "when": 1790700000000,
       "tag": "0039_mailbox_reply_recipients",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "6",
+      "when": 1790800000000,
+      "tag": "0040_mailbox_notes",
+      "breakpoints": true
     }
   ]
 }

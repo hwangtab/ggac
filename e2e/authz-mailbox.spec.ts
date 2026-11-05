@@ -1047,3 +1047,149 @@ test.describe('메일함 일괄 처리', () => {
     }
   })
 })
+
+/**
+ * 내부 메모 — 쓰기는 이사·감사·관리자 전원(2026-11-05 결정), 고치기는 쓴 사람만, 지우기는 쓴 사람과 관리자.
+ * 메모가 경로의 메일 것인지도 대조한다(다른 메일의 메모 id를 섞으면 404). 이 묶음만의 메일을 쓰고 직렬로 돈다.
+ */
+test.describe('메일함 내부 메모', () => {
+  test.describe.configure({ mode: 'serial' })
+  const NOTE_EMAIL_ID = '00000000-0000-4000-8000-00000000c020'
+  const NOTE_SUBJECT = 'MAILBOX-E2E-NOTES'
+
+  async function exec(sql: string, args: (string | number)[] = []) {
+    const client = createClient({ url: process.env.TURSO_DATABASE_URL! })
+    try {
+      return await client.execute({ sql, args })
+    } finally {
+      client.close()
+    }
+  }
+
+  async function ctxFor(baseURL: string | undefined, role: string) {
+    return apiRequest.newContext({ baseURL, storageState: storageStatePath(role) })
+  }
+
+  test.beforeAll(async () => {
+    await exec('DELETE FROM inbound_emails WHERE id = ?', [NOTE_EMAIL_ID])
+    await exec(
+      `INSERT INTO inbound_emails
+        (id, thread_id, resend_email_id, from_address, from_email, to_addresses, subject, status,
+         body_fetch_status, received_at)
+       VALUES (?, ?, 'authz-mailbox-notes', 'notes@example.com', 'notes@example.com', '["mailbox@ggac.kr"]',
+               ?, 'read', 'done', ?)`,
+      [NOTE_EMAIL_ID, NOTE_EMAIL_ID, NOTE_SUBJECT, Date.now()]
+    )
+  })
+  test.afterAll(async () => {
+    await exec('DELETE FROM inbound_emails WHERE id = ?', [NOTE_EMAIL_ID])
+  })
+
+  const notesUrl = `/api/admin/mailbox/${NOTE_EMAIL_ID}/notes`
+
+  test('비로그인 401, 일반 조합원·승인 대기는 403이고 메모가 생기지 않는다', async ({
+    baseURL,
+    request,
+  }) => {
+    expect((await request.post(notesUrl, { data: { body: 'x' } })).status()).toBe(401)
+    for (const role of ['other', 'pending']) {
+      const ctx = await ctxFor(baseURL, role)
+      try {
+        expect((await ctx.post(notesUrl, { data: { body: 'x' } })).status(), role).toBe(403)
+      } finally {
+        await ctx.dispose()
+      }
+    }
+    const n = await exec('SELECT count(*) AS n FROM inbound_email_notes WHERE email_id = ?', [
+      NOTE_EMAIL_ID,
+    ])
+    expect(Number(n.rows[0].n)).toBe(0)
+  })
+
+  test('이사·감사·관리자가 쓰고, 고치기는 쓴 사람만, 지우기는 쓴 사람과 관리자만 된다', async ({
+    baseURL,
+  }) => {
+    const director = await ctxFor(baseURL, 'director')
+    const auditor = await ctxFor(baseURL, 'auditor')
+    const admin = await ctxFor(baseURL, 'admin')
+    try {
+      // 쓰기 — 셋 다 된다. 빈 값·2001자는 400.
+      const made = await director.post(notesUrl, { data: { body: '  이사 메모  ' } })
+      expect(made.status()).toBe(201)
+      const directorNote = (await made.json()).data.note
+      expect(directorNote.body).toBe('이사 메모')
+      const auditorNote = (
+        await (await auditor.post(notesUrl, { data: { body: '감사 메모' } })).json()
+      ).data.note
+      expect((await admin.post(notesUrl, { data: { body: '관리자 메모' } })).status()).toBe(201)
+      expect((await director.post(notesUrl, { data: { body: '   ' } })).status()).toBe(400)
+      expect((await director.post(notesUrl, { data: { body: 'x'.repeat(2001) } })).status()).toBe(
+        400
+      )
+
+      // 상세에 쓴 사람 이름과 함께 나온다.
+      const detail = (await (await auditor.get(`/api/admin/mailbox/${NOTE_EMAIL_ID}`)).json()).data
+      expect(detail.notes.map((n: { body: string }) => n.body)).toEqual([
+        '이사 메모',
+        '감사 메모',
+        '관리자 메모',
+      ])
+      expect(detail.notes[0].author_name).toBeTruthy()
+
+      const noteUrl = (id: string, emailId = NOTE_EMAIL_ID) =>
+        `/api/admin/mailbox/${emailId}/notes/${id}`
+
+      // 고치기 — 쓴 사람만. 관리자도 남의 메모 내용은 못 바꾼다.
+      expect(
+        (await auditor.patch(noteUrl(directorNote.id), { data: { body: '감사가 고침' } })).status()
+      ).toBe(403)
+      expect(
+        (await admin.patch(noteUrl(directorNote.id), { data: { body: '관리자가 고침' } })).status()
+      ).toBe(403)
+      const edited = await director.patch(noteUrl(directorNote.id), {
+        data: { body: '이사가 고침' },
+      })
+      expect(edited.status()).toBe(200)
+      expect((await edited.json()).data.note.body).toBe('이사가 고침')
+
+      // 다른 메일의 경로에 이 메모 id를 넣으면 404 — 스코프 대조.
+      expect(
+        (
+          await director.patch(noteUrl(directorNote.id, EMAIL_DONE_ID), { data: { body: 'x' } })
+        ).status()
+      ).toBe(404)
+      expect((await admin.delete(noteUrl(directorNote.id, EMAIL_DONE_ID))).status()).toBe(404)
+
+      // 지우기 — 쓴 사람과 관리자. 다른 이사·감사는 못 지운다.
+      expect((await auditor.delete(noteUrl(directorNote.id))).status()).toBe(403)
+      expect((await director.delete(noteUrl(auditorNote.id))).status()).toBe(403)
+      expect((await admin.delete(noteUrl(directorNote.id))).status()).toBe(200)
+      expect((await auditor.delete(noteUrl(auditorNote.id))).status()).toBe(200)
+
+      const after = (await (await admin.get(`/api/admin/mailbox/${NOTE_EMAIL_ID}`)).json()).data
+      expect(after.notes.map((n: { body: string }) => n.body)).toEqual(['관리자 메모'])
+    } finally {
+      await Promise.all([director.dispose(), auditor.dispose(), admin.dispose()])
+    }
+  })
+
+  test('화면: 이사가 메모를 남기면 목록에 메모 수가 보인다', async ({ browser }) => {
+    const ctx = await browser.newContext({ storageState: storageStatePath('director') })
+    try {
+      const page = await ctx.newPage()
+      await page.goto('/board-room/mailbox', { waitUntil: 'domcontentloaded' })
+      await page.getByText(NOTE_SUBJECT, { exact: true }).first().click({ timeout: 15000 })
+      const panel = page.getByTestId('mail-notes')
+      await panel.locator('summary').click()
+      await panel.getByLabel('새 메모').fill('화면에서 남긴 메모 <b>굵게</b>')
+      await panel.getByRole('button', { name: '메모 남기기' }).click()
+      // 텍스트로 그린다 — 태그가 해석되지 않고 글자로 보인다.
+      await expect(panel).toContainText('화면에서 남긴 메모 <b>굵게</b>')
+      await expect(panel.locator('b')).toHaveCount(0)
+      await expect(panel.getByRole('button', { name: '고치기' })).toHaveCount(1)
+      await expect(page.getByText(/^메모 \d+$/).first()).toBeVisible()
+    } finally {
+      await ctx.close()
+    }
+  })
+})

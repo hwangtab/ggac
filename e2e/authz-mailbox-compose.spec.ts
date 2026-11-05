@@ -968,6 +968,26 @@ test.describe('답장 받는 사람·전체 답장·인용', () => {
     }
   })
 
+  test('내부 메모는 답장 본문에 섞여 나가지 않는다', async () => {
+    const MEMO_MARKER = 'MAILBOX-E2E-INTERNAL-MEMO-MUST-NOT-LEAVE'
+    const memo = await admin.post(`/api/admin/mailbox/${PARENT_ID}/notes`, {
+      data: { body: MEMO_MARKER },
+    })
+    expect(memo.status()).toBe(201)
+    const res = await admin.post(`/api/admin/mailbox/${PARENT_ID}/reply`, {
+      data: { body_html: '<p>메모 확인용 답장</p>', reply_all: true },
+    })
+    expect(res.status()).toBe(200)
+    const row = (
+      await exec(
+        `SELECT body_html FROM inbound_email_replies WHERE email_id = ? ORDER BY created_at DESC LIMIT 1`,
+        [PARENT_ID]
+      )
+    ).rows[0]
+    expect(String(row.body_html)).toContain('메모 확인용 답장')
+    expect(String(row.body_html)).not.toContain(MEMO_MARKER)
+  })
+
   test('이사는 답장·전체 답장을 보낼 수 없다', async ({ playwright, baseURL }) => {
     const director = await playwright.request.newContext({
       baseURL,
@@ -1171,8 +1191,10 @@ test.describe('전달', () => {
 
       await expect(page.getByRole('heading', { name: '메일 전달' })).toBeVisible()
       await expect(page.locator('input[value="Fwd: 전달할 메일"]')).toBeVisible()
-      await expect(page.locator('textarea')).toHaveValue(/---------- 전달된 메일 ----------/)
-      await expect(page.locator('textarea')).toHaveValue(/전달 원문/)
+      // 상세에도 메모 입력창(textarea)이 있으므로 작성 창의 본문으로 좁힌다.
+      const composeBody = page.getByPlaceholder('내용을 입력하세요.')
+      await expect(composeBody).toHaveValue(/---------- 전달된 메일 ----------/)
+      await expect(composeBody).toHaveValue(/전달 원문/)
 
       const picker = page.getByTestId('forward-attachments')
       await expect(picker.getByLabel(/report\.pdf/)).toBeChecked()

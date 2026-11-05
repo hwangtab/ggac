@@ -77,6 +77,7 @@ const POST_CUTOVER_TABLES = new Set([
   'member_document_versions', // 0036
   'member_document_uploads', // 0036
   'board_document_versions', // 0038 이사회 서류 앱 편집(버전 기록)
+  'inbound_email_notes', // 0040 메일함 내부 메모
 ])
 
 export function comparePgToSqlite(pgSnapshot, sqliteSchema) {

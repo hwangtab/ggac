@@ -270,6 +270,9 @@ export async function listInboundEmails(
     // 같은 대화의 받은 메일 수(자기 포함). 바깥 열은 `realAttachmentCount`와 같은 이유로 표 이름까지 박는다.
     threadCount: sql<number>`(select count(*) from inbound_emails t
       where t.thread_id = "inbound_emails"."thread_id")`,
+    // 내부 메모 수 — 개수만 센다. 메모 본문은 이 파일에서 읽지 않는다(발송 경로가 들여오는 파일이라 메모 쿼리는 따로 둔다).
+    noteCount: sql<number>`(select count(*) from inbound_email_notes n
+      where n.email_id = "inbound_emails"."id")`,
   }
 
   const rowsQuery = db
@@ -288,11 +291,12 @@ export async function listInboundEmails(
 
   return {
     emails: rows.map(row => {
-      const { attachmentCount, threadCount, ...rest } = row
+      const { attachmentCount, threadCount, noteCount, ...rest } = row
       return {
         ...rowToEmail(rest),
         attachment_count: Number(attachmentCount ?? 0),
         thread_count: Number(threadCount ?? 1),
+        note_count: Number(noteCount ?? 0),
       }
     }),
     total_count: Number(countRows[0]?.count ?? 0),
