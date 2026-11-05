@@ -6,6 +6,7 @@ import JSZip from 'jszip'
 
 import { assertLocalTurso, readFixtures, storageStatePath } from './helpers/authState'
 import { cronHeaders } from './helpers/cron'
+import { allowEditorFraming, editorFramingOptions } from './helpers/editorFrame'
 
 assertLocalTurso()
 
@@ -67,7 +68,13 @@ async function ownerContext(
   browser: { newContext: (o: object) => Promise<BrowserContext> },
   viewport = DESKTOP
 ) {
-  const context = await browser.newContext({ storageState: storageStatePath('owner'), viewport })
+  const context = await browser.newContext({
+    storageState: storageStatePath('owner'),
+    viewport,
+    ...editorFramingOptions(),
+  })
+  // 3000·3101 밖의 포트에서는 편집기 사이트의 frame-ancestors 가 iframe 을 막는다(helpers/editorFrame.ts)
+  await allowEditorFraming(context)
   await context.request.get('/api/auth/get-session')
   return context
 }
