@@ -665,6 +665,83 @@ test('24시간 수신자 수에는 같은 기간의 답장도 한 통씩 더해�
   assert.equal(await countOutboundRecipientsSince(since), before + 1)
 })
 
+test('전체 답장은 받은 사람 수(recipient_count)만큼 24시간 합계에 더해진다', async () => {
+  const { insertInboundEmail, insertReply, countOutboundRecipientsSince } =
+    await loadFreshMailboxModule()
+  const mail = await insertInboundEmail(sample())
+  const since = Date.now() - 60_000
+  const before = await countOutboundRecipientsSince(since)
+  await insertReply({
+    email_id: mail.id,
+    subject: 'Re: x',
+    body_html: '<p>x</p>',
+    to_address: 'a@a.org',
+    cc_addresses: ['b@a.org', 'c@a.org'],
+    recipient_count: 3,
+  })
+  await insertReply({
+    email_id: mail.id,
+    subject: 'Re: x',
+    body_html: '<p>x</p>',
+    to_address: 'z@test.local',
+    recipient_count: 0,
+  })
+  assert.equal(await countOutboundRecipientsSince(since), before + 3)
+})
+
+test('답장 기록: 받는 사람·참조를 남기고, 보낸 편지함은 그 주소를 보여 주며 참조로도 찾힌다', async () => {
+  const mod = await loadFreshMailboxModule()
+  const tag = Math.random().toString(36).slice(2)
+  const mail = await mod.insertInboundEmail(sample({ from_address: `orig-${tag}@a.org` }))
+  await mod.insertReply({
+    email_id: mail.id,
+    subject: `Re: 기록-${tag}`,
+    body_html: '<p>x</p>',
+    to_address: `desk-${tag}@c.org`,
+    cc_addresses: [`peer-${tag}@a.org`],
+    recipient_count: 2,
+  })
+  const [reply] = await mod.listRepliesForEmail(mail.id)
+  assert.equal(reply.to_address, `desk-${tag}@c.org`)
+  assert.deepEqual(JSON.parse(reply.cc_addresses), [`peer-${tag}@a.org`])
+  assert.equal(reply.recipient_count, 2)
+
+  const byCc = await mod.listSentMail({
+    limit: 10,
+    offset: 0,
+    kind: 'reply',
+    search: `peer-${tag}`,
+  })
+  assert.equal(byCc.items.length, 1)
+  assert.deepEqual(JSON.parse(byCc.items[0].to_addresses), [`desk-${tag}@c.org`])
+  // 원본 발신자로는 이제 찾히지 않는다 — 답장은 그 주소로 가지 않았다.
+  const byOrig = await mod.listSentMail({
+    limit: 10,
+    offset: 0,
+    kind: 'reply',
+    search: `orig-${tag}`,
+  })
+  assert.equal(byOrig.items.length, 0)
+})
+
+test('받는 사람을 기록하지 않은 옛 답장은 원본 발신자를 받는 사람으로 보이고 한 명으로 센다', async () => {
+  const mod = await loadFreshMailboxModule()
+  const tag = Math.random().toString(36).slice(2)
+  const mail = await mod.insertInboundEmail(sample({ from_address: `old-${tag}@a.org` }))
+  await mod.insertReply({ email_id: mail.id, subject: `Re: 옛-${tag}`, body_html: '<p>x</p>' })
+  const [reply] = await mod.listRepliesForEmail(mail.id)
+  assert.equal(reply.to_address, null)
+  assert.equal(reply.cc_addresses, null)
+  assert.equal(reply.recipient_count, 1)
+  const found = await mod.listSentMail({
+    limit: 10,
+    offset: 0,
+    kind: 'reply',
+    search: `old-${tag}`,
+  })
+  assert.deepEqual(JSON.parse(found.items[0].to_addresses), [`old-${tag}@a.org`])
+})
+
 test('기준 시각보다 오래된 행은 24시간 합계에서 빠진다', async () => {
   const { insertOutboundSending, countOutboundRecipientsSince } = await loadFreshMailboxModule()
   await insertOutboundSending(outboundInput({ recipient_count: 5 }))

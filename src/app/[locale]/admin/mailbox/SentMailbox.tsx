@@ -186,8 +186,9 @@ export default function SentMailbox({
           subject: reply.subject,
           status: 'sent',
           created_at: reply.created_at,
-          to: [data?.email?.from_address].filter(Boolean),
-          cc: [],
+          // 받는 사람·참조는 답장 행에 기록돼 있다(0039). 그 전 답장은 원본 발신자에게만 갔다.
+          to: [reply.to_address ?? data?.email?.from_address].filter(Boolean),
+          cc: reply.cc_addresses ? parseAddresses(reply.cc_addresses) : [],
           bcc: [],
           bccCount: 0,
           bodyHtml: reply.body_html,

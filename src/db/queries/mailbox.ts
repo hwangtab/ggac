@@ -44,6 +44,10 @@ export type InsertReplyInput = {
   subject: string
   body_html: string
   resend_message_id?: string | null
+  to_address?: string | null
+  cc_addresses?: string[]
+  /** 생략하면 1(예전 답장과 같다). */
+  recipient_count?: number
 }
 
 export type ListInboundOptions = {
@@ -553,6 +557,12 @@ export async function insertReply(input: InsertReplyInput): Promise<void> {
     subject: input.subject,
     bodyHtml: input.body_html,
     resendMessageId: input.resend_message_id ?? null,
+    toAddress: input.to_address ?? null,
+    ccAddresses:
+      input.cc_addresses && input.cc_addresses.length > 0
+        ? JSON.stringify(input.cc_addresses)
+        : null,
+    recipientCount: input.recipient_count ?? 1,
   })
 }
 
@@ -933,18 +943,19 @@ export async function countOutboundRecipientsSince(sinceMs: number): Promise<num
         inArray(outboundEmails.status, ['sending', 'sent', 'unknown'])
       )
     )
+  // 답장은 행마다 받은 사람 수(`recipient_count`, 0039)를 센다 — 전체 답장 한 통은 여러 명에게 간다.
   const [replied] = await db
-    .select({ count: sql<number>`count(*)` })
+    .select({ total: sql<number>`coalesce(sum(${inboundEmailReplies.recipientCount}), 0)` })
     .from(inboundEmailReplies)
     .where(gte(inboundEmailReplies.createdAt, since))
-  return Number(composed?.total ?? 0) + Number(replied?.count ?? 0)
+  return Number(composed?.total ?? 0) + Number(replied?.total ?? 0)
 }
 
 export type SentMailKind = 'all' | 'compose' | 'reply'
 
 /**
  * 보낸 편지함 — 새 메일(`outbound_emails`)과 답장(`inbound_email_replies`)을 최신순으로 합친다.
- * 답장의 수신자는 원본 메일의 발신자다. 본문은 싣지 않는다(상세에서 읽는다). BCC도 싣지 않는다.
+ * 답장의 받는 사람은 기록한 `to_address`(0039 이전 행은 원본 발신자)다. 본문은 싣지 않는다(상세에서 읽는다). BCC도 싣지 않는다.
  */
 /**
  * 검색은 **제목·받는 사람·참조**만 본다. 숨은참조(`bcc_addresses`)는 어떤 조건에도 넣지 않는다 —
@@ -964,8 +975,9 @@ export async function listSentMail(options: {
   const composeWhere = pattern
     ? sql` where (${like(sql.raw('o.subject'))} or ${like(sql.raw('o.to_addresses'))} or ${like(sql.raw('o.cc_addresses'))})`
     : sql``
+  // 답장의 받는 사람은 기록한 칸(0039)이 정본이고, 그 전 행은 원본 발신자다. 참조도 찾는다(답장에는 숨은참조가 없다).
   const replyWhere = pattern
-    ? sql` where (${like(sql.raw('r.subject'))} or ${like(sql.raw('ie.from_address'))})`
+    ? sql` where (${like(sql.raw('r.subject'))} or ${like(sql.raw('coalesce(r.to_address, ie.from_address)'))} or ${like(sql.raw('r.cc_addresses'))})`
     : sql``
   const composeSql = sql`
     select o.id as id, 'compose' as kind, o.to_addresses as to_addresses, o.subject as subject,
@@ -973,7 +985,7 @@ export async function listSentMail(options: {
            (select count(*) from outbound_email_attachments a where a.email_id = o.id) as attachment_count
     from outbound_emails o${composeWhere}`
   const replySql = sql`
-    select r.id as id, 'reply' as kind, json_array(ie.from_address) as to_addresses, r.subject as subject,
+    select r.id as id, 'reply' as kind, json_array(coalesce(r.to_address, ie.from_address)) as to_addresses, r.subject as subject,
            'sent' as status, r.created_at as created_at, r.email_id as related_email_id,
            0 as attachment_count
     from inbound_email_replies r join inbound_emails ie on ie.id = r.email_id${replyWhere}`

@@ -97,6 +97,12 @@ export const inboundEmailReplies = sqliteTable(
     subject: text('subject').notNull(),
     bodyHtml: text('body_html').notNull(),
     resendMessageId: text('resend_message_id'),
+    /** 받는 사람(`Reply-To` 또는 원본 발신자). 0039 이전 행은 null — 그때는 원본 `from_address`로 갔다. */
+    toAddress: text('to_address'),
+    /** 전체 답장의 참조. JSON 배열 문자열. 없으면 null. */
+    ccAddresses: text('cc_addresses'),
+    /** 일일 한도에 센 수(to+cc, `@test.local` 제외). 0039 이전 행은 1. */
+    recipientCount: integer('recipient_count').notNull().default(1),
     createdAt: createdAt(),
   },
   table => [index('inbound_email_replies_email_idx').on(table.emailId)]
