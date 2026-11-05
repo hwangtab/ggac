@@ -556,41 +556,50 @@ export async function listOutboundIdsForPurge(
     .where(
       and(
         inArray(outboundEmails.status, statuses),
-        sql`${outboundEmails.createdAt} < ${olderThanMs}`
+        // **`updated_at` 기준이다.** 상태가 정해진 시각이 기한의 시작이다 — `created_at`이면 오래 `unknown`이던
+        // 메일을 운영자가 "안 나갔음"으로 확정하는 순간 다음 크론이 바로 지워 버린다.
+        sql`${outboundEmails.updatedAt} < ${olderThanMs}`
       )
     )
-    .orderBy(asc(outboundEmails.createdAt))
+    .orderBy(asc(outboundEmails.updatedAt))
     .limit(limit)
   return rows.map(r => r.id)
 }
 
-export async function listAttachmentPathsForOutbound(ids: string[]): Promise<string[]> {
-  if (ids.length === 0) return []
-  const rows = await db
-    .select({ blobPath: outboundEmailAttachments.blobPath })
-    .from(outboundEmailAttachments)
-    .where(inArray(outboundEmailAttachments.emailId, ids))
-  return rows.map(r => r.blobPath)
-}
-
 /**
- * 첨부 행을 먼저, 메일 행을 나중에 지운다. FK의 ON DELETE CASCADE가 연결에 따라 꺼져 있을 수 있어
- * 캐스케이드에 기대지 않는다. 지우는 시점에도 상태를 다시 확인해, 그 사이 사람이 확정하거나 다른 상태로
- * 바뀐 행은 건드리지 않는다.
+ * 정리 대상 메일을 **조건부로** 지우고, 그때 실제로 지워진 메일의 첨부 경로를 돌려준다.
+ *
+ * 지우는 시점에 상태를 다시 확인한다 — 후보로 뽑힌 뒤 다른 요청이 상태를 바꿨다면 건드리지 않는다.
+ * 첨부 행을 먼저, 메일 행을 나중에 지운다(FK의 ON DELETE CASCADE가 연결에 따라 꺼져 있을 수 있어 기대지 않는다).
+ * Blob은 호출부가 **이 함수가 끝난 뒤** 지운다 — 행이 사라진 것이 확인된 파일만 지우기 위해서다.
  */
-export async function deleteOutboundEmails(ids: string[], statuses: string[]): Promise<number> {
-  if (ids.length === 0 || statuses.length === 0) return 0
+export async function deleteOutboundEmailsReturningPaths(
+  ids: string[],
+  statuses: string[]
+): Promise<{ deletedCount: number; blobPaths: string[] }> {
+  if (ids.length === 0 || statuses.length === 0) return { deletedCount: 0, blobPaths: [] }
   const eligible = await db
     .select({ id: outboundEmails.id })
     .from(outboundEmails)
     .where(and(inArray(outboundEmails.id, ids), inArray(outboundEmails.status, statuses)))
   const eligibleIds = eligible.map(r => r.id)
-  if (eligibleIds.length === 0) return 0
+  if (eligibleIds.length === 0) return { deletedCount: 0, blobPaths: [] }
+
+  const pathRows = await db
+    .select({ blobPath: outboundEmailAttachments.blobPath })
+    .from(outboundEmailAttachments)
+    .where(inArray(outboundEmailAttachments.emailId, eligibleIds))
+
   await db
     .delete(outboundEmailAttachments)
     .where(inArray(outboundEmailAttachments.emailId, eligibleIds))
-  await db.delete(outboundEmails).where(inArray(outboundEmails.id, eligibleIds))
-  return eligibleIds.length
+  // 메일 행 삭제에도 상태 조건을 다시 건다 — 첨부 경로를 읽은 뒤 바뀐 행을 지우지 않는다.
+  const deleted = await db
+    .delete(outboundEmails)
+    .where(and(inArray(outboundEmails.id, eligibleIds), inArray(outboundEmails.status, statuses)))
+    .returning({ id: outboundEmails.id })
+
+  return { deletedCount: deleted.length, blobPaths: pathRows.map(r => r.blobPath) }
 }
 
 /** 후보 경로 중 DB 어디에도 참조되지 않는 것만 돌려준다(고아 Blob). */

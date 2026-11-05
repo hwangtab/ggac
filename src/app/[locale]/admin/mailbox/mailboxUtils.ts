@@ -13,7 +13,10 @@ export function formatBytes(bytes: number | null): string {
 }
 
 export function formatDate(iso: string): string {
+  // 나간 메일은 영구 보관이라 해가 지나면 "11월 4일"만으로는 어느 해인지 모호하다. 시간대도 고정한다.
   return new Date(iso).toLocaleDateString('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
     month: 'short',
     day: 'numeric',
     hour: '2-digit',

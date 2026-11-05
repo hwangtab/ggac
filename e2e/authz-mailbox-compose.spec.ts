@@ -5,6 +5,7 @@ import { createClient } from '@libsql/client'
 
 import { assertLocalTurso, storageStatePath } from './helpers/authState'
 import { cronHeaders } from './helpers/cron'
+import { expectReachedStorage } from './helpers/storageRoute'
 
 assertLocalTurso()
 
@@ -56,6 +57,30 @@ async function rowsForKey(key: string) {
       args: [key],
     })
     return r.rows
+  } finally {
+    client.close()
+  }
+}
+
+/**
+ * 이전 실행이 남긴 행을 지운다. E2E DB는 영구 파일이라 매 실행마다 작성 행이 쌓이는데, 심어 둔 픽스처는
+ * 첫 실행 시각에 고정돼(ON CONFLICT DO NOTHING) 몇 번 돌리면 목록 첫 페이지(30건) 밖으로 밀려 "목록에 보인다"
+ * 단언이 깨진다. 픽스처 id는 남긴다.
+ */
+async function cleanupPreviousRuns(): Promise<void> {
+  const client = db()
+  try {
+    const keep = [SEEDED_OUTBOUND_ID, SEEDED_OUTBOUND_OTHER_ID]
+    const marks = keep.map(() => '?').join(',')
+    await client.execute({
+      sql: `DELETE FROM outbound_email_attachments WHERE email_id IN
+        (SELECT id FROM outbound_emails WHERE subject LIKE 'MAILBOX-E2E-%' AND id NOT IN (${marks}))`,
+      args: keep,
+    })
+    await client.execute({
+      sql: `DELETE FROM outbound_emails WHERE subject LIKE 'MAILBOX-E2E-%' AND id NOT IN (${marks})`,
+      args: keep,
+    })
   } finally {
     client.close()
   }
@@ -141,6 +166,7 @@ function composeForm(
 
 test.beforeAll(async () => {
   await seedFixtures()
+  await cleanupPreviousRuns()
 })
 
 test.describe('새 메일 작성 API 경계', () => {
@@ -209,7 +235,7 @@ test.describe('새 메일 작성 API 경계', () => {
       const download = await ctx.get(
         `/api/admin/mailbox/outbound/${SEEDED_OUTBOUND_ID}/attachments/${SEEDED_ATTACHMENT_ID}/download`
       )
-      expect(download.status()).toBe(404)
+      await expectReachedStorage(download, [404])
     } finally {
       await ctx.dispose()
     }
@@ -636,7 +662,11 @@ test.describe('멈춘 행 확정과 답장 한도', () => {
 
       const res = await request.post('/api/internal/mailbox/backfill', { headers: cronHeaders() })
       expect(res.status()).toBe(200)
-      expect((await res.json()).data.stale_sending_marked_unknown).toBeGreaterThanOrEqual(1)
+      const data = (await res.json()).data
+      expect(data.stale_sending_marked_unknown).toBeGreaterThanOrEqual(1)
+      // E2E 서버는 운영 배포(VERCEL_ENV=production)가 아니다 — 고아 Blob 정리는 **돌지 않아야** 한다.
+      // 이 서버가 운영 비공개 Blob 토큰을 쥐고 있었다면 운영 파일을 로컬 DB와 대조해 지울 수 있었다.
+      expect(data.outbound_sweep, 'E2E에서 정리가 돌았다').toBeNull()
 
       expect(await statusOf(STALE_ID), '오래된 sending → unknown').toBe('unknown')
       // `failed`로 옮기면 안 된다 — 메일이 이미 나갔을 수 있다.
