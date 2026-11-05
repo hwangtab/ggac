@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import ConditionalLayout from '@/components/ConditionalLayout'
+import { ZOD_JITLESS_INLINE_SCRIPT } from '@/lib/zodBrowserConfig'
 import { getGlobalData } from '@/lib/data'
 import { Suspense } from 'react'
 import { Toaster } from 'react-hot-toast'
@@ -119,6 +120,10 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
 
   return (
     <html lang={locale}>
+      <head>
+        {/* zod 의 eval 탐지가 CSP 위반 거짓 경보를 내지 않게 — src/lib/zodBrowserConfig.ts */}
+        <script dangerouslySetInnerHTML={{ __html: ZOD_JITLESS_INLINE_SCRIPT }} />
+      </head>
       <body suppressHydrationWarning>
         <NextIntlClientProvider messages={messages} locale={locale}>
           <ErrorBoundary>

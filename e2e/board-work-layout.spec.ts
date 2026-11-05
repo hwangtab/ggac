@@ -239,3 +239,44 @@ test.describe('업무 화면 — 이사회실 레이아웃 안', () => {
     }
   })
 })
+
+/**
+ * CSP 위반 거짓 경보(2026-11-05 원인 확인) — zod 4 가 객체 스키마를 처음 검사할 때 `Function("")`로 eval 을 탐지하는데,
+ * 운영 CSP(`script-src`에 unsafe-eval 없음)가 그걸 막아 위반 보고가 "CRITICAL SECURITY EVENT"로 쌓였다(2026-08-11부터
+ * 이사회실·정기총회 화면). `src/lib/zodBrowserConfig.ts`가 브라우저에서 jitless 로 탐지를 끈다. 운영 빌드 서버(이 스위트)는
+ * 운영과 같은 CSP 라 같은 위반이 재현된다.
+ */
+test('이사회실·정기총회 화면을 돌아도 eval(script-src) CSP 위반이 나지 않는다', async ({
+  browser,
+}) => {
+  test.setTimeout(120_000)
+  const { context, page } = await newPage(browser, 'director')
+  try {
+    await page.addInitScript(() => {
+      const w = window as unknown as { __csp?: string[] }
+      w.__csp = []
+      document.addEventListener('securitypolicyviolation', e => {
+        w.__csp?.push(`${e.effectiveDirective} ${e.blockedURI} ${e.sourceFile}:${e.columnNumber}`)
+      })
+    })
+    for (const path of [
+      '/board-room',
+      '/board-room/assembly',
+      '/board-room/chat',
+      '/board-room/documents',
+    ]) {
+      await page.goto(path, { waitUntil: 'domcontentloaded' })
+      await expect(boardMenu(page)).toBeVisible({ timeout: 30_000 })
+      await page.waitForTimeout(1_500)
+      const seen = await page.evaluate(
+        () => (window as unknown as { __csp?: string[] }).__csp ?? []
+      )
+      expect(
+        seen.filter(v => v.startsWith('script-src')),
+        `${path} 의 script-src 위반`
+      ).toEqual([])
+    }
+  } finally {
+    await context.close()
+  }
+})
