@@ -786,6 +786,8 @@ export async function toggleReactionRow(input: {
   return db.transaction(async tx => {
     const m = await loadMessageForWrite(tx, input.messageId)
     if (!m) throw new WorkWriteError('not_found', '메시지를 찾을 수 없습니다')
+    // 보관된 채널은 읽기 전용이다 — 떼는 것도 막는다(예전에는 떼기 분기가 보관 검사보다 먼저라 기존 반응이 사라졌다, 2026-11-05 점검)
+    if (m.archivedAt) throw new WorkWriteError('archived', '보관된 채널입니다')
     const removed = await tx
       .delete(workReactions)
       .where(
@@ -824,6 +826,12 @@ export async function togglePinRow(input: {
   actorId: string
 }): Promise<{ pinned: boolean }> {
   return db.transaction(async tx => {
+    const m = await loadMessageForWrite(tx, input.messageId)
+    if (!m || m.channelId !== input.channelId) {
+      throw new WorkWriteError('invalid_target', '고정할 메시지가 이 채널에 없습니다')
+    }
+    // 보관된 채널은 읽기 전용이다 — 고정 해제도 막는다(2026-11-05 점검)
+    if (m.archivedAt) throw new WorkWriteError('archived', '보관된 채널입니다')
     const removed = await tx
       .delete(workPins)
       .where(and(eq(workPins.channelId, input.channelId), eq(workPins.messageId, input.messageId)))
@@ -831,10 +839,6 @@ export async function togglePinRow(input: {
     if (removed.length > 0) {
       await bumpChannelRev(tx, input.channelId, { pins: true })
       return { pinned: false }
-    }
-    const m = await loadMessageForWrite(tx, input.messageId)
-    if (!m || m.channelId !== input.channelId) {
-      throw new WorkWriteError('invalid_target', '고정할 메시지가 이 채널에 없습니다')
     }
     if (m.deletedAt) throw new WorkWriteError('deleted', '삭제된 메시지입니다')
     if (m.archivedAt) throw new WorkWriteError('archived', '보관된 채널입니다')

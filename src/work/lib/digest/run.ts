@@ -2,8 +2,10 @@ import { canAccessBoardRoom } from '@/lib/server/authz'
 import { workRoleOf } from '@/lib/server/boardWorkAuth'
 import { canReadChannelRow } from '@/lib/server/boardWorkChannelAuth'
 import {
+  claimDigestSend,
+  getDigestState,
   listDigestCandidates,
-  upsertDigestState,
+  releaseDigestSend,
   type DigestCandidateRow,
 } from '@/db/queries/work/digest'
 import { buildDigestEmail } from './build'
@@ -105,6 +107,24 @@ export async function runMentionDigest(
     const mail = buildDigestEmail(list, siteUrl)
     if (!mail) continue
 
+    // 보내기 **전에** 이 묶음을 차지한다 — 겹친 다른 실행이 이미 차지했으면 보내지 않는다(같은 메일 두 통 방지)
+    const next = latestCreatedAt(list)
+    let prev: Date | null
+    try {
+      prev = await getDigestState(userId)
+      if (!(await claimDigestSend(userId, prev, next))) continue
+    } catch (e) {
+      console.error(
+        '[digest] 발송 차지 실패 — 이 사람은 다음 실행에서:',
+        e instanceof Error ? e.name : e
+      )
+      continue
+    }
+    const release = () =>
+      releaseDigestSend(userId, prev, next).catch(e =>
+        console.error('[digest] 차지 되돌리기 실패(이 묶음은 다시 보내지 않음):', e)
+      )
+
     const sent = await mailer({
       to: email,
       subject: mail.subject,
@@ -116,25 +136,27 @@ export async function runMentionDigest(
     if (reason) {
       result.failed += 1
       if (reason === 'unauthorized') {
-        // 키·도메인 오류는 누구에게 보내도 같다 — 이번 실행을 중단하고 알린다(상태는 그대로라 고친 뒤 이어서 보낸다)
+        // 키·도메인 오류는 누구에게 보내도 같다 — 이번 실행을 중단하고 알린다(차지를 되돌려 고친 뒤 이어서 보낸다)
         console.error('[digest] Resend 인증 오류(401/403) — 이번 실행을 중단합니다')
         result.authFailed = true
+        await release()
         break
       }
       if (reason === 'rate_limited') {
-        // 남은 사람도 같은 한도에 걸린다. 상태를 올리지 않았으니 다음 실행에서 이어서 보낸다.
+        // 남은 사람도 같은 한도에 걸린다. 차지를 되돌렸으니 다음 실행에서 이어서 보낸다.
         console.error('[digest] Resend 429 — 이번 실행을 중단합니다')
+        await release()
         break
       }
-      // 영구 거부(400/422)는 매 실행 같은 요청을 되풀이하지 않게 건너뛴 것으로 기록한다. 그 밖의 실패는 다음에 다시.
-      if (reason !== 'rejected') continue
+      // 영구 거부(400/422)는 매 실행 같은 요청을 되풀이하지 않게 건너뛴 것으로 둔다(차지 유지). 그 밖의 실패는 되돌려 다음에 다시.
+      if (reason !== 'rejected') {
+        await release()
+        continue
+      }
       console.error('[digest] Resend 가 수신을 거부함(400/422) — 이번 묶음은 건너뜁니다')
     } else {
       result.sent += 1
     }
-    await upsertDigestState(userId, latestCreatedAt(list)).catch(e =>
-      console.error('[digest] digest_state 갱신 실패(다음 실행에서 중복 발송 가능):', e)
-    )
     if (sendGapMs > 0) await sleep(sendGapMs)
   }
   return result

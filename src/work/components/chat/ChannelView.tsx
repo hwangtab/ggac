@@ -23,6 +23,7 @@ import type {
 } from '@work/lib/channels/types'
 import {
   loadLatestMessages,
+  loadMessagesByIds,
   loadOlderMessages,
   loadPinnedIds,
   toggleBookmark,
@@ -101,6 +102,9 @@ const READ_DEBOUNCE_MS = 800
  * 채널·DM 화면(클라이언트): 머리글 · 타임라인 · 입력창 · 실시간 · Presence · 입력 중 · 읽음 처리.
  * 서버 컴포넌트(c/[slug], dm/[id])가 첫 페이지와 디렉터리를 넘겨준다. 이후 상태는 리듀서 하나가 쥔다.
  */
+/** 재연결 뒤 다시 읽는 오래된(받은 범위 밖) 메시지 수 상한 — 그보다 위는 다시 스크롤하면 새로 읽는다 */
+const STALE_RECHECK_MAX = 300
+
 export default function ChannelView({
   channel,
   membership,
@@ -314,8 +318,32 @@ export default function ChannelView({
           return null
         }
       })
+      const before = messagesRef.current
       dispatch(plan.action)
       if (plan.truncated) setCatchUpNotice(true)
+      // 다시 받은 범위 **밖**(위로 스크롤해 이미 불러 둔 오래된 메시지)은 그 사이의 수정·삭제·반응이 반영되지 않았다 —
+      // 오래 숨겨 둔 탭이 200건 넘게 밀려 재동기화되면 지워진 글이 새로 고칠 때까지 남았다(2026-11-05 점검). 합친 경우에만
+      // (최신으로 바꾼 경우는 이미 버렸다) 그 메시지들을 id 로 다시 읽어 고치고, 읽히지 않는 것은 목록에서 뺀다.
+      if (plan.action.type === 'merge') {
+        const fetched = new Set(plan.action.messages.map(m => m.id))
+        const stale = before
+          .filter(m => !m.status && !fetched.has(m.id))
+          .map(m => m.id)
+          .slice(-STALE_RECHECK_MAX)
+        for (let i = 0; i < stale.length; i += 100) {
+          const ids = stale.slice(i, i + 100)
+          const again = await loadMessagesByIds({ messageIds: ids })
+          if (!again?.ok) break
+          const got = new Map(
+            again.data.filter(m => m.channel_id === channel.id).map(m => [m.id, m])
+          )
+          for (const id of ids) {
+            const row = got.get(id)
+            if (row) dispatch({ type: 'upsert', message: row })
+            else dispatch({ type: 'remove', id })
+          }
+        }
+      }
     } catch (e) {
       console.error('[refetchLatest]', e)
     } finally {

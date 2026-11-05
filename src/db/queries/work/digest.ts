@@ -7,7 +7,7 @@
  * 순수 함수 `src/work/lib/digest/select.ts`가 정한다. 대신 원본 SQL의 데이터 조건(안 읽음·지워지지 않음·본인 글 아님·
  * 알림 수준·마지막 읽은 시각·마지막 발송 이후)은 여기서 그대로 건다.
  */
-import { eq, sql } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 
 import { db } from '../../client.ts'
 import { workDigestState } from '../../schema/index.ts'
@@ -182,6 +182,46 @@ export async function upsertDigestState(userId: string, lastSentAt: Date): Promi
     .insert(workDigestState)
     .values({ userId, lastSentAt })
     .onConflictDoUpdate({ target: workDigestState.userId, set: { lastSentAt } })
+}
+
+/**
+ * 이 사람의 다음 묶음 발송을 **차지한다** — 발송 기준(`last_sent_at`)이 아직 `prev` 일 때만 `next` 로 올린다(비교 후 교체).
+ * 차지하면 true. 다이제스트 크론이 겹치거나 두 번 호출되면 두 실행이 같은 후보를 읽고 둘 다 보냈다(발송 뒤에야 기준을 올렸다 —
+ * 2026-11-05 점검). 이제 메일을 보내기 **전에** 차지하고, 진 쪽은 보내지 않는다. 보내지 못하면 `releaseDigestSend`로 되돌린다.
+ */
+export async function claimDigestSend(
+  userId: string,
+  prev: Date | null,
+  next: Date
+): Promise<boolean> {
+  if (prev === null) {
+    const rows = await db
+      .insert(workDigestState)
+      .values({ userId, lastSentAt: next })
+      .onConflictDoNothing()
+      .returning({ userId: workDigestState.userId })
+    return rows.length === 1
+  }
+  const rows = await db
+    .update(workDigestState)
+    .set({ lastSentAt: next })
+    .where(and(eq(workDigestState.userId, userId), eq(workDigestState.lastSentAt, prev)))
+    .returning({ userId: workDigestState.userId })
+  return rows.length === 1
+}
+
+/** 차지한 발송을 되돌린다(보내지 못했을 때) — 그 사이 다른 실행이 더 올렸으면 건드리지 않는다 */
+export async function releaseDigestSend(
+  userId: string,
+  prev: Date | null,
+  next: Date
+): Promise<void> {
+  const mine = and(eq(workDigestState.userId, userId), eq(workDigestState.lastSentAt, next))
+  if (prev === null) {
+    await db.delete(workDigestState).where(mine)
+    return
+  }
+  await db.update(workDigestState).set({ lastSentAt: prev }).where(mine)
 }
 
 export async function getDigestState(userId: string): Promise<Date | null> {

@@ -13,8 +13,7 @@ import {
 
 import NotificationDropdown from './NotificationDropdown'
 import LocaleSwitcher from './LocaleSwitcher'
-import { releaseDevicePushSubscription } from '@work/lib/push/device'
-import { MEMBER_DOCUMENT_EDITOR_USED_KEY } from '@/lib/memberDocuments/rules'
+import { cleanupBrowserForSignOut } from '@/lib/auth/signOutCleanup'
 
 type NavProfile = {
   is_director: boolean
@@ -168,34 +167,9 @@ const Navigation = () => {
   const handleLogout = async () => {
     try {
       setLoading(true)
-      // 이사회 업무툴 흔적을 로그아웃 **전에** 지운다(docs/board-work/03-통합-재설계.md §2-3 — 업무툴 자체 로그아웃이 없어졌다).
-      // 이사·감사·관리자: 푸시 구독 해지(서버 해지에 세션이 필요하다)·임시 저장·마지막 위치·파일 핸들·편집기 출처 저장소(purge
-      // iframe, 최대 3초)까지 `cleanupBeforeSignOut`이 한다. 그 밖의 계정은 업무툴을 쓸 수 없어 푸시 구독만 확인한다 —
-      // 업무툴 서비스 워커가 없는 브라우저는 아무 요청도 보내지 않는다. 둘 다 던지지 않는다.
-      if (isBoardMember) {
-        try {
-          const { cleanupBeforeSignOut } = await import('@work/components/layout/sign-out-cleanup')
-          await cleanupBeforeSignOut()
-        } catch (cleanupError) {
-          // 정리가 실패해도 로그아웃은 계속한다
-          console.error('[Navigation] 업무툴 로그아웃 정리 실패:', cleanupError)
-        }
-      } else {
-        await releaseDevicePushSubscription()
-      }
-      // 내 문서함 편집기(docs/board-work/04-조합원-문서함.md §8)를 이 브라우저에서 연 적이 있으면 편집기 출처의 저장소도
-      // 비운다(rhwp 자동 복구 초안 등 — 다음 사용자에게 남지 않게). 이사·감사·관리자는 위 정리가 이미 했다. 던지지 않는다.
-      try {
-        if (window.localStorage.getItem(MEMBER_DOCUMENT_EDITOR_USED_KEY)) {
-          if (!isBoardMember) {
-            const { purgeOfficeEditorStorage } = await import('@work/lib/files/office-purge')
-            await purgeOfficeEditorStorage()
-          }
-          window.localStorage.removeItem(MEMBER_DOCUMENT_EDITOR_USED_KEY)
-        }
-      } catch (cleanupError) {
-        console.error('[Navigation] 문서함 편집기 정리 실패:', cleanupError)
-      }
+      // 이 브라우저에 남은 업무툴·편집기 흔적을 로그아웃 **전에** 지운다(푸시 해지에 세션이 필요하다). 프로필을 아직 못 읽었으면
+      // (`navProfile` 없음) 모르는 것으로 넘겨 업무툴 정리까지 한다 — `src/lib/auth/signOutCleanup.ts`.
+      await cleanupBrowserForSignOut(navProfile ? isBoardMember : undefined)
       const response = await fetch('/api/auth/logout', {
         method: 'POST',
         credentials: 'include',

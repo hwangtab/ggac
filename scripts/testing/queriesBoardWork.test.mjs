@@ -409,6 +409,38 @@ test('반응 추가·제거 모두 메시지 rev를 올린다. canAdd가 아니�
   )
 })
 
+test('보관된 채널은 읽기 전용 — 반응 떼기·고정 해제·주제·글쓰기 권한 바꾸기도 막는다(2026-11-05 점검)', async () => {
+  const author = await seedPerson()
+  const ch = await seedChannel({ creatorId: author })
+  const id = await send(ch, author, '보관 전 글')
+  await Q.messages.toggleReactionRow({ messageId: id, userId: author, emoji: '👍', canAdd: true })
+  await Q.messages.togglePinRow({ channelId: ch, messageId: id, actorId: author })
+  await Q.channels.archiveChannelRow(ch)
+  await assert.rejects(
+    () =>
+      Q.messages.toggleReactionRow({ messageId: id, userId: author, emoji: '👍', canAdd: true }),
+    e => e.code === 'archived'
+  )
+  await assert.rejects(
+    () => Q.messages.togglePinRow({ channelId: ch, messageId: id, actorId: author }),
+    e => e.code === 'archived'
+  )
+  assert.equal(await Q.channels.setChannelTopicRow(ch, '바뀐 주제'), null)
+  assert.equal(await Q.channels.setChannelPostPolicyRow(ch, 'owners'), null)
+  // 반응·고정은 그대로 남았다
+  assert.equal(
+    Number(
+      (
+        await setupClient.execute({
+          sql: 'select count(*) n from work_reactions where message_id = ?',
+          args: [id],
+        })
+      ).rows[0].n
+    ),
+    1
+  )
+})
+
 // ── 폴링: 바뀐 메시지 ────────────────────────────────────────────────────────
 
 test('listChangedMessageIds: (since, upto] 사이에 바뀐 메시지만 — 새 글·수정·반응·답글로 바뀐 부모', async () => {

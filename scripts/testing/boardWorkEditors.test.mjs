@@ -153,7 +153,7 @@ test('HWP·HWPX 편집 켜기: 출처 env + HWP 플래그(+ HWPX 플래그), 20M
     NEXT_PUBLIC_HWPX_EDITOR_ENABLED: undefined,
   }
   withEnv(on, () => {
-    assert.equal(hwpEditor.getHwpStudioUrl(), 'https://ggac-office.vercel.app/rhwp/')
+    assert.equal(hwpEditor.getHwpStudioUrl(), 'https://ggac-office.vercel.app/rhwp/?chrome=embed')
     assert.equal(hwpEditor.canOfferHwpEdit({ fileName: 'a.hwp', size: 100 }), true)
     assert.equal(hwpEditor.canOfferHwpEdit({ fileName: 'a.hwpx', size: 100 }), false)
     assert.equal(hwpEditor.canOfferHwpEdit({ fileName: 'a.hwp', size: 21 * 1024 * 1024 }), false)
