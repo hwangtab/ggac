@@ -11,6 +11,7 @@ import {
   updateInboundStatus,
 } from '@/db/queries/mailbox'
 import { listNotesForEmail } from '@/db/queries/mailboxNotes'
+import { listLabelsForEmail } from '@/db/queries/mailboxLabels'
 import { getDisplayNames } from '@/db/queries/work/directory'
 import { validateUUID } from '@/utils/validation'
 
@@ -48,15 +49,20 @@ export const GET = defineApiRoute<undefined, BoardAuthSuccess>({
 
     const threadId = email.thread_id ? String(email.thread_id) : null
     const assignedTo = email.assigned_to ? String(email.assigned_to) : null
-    const [attachments, replies, thread, notes, names] = await Promise.all([
+    const [attachments, replies, thread, notes, names, labels] = await Promise.all([
       listAttachmentsForEmail(id),
       listRepliesForEmail(id),
       threadId ? listThread(threadId) : Promise.resolve([]),
       listNotesForEmail(id),
       assignedTo ? getDisplayNames([assignedTo]) : Promise.resolve(new Map<string, string>()),
+      listLabelsForEmail(id),
     ])
     return ApiSuccess.ok({
-      email: { ...email, assignee_name: assignedTo ? (names.get(assignedTo) ?? null) : null },
+      email: {
+        ...email,
+        assignee_name: assignedTo ? (names.get(assignedTo) ?? null) : null,
+        labels,
+      },
       attachments,
       replies,
       thread,

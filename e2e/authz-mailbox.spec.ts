@@ -1357,3 +1357,210 @@ test.describe('메일함 담당자', () => {
     }
   })
 })
+
+/**
+ * 라벨 — 만들기·고치기·지우기·붙이기는 관리자만, 보기·거르기는 이사·감사·관리자. 이 묶음만의 메일과 이름이
+ * `MAILBOX-E2E-LABEL-`로 시작하는 라벨을 쓰고, 끝나면 지운다. 직렬로 돈다.
+ */
+test.describe('메일함 라벨', () => {
+  test.describe.configure({ mode: 'serial' })
+  const LABEL_EMAIL_IDS = [
+    '00000000-0000-4000-8000-00000000c040',
+    '00000000-0000-4000-8000-00000000c041',
+  ]
+  const LABEL_SUBJECT = 'MAILBOX-E2E-LABELED'
+  const PREFIX = 'MAILBOX-E2E-LABEL-'
+
+  async function exec(sql: string, args: (string | number)[] = []) {
+    const client = createClient({ url: process.env.TURSO_DATABASE_URL! })
+    try {
+      return await client.execute({ sql, args })
+    } finally {
+      client.close()
+    }
+  }
+  async function ctxFor(baseURL: string | undefined, role: string) {
+    return apiRequest.newContext({ baseURL, storageState: storageStatePath(role) })
+  }
+  async function cleanup() {
+    await exec(`DELETE FROM mail_labels WHERE name LIKE '${PREFIX}%'`)
+    await exec(`DELETE FROM inbound_emails WHERE id IN (?, ?)`, LABEL_EMAIL_IDS)
+  }
+
+  test.beforeAll(async () => {
+    await cleanup()
+    for (const [i, id] of LABEL_EMAIL_IDS.entries()) {
+      await exec(
+        `INSERT INTO inbound_emails
+          (id, thread_id, resend_email_id, from_address, from_email, to_addresses, subject, status,
+           body_fetch_status, received_at)
+         VALUES (?, ?, ?, 'labels@example.com', 'labels@example.com', '["mailbox@ggac.kr"]', ?, 'read',
+                 'done', ?)`,
+        [id, id, `authz-mailbox-label-${i}`, `${LABEL_SUBJECT}-${i}`, Date.now() - i * 1000]
+      )
+    }
+  })
+  test.afterAll(cleanup)
+
+  test('보기는 이사·감사·관리자, 쓰기는 관리자만 — 이사·일반 조합원의 쓰기는 403이고 아무것도 안 생긴다', async ({
+    baseURL,
+    request,
+  }) => {
+    expect((await request.get('/api/admin/mailbox/labels')).status()).toBe(401)
+    const other = await ctxFor(baseURL, 'other')
+    const director = await ctxFor(baseURL, 'director')
+    const admin = await ctxFor(baseURL, 'admin')
+    try {
+      expect((await other.get('/api/admin/mailbox/labels')).status()).toBe(403)
+      expect((await director.get('/api/admin/mailbox/labels')).status()).toBe(200)
+
+      expect(
+        (
+          await director.post('/api/admin/mailbox/labels', { data: { name: `${PREFIX}이사` } })
+        ).status()
+      ).toBe(403)
+      const made = await admin.post('/api/admin/mailbox/labels', {
+        data: { name: `${PREFIX}권한`, color: 'green' },
+      })
+      expect(made.status()).toBe(201)
+      const labelId = (await made.json()).data.label.id
+      for (const [method, url, data] of [
+        ['patch', `/api/admin/mailbox/labels/${labelId}`, { name: `${PREFIX}바꿈` }],
+        ['delete', `/api/admin/mailbox/labels/${labelId}`, undefined],
+        [
+          'post',
+          `/api/admin/mailbox/labels/${labelId}/emails`,
+          { email_ids: [LABEL_EMAIL_IDS[0]], action: 'add' },
+        ],
+      ] as const) {
+        const res = await director[method](url, data ? { data } : undefined)
+        expect(res.status(), `${method} ${url}`).toBe(403)
+      }
+      const left = await exec(`SELECT count(*) AS n FROM mail_labels WHERE name LIKE '${PREFIX}%'`)
+      expect(Number(left.rows[0].n)).toBe(1)
+      const links = await exec(
+        'SELECT count(*) AS n FROM inbound_email_labels WHERE label_id = ?',
+        [labelId]
+      )
+      expect(Number(links.rows[0].n)).toBe(0)
+    } finally {
+      await Promise.all([other.dispose(), director.dispose(), admin.dispose()])
+    }
+  })
+
+  test('잘못된 이름·색·같은 이름(대소문자 무시)은 거부한다', async ({ baseURL }) => {
+    const admin = await ctxFor(baseURL, 'admin')
+    try {
+      const post = (data: object) => admin.post('/api/admin/mailbox/labels', { data })
+      expect((await post({ name: `${PREFIX}Case`, color: 'blue' })).status()).toBe(201)
+      expect((await post({ name: `${PREFIX}case`.toUpperCase() })).status()).toBe(409)
+      expect((await post({ name: '   ' })).status()).toBe(400)
+      expect((await post({ name: `${PREFIX}${'x'.repeat(30)}` })).status()).toBe(400)
+      expect((await post({ name: `${PREFIX}색`, color: '#ff0000' })).status()).toBe(400)
+    } finally {
+      await admin.dispose()
+    }
+  })
+
+  test('관리자가 붙이면 이사도 목록·상세에서 보고 라벨로 거른다, 지우면 메일은 남는다', async ({
+    baseURL,
+  }) => {
+    const admin = await ctxFor(baseURL, 'admin')
+    const director = await ctxFor(baseURL, 'director')
+    try {
+      const label = (
+        await (
+          await admin.post('/api/admin/mailbox/labels', {
+            data: { name: `${PREFIX}총회`, color: 'purple' },
+          })
+        ).json()
+      ).data.label
+      const add = await admin.post(`/api/admin/mailbox/labels/${label.id}/emails`, {
+        data: {
+          email_ids: [...LABEL_EMAIL_IDS, '00000000-0000-4000-8000-00000000ffff'],
+          action: 'add',
+        },
+      })
+      expect(add.status()).toBe(200)
+      const added = (await add.json()).data
+      expect(new Set(added.changed)).toEqual(new Set(LABEL_EMAIL_IDS))
+      expect(added.missing).toEqual(['00000000-0000-4000-8000-00000000ffff'])
+
+      const filtered = (
+        await (await director.get(`/api/admin/mailbox?label=${label.id}&limit=100`)).json()
+      ).data.emails as { id: string; labels: { id: string }[] }[]
+      expect(new Set(filtered.map(e => e.id))).toEqual(new Set(LABEL_EMAIL_IDS))
+      expect(filtered[0].labels.map(l => l.id)).toContain(label.id)
+      const detail = (await (await director.get(`/api/admin/mailbox/${LABEL_EMAIL_IDS[0]}`)).json())
+        .data.email
+      expect(detail.labels.map((l: { name: string }) => l.name)).toContain(`${PREFIX}총회`)
+      expect((await director.get('/api/admin/mailbox?label=not-a-uuid')).status()).toBe(400)
+
+      const remove = await admin.post(`/api/admin/mailbox/labels/${label.id}/emails`, {
+        data: { email_ids: [LABEL_EMAIL_IDS[1]], action: 'remove' },
+      })
+      expect((await remove.json()).data.changed).toEqual([LABEL_EMAIL_IDS[1]])
+
+      expect((await admin.delete(`/api/admin/mailbox/labels/${label.id}`)).status()).toBe(200)
+      const still = await exec(
+        'SELECT count(*) AS n FROM inbound_emails WHERE id IN (?, ?)',
+        LABEL_EMAIL_IDS
+      )
+      expect(Number(still.rows[0].n)).toBe(2)
+    } finally {
+      await Promise.all([admin.dispose(), director.dispose()])
+    }
+  })
+
+  test('화면: 관리자는 라벨을 만들어 골라 붙이고, 이사는 보고 거르지만 관리 도구는 없다', async ({
+    browser,
+  }) => {
+    const name = `${PREFIX}화면`
+    const adminCtx = await browser.newContext({ storageState: storageStatePath('admin') })
+    try {
+      const page = await adminCtx.newPage()
+      await page.goto('/admin/mailbox', { waitUntil: 'domcontentloaded' })
+      await page.getByRole('button', { name: '라벨 관리' }).click({ timeout: 15000 })
+      const dialog = page.getByRole('dialog', { name: '라벨 관리' })
+      await dialog.getByLabel('새 라벨 이름').fill(name)
+      await dialog.getByRole('button', { name: '만들기' }).click()
+      await expect(dialog.getByLabel(`${name} 이름`)).toBeVisible()
+      await dialog.getByRole('button', { name: '닫기' }).click()
+
+      await page.getByLabel(`${LABEL_SUBJECT}-0 선택`).check()
+      const option = page.getByLabel('고른 메일에 라벨 붙이기')
+      await option.selectOption({ label: name })
+      await expect
+        .poll(async () =>
+          Number(
+            (
+              await exec(
+                `SELECT count(*) AS n FROM inbound_email_labels l JOIN mail_labels m ON m.id = l.label_id
+                 WHERE m.name = ? AND l.email_id = ?`,
+                [name, LABEL_EMAIL_IDS[0]]
+              )
+            ).rows[0].n
+          )
+        )
+        .toBe(1)
+    } finally {
+      await adminCtx.close()
+    }
+
+    const directorCtx = await browser.newContext({ storageState: storageStatePath('director') })
+    try {
+      const page = await directorCtx.newPage()
+      await page.goto('/board-room/mailbox', { waitUntil: 'domcontentloaded' })
+      const filters = page.getByTestId('label-filters')
+      await filters.getByRole('button', { name: new RegExp(name) }).click({ timeout: 15000 })
+      await expect(page.getByText(`${LABEL_SUBJECT}-0`).first()).toBeVisible()
+      await expect(page.getByText(`${LABEL_SUBJECT}-1`)).toHaveCount(0)
+      await expect(page.getByRole('button', { name: '라벨 관리' })).toHaveCount(0)
+      await page.getByText(`${LABEL_SUBJECT}-0`).first().click()
+      await expect(page.getByTestId('mail-labels')).toContainText(name)
+      await expect(page.getByText('라벨 바꾸기')).toHaveCount(0)
+    } finally {
+      await directorCtx.close()
+    }
+  })
+})

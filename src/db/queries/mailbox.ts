@@ -67,6 +67,8 @@ export type ListInboundOptions = {
   receivedUntil?: Date
   /** 이 사람이 담당자인 메일만("내 담당"). */
   assignedTo?: string
+  /** 이 라벨이 붙은 메일만. */
+  labelId?: string
 }
 
 /**
@@ -79,6 +81,18 @@ export type ListInboundOptions = {
 const realAttachmentCount = sql<number>`(select count(*) from ${inboundEmailAttachments} a
   where a.email_id = "inbound_emails"."id"
     and not (a.content_id is not null and coalesce(a.content_type, '') like 'image/%'))`
+
+function parseLabels(raw: unknown): { id: string; name: string; color: string }[] {
+  try {
+    const parsed = JSON.parse(String(raw ?? '[]'))
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .filter(item => item && typeof item.id === 'string')
+      .sort((a, b) => String(a.name).localeCompare(String(b.name), 'ko'))
+  } catch {
+    return []
+  }
+}
 
 function rowToEmail(row: Record<string, unknown>): Record<string, unknown> {
   const snake = toSnakeCase(row)
@@ -224,6 +238,13 @@ export async function listInboundEmails(
     )
   }
 
+  if (options.labelId) {
+    conditions.push(
+      sql`exists (select 1 from inbound_email_labels l
+        where l.email_id = ${inboundEmails.id} and l.label_id = ${options.labelId})`
+    )
+  }
+
   if (options.assignedTo) {
     conditions.push(eq(inboundEmails.assignedTo, options.assignedTo))
   }
@@ -280,6 +301,10 @@ export async function listInboundEmails(
     // 담당자 이름(표시 이름만). 바깥 열은 위의 개수들과 같은 이유로 표 이름까지 박는다.
     assigneeName: sql<string | null>`(select display_name from member_profiles m
       where m.id = "inbound_emails"."assigned_to")`,
+    // 붙은 라벨 — JSON 배열 문자열(없으면 '[]'). 정렬은 아래에서 한다(json_group_array는 순서를 보장하지 않는다).
+    labelsJson: sql<string>`(select json_group_array(json_object('id', ml.id, 'name', ml.name, 'color', ml.color))
+      from inbound_email_labels l join mail_labels ml on ml.id = l.label_id
+      where l.email_id = "inbound_emails"."id")`,
     // 내부 메모 수 — 개수만 센다. 메모 본문은 이 파일에서 읽지 않는다(발송 경로가 들여오는 파일이라 메모 쿼리는 따로 둔다).
     noteCount: sql<number>`(select count(*) from inbound_email_notes n
       where n.email_id = "inbound_emails"."id")`,
@@ -301,9 +326,10 @@ export async function listInboundEmails(
 
   return {
     emails: rows.map(row => {
-      const { attachmentCount, threadCount, noteCount, assigneeName, ...rest } = row
+      const { attachmentCount, threadCount, noteCount, assigneeName, labelsJson, ...rest } = row
       return {
         ...rowToEmail(rest),
+        labels: parseLabels(labelsJson),
         assignee_name: assigneeName ?? null,
         attachment_count: Number(attachmentCount ?? 0),
         thread_count: Number(threadCount ?? 1),

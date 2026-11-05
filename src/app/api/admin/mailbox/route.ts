@@ -74,6 +74,10 @@ export const GET = defineApiRoute<undefined, BoardAuthSuccess>({
       throw ApiError.badRequest('알 수 없는 담당자 조건입니다.')
     }
 
+    const labelParam = params.get('label')
+    const labelCheck = labelParam ? validateUUID(labelParam, '라벨 ID') : null
+    if (labelCheck && !labelCheck.isValid) throw ApiError.badRequest('라벨 id가 올바르지 않습니다.')
+
     const has = params.get('has')
     if (has && has !== 'attachment') {
       throw ApiError.badRequest('알 수 없는 조건입니다.')
@@ -90,6 +94,7 @@ export const GET = defineApiRoute<undefined, BoardAuthSuccess>({
       receivedFrom: receivedFrom ?? undefined,
       receivedUntil: receivedUntil ?? undefined,
       assignedTo: assignee === 'me' ? auth.user.id : undefined,
+      labelId: labelCheck?.sanitized,
     })
     return ApiSuccess.ok({
       emails: result.emails,
