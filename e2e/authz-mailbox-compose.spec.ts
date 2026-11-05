@@ -996,3 +996,190 @@ test.describe('답장 받는 사람·전체 답장·인용', () => {
     }
   })
 })
+
+/**
+ * 전달(PR5) — 새 메일 경로에 `forward_of`·`forward_attachment_ids`를 얹는다. 검증(스코프·실행 파일·용량)은 전부
+ * `sending` 행보다 앞이라 거부되면 행이 생기지 않는다. E2E 서버에는 비공개 Blob 토큰이 없어 첨부 복사 자체는 못
+ * 하므로, 복사 단계의 실패가 "아무것도 안 나가고 행은 failed"로 끝나는지를 본다.
+ */
+test.describe('전달', () => {
+  const SOURCE_ID = '00000000-0000-4000-8000-00000000d0e3'
+  const OTHER_ID = '00000000-0000-4000-8000-00000000d0e4'
+  const ATT_OK = '00000000-0000-4000-8000-00000000d0c1'
+  const ATT_EXE = '00000000-0000-4000-8000-00000000d0c2'
+  const ATT_BIG = '00000000-0000-4000-8000-00000000d0c3'
+  const ATT_OTHER = '00000000-0000-4000-8000-00000000d0c4'
+  let admin: APIRequestContext
+
+  async function exec(sql: string, args: (string | number | null)[] = []) {
+    const client = db()
+    try {
+      return await client.execute({ sql, args })
+    } finally {
+      client.close()
+    }
+  }
+
+  test.beforeAll(async ({ playwright, baseURL }) => {
+    admin = await playwright.request.newContext({
+      baseURL,
+      storageState: storageStatePath('admin'),
+    })
+    await exec('DELETE FROM inbound_emails WHERE id IN (?, ?)', [SOURCE_ID, OTHER_ID])
+    for (const [id, subject] of [
+      [SOURCE_ID, '전달할 메일'],
+      [OTHER_ID, '다른 메일'],
+    ]) {
+      await exec(
+        `INSERT INTO inbound_emails
+          (id, thread_id, resend_email_id, from_address, from_email, to_addresses, subject, body_text,
+           status, body_fetch_status, received_at)
+         VALUES (?, ?, ?, 'src@authz-fwd.test.local', 'src@authz-fwd.test.local', '["mailbox@ggac.kr"]',
+                 ?, '전달 원문', 'read', 'done', ?)`,
+        [id, id, `authz-fwd-${id}`, subject, Date.now() - 60_000]
+      )
+    }
+    const attachments: [string, string, string, number][] = [
+      [ATT_OK, SOURCE_ID, 'report.pdf', 1234],
+      [ATT_EXE, SOURCE_ID, 'setup.exe', 10],
+      [ATT_BIG, SOURCE_ID, 'video.zip', 11_000_000],
+      [ATT_OTHER, OTHER_ID, 'secret.pdf', 100],
+    ]
+    for (const [id, emailId, filename, size] of attachments) {
+      await exec(
+        `INSERT INTO inbound_email_attachments (id, email_id, filename, content_type, size_bytes, blob_path)
+         VALUES (?, ?, ?, 'application/octet-stream', ?, ?)`,
+        [id, emailId, filename, size, `mailbox/${emailId}/${id}-${filename}`]
+      )
+    }
+  })
+
+  test.afterAll(async () => {
+    await exec('DELETE FROM inbound_emails WHERE id IN (?, ?)', [SOURCE_ID, OTHER_ID])
+    await admin.dispose()
+  })
+
+  function forwardForm(key: string, ids: string[], forwardOf: string = SOURCE_ID) {
+    return composeForm({
+      idempotency_key: key,
+      subject: 'MAILBOX-E2E-FWD 전달할 메일',
+      forward_of: forwardOf,
+      forward_attachment_ids: JSON.stringify(ids),
+    })
+  }
+
+  test('첨부 없는 전달은 나가고, 감사 기록에 어느 메일을 전달했는지 남는다', async () => {
+    const key = randomUUID()
+    const res = await admin.post('/api/admin/mailbox/outbound', { multipart: forwardForm(key, []) })
+    expect(res.status()).toBe(200)
+    const [row] = await rowsForKey(key)
+    expect(row.status).toBe('sent')
+    const activity = (
+      await exec(
+        `SELECT metadata FROM user_activities WHERE action_type = 'mailbox_email_sent' AND target_id = ?`,
+        [String(row.id)]
+      )
+    ).rows[0]
+    const metadata = JSON.parse(String(activity?.metadata ?? '{}'))
+    expect(metadata.forward_of).toBe(SOURCE_ID)
+    expect(metadata.forwarded_attachment_ids).toEqual([])
+  })
+
+  test('다른 메일의 첨부·실행 파일·10MB 초과는 발송 행을 만들기 전에 400이다', async () => {
+    for (const [ids, pattern] of [
+      [[ATT_OTHER], /이 메일의 것이 아닙니다/],
+      [[ATT_OK, ATT_OTHER], /이 메일의 것이 아닙니다/],
+      [[ATT_EXE], /전달할 수 없는 파일 형식/],
+      [[ATT_BIG], /내려받아 따로 공유/],
+    ] as const) {
+      const key = randomUUID()
+      const res = await admin.post('/api/admin/mailbox/outbound', {
+        multipart: forwardForm(key, [...ids]),
+      })
+      expect(res.status(), ids.join(',')).toBe(400)
+      expect((await res.json()).error).toMatch(pattern)
+      expect(await rowsForKey(key), '거부됐는데 발송 행이 생겼다').toHaveLength(0)
+    }
+  })
+
+  test('없는 메일·형식이 틀린 id는 거부한다', async () => {
+    const missing = await admin.post('/api/admin/mailbox/outbound', {
+      multipart: forwardForm(randomUUID(), [], '00000000-0000-4000-8000-00000000ffff'),
+    })
+    expect(missing.status()).toBe(404)
+    const malformed = await admin.post('/api/admin/mailbox/outbound', {
+      multipart: forwardForm(randomUUID(), [], 'not-a-uuid'),
+    })
+    expect(malformed.status()).toBe(400)
+    const badIds = await admin.post('/api/admin/mailbox/outbound', {
+      multipart: composeForm({
+        subject: 'MAILBOX-E2E-FWD 형식',
+        forward_of: SOURCE_ID,
+        forward_attachment_ids: '{"a":1}',
+      }),
+    })
+    expect(badIds.status()).toBe(400)
+  })
+
+  test('첨부 복사가 실패하면 아무것도 나가지 않고 행은 failed, 첨부 행은 남지 않는다', async () => {
+    const key = randomUUID()
+    const res = await admin.post('/api/admin/mailbox/outbound', {
+      multipart: forwardForm(key, [ATT_OK]),
+    })
+    // 토큰이 없으면 저장소 단계 500, 시험 토큰이 있으면 객체가 없어 400 — 어느 쪽이든 안 나간다.
+    expect([400, 500]).toContain(res.status())
+    const [row] = await rowsForKey(key)
+    expect(row.status).toBe('failed')
+    expect(row.resend_message_id).toBeNull()
+    const left = await exec(
+      'SELECT count(*) AS n FROM outbound_email_attachments WHERE email_id = ?',
+      [String(row.id)]
+    )
+    expect(Number(left.rows[0].n)).toBe(0)
+  })
+
+  test('이사는 전달할 수 없다', async ({ playwright, baseURL }) => {
+    const director = await playwright.request.newContext({
+      baseURL,
+      storageState: storageStatePath('director'),
+    })
+    try {
+      const key = randomUUID()
+      const res = await director.post('/api/admin/mailbox/outbound', {
+        multipart: forwardForm(key, [ATT_OK]),
+      })
+      expect(res.status()).toBe(403)
+      expect(await rowsForKey(key)).toHaveLength(0)
+    } finally {
+      await director.dispose()
+    }
+  })
+
+  test('화면: 전달 창은 제목·본문을 채우고 원본 첨부를 고르게 하며 10MB 초과를 막는다', async ({
+    browser,
+  }) => {
+    const ctx = await browser.newContext({ storageState: storageStatePath('admin') })
+    try {
+      const page = await ctx.newPage()
+      await page.goto('/admin/mailbox', { waitUntil: 'domcontentloaded' })
+      await page.getByText('전달할 메일', { exact: true }).first().click()
+      await page.getByRole('button', { name: '전달', exact: true }).click()
+
+      await expect(page.getByRole('heading', { name: '메일 전달' })).toBeVisible()
+      await expect(page.locator('input[value="Fwd: 전달할 메일"]')).toBeVisible()
+      await expect(page.locator('textarea')).toHaveValue(/---------- 전달된 메일 ----------/)
+      await expect(page.locator('textarea')).toHaveValue(/전달 원문/)
+
+      const picker = page.getByTestId('forward-attachments')
+      await expect(picker.getByLabel(/report\.pdf/)).toBeChecked()
+      // 실행 파일은 처음부터 고를 수 없다 — 기본 선택에 들어 있으면 창을 열자마자 오류가 뜬다.
+      await expect(picker.getByLabel(/setup\.exe/)).toBeDisabled()
+      await expect(picker.getByLabel(/setup\.exe/)).not.toBeChecked()
+      await expect(picker).not.toContainText('전달할 수 없는 파일 형식')
+      await picker.getByLabel(/video\.zip/).check()
+      await expect(picker).toContainText('내려받아 따로 공유')
+    } finally {
+      await ctx.close()
+    }
+  })
+})

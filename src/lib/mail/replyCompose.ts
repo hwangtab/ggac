@@ -167,3 +167,66 @@ export function buildReplyQuote(source: {
     `${escapeHtml(clipped).replace(/\r?\n/g, '<br>')}</blockquote>`
   )
 }
+
+/** `Fwd: `를 한 번만 붙인다. 이미 `Fwd:`·`Fw:`·`전달:`로 시작하면 그대로 둔다. */
+export function forwardSubject(original: string | null | undefined): string {
+  const subject = String(original ?? '').trim() || '(제목 없음)'
+  return /^(fwd?|전달)\s*:/i.test(subject) ? subject : `Fwd: ${subject}`
+}
+
+function addressLine(value: unknown): string {
+  let parsed = value
+  if (typeof value === 'string') {
+    try {
+      parsed = JSON.parse(value)
+    } catch {
+      return ''
+    }
+  }
+  return Array.isArray(parsed) ? parsed.map(String).join(', ') : ''
+}
+
+/**
+ * 전달 본문의 기본값(평문) — 작성 창에 미리 채워 관리자가 고칠 수 있게 한다. 원문은 **평문만** 싣는다(인용과 같은
+ * 이유로 받은 HTML은 다시 내보내지 않는다). 평문이 없으면 머리말만 싣고 그 사실을 적는다.
+ */
+export function buildForwardText(source: {
+  from_address: string
+  to_addresses?: unknown
+  cc_addresses?: unknown
+  received_at: string | Date | null
+  subject: string | null | undefined
+  body_text: string | null | undefined
+}): string {
+  const at = source.received_at ? new Date(source.received_at) : null
+  const when =
+    at && !Number.isNaN(at.getTime())
+      ? at.toLocaleString('ko-KR', {
+          timeZone: 'Asia/Seoul',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+      : ''
+  const to = addressLine(source.to_addresses)
+  const cc = addressLine(source.cc_addresses)
+  const text = String(source.body_text ?? '').trim()
+  const clipped =
+    text.length > QUOTE_MAX_CHARS ? `${text.slice(0, QUOTE_MAX_CHARS)}\n…(이하 생략)` : text
+  return [
+    '',
+    '',
+    '---------- 전달된 메일 ----------',
+    `보낸 사람: ${String(source.from_address ?? '').trim()}`,
+    when ? `날짜: ${when}` : null,
+    `제목: ${String(source.subject ?? '').trim() || '(제목 없음)'}`,
+    to ? `받는 사람: ${to}` : null,
+    cc ? `참조: ${cc}` : null,
+    '',
+    clipped || '(이 메일은 글자 본문이 없습니다.)',
+  ]
+    .filter(line => line !== null)
+    .join('\n')
+}

@@ -6,9 +6,11 @@ import { FiPaperclip, FiX } from 'react-icons/fi'
 import { classifyFailedResponse } from '@/lib/mail/composeOutcome'
 import {
   COMPOSE_LIMITS,
+  isBlockedAttachmentName,
   normalizeAddress,
   validateAttachments,
   validateCompose,
+  validateForwardAttachments,
 } from '@/lib/mail/composeValidation'
 
 import { escapeHtml, formatBytes } from './mailboxUtils'
@@ -28,6 +30,15 @@ type Props = {
   onDone: () => void
   /** 받는 사람을 미리 채운다(발신자 카드의 "메일 쓰기"). 발송 전에 서버가 다시 검증한다. */
   initialTo?: string[]
+  /** 받은 메일 전달. 제목·본문을 미리 채우고, 고른 받은 첨부는 서버가 비공개 저장소에서 복사해 붙인다. */
+  forward?: ForwardSource
+}
+
+export type ForwardSource = {
+  emailId: string
+  subject: string
+  body: string
+  attachments: { id: string; filename: string; size_bytes: number | null; inline: boolean }[]
 }
 
 type Outcome = { tone: 'ok' | 'warn'; message: string }
@@ -148,7 +159,7 @@ function isExternal(address: string): boolean {
  *  - 유지: 성공, "처리 중/확인 필요"(409), 네트워크 오류(요청이 닿았는지 모른다 — 같은 키로 다시 보내도 안전하다).
  *  - 새로 발급: 서버가 거절했다(검증 실패·상한 초과·발송 거절). 이 키의 행은 이미 끝난 상태라 재사용할 수 없다.
  */
-export default function ComposeModal({ quota, onClose, onDone, initialTo }: Props) {
+export default function ComposeModal({ quota, onClose, onDone, initialTo, forward }: Props) {
   const keyRef = useRef<string>(crypto.randomUUID())
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -156,9 +167,24 @@ export default function ComposeModal({ quota, onClose, onDone, initialTo }: Prop
   const [cc, setCc] = useState<string[]>([])
   const [bcc, setBcc] = useState<string[]>([])
   const [showCcBcc, setShowCcBcc] = useState(false)
-  const [subject, setSubject] = useState('')
-  const [body, setBody] = useState('')
+  const [subject, setSubject] = useState(() => forward?.subject ?? '')
+  const [body, setBody] = useState(() => forward?.body ?? '')
   const [files, setFiles] = useState<File[]>([])
+  // 전달할 받은 첨부 — 기본은 진짜 첨부만 고른다. 본문에 박힌 인라인 이미지(서명 로고 등)는 꺼 두고, 내보낼 수
+  // 없는 형식(실행 파일)은 아예 고를 수 없게 그린다 — 기본으로 골라 두면 창을 열자마자 오류부터 뜬다.
+  const [forwardIds, setForwardIds] = useState<string[]>(
+    () =>
+      forward?.attachments
+        .filter(a => !a.inline && !isBlockedAttachmentName(a.filename))
+        .map(a => a.id) ?? []
+  )
+  const forwardPicked = (forward?.attachments ?? []).filter(a => forwardIds.includes(a.id))
+  const forwardCheck = forward
+    ? validateForwardAttachments(
+        forwardPicked.map(a => ({ id: a.id, name: a.filename, size: a.size_bytes })),
+        files.length
+      )
+    : null
 
   const [step, setStep] = useState<'edit' | 'confirm'>('edit')
   const [sending, setSending] = useState(false)
@@ -186,6 +212,10 @@ export default function ComposeModal({ quota, onClose, onDone, initialTo }: Prop
     const attachmentCheck = validateAttachments(files.map(f => ({ name: f.name, size: f.size })))
     if (attachmentCheck.ok === false) {
       setError(attachmentCheck.error)
+      return
+    }
+    if (forwardCheck && forwardCheck.ok === false) {
+      setError(forwardCheck.error)
       return
     }
     if (remaining !== null && validated.value.recipientCount > remaining) {
@@ -264,6 +294,10 @@ export default function ComposeModal({ quota, onClose, onDone, initialTo }: Prop
       // 평문 입력을 HTML로 보낸다 — 이스케이프하고 개행을 <br>로 바꾸지 않으면 문단이 붙어 나간다.
       form.set('body_html', escapeHtml(body).replace(/\n/g, '<br>'))
       for (const file of files) form.append('attachments', file)
+      if (forward) {
+        form.set('forward_of', forward.emailId)
+        form.set('forward_attachment_ids', JSON.stringify(forwardPicked.map(a => a.id)))
+      }
 
       const res = await fetch('/api/admin/mailbox/outbound', { method: 'POST', body: form })
       const json = await res.json().catch(() => null)
@@ -342,7 +376,7 @@ export default function ComposeModal({ quota, onClose, onDone, initialTo }: Prop
       <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-xl bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-gray-200 p-5">
           <h2 className="text-base font-semibold text-gray-900">
-            {step === 'confirm' ? '보내기 전에 확인해 주세요' : '새 메일'}
+            {step === 'confirm' ? '보내기 전에 확인해 주세요' : forward ? '메일 전달' : '새 메일'}
           </h2>
           <button
             onClick={close}
@@ -463,6 +497,50 @@ export default function ComposeModal({ quota, onClose, onDone, initialTo }: Prop
                     onChange={e => addFiles(e.target.files)}
                   />
                 </div>
+                {forward && forward.attachments.length > 0 && (
+                  <fieldset className="space-y-1" data-testid="forward-attachments">
+                    <legend className="text-xs font-medium text-gray-600">
+                      전달할 원본 첨부 (합쳐서{' '}
+                      {Math.floor(COMPOSE_LIMITS.maxForwardTotalBytes / 1_000_000)}MB까지)
+                    </legend>
+                    {forward.attachments.map(att => {
+                      const blocked = isBlockedAttachmentName(att.filename)
+                      return (
+                        <label
+                          key={att.id}
+                          className={`flex items-center gap-2 rounded bg-gray-50 px-2 py-1 text-xs ${
+                            blocked ? 'text-gray-400' : 'text-gray-700'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            disabled={frozen || blocked}
+                            checked={forwardIds.includes(att.id)}
+                            onChange={e =>
+                              setForwardIds(ids =>
+                                e.target.checked
+                                  ? [...ids, att.id]
+                                  : ids.filter(id => id !== att.id)
+                              )
+                            }
+                            className="rounded border-gray-300"
+                          />
+                          <span className="truncate">
+                            {att.filename}{' '}
+                            <span className="text-gray-400">
+                              ({formatBytes(att.size_bytes)}
+                              {att.inline ? ', 본문 이미지' : ''}
+                              {blocked ? ', 보낼 수 없는 형식' : ''})
+                            </span>
+                          </span>
+                        </label>
+                      )
+                    })}
+                    {forwardCheck && forwardCheck.ok === false && (
+                      <p className="text-xs text-amber-700">{forwardCheck.error}</p>
+                    )}
+                  </fieldset>
+                )}
                 {files.length > 0 && (
                   <ul className="space-y-1">
                     {files.map((file, i) => (
@@ -579,6 +657,21 @@ export default function ComposeModal({ quota, onClose, onDone, initialTo }: Prop
                   {body}
                 </pre>
               </div>
+              {forwardPicked.length > 0 && (
+                <div>
+                  <div className="text-xs font-medium text-gray-500">
+                    전달하는 원본 첨부 {forwardPicked.length}개
+                  </div>
+                  <ul className="mt-1 space-y-0.5 text-gray-800">
+                    {forwardPicked.map(att => (
+                      <li key={att.id}>
+                        {att.filename}{' '}
+                        <span className="text-gray-400">({formatBytes(att.size_bytes)})</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               {files.length > 0 && (
                 <div>
                   <div className="text-xs font-medium text-gray-500">첨부 {files.length}개</div>

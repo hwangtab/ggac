@@ -21,6 +21,11 @@ export const COMPOSE_LIMITS = {
    * 들어와야 한다. 클라이언트가 Blob에 직접 올리는 방식은 발송이 실패하면 고아 파일을 남기므로 쓰지 않는다.
    */
   maxAttachmentTotalBytes: 4_000_000,
+  /**
+   * 전달하는 받은 첨부의 합계(바이트). 이 첨부는 요청 본문을 거치지 않고 서버가 비공개 저장소에서 복사하므로
+   * 4.5MB 한도와 무관하다. 대신 받는 쪽 메일 서버의 흔한 한도(10~25MB)에서 넉넉히 안쪽으로 잡는다.
+   */
+  maxForwardTotalBytes: 10_000_000,
 } as const
 
 /** 메일로 나가면 안 되는(수신 측 필터가 막거나 실행 파일인) 확장자. */
@@ -191,6 +196,13 @@ export function sanitizeAttachmentName(raw: string): string {
   return name || 'attachment'
 }
 
+/** 메일로 내보낼 수 없는 확장자인가. 전달 창이 처음부터 고를 수 없게 그리는 데 쓴다(검증은 아래 함수들이 한다). */
+export function isBlockedAttachmentName(raw: string): boolean {
+  const name = sanitizeAttachmentName(raw)
+  const dot = name.lastIndexOf('.')
+  return dot !== -1 && BLOCKED_EXTENSIONS.has(name.slice(dot + 1).toLowerCase())
+}
+
 export function validateAttachments(files: AttachmentMeta[]): ValidationResult<AttachmentMeta[]> {
   if (files.length > COMPOSE_LIMITS.maxAttachments) {
     return { ok: false, error: `첨부는 ${COMPOSE_LIMITS.maxAttachments}개까지 가능합니다.` }
@@ -217,4 +229,43 @@ export function validateAttachments(files: AttachmentMeta[]): ValidationResult<A
     }
   }
   return { ok: true, value: out }
+}
+
+export type ForwardAttachmentMeta = { id: string; name: string; size: number | null }
+
+/**
+ * 전달할 받은 첨부 검증 — 개수는 올린 첨부와 **합쳐** `maxAttachments`, 용량은 전달분만 `maxForwardTotalBytes`.
+ * 실행 파일 확장자는 올린 첨부와 같이 막는다(받은 메일에 들어 있었다고 우리 이름으로 내보내지 않는다).
+ * 크기를 모르는 첨부(`size` null)는 여기서 통과시키고 라우트가 실제로 읽은 뒤 다시 잰다.
+ */
+export function validateForwardAttachments(
+  files: ForwardAttachmentMeta[],
+  uploadedCount: number
+): ValidationResult<ForwardAttachmentMeta[]> {
+  if (files.length + uploadedCount > COMPOSE_LIMITS.maxAttachments) {
+    return {
+      ok: false,
+      error: `첨부는 전달하는 것까지 합쳐 ${COMPOSE_LIMITS.maxAttachments}개까지 가능합니다.`,
+    }
+  }
+  let total = 0
+  const out: ForwardAttachmentMeta[] = []
+  for (const file of files) {
+    const name = sanitizeAttachmentName(file.name)
+    const dot = name.lastIndexOf('.')
+    const ext = dot === -1 ? '' : name.slice(dot + 1).toLowerCase()
+    if (BLOCKED_EXTENSIONS.has(ext)) {
+      return { ok: false, error: `전달할 수 없는 파일 형식입니다: ${name}` }
+    }
+    total += file.size ?? 0
+    out.push({ id: file.id, name, size: file.size })
+  }
+  if (total > COMPOSE_LIMITS.maxForwardTotalBytes) {
+    return { ok: false, error: forwardTooLargeMessage() }
+  }
+  return { ok: true, value: out }
+}
+
+export function forwardTooLargeMessage(): string {
+  return `전달하는 첨부는 합쳐서 ${Math.floor(COMPOSE_LIMITS.maxForwardTotalBytes / 1_000_000)}MB까지입니다. 큰 파일은 내려받아 따로 공유해 주세요.`
 }

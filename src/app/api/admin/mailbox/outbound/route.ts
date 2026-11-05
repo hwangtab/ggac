@@ -9,6 +9,8 @@ import {
   countInboundSince,
   countOutboundRecipientsSince,
   deleteOutboundAttachmentsForEmail,
+  getInboundEmail,
+  listAttachmentsForEmail,
   insertOutboundAttachment,
   insertOutboundSending,
   listSentMail,
@@ -20,9 +22,12 @@ import { logUserActivity } from '@/db/queries/activities'
 import { readSessionUser } from '@/lib/server/session'
 import { MailSendError, sendEmail } from '@/lib/mail/send'
 import {
+  COMPOSE_LIMITS,
+  forwardTooLargeMessage,
   isTestRecipientAddress,
   validateCompose,
   validateAttachments,
+  validateForwardAttachments,
 } from '@/lib/mail/composeValidation'
 import {
   dailyOutboundLimit,
@@ -30,8 +35,11 @@ import {
   evaluateQuota,
   isComposeEnabled,
 } from '@/lib/mail/composeQuota'
-import { blobPathForSentAttachment } from '@/lib/storage/mailboxAttachments'
-import { deleteObject, putObject } from '@/lib/storage/blob'
+import {
+  blobPathForSentAttachment,
+  isSafeMailboxAttachmentPath,
+} from '@/lib/storage/mailboxAttachments'
+import { deleteObject, getPrivateObject, putObject } from '@/lib/storage/blob'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { sanitizePostHtml } from '@/utils/sanitizePostHtml'
 import { logSecurityEvent } from '@/utils/security'
@@ -58,6 +66,14 @@ function parseAddressList(raw: FormDataEntryValue | null): unknown {
   }
 }
 
+/** 전달 첨부를 읽고 나서야 알게 된 실패. 사람이 고칠 수 있는 사유라 그대로 보여 준다. */
+class ForwardAttachmentError extends Error {}
+
+type ForwardPlan = {
+  emailId: string
+  attachments: { id: string; name: string; contentType: string | null; blobPath: string }[]
+}
+
 function plainTextLength(html: string): number {
   return html
     .replace(/<br\s*\/?>/gi, ' ')
@@ -66,7 +82,9 @@ function plainTextLength(html: string): number {
     .trim().length
 }
 
-// POST: 받은 메일과 무관한 새 메일을 작성해 보낸다(관리자만)
+// POST: 새 메일을 작성해 보낸다(관리자만). 받은 메일을 **전달**할 때도 이 경로다 — `forward_of`(받은 메일 id)와
+// `forward_attachment_ids`(그 메일의 첨부 id JSON 배열)를 함께 보내면 서버가 비공개 저장소에서 첨부를 복사해 붙인다.
+// 전달 첨부는 그 메일의 것인지 대조한다(다운로드 라우트와 같은 스코프 검사). 검증은 전부 `sending` 행보다 앞이다.
 //
 // 순서가 핵심이다 — 되돌릴 수 없는 일(발송)은 맨 끝에 한 번만 일어나고, 그 앞은 전부 DB 제약과 검증이 막는다.
 //  1. 킬스위치 → 검증 → `sending` 행을 먼저 쓴다(idempotency_key UNIQUE가 중복 클릭을 막는다).
@@ -130,6 +148,56 @@ export const POST = defineApiRoute<undefined, AdminAuthSuccess>({
     const attachmentCheck = validateAttachments(files.map(f => ({ name: f.name, size: f.size })))
     if (attachmentCheck.ok === false) throw ApiError.badRequest(attachmentCheck.error)
     const attachmentMeta = attachmentCheck.value
+
+    // 전달 — 발송 행을 쓰기 전에 전부 판정한다. 저장소는 아직 읽지 않는다(첨부 단계에서 읽는다).
+    let forward: ForwardPlan | null = null
+    const forwardOfRaw = form.get('forward_of')
+    if (forwardOfRaw !== null && forwardOfRaw !== '') {
+      const forwardId = validateUUID(String(forwardOfRaw), '전달할 메일 ID')
+      if (!forwardId.isValid) throw ApiError.badRequest('전달할 메일 id가 올바르지 않습니다.')
+      const source = await getInboundEmail(forwardId.sanitized)
+      if (!source) throw ApiError.notFound('전달할 메일을 찾을 수 없습니다.')
+
+      const requested = parseAddressList(form.get('forward_attachment_ids'))
+      if (
+        requested === null ||
+        !Array.isArray(requested) ||
+        requested.some(item => typeof item !== 'string')
+      ) {
+        throw ApiError.badRequest('전달할 첨부 형식이 올바르지 않습니다.')
+      }
+      const owned = new Map(
+        (await listAttachmentsForEmail(forwardId.sanitized)).map(a => [String(a.id), a])
+      )
+      const picked = [...new Set(requested as string[])].map(attachmentId => {
+        const attachment = owned.get(attachmentId)
+        // 다른 메일의 첨부 id를 섞는 시도 — 이 메일의 것이 아니면 거부한다.
+        if (!attachment) throw ApiError.badRequest('전달할 첨부가 이 메일의 것이 아닙니다.')
+        const blobPath = String(attachment.blob_path ?? '')
+        if (!isSafeMailboxAttachmentPath(blobPath)) {
+          logSecurityEvent('MAILBOX_ATTACHMENT_PATH_REJECTED', { id: attachmentId }, 'high')
+          throw ApiError.badRequest('전달할 수 없는 첨부입니다.')
+        }
+        return {
+          id: attachmentId,
+          name: String(attachment.filename ?? 'attachment'),
+          size: attachment.size_bytes === null ? null : Number(attachment.size_bytes),
+          contentType: (attachment.content_type as string | null) ?? null,
+          blobPath,
+        }
+      })
+      const forwardCheck = validateForwardAttachments(picked, files.length)
+      if (forwardCheck.ok === false) throw ApiError.badRequest(forwardCheck.error)
+      forward = {
+        emailId: forwardId.sanitized,
+        attachments: picked.map((item, i) => ({
+          id: item.id,
+          name: forwardCheck.value[i].name,
+          contentType: item.contentType,
+          blobPath: item.blobPath,
+        })),
+      }
+    }
 
     const value = compose.value
     // 수신자가 전부 `@test.local`이면 실제로는 아무것도 나가지 않는다(validateCompose가 혼합을 막는다).
@@ -223,8 +291,41 @@ export const POST = defineApiRoute<undefined, AdminAuthSuccess>({
         })
         toSend.push({ filename: attachmentMeta[i].name, content: buffer })
       }
+      // 전달 첨부 — 받은 첨부를 `mailbox/`에서 읽어 `mailbox-sent/`에 복사한다. 보낸 메일 첨부는 보낸 편지함과
+      // 정리 크론이 `mailbox-sent/`만 보므로 원본 경로를 그대로 가리키지 않는다. DB의 크기가 비었거나 틀릴 수 있어
+      // 실제로 읽은 바이트로 다시 잰다.
+      let forwardedBytes = 0
+      for (const item of forward?.attachments ?? []) {
+        const object = await getPrivateObject(item.blobPath)
+        if (!object || !object.stream) {
+          throw new ForwardAttachmentError(`전달할 첨부를 찾을 수 없습니다: ${item.name}`)
+        }
+        const buffer = Buffer.from(await new Response(object.stream).arrayBuffer())
+        forwardedBytes += buffer.length
+        if (forwardedBytes > COMPOSE_LIMITS.maxForwardTotalBytes) {
+          throw new ForwardAttachmentError(forwardTooLargeMessage())
+        }
+        const attachmentId = randomUUID()
+        const blobPath = blobPathForSentAttachment(id, attachmentId, item.name)
+        const contentType = item.contentType || object.contentType || 'application/octet-stream'
+        await putObject('private', blobPath, buffer, contentType, false)
+        stored.push(blobPath)
+        await insertOutboundAttachment({
+          id: attachmentId,
+          email_id: id,
+          filename: item.name,
+          content_type: contentType,
+          size_bytes: buffer.length,
+          blob_path: blobPath,
+        })
+        toSend.push({ filename: item.name, content: buffer })
+      }
     } catch (error) {
       await discardAttachments(stored)
+      if (error instanceof ForwardAttachmentError) {
+        await markOutboundStatus(id, 'failed', error.message).catch(() => undefined)
+        throw ApiError.badRequest(`${error.message} 메일은 보내지 않았습니다.`)
+      }
       await markOutboundStatus(id, 'failed', '첨부 저장 실패').catch(() => undefined)
       logSecurityEvent(
         'ADMIN_MAILBOX_OUTBOUND_API_ERROR',
@@ -293,6 +394,14 @@ export const POST = defineApiRoute<undefined, AdminAuthSuccess>({
           ),
           subject_length: value.subject.length,
           attachment_count: toSend.length,
+          // 전달이면 어느 받은 메일의 어느 첨부를 내보냈는지 남긴다 — 다운로드 기록(attachment_downloaded)과 같은
+          // 감사 목적이다. 받은 첨부가 조합 밖으로 나간 경로를 나중에 추적할 수 있어야 한다.
+          ...(forward
+            ? {
+                forward_of: forward.emailId,
+                forwarded_attachment_ids: forward.attachments.map(a => a.id),
+              }
+            : {}),
         },
         ip_address:
           request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || null,
