@@ -46,7 +46,7 @@ interface InboundEmail {
   attachment_count?: number
 }
 
-/** `GET /api/admin/mailbox/sender`. `member`는 관리자 응답에만 키가 있다. */
+/** `GET /api/admin/mailbox/sender`. `member`는 가입한 회원이 아니면 null이다. */
 interface SenderCard {
   sender: {
     email: string
@@ -57,8 +57,7 @@ interface SenderCard {
     reply_count: number
     sent_count: number
   }
-  member?: {
-    id: string
+  member: {
     display_name: string
     registration_status: string
     is_active: boolean
@@ -704,22 +703,20 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                       {formatDate(senderCard.sender.last_received_at)}
                     </div>
                   )}
-                  {senderCard.member !== undefined && (
-                    <div>
-                      {senderCard.member ? (
-                        <span className="inline-flex px-2 py-0.5 rounded-full bg-green-100 text-green-800">
-                          회원 {senderCard.member.display_name}
-                          {senderCard.member.registration_status !== 'approved' &&
-                            ` (${REGISTRATION_LABELS[senderCard.member.registration_status] ?? senderCard.member.registration_status})`}
-                          {senderCard.member.registration_status === 'approved' &&
-                            !senderCard.member.is_active &&
-                            ' (비활성)'}
-                        </span>
-                      ) : (
-                        <span className="text-gray-400">가입한 회원 주소가 아닙니다</span>
-                      )}
-                    </div>
-                  )}
+                  <div>
+                    {senderCard.member ? (
+                      <span className="inline-flex px-2 py-0.5 rounded-full bg-green-100 text-green-800">
+                        회원 {senderCard.member.display_name}
+                        {senderCard.member.registration_status !== 'approved' &&
+                          ` (${REGISTRATION_LABELS[senderCard.member.registration_status] ?? senderCard.member.registration_status})`}
+                        {senderCard.member.registration_status === 'approved' &&
+                          !senderCard.member.is_active &&
+                          ' (비활성)'}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">가입한 회원 주소가 아닙니다</span>
+                    )}
+                  </div>
                 </div>
               )}
               <div className="flex gap-1.5 flex-wrap">
