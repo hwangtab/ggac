@@ -35,6 +35,7 @@ import { logSecurityEvent } from '@/utils/security'
 import { verifySvixSignature } from '@/lib/mail/svixSignature'
 import { parseAllowedRecipients, isAllowedRecipient } from '@/lib/mail/inboundRecipients'
 import { ingestInboundEmail } from '@/lib/mail/ingestInbound'
+import { applySenderRules } from '@/lib/mail/applySenderRules'
 import { insertInboundEmail, countInboundSince } from '@/db/queries/mailbox'
 
 export const runtime = 'nodejs'
@@ -142,6 +143,14 @@ export async function POST(request: NextRequest) {
     // 안에 다 못 끝낼 수 있다. ingestInboundEmail은 스스로 던지지 않아
     // after() 안에서도 안전하다(실패는 로그·pending 상태로만 남는다).
     after(() => ingestInboundEmail(resendEmailId, String(row.id)))
+    // 발신자 규칙(스팸·보관·라벨). 저장 뒤의 실패로 500을 주면 재전송이 중복으로 걸러져 규칙이 영영 안 먹으므로
+    // 응답 뒤에 돌린다. applySenderRules는 던지지 않는다.
+    after(() =>
+      applySenderRules({
+        id: String(row.id),
+        from_email: (row.from_email as string | null) ?? null,
+      })
+    )
     after(() => warnIfQuotaPressure())
 
     return ApiSuccess.ok({ id: row.id }).toNextResponse()

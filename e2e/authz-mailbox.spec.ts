@@ -1564,3 +1564,223 @@ test.describe('메일함 라벨', () => {
     }
   })
 })
+
+/**
+ * 발신자 규칙 — 관리자만 만들고 지운다. 받는 즉시 적용은 서명된 웹훅이 필요해 E2E로는 못 부르므로 단위 테스트
+ * (mailboxSenderRules.test.mjs)가 맡고, 여기서는 권한·검증·공용 도메인 확인·"기존 메일에도 적용"과 화면을 본다.
+ */
+test.describe('메일함 발신자 규칙', () => {
+  test.describe.configure({ mode: 'serial' })
+  const RULE_FROM = 'rules-e2e@promo-e2e.example'
+  const RULE_IDS = ['00000000-0000-4000-8000-00000000c050', '00000000-0000-4000-8000-00000000c051']
+  const RULE_SUBJECT = 'MAILBOX-E2E-RULES'
+
+  async function exec(sql: string, args: (string | number)[] = []) {
+    const client = createClient({ url: process.env.TURSO_DATABASE_URL! })
+    try {
+      return await client.execute({ sql, args })
+    } finally {
+      client.close()
+    }
+  }
+  async function ctxFor(baseURL: string | undefined, role: string) {
+    return apiRequest.newContext({ baseURL, storageState: storageStatePath(role) })
+  }
+  async function statusOf(id: string) {
+    return String(
+      (await exec('SELECT status FROM inbound_emails WHERE id = ?', [id])).rows[0]?.status
+    )
+  }
+  async function cleanup() {
+    await exec(
+      `DELETE FROM mail_sender_rules WHERE match_value IN ('${RULE_FROM}', 'promo-e2e.example', 'gmail.com')`
+    )
+    await exec('DELETE FROM inbound_emails WHERE id IN (?, ?)', RULE_IDS)
+  }
+
+  test.beforeAll(async () => {
+    await cleanup()
+    // 하나는 안 읽음, 하나는 답장함 — "기존 메일에도 적용"은 안 읽음·읽음만 옮겨야 한다.
+    for (const [i, id] of RULE_IDS.entries()) {
+      await exec(
+        `INSERT INTO inbound_emails
+          (id, thread_id, resend_email_id, from_address, from_email, to_addresses, subject, status,
+           body_fetch_status, received_at)
+         VALUES (?, ?, ?, ?, ?, '["mailbox@ggac.kr"]', ?, ?, 'done', ?)`,
+        [
+          id,
+          id,
+          `authz-mailbox-rules-${i}`,
+          `광고 <${RULE_FROM}>`,
+          RULE_FROM,
+          `${RULE_SUBJECT}-${i}`,
+          i === 0 ? 'unread' : 'replied',
+          Date.now() - i * 1000,
+        ]
+      )
+    }
+  })
+  test.afterAll(cleanup)
+
+  test('규칙은 관리자만 — 비로그인 401, 이사·감사 403이고 아무것도 안 생긴다', async ({
+    baseURL,
+    request,
+  }) => {
+    const data = { match_type: 'address', match_value: RULE_FROM, action: 'spam' }
+    expect((await request.get('/api/admin/mailbox/rules')).status()).toBe(401)
+    for (const role of ['director', 'auditor']) {
+      const ctx = await ctxFor(baseURL, role)
+      try {
+        expect((await ctx.get('/api/admin/mailbox/rules')).status(), role).toBe(403)
+        expect((await ctx.post('/api/admin/mailbox/rules', { data })).status(), role).toBe(403)
+        expect(
+          (
+            await ctx.get(
+              `/api/admin/mailbox/rules/preview?match_type=address&match_value=${RULE_FROM}`
+            )
+          ).status(),
+          role
+        ).toBe(403)
+      } finally {
+        await ctx.dispose()
+      }
+    }
+    const n = await exec(`SELECT count(*) AS n FROM mail_sender_rules WHERE match_value = ?`, [
+      RULE_FROM,
+    ])
+    expect(Number(n.rows[0].n)).toBe(0)
+  })
+
+  test('기존 메일에도 적용하면 안 읽음만 스팸으로 가고 답장한 메일은 그대로, 같은 규칙은 409', async ({
+    baseURL,
+  }) => {
+    const admin = await ctxFor(baseURL, 'admin')
+    try {
+      const preview = (
+        await (
+          await admin.get(
+            `/api/admin/mailbox/rules/preview?match_type=address&match_value=${RULE_FROM}`
+          )
+        ).json()
+      ).data
+      expect(preview.matching_count).toBe(2)
+      expect(preview.public_domain).toBe(false)
+
+      const data = {
+        match_type: 'address',
+        match_value: `광고 <${RULE_FROM.toUpperCase()}>`,
+        action: 'spam',
+        apply_existing: true,
+      }
+      const made = await admin.post('/api/admin/mailbox/rules', { data })
+      expect(made.status()).toBe(201)
+      expect((await made.json()).data.applied_existing).toBe(1)
+      expect(await statusOf(RULE_IDS[0])).toBe('spam')
+      expect(await statusOf(RULE_IDS[1])).toBe('replied')
+
+      expect((await admin.post('/api/admin/mailbox/rules', { data })).status()).toBe(409)
+      const listed = (await (await admin.get('/api/admin/mailbox/rules')).json()).data.rules as {
+        match_value: string
+        action: string
+      }[]
+      expect(listed.some(r => r.match_value === RULE_FROM && r.action === 'spam')).toBe(true)
+    } finally {
+      await admin.dispose()
+    }
+  })
+
+  test('공용 메일 도메인은 한 번 더 확인해야 하고, 잘못된 조건·라벨 없는 라벨 규칙은 400', async ({
+    baseURL,
+  }) => {
+    const admin = await ctxFor(baseURL, 'admin')
+    try {
+      const post = (data: object) => admin.post('/api/admin/mailbox/rules', { data })
+      const refused = await post({
+        match_type: 'domain',
+        match_value: 'Gmail.com',
+        action: 'archive',
+      })
+      expect(refused.status()).toBe(400)
+      expect((await refused.json()).error).toMatch(/여러 사람이 쓰는 메일 서비스/)
+      expect(
+        (
+          await post({
+            match_type: 'domain',
+            match_value: 'gmail.com',
+            action: 'archive',
+            confirm_public_domain: true,
+          })
+        ).status()
+      ).toBe(201)
+
+      for (const data of [
+        { match_type: 'address', match_value: 'not-an-address', action: 'spam' },
+        { match_type: 'domain', match_value: 'localhost', action: 'spam' },
+        { match_type: 'regex', match_value: '.*', action: 'spam' },
+        { match_type: 'domain', match_value: 'promo-e2e.example', action: 'delete' },
+        { match_type: 'domain', match_value: 'promo-e2e.example', action: 'label' },
+      ]) {
+        expect((await post(data)).status(), JSON.stringify(data)).toBe(400)
+      }
+    } finally {
+      await admin.dispose()
+    }
+  })
+
+  test('지우기는 관리자만, 이미 처리된 메일은 그대로 둔다', async ({ baseURL }) => {
+    const admin = await ctxFor(baseURL, 'admin')
+    const director = await ctxFor(baseURL, 'director')
+    try {
+      const rule = (
+        (await (await admin.get('/api/admin/mailbox/rules')).json()).data.rules as {
+          id: string
+          match_value: string
+        }[]
+      ).find(r => r.match_value === RULE_FROM)!
+      expect((await director.delete(`/api/admin/mailbox/rules/${rule.id}`)).status()).toBe(403)
+      expect((await admin.delete(`/api/admin/mailbox/rules/${rule.id}`)).status()).toBe(200)
+      expect((await admin.delete(`/api/admin/mailbox/rules/${rule.id}`)).status()).toBe(404)
+      expect(await statusOf(RULE_IDS[0])).toBe('spam')
+    } finally {
+      await Promise.all([admin.dispose(), director.dispose()])
+    }
+  })
+
+  test('화면: 관리자는 발신자 카드에서 규칙 창을 열어 미리보기를 보고 만든다, 이사에게는 도구가 없다', async ({
+    browser,
+  }) => {
+    const adminCtx = await browser.newContext({ storageState: storageStatePath('admin') })
+    try {
+      const page = await adminCtx.newPage()
+      await page.goto(`/admin/mailbox?from=${encodeURIComponent(RULE_FROM)}`, {
+        waitUntil: 'domcontentloaded',
+      })
+      await page
+        .getByTestId('sender-card')
+        .getByRole('button', { name: '규칙 만들기' })
+        .click({ timeout: 15000 })
+      const dialog = page.getByRole('dialog', { name: '발신자 규칙' })
+      await expect(dialog.getByLabel('조건 값')).toHaveValue(RULE_FROM)
+      await expect(dialog.getByTestId('rule-preview-count')).toContainText('맞는 메일 2통')
+      await dialog.getByLabel('동작').selectOption('archive')
+      await dialog.getByRole('button', { name: '규칙 만들기' }).click()
+      await expect(dialog.getByTestId('rule-list')).toContainText(RULE_FROM)
+      await expect(dialog).toContainText('기존 메일 0통에 적용했습니다')
+    } finally {
+      await adminCtx.close()
+    }
+
+    const directorCtx = await browser.newContext({ storageState: storageStatePath('director') })
+    try {
+      const page = await directorCtx.newPage()
+      await page.goto(`/board-room/mailbox?from=${encodeURIComponent(RULE_FROM)}`, {
+        waitUntil: 'domcontentloaded',
+      })
+      await expect(page.getByTestId('sender-card')).toBeVisible({ timeout: 15000 })
+      await expect(page.getByRole('button', { name: '규칙 만들기' })).toHaveCount(0)
+      await expect(page.getByRole('button', { name: '발신자 규칙' })).toHaveCount(0)
+    } finally {
+      await directorCtx.close()
+    }
+  })
+})
