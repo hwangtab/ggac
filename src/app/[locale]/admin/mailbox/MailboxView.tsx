@@ -44,7 +44,25 @@ interface InboundEmail {
   updated_at: string
   /** 목록 응답에만 있다. 인라인 이미지는 세지 않는다. */
   attachment_count?: number
+  /** 대화를 시작한 받은 메일의 id(0038). */
+  thread_id: string | null
+  /** 목록 응답에만 있다. 같은 대화의 받은 메일 수(자기 포함). */
+  thread_count?: number
 }
+
+/** 상세 응답의 `thread` — 같은 대화의 받은 메일과 우리 답장, 시간순. 본문은 없다. */
+type ThreadItem =
+  | {
+      kind: 'inbound'
+      id: string
+      from_email: string | null
+      from_name: string | null
+      from_address: string
+      subject: string | null
+      status: InboundEmail['status']
+      at: string | null
+    }
+  | { kind: 'reply'; id: string; email_id: string; subject: string; at: string | null }
 
 /** `GET /api/admin/mailbox/sender`. `member`는 가입한 회원이 아니면 null이다. */
 interface SenderCard {
@@ -184,6 +202,7 @@ export default function MailboxView({ className = '' }: { className?: string }) 
   const [showRemoteImages, setShowRemoteImages] = useState(false)
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [replies, setReplies] = useState<SentReply[]>([])
+  const [thread, setThread] = useState<ThreadItem[]>([])
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState<string | null>(null)
 
@@ -296,6 +315,7 @@ export default function MailboxView({ className = '' }: { className?: string }) 
       setDetail(json.data?.email ?? null)
       setAttachments(json.data?.attachments ?? [])
       setReplies(json.data?.replies ?? [])
+      setThread(json.data?.thread ?? [])
       setCanManage(json.data?.can_manage === true)
     } catch (err) {
       setDetailError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.')
@@ -304,11 +324,12 @@ export default function MailboxView({ className = '' }: { className?: string }) 
     }
   }, [])
 
-  const selectEmail = (email: InboundEmail) => {
+  const selectEmail = (email: Pick<InboundEmail, 'id' | 'status'>) => {
     setSelectedId(email.id)
     setDetail(null)
     setAttachments([])
     setReplies([])
+    setThread([])
     setShowRemoteImages(false)
     fetchDetail(email.id)
 
@@ -327,6 +348,7 @@ export default function MailboxView({ className = '' }: { className?: string }) 
     setDetail(null)
     setAttachments([])
     setReplies([])
+    setThread([])
     setShowRemoteImages(false)
   }
 
@@ -344,7 +366,7 @@ export default function MailboxView({ className = '' }: { className?: string }) 
   }
 
   const updateStatus = async (
-    email: InboundEmail,
+    email: Pick<InboundEmail, 'id' | 'status'>,
     status: InboundEmail['status'],
     options: { silent?: boolean } = {}
   ) => {
@@ -456,7 +478,10 @@ export default function MailboxView({ className = '' }: { className?: string }) 
 
   const page = Math.floor(offset / LIMIT) + 1
   const totalPages = Math.max(1, Math.ceil(totalCount / LIMIT))
-  const selectedEmail = emails.find(e => e.id === selectedId) ?? null
+  // 대화 목록에서 연 메일은 지금 목록 페이지에 없을 수 있다 — 그때는 상세 응답을 머리글로 쓴다.
+  const selectedEmail =
+    emails.find(e => e.id === selectedId) ?? (detail && detail.id === selectedId ? detail : null)
+  const threadInboundCount = thread.filter(item => item.kind === 'inbound').length
 
   return (
     <div className={`flex flex-col ${className}`}>
@@ -766,6 +791,14 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                           <span className="font-medium text-gray-900 truncate min-w-0 text-sm">
                             {email.subject || '(제목 없음)'}
                           </span>
+                          {(email.thread_count ?? 1) > 1 && (
+                            <span
+                              className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 shrink-0"
+                              title="같은 대화의 메일 수"
+                            >
+                              대화 {email.thread_count}
+                            </span>
+                          )}
                           {(email.attachment_count ?? 0) > 0 && (
                             <FiPaperclip
                               className="w-3.5 h-3.5 text-gray-400 shrink-0"
@@ -935,6 +968,57 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                         </a>
                       ))}
                     </div>
+                  )}
+                  {threadInboundCount > 1 && (
+                    /* 기본은 접는다 — 펼친 채로 두면 머리글이 세로를 먹어 본문 iframe이 눌린다(답장 목록과 같은 이유). */
+                    <details key={`thread-${selectedEmail.id}`} className="mt-2 text-xs">
+                      <summary className="cursor-pointer text-gray-600 font-medium">
+                        이 대화의 메일 {threadInboundCount}통
+                        {thread.length > threadInboundCount &&
+                          ` · 우리 답장 ${thread.length - threadInboundCount}통`}
+                      </summary>
+                      <ol className="mt-1.5 max-h-40 overflow-y-auto border-l-2 border-gray-200 pl-2 space-y-0.5">
+                        {thread.map(item => {
+                          const targetId = item.kind === 'inbound' ? item.id : item.email_id
+                          const current = item.kind === 'inbound' && item.id === selectedEmail.id
+                          return (
+                            <li key={`${item.kind}-${item.id}`}>
+                              <button
+                                type="button"
+                                disabled={current}
+                                aria-current={current ? 'true' : undefined}
+                                onClick={() => {
+                                  const target = thread.find(
+                                    t => t.kind === 'inbound' && t.id === targetId
+                                  )
+                                  selectEmail({
+                                    id: targetId,
+                                    status: target?.kind === 'inbound' ? target.status : 'read',
+                                  })
+                                }}
+                                className={`w-full flex items-baseline gap-2 rounded px-1.5 py-1 text-left ${
+                                  current
+                                    ? 'bg-primary-50 text-primary-800 cursor-default'
+                                    : 'text-gray-600 hover:bg-gray-50'
+                                }`}
+                              >
+                                <span className="shrink-0 text-gray-400">
+                                  {item.at ? formatDate(item.at) : ''}
+                                </span>
+                                <span className="truncate">
+                                  {item.kind === 'inbound'
+                                    ? item.from_name || item.from_email || item.from_address
+                                    : '↩ 우리 답장'}
+                                  {item.kind === 'inbound' && item.status === 'unread' && (
+                                    <span className="ml-1 text-blue-600">●</span>
+                                  )}
+                                </span>
+                              </button>
+                            </li>
+                          )
+                        })}
+                      </ol>
+                    </details>
                   )}
                 </div>
 

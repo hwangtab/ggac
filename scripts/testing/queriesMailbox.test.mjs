@@ -439,6 +439,83 @@ test('회원 매칭은 대소문자를 무시하고 배지에 필요한 칸만 �
   assert.equal(await mod.findMemberByEmail(uniqueAddress('stranger')), null)
 })
 
+test('삽입하면 대화 id는 자기 id다', async () => {
+  const { insertInboundEmail } = await loadFreshMailboxModule()
+  const row = await insertInboundEmail(sample())
+  assert.equal(row.thread_id, row.id)
+})
+
+function threadSample(minute, overrides = {}) {
+  return sample({
+    message_id: `<t${Math.random().toString(36).slice(2)}@x>`,
+    received_at: new Date(Date.UTC(2026, 4, 1, 0, minute)),
+    ...overrides,
+  })
+}
+
+test('assignThread: 가리킨 앞 메일의 대화로 옮기고, 사슬이면 시작 메일의 대화를 따른다', async () => {
+  const mod = await loadFreshMailboxModule()
+  const root = await mod.insertInboundEmail(threadSample(0))
+  const second = await mod.insertInboundEmail(threadSample(1))
+  // In-Reply-To만으로 root를 가리킨다
+  assert.equal(await mod.assignThread(second.id, [root.message_id]), root.id)
+  const third = await mod.insertInboundEmail(threadSample(2))
+  // second만 가리켜도 second의 대화(root)로 간다
+  assert.equal(await mod.assignThread(third.id, [second.message_id]), root.id)
+  const after = await mod.getInboundEmail(third.id)
+  assert.equal(after.thread_id, root.id)
+  // 다시 불러도 같다(멱등)
+  assert.equal(await mod.assignThread(third.id, [second.message_id]), root.id)
+})
+
+test('assignThread: 모르는 ID·자기 자신·나중에 받은 메일은 대화를 바꾸지 않는다', async () => {
+  const mod = await loadFreshMailboxModule()
+  const early = await mod.insertInboundEmail(threadSample(10))
+  const late = await mod.insertInboundEmail(threadSample(11))
+  assert.equal(await mod.assignThread(early.id, []), null)
+  assert.equal(await mod.assignThread(early.id, ['<nobody@nowhere>']), null)
+  assert.equal(await mod.assignThread(early.id, [early.message_id]), null)
+  assert.equal(await mod.assignThread(early.id, [late.message_id]), null)
+  assert.equal((await mod.getInboundEmail(early.id)).thread_id, early.id)
+})
+
+test('assignThread: 앞 메일이 여럿이면 가장 먼저 받은 것의 대화다', async () => {
+  const mod = await loadFreshMailboxModule()
+  const older = await mod.insertInboundEmail(threadSample(20))
+  const newer = await mod.insertInboundEmail(threadSample(21))
+  const reply = await mod.insertInboundEmail(threadSample(22))
+  assert.equal(await mod.assignThread(reply.id, [newer.message_id, older.message_id]), older.id)
+})
+
+test('대화 목록은 받은 메일과 답장을 시간순으로 주고 다른 대화는 섞지 않는다', async () => {
+  const mod = await loadFreshMailboxModule()
+  const root = await mod.insertInboundEmail(threadSample(30, { subject: '원본' }))
+  await mod.insertReply({ email_id: root.id, subject: 'Re: 원본', body_html: '<p>답</p>' })
+  const follow = await mod.insertInboundEmail(
+    threadSample(31, { subject: 'Re: Re: 원본', received_at: new Date(Date.now() + 60_000) })
+  )
+  await mod.assignThread(follow.id, [root.message_id])
+  const stranger = await mod.insertInboundEmail(threadSample(32))
+
+  const thread = await mod.listThread(root.id)
+  assert.deepEqual(
+    thread.map(item => `${item.kind}:${item.kind === 'inbound' ? item.id : item.email_id}`),
+    [`inbound:${root.id}`, `reply:${root.id}`, `inbound:${follow.id}`]
+  )
+  assert.ok(!thread.some(item => item.id === stranger.id))
+  assert.equal('body_html' in thread[0], false, '대화 목록에는 본문이 없다')
+
+  const list = await mod.listInboundEmails({
+    limit: 100,
+    offset: 0,
+    fromEmail: 'sender@example.com',
+  })
+  const counts = Object.fromEntries(list.emails.map(e => [e.id, e.thread_count]))
+  assert.equal(counts[root.id], 2)
+  assert.equal(counts[follow.id], 2)
+  assert.equal(counts[stranger.id], 1)
+})
+
 test('References는 공백으로 이어 쌓인다', async () => {
   const { insertInboundEmail, appendThreadReference, getInboundEmail } =
     await loadFreshMailboxModule()

@@ -70,6 +70,48 @@ test('본문을 당겨 저장하면 done이 된다', async () => {
   }
 })
 
+test('본문 헤더의 References가 가리키는 앞 메일의 대화에 붙는다', async () => {
+  const tag = Math.random().toString(36).slice(2)
+  const root = await insertInboundEmail({
+    resend_email_id: `re_root_${tag}`,
+    message_id: `<root-${tag}@mail.example.com>`,
+    from_address: 'sender@example.com',
+    to_addresses: ['contact@ggac.kr'],
+    received_for: ['contact@ggac.kr'],
+    subject: '문의',
+    received_at: new Date(Date.now() - 60_000),
+  })
+  const row = await seed()
+  const restore = stubFetch(async url => {
+    if (String(url).includes('/attachments')) {
+      return new Response(JSON.stringify({ data: [] }), { status: 200 })
+    }
+    return new Response(
+      JSON.stringify({
+        id: 'x',
+        from: 'sender@example.com',
+        to: ['contact@ggac.kr'],
+        html: '<p>다시 문의</p>',
+        text: '다시 문의',
+        // 상대가 우리 답장에 답했다 — In-Reply-To는 우리가 모르는 우리 답장 ID, References에 원본이 남는다.
+        headers: {
+          'in-reply-to': `<ours-${tag}@resend.example>`,
+          references: `<root-${tag}@mail.example.com> <ours-${tag}@resend.example>`,
+        },
+      }),
+      { status: 200 }
+    )
+  })
+  try {
+    await ingestInboundEmail('x', row.id)
+    const after = await getInboundEmail(row.id)
+    assert.equal(after.body_fetch_status, 'done')
+    assert.equal(after.thread_id, root.id)
+  } finally {
+    restore()
+  }
+})
+
 // 리뷰 룰링(컨트롤러): 본문 조회 실패는 'pending'으로 남아야 한다. 'failed'로
 // 옮기면 Task 7의 유일한 복구 쿼리(listPendingInboundEmails)가 'pending'만
 // 읽어 이 행을 영영 못 본다. 예전 단언(assert.notEqual(..., 'done'))은

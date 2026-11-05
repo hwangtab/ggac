@@ -7,6 +7,7 @@ import {
   getInboundEmail,
   listAttachmentsForEmail,
   listRepliesForEmail,
+  listThread,
   updateInboundStatus,
 } from '@/db/queries/mailbox'
 import { validateUUID } from '@/utils/validation'
@@ -16,7 +17,8 @@ export const runtime = 'nodejs'
 
 const ALLOWED_STATUSES = ['unread', 'read', 'replied', 'archived', 'spam'] as const
 
-// GET: 메일 한 건 상세 + 첨부 목록 + 보낸 답장 (이사·감사·관리자, 브리프 A)
+// GET: 메일 한 건 상세 + 첨부 목록 + 보낸 답장 + 같은 대화의 메일 목록 (이사·감사·관리자, 브리프 A)
+// `thread`는 본문 없이 머리글만 싣는다 — 같은 대화의 다른 메일은 각자의 상세로 연다.
 export const GET = defineApiRoute<undefined, BoardAuthSuccess>({
   method: 'GET',
   name: 'api/admin/mailbox/[id]',
@@ -42,11 +44,13 @@ export const GET = defineApiRoute<undefined, BoardAuthSuccess>({
       throw ApiError.notFound('메일을 찾을 수 없습니다.')
     }
 
-    const [attachments, replies] = await Promise.all([
+    const threadId = email.thread_id ? String(email.thread_id) : null
+    const [attachments, replies, thread] = await Promise.all([
       listAttachmentsForEmail(id),
       listRepliesForEmail(id),
+      threadId ? listThread(threadId) : Promise.resolve([]),
     ])
-    return ApiSuccess.ok({ email, attachments, replies, can_manage: auth.isAdmin })
+    return ApiSuccess.ok({ email, attachments, replies, thread, can_manage: auth.isAdmin })
   },
 })
 

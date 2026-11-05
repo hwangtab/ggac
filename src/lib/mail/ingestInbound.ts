@@ -19,8 +19,10 @@ import { logSecurityEvent } from '../../utils/security.ts'
 
 import { fetchReceivedEmail, listReceivedAttachments, downloadAttachment } from './inboundClient.ts'
 import { blobPathForAttachment } from '../storage/mailboxAttachments.ts'
+import { referencedMessageIds } from './threading.ts'
 import {
   markBodyFetched,
+  assignThread,
   insertAttachment,
   listAttachmentsForEmail,
   markAttachmentsIncomplete,
@@ -40,31 +42,26 @@ export async function ingestInboundEmail(
   const put = deps.putObject
   try {
     const email = await fetchReceivedEmail(resendEmailId)
-    // 헤더는 통째로 JSON 문자열로만 저장한다. In-Reply-To/References를
-    // 파싱해 상대방의 답장을 원래 스레드에 이어 붙이는 일은 아직 안 한다.
-    //
-    // `inbound_emails.thread_references`(schema/mailbox.ts)가 이미 있지만
-    // 방향이 반대다 — 관리자가 답장을 보낼 때(app/api/admin/mailbox/[id]/
-    // reply/route.ts → appendThreadReference) *우리가 보낸* message-id를
-    // 그 행에 쌓아 두는 용도다. 상대방이 그 답장에 다시 답할 때 오는
-    // In-Reply-To를 이 컬럼과 대조해 "어느 기존 행의 스레드인지"는 알 수
-    // 있지만, 그렇게 찾아낸 원본 행과 *이번에 새로 들어온 행*을 연결할
-    // 컬럼 자체가 스키마에 없다 — 지금은 상대방 답장마다 무관한 새 행이
-    // 하나씩 쌓인다.
-    //
-    // 최소 스키마 추가안(아직 만들지 않음 — 마이그레이션이 필요해 이번
-    // 손질 범위를 벗어난다): `inbound_emails.thread_root_id`(nullable
-    // text, 자기 자신을 가리키면 스레드의 시작) 하나만 더해도 된다. 채우는
-    // 절차는 이 함수 안에서: email.headers의 In-Reply-To/References를
-    // 파싱 → 각 message-id로 `thread_references LIKE '%' || ? || '%'`
-    // 조회 → 맞는 행을 찾으면 그 행의 thread_root_id(없으면 그 행 자신의
-    // id)를 이번 행에 그대로 쓴다.
+    // 헤더는 통째로 JSON 문자열로 저장하고, 그 안의 In-Reply-To/References로 앞 메일의 대화에 붙인다
+    // (`assignThread`, 규칙은 lib/mail/threading.ts). `thread_references`는 방향이 반대다 — 관리자가 답장할 때
+    // 원본의 message-id를 그 행에 쌓아 두는 칸이다(reply 라우트 → appendThreadReference).
     await markBodyFetched(rowId, {
       body_html: email.html,
       body_text: email.text,
       headers: JSON.stringify(email.headers ?? {}),
       subject: email.subject,
     })
+    // 대화 묶기는 부가 기능이다 — 실패해도 본문 저장과 첨부 복사는 계속한다. 본문이 이미 done이라 백필이 다시
+    // 집지 않으므로, 실패한 메일은 자기 대화로 남는다(기록만 남긴다).
+    try {
+      await assignThread(rowId, referencedMessageIds(email.headers))
+    } catch (error) {
+      logSecurityEvent(
+        'MAILBOX_THREAD_ASSIGN_FAILED',
+        { rowId, error: error instanceof Error ? error.message : 'unknown' },
+        'low'
+      )
+    }
   } catch (error) {
     // 상태를 'pending'으로 그대로 둔다 — 여기서 markBodyFetchFailed를 부르면
     // Task 7의 유일한 복구 쿼리(listPendingInboundEmails)가 'pending'만 읽어

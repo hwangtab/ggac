@@ -131,10 +131,10 @@ async function seedFixtures(): Promise<void> {
     })
     await client.execute({
       sql: `INSERT INTO inbound_emails
-        (id, resend_email_id, from_address, to_addresses, subject, status, body_fetch_status, received_at)
-        VALUES (?, 'authz-compose-reply-parent', 'asker@example.invalid', '["mailbox@ggac.kr"]', 'MAILBOX-E2E-REPLY-PARENT', 'replied', 'done', ?)
+        (id, thread_id, resend_email_id, from_address, from_email, to_addresses, subject, status, body_fetch_status, received_at)
+        VALUES (?, ?, 'authz-compose-reply-parent', 'asker@example.invalid', 'asker@example.invalid', '["mailbox@ggac.kr"]', 'MAILBOX-E2E-REPLY-PARENT', 'replied', 'done', ?)
         ON CONFLICT(id) DO NOTHING`,
-      args: [REPLY_PARENT_EMAIL_ID, now],
+      args: [REPLY_PARENT_EMAIL_ID, REPLY_PARENT_EMAIL_ID, now],
     })
     // 보낸 편지함의 "답장" 행.
     await client.execute({
