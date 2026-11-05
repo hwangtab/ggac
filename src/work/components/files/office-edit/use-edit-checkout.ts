@@ -75,6 +75,19 @@ export function useEditCheckout(attachmentId: string | null) {
 }
 
 /** 저장 안 된 변경이 있으면 창 닫기·새로고침에서 브라우저 확인을 띄운다 */
+export const LEAVE_CONFIRM_MESSAGE =
+  '저장하지 않은 변경이 있습니다. 이 화면을 떠나면 변경 내용이 사라집니다. 떠날까요?'
+
+/**
+ * 저장하지 않은 변경이 있으면 떠나기 전에 묻는다.
+ *
+ * - 창 닫기·새로 고침·주소 입력: `beforeunload`
+ * - **사이트 안 링크 이동**(전역 내비·이사회실 메뉴·마이페이지 메뉴 등): 페이지를 새로 불러오지 않아 `beforeunload`가 뜨지
+ *   않는다 — 편집 화면이 이 레이아웃들 **안에서** 열리므로 메뉴를 누르면 확인 없이 편집기가 내려가 변경이 사라졌다
+ *   (2026-11-05 점검). 문서 전체의 클릭을 캡처 단계에서 가로채 묻는다(펀딩 편집 화면과 같은 방식). 새 탭·페이지 안 앵커·
+ *   보조 키 클릭은 이 문서를 떠나지 않으니 통과시킨다.
+ * - 브라우저 뒤로 가기는 Next 의 기록 처리와 겹쳐 여기서 막지 않는다(화면의 [돌아가기]는 따로 묻는다).
+ */
 export function useLeaveGuard(dirty: boolean): void {
   useEffect(() => {
     if (!dirty) return
@@ -82,7 +95,25 @@ export function useLeaveGuard(dirty: boolean): void {
       e.preventDefault()
       e.returnValue = ''
     }
+    const onClick = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0) return
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+      const anchor = (e.target as HTMLElement | null)?.closest?.('a')
+      if (!anchor) return
+      const href = anchor.getAttribute('href')
+      if (!href || href.startsWith('#')) return
+      if (anchor.target && anchor.target !== '_self') return
+      if (anchor.hasAttribute('download')) return
+      if (!window.confirm(LEAVE_CONFIRM_MESSAGE)) {
+        e.preventDefault()
+        e.stopPropagation()
+      }
+    }
     window.addEventListener('beforeunload', onBeforeUnload)
-    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+    document.addEventListener('click', onClick, true)
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload)
+      document.removeEventListener('click', onClick, true)
+    }
   }, [dirty])
 }

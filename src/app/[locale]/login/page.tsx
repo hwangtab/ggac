@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { cleanupBrowserForSignOut } from '@/lib/auth/signOutCleanup'
 import { useSearchParams } from 'next/navigation'
 import { useRouter, Link } from '@/i18n/navigation'
 import { useTranslations } from 'next-intl'
@@ -483,6 +484,8 @@ export default function LoginPage() {
                 </button>
                 <button
                   onClick={async () => {
+                    // 내비의 로그아웃과 같은 정리를 먼저 한다(편집기 초안·푸시 구독 — 공용 PC 의 다음 사람에게 남지 않게)
+                    await cleanupBrowserForSignOut()
                     await authClient.signOut()
                     setIsAlreadyLoggedIn(false)
                     setJustAuthenticated(false)

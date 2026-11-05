@@ -533,10 +533,11 @@ export async function setChannelTopicRow(
   channelId: string,
   topic: string | null
 ): Promise<{ topic: string | null } | null> {
+  // 보관된 채널은 읽기 전용이다 — 주제도 바꾸지 않는다(2026-11-05 점검)
   const rows = await db
     .update(workChannels)
     .set({ topic })
-    .where(eq(workChannels.id, channelId))
+    .where(and(eq(workChannels.id, channelId), isNull(workChannels.archivedAt)))
     .returning({ topic: workChannels.topic })
   return rows[0] ?? null
 }
@@ -549,7 +550,14 @@ export async function setChannelPostPolicyRow(
   const rows = await db
     .update(workChannels)
     .set({ postPolicy: policy })
-    .where(and(eq(workChannels.id, channelId), ne(workChannels.kind, 'dm')))
+    .where(
+      and(
+        eq(workChannels.id, channelId),
+        ne(workChannels.kind, 'dm'),
+        // 보관된 채널은 읽기 전용이다(2026-11-05 점검)
+        isNull(workChannels.archivedAt)
+      )
+    )
     .returning({ postPolicy: workChannels.postPolicy })
   return rows[0] ? { post_policy: rows[0].postPolicy } : null
 }

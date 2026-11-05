@@ -408,6 +408,36 @@ test('다이제스트: 읽음·지운 글·본인 글·10분 안·마지막 발�
   assert.equal((await Q.digest.getDigestState(me)).getTime(), minAgo(200).getTime())
 })
 
+test('다이제스트 발송 차지: 같은 기준에서 두 실행이 겹치면 한쪽만 차지하고, 되돌리면 다음 실행이 다시 차지한다(2026-11-05 점검)', async () => {
+  const me = await seedPerson()
+  const t1 = new Date(DNOW.getTime() - 5 * 60_000)
+  const t2 = new Date(DNOW.getTime() - 60_000)
+  // 처음(상태 없음) — 두 실행이 동시에 같은 prev=null 로 차지하려 한다
+  const [a, b] = await Promise.all([
+    Q.digest.claimDigestSend(me, null, t1),
+    Q.digest.claimDigestSend(me, null, t1),
+  ])
+  assert.deepEqual([a, b].sort(), [false, true])
+  assert.equal((await Q.digest.getDigestState(me)).getTime(), t1.getTime())
+  // 다음 묶음 — 기준(prev)이 다르면 차지하지 못한다
+  assert.equal(await Q.digest.claimDigestSend(me, null, t2), false)
+  assert.equal(await Q.digest.claimDigestSend(me, t1, t2), true)
+  assert.equal(
+    await Q.digest.claimDigestSend(me, t1, t2),
+    false,
+    '같은 묶음을 두 번 차지하지 않는다'
+  )
+  // 보내지 못해 되돌리면 기준이 t1 로 돌아와 다음 실행이 다시 차지한다
+  await Q.digest.releaseDigestSend(me, t1, t2)
+  assert.equal((await Q.digest.getDigestState(me)).getTime(), t1.getTime())
+  assert.equal(await Q.digest.claimDigestSend(me, t1, t2), true)
+  // 첫 묶음을 되돌리면 상태가 없어진다
+  const other = await seedPerson()
+  assert.equal(await Q.digest.claimDigestSend(other, null, t1), true)
+  await Q.digest.releaseDigestSend(other, null, t1)
+  assert.equal(await Q.digest.getDigestState(other), null)
+})
+
 test('다이제스트: 읽을 수 없는 내용은 없다 — 채널에서 나간 뒤의 멘션, 이사에서 빠진 사람', async () => {
   const owner = await seedPerson()
   const leaver = await seedPerson()

@@ -278,6 +278,10 @@ test.describe('업무툴 앱 안 편집 — 실제 편집기(ggac-office)', () =
       await expect(page).toHaveURL(new RegExp(`/board-room/edit/${id}$`), { timeout: 30_000 })
       await expect(page.getByTestId('hwp-edit-screen')).toBeVisible({ timeout: 30_000 })
       const frameSel = `[data-testid="hwp-editor-container"] iframe[src^="${ORIGIN}/rhwp/"]`
+      // 단독 앱(full) 모드로 뜨면 자동 복구 대화상자·내 PC 저장(Ctrl+S)이 살아 있다 — 반드시 내장 모드(2026-11-05 점검)
+      await expect(page.locator(frameSel).first()).toHaveAttribute('src', /[?&]chrome=embed\b/, {
+        timeout: 60_000,
+      })
       // dev 의 StrictMode 는 효과를 두 번 돌려 잠깐 iframe 이 둘이다(첫 것은 만든 직후 destroy) — 하나로 줄 때까지
       await expect(page.locator(frameSel)).toHaveCount(1, { timeout: 60_000 })
       await expect(page.locator(frameSel)).toBeVisible()
@@ -288,6 +292,19 @@ test.describe('업무툴 앱 안 편집 — 실제 편집기(ggac-office)', () =
       await typeInEditor(page, frameSel, '이사회 업무툴 시험', { x: 0.5, y: 0.3 })
       // 사용자 편집은 이벤트가 없어 2초마다 dirty 를 묻는다(HWP_DIRTY_POLL_MS)
       await expect(editorStatus(page)).toHaveText('저장 안 된 변경', { timeout: 30_000 })
+
+      // 저장하지 않은 채 사이트 안 링크(전역 내비)를 누르면 묻고, 취소하면 그대로 남는다(2026-11-05 점검 — 예전엔 확인 없이
+      // 편집기가 내려가 변경이 사라졌다)
+      const editUrl = page.url()
+      const asked = page.waitForEvent('dialog')
+      void page.getByRole('link', { name: 'HOME' }).first().click()
+      const dialog = await asked
+      expect(dialog.type()).toBe('confirm')
+      expect(dialog.message()).toMatch(/저장하지 않은 변경/)
+      await dialog.dismiss()
+      await page.waitForTimeout(1_000)
+      expect(page.url()).toBe(editUrl)
+      await expect(editorStatus(page)).toHaveText('저장 안 된 변경')
 
       await page.getByRole('button', { name: '저장(새 버전)' }).click()
       // 브라우저 검사(쪽 수 재확인·OLE2) → 업로드 → 서버 검증(kordoc) → 미리보기 → 새 버전으로 저장

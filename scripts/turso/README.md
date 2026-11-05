@@ -346,8 +346,12 @@ webServer에 `{...process.env, ...webServer.env}`를 넘긴다. e2e 전용 변�
   11개 스펙
 - `authz-public`: `authz-boundaries` 21건
 
-**실측 기준선(2026-11-05, 내 문서함·업무툴 정리 순서 버그 수정 뒤, HWPX 플래그를 준 실행, 운영 빌드 서버):**
-총 339건 중 **337 passed, 1 failed, 1 skipped**(8.0분). 331에서 늘어난 6건은 main 의 메일함 PR #79(`authz-mailbox-compose` 4·
+**실측 기준선(2026-11-05, 편집기 내장 모드·이탈 확인·다이제스트 중복 발송 등 수정 뒤, HWPX 플래그를 준 실행, 운영 빌드 서버):**
+총 349건 중 **347 passed, 1 failed, 1 skipped**(7.8분). 337에서 늘어난 10건은 main 의 메일함 PR #83(`authz-mailbox-compose` 6·
+`authz-mailbox` 4)이다.
+
+직전 기준선(2026-11-05, 내 문서함·업무툴 정리 순서 버그 수정 뒤, HWPX 플래그를 준 실행, 운영 빌드 서버):
+총 339건 중 337 passed, 1 failed, 1 skipped(8.0분). 331에서 늘어난 6건은 main 의 메일함 PR #79(`authz-mailbox-compose` 4·
 `authz-mailbox` 2)다 — #80 의 측정은 #79 를 받기 전이었다.
 
 직전 기준선(2026-11-05, 앱 편집 버그 수정 — 중복 저장·CSP 거짓 경보 — 뒤, HWPX 플래그를 준 실행, 운영 빌드 서버):
@@ -1166,7 +1170,7 @@ EXPLAIN QUERY PLAN SELECT count(*) FROM notifications WHERE user_id = '<아무 �
 가드도 타입 검사도 통과한다. 가드는 **"이 문자열이 이 파일에 있는가"**만 보고
 도달 가능성·실행 순서·데이터 흐름을 보지 않는다.
 
-**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 337 passed, 실행 절차는
+**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 347 passed, 실행 절차는
 위 "권한 E2E" 절). 같은 감사에서 **E2E는 관리자 게이트 무력화를 실제로 잡았다.**
 
 `assert-runtime-risks.mjs`가 여전히 값을 하는 자리는 **지워진 것**(게이트를 통째로

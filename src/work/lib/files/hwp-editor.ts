@@ -59,11 +59,20 @@ export function isHwpEditorEnabled(): boolean {
   return process.env.NEXT_PUBLIC_HWP_EDITOR_ENABLED === '1' && getOfficeEditorOrigin() !== null
 }
 
-/** rhwp-studio 주소 `<편집기 출처>/rhwp/`. 꺼져 있으면 null */
+/**
+ * rhwp-studio 주소 `<편집기 출처>/rhwp/?chrome=embed`. 꺼져 있으면 null.
+ *
+ * **`chrome=embed`가 꼭 있어야 한다**(2026-11-05 점검). 없으면 rhwp-studio 가 단독 앱(full) 모드로 뜬다:
+ * - 시작할 때 자동 복구 대화상자가 편집기 출처의 IndexedDB 에 남은 초안 목록(이름·시각)을 띄운다 — 공용 PC 에서 앞사람이
+ *   저장하지 않고 나간 문서가 다음 사람에게 보이고, 복구를 누르면 그 내용이 엉뚱한 문서의 새 버전으로 올라갈 수 있다
+ * - Ctrl+S 가 내 PC 로 저장하면서 변경 표시를 지워, 서버에 올리지 않았는데 화면이 "변경 없음"이 된다
+ * - 파일 열기·최근 문서·문서 끌어다 놓기로 다른 문서로 바뀌어도 호스트가 모른다
+ * embed 프로파일은 이 진입점을 모두 막는다(rhwp-studio `main.ts`의 `chromeMode === 'embed'` 분기).
+ */
 export function getHwpStudioUrl(): string | null {
   if (!isHwpEditorEnabled()) return null
   const origin = getOfficeEditorOrigin()
-  return origin ? `${origin}/rhwp/` : null
+  return origin ? `${origin}/rhwp/?chrome=embed` : null
 }
 
 /**

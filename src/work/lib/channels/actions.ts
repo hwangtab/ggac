@@ -215,7 +215,7 @@ export async function updateChannelTopic(
   }
   try {
     const row = await setChannelTopicRow(parsed.data.channelId, parsed.data.topic)
-    if (!row) return fail('채널 소유자나 관리자만 주제를 바꿀 수 있습니다.')
+    if (!row) return fail('보관된 채널이거나 채널 소유자·관리자가 아니라 주제를 바꿀 수 없습니다.')
     refreshShell()
     return ok({ topic: row.topic })
   } catch (e) {
@@ -245,7 +245,8 @@ export async function updateChannelPostPolicy(
   } catch (e) {
     return dbFailure('updateChannelPostPolicy', e)
   }
-  if (!row) return fail('채널 소유자나 관리자만 글쓰기 권한을 바꿀 수 있습니다.')
+  if (!row)
+    return fail('보관된 채널이거나 채널 소유자·관리자가 아니라 글쓰기 권한을 바꿀 수 없습니다.')
   await logAudit(
     user.id,
     'channel.post_policy',

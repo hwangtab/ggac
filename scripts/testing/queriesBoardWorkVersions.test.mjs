@@ -138,6 +138,26 @@ async function row(sql, args) {
 
 const isErr = code => e => Q.shared.isWorkWriteError(e, code)
 
+test('새 버전을 게시하면 옛 버전 게시물의 rev 도 오른다 — 열린 화면이 "이전 버전" 표시를 받는다(2026-11-05 점검)', async () => {
+  const me = await seedPerson()
+  const ch = await seedChannel(me)
+  const v1 = await seedV1(ch, me)
+  const before = Number(
+    (await row('select rev from work_messages where id = ?', [v1.message_id])).rev
+  )
+  const v2 = (await saveVersion(ch, me, v1.id)).attachment
+  const after = Number(
+    (await row('select rev from work_messages where id = ?', [v1.message_id])).rev
+  )
+  assert.ok(after > before, `v1 게시물의 rev 가 올라야 한다(${before} → ${after})`)
+  const chRev = Number((await row('select rev from work_channels where id = ?', [ch])).rev)
+  assert.ok(after <= chRev)
+  // 폴링이 그 메시지를 바뀐 것으로 돌려준다
+  const changed = await Q.messages.listChangedMessageIds(ch, before, chRev, 200)
+  assert.ok(changed.includes(v1.message_id))
+  assert.ok(changed.includes(v2.message_id))
+})
+
 test('버전 번호·계보: root 는 v1 id, 번호는 계보 최대+1, 앞 버전 id 를 남기고 최신만 is_latest', async () => {
   const me = await seedPerson()
   const ch = await seedChannel(me)

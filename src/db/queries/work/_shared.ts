@@ -7,7 +7,7 @@
  * **데이터 정합성**(작성자 강제·답글 수 재계산·보관 채널 쓰기 금지 …)은 여기 쓰기 함수가 같은
  * 트랜잭션 안에서 지킨다 — 호출부가 무엇을 넘기든 깨지지 않아야 하는 규칙이라서다.
  */
-import { and, desc, eq, isNull, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
 
 import { db } from '../../client.ts'
 import {
@@ -156,6 +156,16 @@ export async function recomputeAttachmentLatest(tx: WorkExecutor, rootId: string
     .orderBy(desc(workAttachments.versionNo))
     .limit(1)
   const latestId = latest?.id ?? null
+  const before = await tx
+    .select({
+      id: workAttachments.id,
+      isLatest: workAttachments.isLatest,
+      messageId: workAttachments.messageId,
+      channelId: workMessages.channelId,
+    })
+    .from(workAttachments)
+    .innerJoin(workMessages, eq(workMessages.id, workAttachments.messageId))
+    .where(sql`${lineageKeySql} = ${rootId}`)
   await tx
     .update(workAttachments)
     .set({
@@ -164,6 +174,16 @@ export async function recomputeAttachmentLatest(tx: WorkExecutor, rootId: string
         : false,
     })
     .where(sql`${lineageKeySql} = ${rootId}`)
+  // is_latest 가 바뀐 첨부가 달린 **다른** 메시지의 rev 도 올린다 — 안 올리면 열려 있는 화면이 그 메시지를 다시 받지 않아,
+  // 새 버전을 게시해도 옛 게시물이 "최신"처럼 보였다(이전 버전 표시가 안 붙음, 2026-11-05 점검). 계보는 한 채널 안이다.
+  const changed = before.filter(r => Boolean(r.isLatest) !== (r.id === latestId))
+  if (changed.length > 0) {
+    const rev = await bumpChannelRev(tx, changed[0].channelId)
+    await tx
+      .update(workMessages)
+      .set({ rev })
+      .where(inArray(workMessages.id, [...new Set(changed.map(r => r.messageId))]))
+  }
 }
 
 /** 원본 recompute_latest_after_message_delete: 그 메시지 첨부가 속한 계보마다 재계산 */

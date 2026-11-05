@@ -28,9 +28,27 @@ export function invalid<T = never>(error: ZodError): ActionResult<T> {
 export const FORBIDDEN_MESSAGE = '이 작업을 할 권한이 없습니다.'
 export const GENERIC_MESSAGE = '처리하지 못했습니다. 잠시 후 다시 시도해 주세요.'
 
-/** Postgres/PostgREST 오류 → 사용자 문구. 원문은 로그로만 남긴다. */
+/**
+ * 로그에 남길 오류 요약 — **메시지·쿼리 값은 싣지 않는다.** drizzle 의 쿼리 오류는 메시지에 `params: …`(넘긴 값 전부)를 담아,
+ * DM·메모 본문을 저장하다 DB 가 잠깐 실패하면 본문이 그대로 런타임 로그에 남았다(2026-11-05 점검). 이름·코드만 원인 사슬에서
+ * 모은다(예: `Error > TypeError(fetch failed) > SocketError UND_ERR_SOCKET`의 이름·코드).
+ */
+export function errorSummaryForLog(error: unknown): { chain: string[] } {
+  const chain: string[] = []
+  let cur: unknown = error
+  for (let depth = 0; cur && depth < 6; depth++) {
+    const o = cur as { name?: unknown; code?: unknown; cause?: unknown }
+    const name = typeof o.name === 'string' ? o.name : typeof cur
+    const code = typeof o.code === 'string' || typeof o.code === 'number' ? ` ${o.code}` : ''
+    chain.push(`${name}${code}`)
+    cur = o.cause
+  }
+  return { chain }
+}
+
+/** Postgres/PostgREST 오류 → 사용자 문구. 오류는 이름·코드만 로그로 남긴다(본문이 섞이지 않게 — `errorSummaryForLog`). */
 export function dbFailure<T = never>(where: string, error: unknown): ActionResult<T> {
-  console.error(`[${where}]`, error)
+  console.error(`[${where}]`, errorSummaryForLog(error))
   const code = getPostgresErrorCode(error)
   // 42501 insufficient_privilege(RLS·하드닝 트리거), PGRST301 JWT 문제
   if (code === '42501' || code === 'PGRST301') return fail(FORBIDDEN_MESSAGE)

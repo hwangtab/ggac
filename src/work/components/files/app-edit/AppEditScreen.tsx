@@ -12,6 +12,7 @@ import OfficeEditorFrame, {
   type OfficeEditorPhase,
 } from '@work/components/files/office-edit/OfficeEditorFrame'
 import { useDesktopEditorKnown } from '@work/components/files/office-edit/use-desktop-editor'
+import { useLeaveGuard } from '@work/components/files/office-edit/use-edit-checkout'
 import { objectsDroppedMessage, type ObjectsDropped } from '@work/lib/files/doc-edit-types'
 import type { AppEditorKind } from '@work/lib/files/app-edit'
 
@@ -79,16 +80,8 @@ export default function AppEditScreen({
   const mountRef = useRef(onMount)
   useEffect(() => mountRef.current?.(), [])
 
-  // 저장하지 않은 변경이 있으면 창 닫기·새로 고침을 한 번 묻는다
-  useEffect(() => {
-    if (!dirty) return
-    const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      e.preventDefault()
-      e.returnValue = ''
-    }
-    window.addEventListener('beforeunload', onBeforeUnload)
-    return () => window.removeEventListener('beforeunload', onBeforeUnload)
-  }, [dirty])
+  // 저장하지 않은 변경이 있으면 창 닫기·새로 고침·사이트 안 링크 이동을 한 번 묻는다(업무툴 편집 화면과 같은 훅)
+  useLeaveGuard(dirty)
 
   // 원본 바이트는 처음 열 때의 버전으로 한 번만 받는다 — 저장 뒤에도 같은 편집기 문서로 계속 편집한다
   const loadBuffer = useCallback(async () => {
@@ -118,6 +111,9 @@ export default function AppEditScreen({
       if (editor.kind === 'hwp') await hwp.current?.markSaved()
     } catch (e) {
       setError(e instanceof Error ? e.message : '저장하지 못했습니다.')
+      // 편집기는 내보내기를 마치자마자 "변경 없음"을 알린다(서버 저장보다 먼저) — 저장이 실패했으면 아직 올라가지 않은
+      // 변경이 남아 있다. 표시를 되살려 떠나기 전에 묻게 한다(2026-11-05 점검: 실패 뒤 확인 없이 나가져 편집이 사라졌다).
+      setDirty(true)
     } finally {
       setSaving(null)
     }
