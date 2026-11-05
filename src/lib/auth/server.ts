@@ -1,13 +1,18 @@
+import { NextRequest } from 'next/server'
 import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { nextCookies } from 'better-auth/next-js'
 
 import { db } from '@/db/client'
 import { upsertProfile, type UpsertProfileInput } from '@/db/queries/profiles'
+import { isUndeliverableTestRecipient } from '@/lib/mail/send'
+import { distributedRateLimiter } from '@/utils/distributedRateLimiter'
 import { logger, maskId } from '@/utils/logger'
+import { logSecurityEvent } from '@/utils/security'
 
 import { type AuthEmailKind, sendAuthEmail } from './email'
 import { resolveEmailLinkBaseUrl } from './emailBaseUrl'
+import { checkAuthMailBudget, type BudgetConsume } from './mailBudget'
 import { safeErrorMessage } from './errorMessage'
 import { hashPassword, verifyPassword } from './password'
 import { buildMemberProfileRow } from './profileHook'
@@ -45,6 +50,26 @@ function maskEmailForLog(email: string): string {
  * `[auth][email]` 로그로 남기기 위해서다. 조립 실패를 호출부에서 미리
  * 처리해버리면 이 함수의 catch를 거치지 않아 로그가 하나도 안 남는다.
  */
+/**
+ * 예산 카운터를 하나 올린다(`mailBudget.ts`). 분산 제한기(Upstash)를 그대로 쓰되 요청이 아니라 **키 하나**를
+ * 센다 — 제한기가 요청 객체를 요구해서 내부용 요청을 만들어 넘기지만 키는 `keyGenerator`가 정하므로 그
+ * 요청의 내용은 쓰이지 않는다. 운영에서 Upstash가 없거나 장애면 제한기는 POST를 막는 쪽으로 답하고(다른
+ * 인증 경로의 IP 제한도 같은 이유로 막힌다), 그때 메일은 나가지 않고 보안 로그가 남는다.
+ */
+const consumeAuthMailBudget: BudgetConsume = async (key, windowMs, max) => {
+  const limiter = await distributedRateLimiter.applyRateLimit({
+    name: 'auth_mail_budget',
+    windowMs,
+    maxRequests: max,
+    keyGenerator: () => key,
+    blockDuration: 60 * 1000,
+  })
+  const result = await limiter(
+    new NextRequest('https://auth-mail-budget.invalid/consume', { method: 'POST' })
+  )
+  return result.success
+}
+
 async function sendAuthEmailLogged(
   kind: AuthEmailKind,
   to: string,
@@ -52,6 +77,33 @@ async function sendAuthEmailLogged(
 ): Promise<void> {
   try {
     const url = buildUrl()
+
+    // 발송 예산 — Resend 하루 쿼터는 가입·재설정·다이제스트·메일함이 함께 쓴다. 한도를 넘으면 메일을 보내지
+    // 않고 넘어간다(응답은 그대로 200 — 어떤 주소가 가입돼 있는지 알리지 않는다). 테스트 주소는 어차피 나가지
+    // 않으니 예산을 쓰지 않는다. **예산 확인이 오류를 내면 막지 않고 보낸다** — 안전장치의 버그가 로그인을
+    // 막으면 안 된다(대신 로그가 남는다).
+    if (!isUndeliverableTestRecipient(to)) {
+      let allowed = true
+      try {
+        const verdict = await checkAuthMailBudget(consumeAuthMailBudget, to)
+        if (verdict.allowed === false) {
+          allowed = false
+          logSecurityEvent(
+            'AUTH_EMAIL_BUDGET_EXCEEDED',
+            { kind, scope: verdict.scope, to: maskEmailForLog(to) },
+            'high'
+          )
+        }
+      } catch (budgetError) {
+        logger.error(
+          `${AUTH_EMAIL_LOG_PREFIX} 예산 확인 실패(발송은 진행) kind=${kind}: ${
+            budgetError instanceof Error ? budgetError.message : String(budgetError)
+          }`
+        )
+      }
+      if (!allowed) return
+    }
+
     await sendAuthEmail(kind, to, url)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
