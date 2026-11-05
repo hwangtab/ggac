@@ -300,6 +300,7 @@ export default function ChannelView({
   const [syncNotice, setSyncNotice] = useState<'failed' | 'stale' | null>(null)
   const uploadBusyRef = useRef(false)
   const catchingUpRef = useRef(false)
+  const resyncPendingRef = useRef(false)
   const [catchUpNotice, setCatchUpNotice] = useState(false)
   const refetchLatest = useCallback(async () => {
     // 재연결·온라인 복귀가 겹쳐도 한 번에 하나만(빈틈 이어 받기는 여러 번 왕복한다)
@@ -324,7 +325,11 @@ export default function ChannelView({
       // 다시 받은 범위 **밖**(위로 스크롤해 이미 불러 둔 오래된 메시지)은 그 사이의 수정·삭제·반응이 반영되지 않았다 —
       // 오래 숨겨 둔 탭이 200건 넘게 밀려 재동기화되면 지워진 글이 새로 고칠 때까지 남았다(2026-11-05 점검). 합친 경우에만
       // (최신으로 바꾼 경우는 이미 버렸다) 그 메시지들을 id 로 다시 읽어 고치고, 읽히지 않는 것은 목록에서 뺀다.
-      if (plan.action.type === 'merge') {
+      // 재동기화(커서 건너뜀)일 때만 — 보통 재연결은 커서가 이어져 그 사이 바뀐 것이 폴링으로 온다(매 재연결마다 다시 읽지
+      // 않게, 그리고 그 사이 도착한 실시간 갱신을 옛 스냅숏으로 덮지 않게 — 2026-11-05 회귀 리뷰)
+      const recheckOld = resyncPendingRef.current
+      resyncPendingRef.current = false
+      if (recheckOld && plan.action.type === 'merge') {
         const fetched = new Set(plan.action.messages.map(m => m.id))
         const stale = before
           .filter(m => !m.status && !fetched.has(m.id))
@@ -416,6 +421,9 @@ export default function ChannelView({
         } else {
           setSyncNotice(cur => cur ?? 'failed')
         }
+      } else if (event.type === 'resync') {
+        // 이어지는 재연결의 최신 페이지 다시 읽기에서 받은 범위 밖 오래된 메시지도 다시 읽게 표시한다
+        resyncPendingRef.current = true
       } else if (event.type === 'sync-ok') {
         setSyncNotice(cur => (cur === 'failed' ? null : cur))
         void refetchLatest()

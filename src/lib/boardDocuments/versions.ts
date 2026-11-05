@@ -175,6 +175,8 @@ export async function saveEditedVersion(
   // 파일이라 아래 검사·실패 처리가 지우면 서류가 통째로 404 가 된다(2026-11-05 리뷰). 객체를 건드리지 않고 같은 결과를 돌려준다.
   const already = await getBoardDocumentVersion(doc.id, input.uploadId).catch(() => null)
   if (already) {
+    // 첫 요청이 커밋한 뒤 캐시 정리·본문 추출 예약 전에 끊겼을 수 있다 — 다시 한다(멱등, 2026-11-05 회귀 리뷰)
+    await afterNewVersion(doc.id)
     return {
       ok: true,
       data: {

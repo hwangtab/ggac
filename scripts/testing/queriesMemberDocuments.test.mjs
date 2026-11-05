@@ -403,6 +403,21 @@ test('알림을 보내지 못하면 알림 시각을 되돌린다 — 이번 실
   assert.notEqual((await Q.docs.getOwnedMemberDocument(owner, b)).document.deletionNotifiedAt, null)
 })
 
+test('임시 업로드 정리는 실제로 지운 행의 경로만 돌려주고, 고아 판정은 행이 가리키는 키를 빼낸다(2026-11-05 회귀 리뷰)', async () => {
+  const owner = await seedMember()
+  const { documentId } = await seedDocument(owner)
+  const doc = await Q.docs.getOwnedMemberDocument(owner, documentId)
+  const live = doc.versions[0].blobPath
+  const up = pendingRow(owner)
+  await Q.docs.insertMemberDocumentUpload(up, { maxPending: 20 })
+  // 한 번 지우면 경로를 돌려주고, 두 번째(이미 지운 행 — 그 사이 승격된 경우와 같다)는 빈 배열이다
+  assert.deepEqual(await Q.docs.claimMemberDocumentUploadRows([up.id]), [up.blobPath])
+  assert.deepEqual(await Q.docs.claimMemberDocumentUploadRows([up.id]), [])
+  const orphan = `member-documents/${owner}/${crypto.randomUUID()}/x.docx`
+  const refs = await Q.docs.findReferencedMemberDocumentPaths([live, up.blobPath, orphan])
+  assert.deepEqual([...refs], [live])
+})
+
 test('24시간이 지난 임시 업로드만 정리 대상이다', async () => {
   const owner = await seedMember()
   const now = new Date(Date.now() + 14600 * DAY)

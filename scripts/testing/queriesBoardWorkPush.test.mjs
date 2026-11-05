@@ -4,6 +4,9 @@ import { rmSync } from 'node:fs'
 import { createClient } from '@libsql/client'
 
 import { applyMigrations } from './apply-migrations.mjs'
+import { registerAliasResolveHook } from './aliasResolveHook.mjs'
+
+registerAliasResolveHook(import.meta.url)
 
 /**
  * 이사회 업무툴 5단계(푸시·다이제스트·정리 크론) 쿼리 계층을 실제 SQLite 파일 DB로 검증한다.
@@ -427,6 +430,11 @@ test('다이제스트 발송 차지: 같은 기준에서 두 실행이 겹치면
     false,
     '같은 묶음을 두 번 차지하지 않는다'
   )
+  // 겹친 실행이 이미 올린 값(t2)을 새로 읽어 그 값으로 다시 차지하려 해도(t2→t2) 실패한다 — 예전 코드는 이게 통과해
+  // 같은 메일이 두 번 갔다(2026-11-05 회귀 리뷰). 뒤로 돌리는 것(t2→t1)도 안 된다.
+  assert.equal(await Q.digest.claimDigestSend(me, t2, t2), false)
+  assert.equal(await Q.digest.claimDigestSend(me, t2, t1), false)
+  assert.equal((await Q.digest.getDigestState(me)).getTime(), t2.getTime())
   // 보내지 못해 되돌리면 기준이 t1 로 돌아와 다음 실행이 다시 차지한다
   await Q.digest.releaseDigestSend(me, t1, t2)
   assert.equal((await Q.digest.getDigestState(me)).getTime(), t1.getTime())
@@ -436,6 +444,48 @@ test('다이제스트 발송 차지: 같은 기준에서 두 실행이 겹치면
   assert.equal(await Q.digest.claimDigestSend(other, null, t1), true)
   await Q.digest.releaseDigestSend(other, null, t1)
   assert.equal(await Q.digest.getDigestState(other), null)
+})
+
+test('다이제스트 실행이 겹치거나 연달아 두 번 돌아도 같은 묶음은 한 통만 간다(run.ts 경로 — 2026-11-05 회귀 리뷰)', async () => {
+  const { runMentionDigest } = await import(src('work/lib/digest/run.ts'))
+  const author = await seedPerson()
+  const me = await seedPerson()
+  const ch = await seedChannel({ creatorId: author })
+  await Q.channels.addChannelMemberRows(ch, [me])
+  await setLastRead(ch, me, minAgo(600))
+  await Q.prefs.upsertMemberPrefs(me, { digestMode: 'normal' })
+  const mention = async (text, ago) => {
+    const id = await send(ch, author, text)
+    await Q.messages.recordMentionRows({
+      messageId: id,
+      authorId: author,
+      explicitIds: [me],
+      everyone: false,
+    })
+    await backdate(id, minAgo(ago))
+    return id
+  }
+  await mention('겹침 시험 1', 30)
+  const sent = []
+  const mailer = async m => {
+    sent.push(m)
+    // 메일 API 왕복 동안 다른 실행이 끼어들 틈을 준다
+    await new Promise(r => setTimeout(r, 30))
+    return { ok: true }
+  }
+  const opts = { mailer, sendGapMs: 0, siteUrl: 'https://ggac.kr' }
+  // 동시에 두 번(크론 중복 호출)
+  await Promise.all([runMentionDigest(DNOW, opts), runMentionDigest(DNOW, opts)])
+  // 이어서 한 번 더 — 이미 보낸 묶음이다
+  await runMentionDigest(DNOW, opts)
+  const toMe = sent.filter(m => m.html.includes('겹침 시험 1'))
+  assert.equal(toMe.length, 1, `같은 묶음이 ${toMe.length}통 갔다`)
+  // 새 멘션이 생기면 다음 실행이 그것만 보낸다
+  await mention('겹침 시험 2', 20)
+  await runMentionDigest(DNOW, opts)
+  const second = sent.filter(m => m.html.includes('겹침 시험 2'))
+  assert.equal(second.length, 1)
+  assert.equal(second[0].html.includes('겹침 시험 1'), false, '이미 보낸 글이 다시 실렸다')
 })
 
 test('다이제스트: 읽을 수 없는 내용은 없다 — 채널에서 나간 뒤의 멘션, 이사에서 빠진 사람', async () => {

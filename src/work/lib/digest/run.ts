@@ -3,7 +3,6 @@ import { workRoleOf } from '@/lib/server/boardWorkAuth'
 import { canReadChannelRow } from '@/lib/server/boardWorkChannelAuth'
 import {
   claimDigestSend,
-  getDigestState,
   listDigestCandidates,
   releaseDigestSend,
   type DigestCandidateRow,
@@ -109,9 +108,9 @@ export async function runMentionDigest(
 
     // 보내기 **전에** 이 묶음을 차지한다 — 겹친 다른 실행이 이미 차지했으면 보내지 않는다(같은 메일 두 통 방지)
     const next = latestCreatedAt(list)
-    let prev: Date | null
+    // 비교 기준은 후보를 뽑을 때 본 값이다(차지 직전에 새로 읽으면 겹친 실행이 올린 값을 보고 또 보낸다)
+    const prev = list[0].recipient_digest_last_sent_at
     try {
-      prev = await getDigestState(userId)
       if (!(await claimDigestSend(userId, prev, next))) continue
     } catch (e) {
       console.error(
