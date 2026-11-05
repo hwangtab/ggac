@@ -301,6 +301,28 @@ test('임시 업로드 상한: 같은 트랜잭션에서 다시 세어 넘으면
   assert.equal(await Q.files.deletePendingUploads(mineIds, me), mineIds.length)
 })
 
+test('폐기(claimPendingUploads)는 실제로 지운 행만 돌려준다 — 그 사이 승격된 업로드는 빠져 그 객체를 지우지 않는다(2026-11-05 감사)', async () => {
+  const me = await seedPerson()
+  const other = await seedPerson()
+  const ch = await seedChannel({ creatorId: me })
+  const msg = await seedMessage(ch, me)
+  const promoted = await seedPending(ch, me, '승격됨.pdf', 100)
+  const stale = await seedPending(ch, me, '버림.pdf', 100)
+  // 저장(승격)이 먼저 끝났다 — 승격 트랜잭션이 임시 행을 지운다
+  await Q.files.promotePendingUpload({ uploadId: promoted, messageId: msg, actorId: me, size: 100 })
+  // 남의 것은 지우지 못한다
+  assert.deepEqual(await Q.files.claimPendingUploads([stale], other), [])
+  // 겹친 폐기: 승격된 업로드는 결과에 없다 → discardPending 이 그 객체를 지우지 않는다
+  assert.deepEqual(await Q.files.claimPendingUploads([promoted, stale], me), [stale])
+  // 폐기가 먼저면 승격은 not_found 로 실패한다(객체를 가리키는 첨부가 생기지 않는다)
+  const late = await seedPending(ch, me, '늦은 승격.pdf', 100)
+  assert.deepEqual(await Q.files.claimPendingUploads([late], me), [late])
+  await assert.rejects(
+    Q.files.promotePendingUpload({ uploadId: late, messageId: msg, actorId: me, size: 100 }),
+    e => Q.shared.isWorkWriteError(e, 'not_found')
+  )
+})
+
 test('첨부 읽기(getReadableAttachment): 읽을 수 없는 채널·지워진 메시지·남의 DM 은 null, 짝으로 허용 쪽도 본다', async () => {
   const owner = await seedPerson({ is_auditor: true })
   const director = await seedPerson()

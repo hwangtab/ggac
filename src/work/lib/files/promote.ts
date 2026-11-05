@@ -1,5 +1,6 @@
+import { findReferencedBlobPaths } from '@/db/queries/work/cleanup'
 import {
-  deletePendingUploads,
+  claimPendingUploads,
   promotePendingUpload,
   type WorkPendingUploadRecord,
 } from '@/db/queries/work/files'
@@ -21,24 +22,50 @@ import { downloadObject, removeObjects, statObject, uploadBuffer } from './stora
 
 export type PendingRow = WorkPendingUploadRecord
 
-/** 임시 업로드를 정리한다(객체 + 행). 객체 삭제가 실패하면 행을 남겨 크론(5단계)이 24시간 뒤 다시 지운다. */
+/**
+ * 임시 업로드를 정리한다(행 → 객체 순서). **행을 먼저 지우고, 실제로 지운 행의 객체만 지운다.**
+ *
+ * 예전 순서(객체 → 행)는 저장과 폐기가 겹치면 위험했다: 저장(승격)이 아직 남아 있는 임시 행으로 커밋하는 사이 폐기가 그
+ * 객체를 지우면, 새 최신 버전·첨부가 없는 객체를 가리켰다(화면을 떠나며 정리·대화상자 닫기·첨부 칩 X 와 저장이 겹칠 때 —
+ * 2026-11-05 감사). 지금은 승격이 먼저 끝났으면 행이 없어 여기서 아무것도 지우지 않고, 폐기가 먼저면 승격이 not_found 로
+ * 실패한다. 행을 지운 뒤 객체 삭제가 실패하면 고아 객체가 남고 정리 크론의 고아 청소(`sweepOrphanObjects`)가 치운다.
+ */
 export async function discardPending(rows: PendingRow[], uploaderId: string) {
   if (rows.length === 0) return
+  let claimed: string[]
   try {
-    await removeObjects(rows.map(r => r.blobPath))
-  } catch (e) {
-    // 객체를 못 지웠으면 행을 남겨야 크론이 행을 보고 객체를 다시 지운다. 행까지 지우면 고아 객체가 영구히 남는다.
-    console.error('[discardPending] 객체 삭제 실패(행을 남겨 크론이 정리):', e)
-    return
-  }
-  try {
-    await deletePendingUploads(
+    claimed = await claimPendingUploads(
       rows.map(r => r.id),
       uploaderId
     )
   } catch (e) {
-    console.error('[discardPending] 행 삭제 실패(크론이 정리):', e)
+    console.error('[discardPending] 행 삭제 실패(객체를 남기고 크론이 정리):', e)
+    return
   }
+  const gone = new Set(claimed)
+  const paths = rows.filter(r => gone.has(r.id)).map(r => r.blobPath)
+  if (paths.length === 0) return
+  try {
+    await removeObjects(paths)
+  } catch (e) {
+    console.error('[discardPending] 객체 삭제 실패(고아 객체 — 크론 고아 청소가 정리):', e)
+  }
+}
+
+/**
+ * 복사본(되돌리기·사본 만들기)의 저장이 실패했을 때 그 복사 객체를 치운다 — **어떤 첨부 행도 그 키를 가리키지 않을 때만**.
+ * DB 응답이 끊겨 예외가 났어도 커밋은 됐을 수 있다(libsql HTTP: COMMIT 반영 뒤 응답 유실). 그때 지우면 방금 만든 최신 버전·
+ * 사본이 없는 객체를 가리킨다(2026-11-05 감사). 확인 조회가 실패하면 지우지 않는다 — 고아 객체는 크론 고아 청소가 치운다.
+ */
+export async function removeCopyUnlessReferenced(path: string, withThumb: boolean): Promise<void> {
+  let referenced: boolean
+  try {
+    referenced = (await findReferencedBlobPaths([path])).has(path)
+  } catch {
+    return
+  }
+  if (referenced) return
+  await removeObjects(withThumb ? [path, thumbPathOf(path)] : [path]).catch(() => undefined)
 }
 
 /** 실패 사유를 사용자 문구와 함께 던진다(원본은 Error 메시지를 그대로 실패 목록에 실었다) */

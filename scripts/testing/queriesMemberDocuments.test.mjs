@@ -367,6 +367,42 @@ test('알린 지 30일이 지나도 안 열었으면 지워지고, 지울 대상
   assert.equal(await Q.docs.getOwnedMemberDocument(owner, documentId), null)
 })
 
+test('보존 삭제는 행부터 조건부로 지운다 — 목록을 만든 뒤 열었으면 null 이고 행이 남는다(2026-11-05 리뷰)', async () => {
+  const owner = await seedMember()
+  const now = new Date(Date.now() + 11000 * DAY)
+  const t = now.getTime()
+  const { documentId, versionId } = await seedDocument(owner)
+  await setTimes(documentId, { lastOpenedAt: t - 400 * DAY, deletionNotifiedAt: t - 31 * DAY })
+  assert.ok((await Q.docs.listRetentionDeleteCandidates(now, 1000)).some(r => r.id === documentId))
+  // 목록을 만든 뒤 주인이 열었다
+  await Q.docs.touchOwnedMemberDocument(owner, documentId, new Date(t - 1000))
+  assert.equal(await Q.docs.claimExpiredMemberDocument(documentId, now), null)
+  assert.ok(await Q.docs.getOwnedMemberDocument(owner, documentId), '열었으면 행이 남아야 한다')
+
+  // 다시 1년+30일 지나면 지워지고, 그 순간의 객체 경로·버전 id 를 돌려준다
+  await setTimes(documentId, { lastOpenedAt: t - 400 * DAY, deletionNotifiedAt: t - 31 * DAY })
+  const claimed = await Q.docs.claimExpiredMemberDocument(documentId, now)
+  assert.deepEqual(claimed.versionIds, [versionId])
+  assert.equal(claimed.blobPaths.length, 1)
+  assert.ok(claimed.blobPaths[0].startsWith(`member-documents/${owner}/`))
+  assert.equal(await Q.docs.getOwnedMemberDocument(owner, documentId), null)
+})
+
+test('알림을 보내지 못하면 알림 시각을 되돌린다 — 이번 실행이 남긴 시각만', async () => {
+  const owner = await seedMember()
+  const now = new Date(Date.now() + 12000 * DAY)
+  const t = now.getTime()
+  const a = (await seedDocument(owner)).documentId
+  const b = (await seedDocument(owner)).documentId
+  await setTimes(a, { lastOpenedAt: t - 400 * DAY })
+  await setTimes(b, { lastOpenedAt: t - 400 * DAY, deletionNotifiedAt: t - 5 * DAY })
+  assert.deepEqual(await Q.docs.markDeletionNotified([a], now), [a])
+  // b 는 지난 실행이 이미 알린 문서 — 되돌리지 않는다
+  assert.equal(await Q.docs.clearDeletionNotified([a, b], now), 1)
+  assert.equal((await Q.docs.getOwnedMemberDocument(owner, a)).document.deletionNotifiedAt, null)
+  assert.notEqual((await Q.docs.getOwnedMemberDocument(owner, b)).document.deletionNotifiedAt, null)
+})
+
 test('24시간이 지난 임시 업로드만 정리 대상이다', async () => {
   const owner = await seedMember()
   const now = new Date(Date.now() + 14600 * DAY)

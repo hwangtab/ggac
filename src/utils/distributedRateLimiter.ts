@@ -708,12 +708,14 @@ export const DISTRIBUTED_RATE_LIMIT_CONFIGS = {
     message: '너무 자주 요청했습니다. 잠시 뒤 다시 시도해 주세요.',
   },
 
-  // 조합원 내 문서함 쓰기(업로드 준비·토큰·새 문서·새 버전·되돌리기·이름·삭제, 사용자 단위 분당 30회).
+  // 조합원 내 문서함 쓰기(업로드 준비·토큰·새 문서·새 버전·되돌리기·이름·삭제, 사용자 단위 분당 90회).
   // docs/board-work/04-조합원-문서함.md §4. 쓰기라 리미터 장애 때 fail-closed 다.
+  // 파일 하나를 올리는 데 쓰기 세 번(준비·토큰·새 문서)이 든다 — 30 이면 여러 파일을 고른 올리기가 11번째부터 429 였다
+  // (2026-11-05 리뷰). 90 이면 분당 30개다.
   MEMBER_DOCUMENT_WRITE: {
     name: 'member_document_write',
     windowMs: 60 * 1000,
-    maxRequests: 30,
+    maxRequests: 90,
     message: '너무 자주 요청했습니다. 잠시 뒤 다시 시도해 주세요.',
   },
 

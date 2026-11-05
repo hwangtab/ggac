@@ -338,6 +338,12 @@ export function derivedInvariants() {
                    OR backer_email NOT LIKE 'withdrawn+%@ggac.invalid'
                    OR ${WITHDRAWN_PLEDGE_NULL_COLUMNS.map(c => `${c} IS NOT NULL`).join(' OR ')})`,
     },
+    {
+      // 탈퇴 확정은 그 사람의 내 문서함(개인 파일)을 지운다 — `withdrawMember`의 ⑤(2026-11-05). 남아 있으면 그 단계가 빠졌다.
+      constraint: 'withdrawn_members_have_no_member_documents',
+      table: 'member_documents',
+      where: `owner_id IN (SELECT id FROM member_profiles WHERE registration_status = 'withdrawn')`,
+    },
     ...timebankInvariants(),
   ]
 }

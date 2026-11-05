@@ -1,5 +1,5 @@
 import {
-  deletePendingUploadRows,
+  claimPendingUploadRows,
   findReferencedBlobPaths,
   hardDeleteMessages,
   listParentsWithLiveReplies,
@@ -65,9 +65,23 @@ export async function purgeStalePendingUploads(
       return { ...result, error: 'query' }
     }
     if (rows.length === 0) break
-    const plan = pendingObjectPaths(rows, draftLayoutPaths)
+    // 행을 **먼저** 지우고 실제로 지운 행의 객체만 지운다 — 그 사이 승격된 업로드(승격이 임시 행을 지운다)의 객체를 건드리지
+    // 않는다(`discardPending`과 같은 이유, 2026-11-05 감사). 객체 삭제가 실패하면 고아 객체가 남고 아래 고아 청소가 치운다.
+    let claimed: string[]
+    try {
+      claimed = await claimPendingUploadRows(rows.map(r => r.id))
+    } catch (e) {
+      console.error('[purge-pending-uploads] 행 삭제 실패:', e)
+      return { ...result, error: 'query' }
+    }
+    result.purged += claimed.length
+    const gone = new Set(claimed)
+    const plan = pendingObjectPaths(
+      rows.filter(r => gone.has(r.id)),
+      draftLayoutPaths
+    )
     if (plan.unsafe > 0) {
-      // 행의 경로가 업무툴 규약 밖이다(손으로 넣은 행 등) — 그 객체는 건드리지 않고 행만 지운다
+      // 행의 경로가 업무툴 규약 밖이다(손으로 넣은 행 등) — 그 객체는 건드리지 않는다
       console.error(
         `[purge-pending-uploads] 안전하지 않은 경로 ${plan.unsafe}건 — 객체 삭제 건너뜀`
       )
@@ -77,17 +91,13 @@ export async function purgeStalePendingUploads(
         await removeObjects(plan.paths.slice(i, i + 100))
       }
     } catch (e) {
-      console.error('[purge-pending-uploads] 객체 삭제 실패:', e instanceof Error ? e.name : e)
-      return { ...result, error: 'storage' }
+      console.error(
+        '[purge-pending-uploads] 객체 삭제 실패(고아 청소가 정리):',
+        e instanceof Error ? e.name : e
+      )
     }
     result.objects += plan.paths.length
     result.unsafe += plan.unsafe
-    try {
-      result.purged += await deletePendingUploadRows(rows.map(r => r.id))
-    } catch (e) {
-      console.error('[purge-pending-uploads] 행 삭제 실패:', e)
-      return { ...result, error: 'query' }
-    }
     if (rows.length < PENDING_BATCH) break
   }
 

@@ -9,6 +9,7 @@ import { createLogger, maskId } from '@/utils/logger'
 import { validateUUID } from '@/utils/validation'
 import { getProfileById, updateProfile, type ProfilePatch } from '@/db/queries/profiles'
 import { withdrawMember } from '@/db/queries/withdrawal'
+import { removeWithdrawnMemberDocuments } from '@/lib/memberDocuments/withdrawalCleanup'
 import { fundingWithdrawalVerdictFor } from '@/lib/server/fundingWithdrawal'
 import { adminLockoutVerdictFor } from '@/lib/server/adminLockout'
 import { getDirectorRoster } from '@/lib/server/boardRoomAuth'
@@ -149,6 +150,21 @@ export const POST = defineApiRoute<Record<string, unknown>>({
           { memberId: maskId(memberId), action, adminId: maskId(user.id) },
           'medium'
         )
+
+        // 내 문서함 파일 — 행은 트랜잭션이 지웠다. 저장소 객체·미리보기 캐시는 외부 호출이라 커밋 뒤에 지운다.
+        // 실패해도 탈퇴는 유효하다(고아 객체가 남고 로그만 남긴다).
+        if (outcome.memberDocumentCleanup) {
+          await removeWithdrawnMemberDocuments(
+            memberId,
+            outcome.memberDocumentCleanup,
+            (stage, error) =>
+              log.error('탈퇴 뒤 내 문서함 정리 실패', {
+                memberId: maskId(memberId),
+                stage,
+                error: error instanceof Error ? error.name : typeof error,
+              })
+          )
+        }
 
         // 타임뱅크 음수 잔액 탈퇴(조합이 떠안음, 스펙 §9.3 4단계) — 커밋 뒤 이사
         // 전원에게 알린다. 정산 행 자체가 이사회 보고 대상 표시라 알림이 실패해도

@@ -229,6 +229,25 @@ export async function deletePendingUploads(
   return rows.length
 }
 
+/**
+ * 내 임시 업로드 행을 지우고 **실제로 지운 행의 id** 를 돌려준다. 폐기는 이 결과에 든 업로드의 객체만 지운다 — 같은 업로드가
+ * 그 사이 승격됐으면(승격 트랜잭션이 임시 행을 지운다) 여기 나오지 않아 살아 있는 첨부의 객체를 건드리지 않는다(2026-11-05 감사).
+ */
+export async function claimPendingUploads(
+  ids: readonly string[],
+  uploaderId: string
+): Promise<string[]> {
+  const unique = [...new Set(ids)]
+  if (unique.length === 0) return []
+  const rows = await db
+    .delete(workPendingUploads)
+    .where(
+      and(inArray(workPendingUploads.id, unique), eq(workPendingUploads.uploaderId, uploaderId))
+    )
+    .returning({ id: workPendingUploads.id })
+  return rows.map(r => r.id)
+}
+
 // ── 승격 ─────────────────────────────────────────────────────────────────────
 
 export type PromoteInput = {
