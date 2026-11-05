@@ -4,7 +4,8 @@
  * Resend는 받은 메일을 30일만 들고 있고 첨부 URL은 한 시간이면 만료된다.
  * 그래서 여기 있는 값이 정본이고 Resend는 배달 통로일 뿐이다.
  */
-import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core'
+import { sql } from 'drizzle-orm'
+import { sqliteTable, text, integer, index, uniqueIndex, primaryKey } from 'drizzle-orm/sqlite-core'
 
 import { uuidPk, createdAt, updatedAt } from './_shared.ts'
 import { memberProfiles } from './identity.ts'
@@ -200,4 +201,42 @@ export const inboundEmailNotes = sqliteTable(
     updatedAt: updatedAt(),
   },
   table => [index('inbound_email_notes_email_idx').on(table.emailId, table.createdAt)]
+)
+
+/**
+ * 메일함 라벨 — 조합이 함께 쓰는 분류(총회·후원·언론 등). 만들기·고치기·지우기와 메일에 붙이기는 관리자만,
+ * 보기·거르기는 이사·감사·관리자(라우트가 판정). 이름은 대소문자를 가리지 않고 겹칠 수 없다 — `lower(name)` 유일
+ * 인덱스가 막는다(동시에 같은 이름을 만들어도 하나만 들어간다). 색은 정해진 팔레트의 키(`MAIL_LABEL_COLORS`)이고
+ * 길이·색 판정은 라우트가 한다(0027과 같은 규칙으로 CHECK 없음).
+ */
+export const mailLabels = sqliteTable(
+  'mail_labels',
+  {
+    id: uuidPk(),
+    name: text('name').notNull(),
+    color: text('color').notNull().default('gray'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  table => [uniqueIndex('mail_labels_name_idx').on(sql`lower(${table.name})`)]
+)
+
+/** 메일 ↔ 라벨. 메일이나 라벨이 지워지면 함께 지운다. */
+export const inboundEmailLabels = sqliteTable(
+  'inbound_email_labels',
+  {
+    emailId: text('email_id')
+      .notNull()
+      .references(() => inboundEmails.id, { onDelete: 'cascade' }),
+    labelId: text('label_id')
+      .notNull()
+      .references(() => mailLabels.id, { onDelete: 'cascade' }),
+    /** 붙인 사람. 프로필이 지워지면 비운다. */
+    createdBy: text('created_by').references(() => memberProfiles.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+  },
+  table => [
+    primaryKey({ columns: [table.emailId, table.labelId] }),
+    index('inbound_email_labels_label_idx').on(table.labelId),
+  ]
 )

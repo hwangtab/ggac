@@ -20,8 +20,10 @@ import {
   replyRecipients,
   replySubject,
 } from '@/lib/mail/replyCompose'
+import { labelColorClass } from '@/lib/mail/labels'
 
 import ComposeModal, { type ForwardSource } from './ComposeModal'
+import LabelManager, { LabelChip, type MailLabel } from './LabelManager'
 import SentMailbox from './SentMailbox'
 import {
   buildBodySrcDoc,
@@ -60,6 +62,8 @@ interface InboundEmail {
   /** 담당자(0041)와 그 표시 이름. */
   assigned_to?: string | null
   assignee_name?: string | null
+  /** 붙은 라벨(0042). 목록과 상세 둘 다 싣는다. */
+  labels?: { id: string; name: string; color: string }[]
 }
 
 type AssigneeOption = { id: string; display_name: string; role: 'admin' | 'director' | 'auditor' }
@@ -219,6 +223,11 @@ export default function MailboxView({ className = '' }: { className?: string }) 
   // 담당자 후보(관리자만 받는다 — 지정은 관리자만 한다).
   const [assigneeOptions, setAssigneeOptions] = useState<AssigneeOption[]>([])
   const [assigning, setAssigning] = useState(false)
+  // 라벨 — 목록은 이사·감사·관리자 모두 받아 거르기에 쓰고, 붙이기·관리는 관리자만 한다.
+  const [labels, setLabels] = useState<MailLabel[]>([])
+  const [labelFilter, setLabelFilter] = useState<string | null>(null)
+  const [labelManagerOpen, setLabelManagerOpen] = useState(false)
+  const [labelBusy, setLabelBusy] = useState(false)
   const [bulkUpdating, setBulkUpdating] = useState(false)
   const [canManage, setCanManage] = useState(false)
   // 발신자 필터는 URL(`?from=`·`?domain=`)이 정본이다 — 뒤로 가기로 풀리고 링크로 공유된다. 서버 렌더에는
@@ -277,6 +286,7 @@ export default function MailboxView({ className = '' }: { className?: string }) 
       if (afterDate) params.set('after', afterDate)
       if (beforeDate) params.set('before', beforeDate)
       if (mineOnly) params.set('assignee', 'me')
+      if (labelFilter) params.set('label', labelFilter)
       params.set('limit', String(LIMIT))
       params.set('offset', String(offset))
 
@@ -295,7 +305,37 @@ export default function MailboxView({ className = '' }: { className?: string }) 
     } finally {
       setLoading(false)
     }
-  }, [statusFilter, search, offset, senderFilter, hasAttachment, afterDate, beforeDate, mineOnly])
+  }, [
+    statusFilter,
+    search,
+    offset,
+    senderFilter,
+    hasAttachment,
+    afterDate,
+    beforeDate,
+    mineOnly,
+    labelFilter,
+  ])
+
+  const fetchLabels = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/mailbox/labels')
+      if (!res.ok) return
+      const json = await res.json()
+      setLabels(json?.data?.labels ?? [])
+    } catch {
+      // 라벨이 안 와도 메일함은 그대로 쓴다.
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchLabels()
+  }, [fetchLabels])
+
+  // 거르고 있던 라벨이 지워졌으면 거르기를 푼다 — 남겨 두면 빈 목록만 보인다.
+  useEffect(() => {
+    if (labelFilter && !labels.some(l => l.id === labelFilter)) setLabelFilter(null)
+  }, [labels, labelFilter])
 
   // 발신자 카드 — 주소 필터일 때만. 카드가 실패해도 목록은 그대로 보여야 하므로 오류는 카드만 지운다.
   useEffect(() => {
@@ -477,6 +517,44 @@ export default function MailboxView({ className = '' }: { className?: string }) 
       cancelled = true
     }
   }, [canManage])
+
+  /** 메일들에 라벨을 붙이거나 뗀다(관리자만). 화면의 행·상세와 라벨별 개수를 함께 맞춘다. */
+  const applyLabel = async (emailIds: string[], labelId: string, action: 'add' | 'remove') => {
+    if (emailIds.length === 0 || labelBusy) return false
+    const label = labels.find(l => l.id === labelId)
+    if (!label) return false
+    setLabelBusy(true)
+    try {
+      const res = await fetch(`/api/admin/mailbox/labels/${labelId}/emails`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email_ids: emailIds, action }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || '라벨을 바꾸지 못했습니다.')
+      const targets = new Set(emailIds)
+      const chip = { id: label.id, name: label.name, color: label.color }
+      const patch = <T extends { id: string; labels?: InboundEmail['labels'] }>(email: T): T => {
+        if (!targets.has(email.id)) return email
+        const others = (email.labels ?? []).filter(l => l.id !== labelId)
+        const next =
+          action === 'add'
+            ? [...others, chip].sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+            : others
+        return { ...email, labels: next }
+      }
+      setEmails(prev => prev.map(patch))
+      setDetail(prev => (prev ? patch(prev) : prev))
+      await fetchLabels()
+      if (labelFilter === labelId && action === 'remove') await fetchEmails()
+      return true
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '라벨을 바꾸지 못했습니다.')
+      return false
+    } finally {
+      setLabelBusy(false)
+    }
+  }
 
   const changeAssignee = async (email: InboundEmail, next: string | null) => {
     if (assigning) return
@@ -1040,6 +1118,40 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                   내 담당
                 </button>
               </div>
+              {(labels.length > 0 || canManage) && (
+                <div className="flex gap-1.5 flex-wrap items-center" data-testid="label-filters">
+                  {labels.map(label => (
+                    <button
+                      key={label.id}
+                      type="button"
+                      aria-pressed={labelFilter === label.id}
+                      onClick={() => {
+                        setLabelFilter(current => (current === label.id ? null : label.id))
+                        setOffset(0)
+                      }}
+                      className={`px-2 py-0.5 text-xs rounded-md border transition-colors ${labelColorClass(
+                        label.color
+                      )} ${
+                        labelFilter === label.id
+                          ? 'border-gray-800 ring-1 ring-gray-800'
+                          : 'border-transparent opacity-80 hover:opacity-100'
+                      }`}
+                    >
+                      {label.name}
+                      <span className="ml-1 text-[10px] opacity-70">{label.email_count}</span>
+                    </button>
+                  ))}
+                  {canManage && (
+                    <button
+                      type="button"
+                      onClick={() => setLabelManagerOpen(true)}
+                      className="px-2 py-0.5 text-xs text-gray-500 hover:text-gray-800 hover:underline"
+                    >
+                      라벨 관리
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             {canManage && emails.length > 0 && (
@@ -1063,6 +1175,31 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                   />
                   {checkedIds.length > 0 ? `${checkedIds.length}개 선택` : '전체 선택'}
                 </label>
+                {checkedIds.length > 0 && labels.length > 0 && (
+                  <select
+                    aria-label="고른 메일에 라벨 붙이기"
+                    disabled={labelBusy}
+                    value=""
+                    onChange={async e => {
+                      const labelId = e.target.value
+                      if (!labelId) return
+                      const ok = await applyLabel(
+                        emails.filter(m => checkedIds.includes(m.id)).map(m => m.id),
+                        labelId,
+                        'add'
+                      )
+                      if (ok) setCheckedIds([])
+                    }}
+                    className="rounded-md border border-gray-300 bg-white px-1.5 py-1"
+                  >
+                    <option value="">라벨 붙이기…</option>
+                    {labels.map(label => (
+                      <option key={label.id} value={label.id}>
+                        {label.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 {checkedIds.length > 0 &&
                   (['read', 'unread', 'archived', 'spam'] as const).map(s => (
                     <button
@@ -1116,6 +1253,9 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                           <span className="font-medium text-gray-900 truncate min-w-0 text-sm">
                             {email.subject || '(제목 없음)'}
                           </span>
+                          {(email.labels ?? []).map(label => (
+                            <LabelChip key={label.id} name={label.name} color={label.color} />
+                          ))}
                           {email.assigned_to && (
                             <span
                               className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-50 text-indigo-700 shrink-0"
@@ -1329,6 +1469,47 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                       </select>
                     )}
                   </div>
+                  {((selectedEmail.labels ?? []).length > 0 ||
+                    (canManage && labels.length > 0)) && (
+                    <div
+                      className="mt-1 flex flex-wrap items-center gap-1.5"
+                      data-testid="mail-labels"
+                    >
+                      {(selectedEmail.labels ?? []).map(label => (
+                        <LabelChip key={label.id} name={label.name} color={label.color} />
+                      ))}
+                      {canManage && labels.length > 0 && (
+                        <details className="relative text-xs">
+                          <summary className="cursor-pointer list-none text-gray-500 hover:text-gray-800">
+                            라벨 바꾸기
+                          </summary>
+                          <div className="absolute z-10 mt-1 w-48 rounded-lg border border-gray-200 bg-white p-2 shadow-lg space-y-1">
+                            {labels.map(label => {
+                              const on = (selectedEmail.labels ?? []).some(l => l.id === label.id)
+                              return (
+                                <label key={label.id} className="flex items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    disabled={labelBusy}
+                                    checked={on}
+                                    onChange={() =>
+                                      applyLabel(
+                                        [selectedEmail.id],
+                                        label.id,
+                                        on ? 'remove' : 'add'
+                                      )
+                                    }
+                                    className="rounded border-gray-300"
+                                  />
+                                  <LabelChip name={label.name} color={label.color} />
+                                </label>
+                              )
+                            })}
+                          </div>
+                        </details>
+                      )}
+                    </div>
+                  )}
                   {attachments.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-3">
                       {attachments.map(att => (
@@ -1670,6 +1851,18 @@ export default function MailboxView({ className = '' }: { className?: string }) 
       )}
 
       {/* 새 메일 작성 모달 — 관리자 + 서버 스위치가 켜졌을 때만 그린다. */}
+      {canManage && labelManagerOpen && (
+        <LabelManager
+          labels={labels}
+          onClose={() => setLabelManagerOpen(false)}
+          onChanged={async () => {
+            await fetchLabels()
+            // 이름·색을 바꾸거나 지우면 행의 칩도 바뀐다(지운 라벨로 거르던 것은 위 effect가 푼다).
+            await fetchEmails()
+            if (selectedId) await fetchDetail(selectedId)
+          }}
+        />
+      )}
       {canManage && composeEnabled && composeOpen && (
         <ComposeModal
           quota={composeQuota}
