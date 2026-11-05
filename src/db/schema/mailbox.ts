@@ -17,7 +17,12 @@ export const inboundEmails = sqliteTable(
     resendEmailId: text('resend_email_id').notNull().unique(),
     /** `<...@...>` 형식. 답장의 In-Reply-To에 그대로 넣는다. */
     messageId: text('message_id'),
+    /** 웹훅 `from` 원문. `홍길동 <hong@a.org>` 꼴일 수 있다 — 거르기에는 `fromEmail`을 쓴다. */
     fromAddress: text('from_address').notNull(),
+    /** 소문자로 정규화한 발신 주소(`parseMailbox`, 기존 행은 0037이 백필). 발신자 필터는 완전 일치로 본다. */
+    fromEmail: text('from_email'),
+    /** 표시 이름. 없으면 null. */
+    fromName: text('from_name'),
     /** JSON 배열 문자열. */
     toAddresses: text('to_addresses').notNull(),
     ccAddresses: text('cc_addresses'),
@@ -51,6 +56,7 @@ export const inboundEmails = sqliteTable(
     index('inbound_emails_status_idx').on(table.status),
     index('inbound_emails_received_idx').on(table.receivedAt),
     index('inbound_emails_from_idx').on(table.fromAddress),
+    index('inbound_emails_from_email_idx').on(table.fromEmail, table.receivedAt),
     index('inbound_emails_fetch_status_idx').on(table.bodyFetchStatus),
   ]
 )
