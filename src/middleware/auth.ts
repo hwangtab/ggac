@@ -104,8 +104,12 @@ export async function handleAuth(
   const isBoardMeetingWritePage =
     authPathname === '/board-room/meetings/new' ||
     /^\/board-room\/meetings\/[^/]+\/edit$/.test(authPathname)
+  // 이사회 서류 앱 편집 화면(docs/board-work/05-이사회-서류-앱-편집.md §7)도 같은 이유로 뺀다 — 서류함
+  // (`/board-room/documents`)은 조합원에게 열린 열람 화면이지만 편집은 이사·감사·관리자 중 올린 사람·관리자만이다.
+  const isBoardDocumentEditPage = /^\/board-room\/documents\/[^/]+\/edit\/?$/.test(authPathname)
   const isBoardRoomRecordPage =
     !isBoardMeetingWritePage &&
+    !isBoardDocumentEditPage &&
     (authPathname === '/board-room' ||
       authPathname.startsWith('/board-room/meetings') ||
       authPathname.startsWith('/board-room/assembly') ||

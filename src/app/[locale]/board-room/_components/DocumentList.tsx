@@ -2,7 +2,10 @@
 
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
+import { Link } from '@/i18n/navigation'
 import { isSafeInternalPath } from '@/utils/safeUrl'
+import { useDesktopEditorKnown } from '@work/components/files/office-edit/use-desktop-editor'
+import { canOfferAppEdit } from '@work/lib/files/app-edit'
 
 interface BoardDocument {
   id: string
@@ -20,6 +23,8 @@ interface DocumentListProps {
   documents: BoardDocument[]
   currentUserId: string
   isAdmin: boolean
+  /** 이사·감사·관리자인가 — 버전 기록·앱 편집 진입점은 이사회 안에서만 보인다(조합원은 API 도 403) */
+  isBoardMember?: boolean
   onChanged: () => void
 }
 
@@ -44,9 +49,11 @@ export default function DocumentList({
   documents,
   currentUserId,
   isAdmin,
+  isBoardMember = false,
   onChanged,
 }: DocumentListProps) {
   const t = useTranslations('boardRoom.documents')
+  const desktop = useDesktopEditorKnown()
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const handleDelete = async (id: string) => {
@@ -112,6 +119,27 @@ export default function DocumentList({
                 <span className="px-3 py-1.5 bg-gray-100 text-gray-400 text-xs font-medium rounded-lg whitespace-nowrap">
                   {t('download')}
                 </span>
+              )}
+              {/* 앱 편집(docs/board-work/05-이사회-서류-앱-편집.md §7) — 지울 수 있는 사람(올린 사람·관리자)과 같은 사람,
+                  PC, 이 배포의 편집기가 여는 형식만. 실제 차단은 편집 API 가 한다. */}
+              {isBoardMember &&
+                canDelete &&
+                desktop === true &&
+                canOfferAppEdit(doc.file_name || doc.title, doc.file_size ?? 0) && (
+                  <Link
+                    href={`/board-room/documents/${doc.id}/edit`}
+                    className="px-3 py-1.5 border border-gray-300 text-gray-700 text-xs font-medium rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap"
+                  >
+                    {t('editInApp')}
+                  </Link>
+                )}
+              {isBoardMember && (
+                <Link
+                  href={`/board-room/documents/${doc.id}`}
+                  className="px-3 py-1.5 border border-gray-300 text-gray-700 text-xs font-medium rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap"
+                >
+                  {t('versions')}
+                </Link>
               )}
               {canDelete && (
                 <button

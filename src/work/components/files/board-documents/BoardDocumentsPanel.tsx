@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { DownloadIcon, EyeIcon, Trash2Icon, UploadIcon } from 'lucide-work'
+import { DownloadIcon, EyeIcon, HistoryIcon, PencilIcon, Trash2Icon, UploadIcon } from 'lucide-work'
 import { DataTable, TBody, Td, Th, THead, Tr } from '@work/components/layout/data-table'
 import { EmptyState } from '@work/components/layout/page'
 import { Badge } from '@work/components/ui/badge'
@@ -11,7 +11,10 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@work/com
 import { Field, FieldDescription, FieldError, FieldLabel } from '@work/components/ui/field'
 import { Input } from '@work/components/ui/input'
 import { NativeSelect } from '@work/components/ui/native-select'
+import Link from '@work/lib/nav/link'
 import { useRouter } from '@work/lib/nav/navigation'
+import { canOfferAppEdit } from '@work/lib/files/app-edit'
+import { useDesktopEditorKnown } from '../office-edit/use-desktop-editor'
 import { BOARD_VISIBILITY_LABEL } from '@work/lib/files/board-folders'
 import { FILE_KIND_LABEL, fileKindOf, formatBytes } from '@work/lib/files/mime'
 import { formatDateTime } from '@work/lib/format/datetime'
@@ -58,6 +61,7 @@ export default function BoardDocumentsPanel({
   openDocId: string | null
 }) {
   const router = useRouter()
+  const desktop = useDesktopEditorKnown()
   const [uploadOpen, setUploadOpen] = useState(false)
   const [previewId, setPreviewId] = useState<string | null>(openDocId)
   const [deleting, setDeleting] = useState<BoardDocumentItem | null>(null)
@@ -209,6 +213,25 @@ export default function BoardDocumentsPanel({
                       >
                         <DownloadIcon aria-hidden="true" />
                       </a>
+                      {/* 앱 편집(05 §7) — 지울 수 있는 사람과 같은 사람·PC·편집기가 여는 형식만. 실제 차단은 편집 API */}
+                      {canDelete && desktop === true && canOfferAppEdit(doc.fileName, doc.size) && (
+                        <Link
+                          href={`/board-room/documents/${doc.id}/edit`}
+                          aria-label={`${doc.title} 앱에서 편집`}
+                          title="앱에서 편집"
+                          className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
+                        >
+                          <PencilIcon aria-hidden="true" />
+                        </Link>
+                      )}
+                      <Link
+                        href={`/board-room/documents/${doc.id}`}
+                        aria-label={`${doc.title} 버전 기록`}
+                        title="버전 기록"
+                        className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
+                      >
+                        <HistoryIcon aria-hidden="true" />
+                      </Link>
                       {canDelete && (
                         <Button
                           type="button"

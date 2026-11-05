@@ -127,6 +127,11 @@ export function bodyPlanAfterRevert(
 
 // ── 파일 이름 ─────────────────────────────────────────────────────────────────
 
+/** 지금 서류 이름(확장자 포함) — 파일 이름이 비었으면 제목. 편집기·저장본 판정이 이 이름으로 형식을 고른다 */
+export function currentFileName(doc: { fileName: string | null; title: string }): string {
+  return doc.fileName?.trim() || doc.title
+}
+
 /** 확장자(점 없이 소문자). 없으면 '' */
 export function fileExtensionOf(name: string): string {
   if (typeof name !== 'string') return ''

@@ -1618,6 +1618,8 @@
       "download": "Download",
       "delete": "Delete",
       "confirmDelete": "Delete this document?",
+      "editInApp": "Edit in app",
+      "versions": "Versions",
       "uploadedBy": "Uploaded by",
       "uploadedAt": "Uploaded",
       "empty": "No documents found.",

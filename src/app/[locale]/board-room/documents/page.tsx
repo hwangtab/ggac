@@ -171,6 +171,7 @@ export default function DocumentsPage() {
           documents={documents}
           currentUserId={currentUserId}
           isAdmin={isAdmin}
+          isBoardMember={isBoardMember === true}
           onChanged={fetchDocuments}
         />
       )}

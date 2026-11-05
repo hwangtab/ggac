@@ -1618,6 +1618,8 @@
       "download": "다운로드",
       "delete": "삭제",
       "confirmDelete": "이 서류를 삭제하시겠습니까?",
+      "editInApp": "앱에서 편집",
+      "versions": "버전 기록",
       "uploadedBy": "등록자",
       "uploadedAt": "등록일",
       "empty": "등록된 서류가 없습니다.",

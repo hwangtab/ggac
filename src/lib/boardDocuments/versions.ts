@@ -31,6 +31,7 @@ import { logSecurityEvent } from '@/utils/security'
 import {
   bodyPlanAfterRevert,
   bodyPlanAfterSave,
+  currentFileName,
   editorSourceFor,
   isCompatibleSavedName,
   savedDisplayName,
@@ -45,6 +46,8 @@ import {
   removeBoardDocumentObjects,
   statBoardDocumentObject,
 } from './storage'
+
+export { currentFileName }
 
 /**
  * 이사회 서류 앱 편집의 서버 단계(라우트가 `requireBoardMember()` → 레이트 리밋 → 서류 행·편집 판정을 끝낸 **뒤에**
@@ -65,11 +68,6 @@ function fail<T>(status: number, error: string): ServiceResult<T> {
 const MULTIPART_THRESHOLD_BYTES = 8 * 1024 * 1024
 const ZIP_MAGIC = [0x50, 0x4b, 0x03, 0x04]
 const OLE2_MAGIC = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]
-
-/** 지금 서류 이름(확장자 포함) — 파일 이름이 비었으면 제목 */
-export function currentFileName(doc: Pick<BoardDocumentEditRow, 'fileName' | 'title'>): string {
-  return doc.fileName?.trim() || doc.title
-}
 
 /** 저장본의 크기 상한 — HWP·HWPX 20MB(업무툴 DOC_EDIT_MAX_BYTES), 오피스 50MB(OFFICE_EDIT_MAX_BYTES) */
 function maxBytesFor(name: string): number {

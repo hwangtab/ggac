@@ -40,9 +40,16 @@ export function isBoardWorkPath(pathname: string | null | undefined): boolean {
   return seg !== null && (BOARD_WORK_SEGMENTS as readonly string[]).includes(seg)
 }
 
-/** 앱 안 문서 편집 화면(`/board-room/edit/*`) — 이사회실 메뉴를 기본으로 접는다(03 §8 결정 2) */
+/**
+ * 앱 안 문서 편집 화면 — 이사회실 메뉴를 기본으로 접는다(03 §8 결정 2). 업무툴 첨부(`/board-room/edit/*`)와 이사회 서류
+ * 앱 편집(`/board-room/documents/<id>/edit` — 05 §7). 뒤쪽은 업무 화면(`isBoardWorkPath`)이 아니다: 서류함 화면이고
+ * 메뉴 활성 항목도 자료실 그대로다.
+ */
 export function isBoardWorkEditPath(pathname: string | null | undefined): boolean {
-  return workSegment(pathname) === 'edit'
+  if (workSegment(pathname) === 'edit') return true
+  if (!pathname) return false
+  const path = stripLocale(pathname.split(/[?#]/)[0]).replace(/\/+$/, '')
+  return /^\/board-room\/documents\/[^/]+\/edit$/.test(path)
 }
 
 /**
