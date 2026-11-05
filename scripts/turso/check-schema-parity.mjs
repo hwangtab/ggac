@@ -81,6 +81,7 @@ const POST_CUTOVER_TABLES = new Set([
   'mail_labels', // 0042 메일함 라벨
   'inbound_email_labels', // 0042
   'mail_sender_rules', // 0043 메일함 발신자 규칙
+  'mail_reply_templates', // 0045 메일함 답장 템플릿
 ])
 
 export function comparePgToSqlite(pgSnapshot, sqliteSchema) {

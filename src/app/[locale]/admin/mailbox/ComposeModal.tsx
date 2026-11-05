@@ -14,6 +14,7 @@ import {
 } from '@/lib/mail/composeValidation'
 
 import { escapeHtml, formatBytes } from './mailboxUtils'
+import { TemplatePicker, type ReplyTemplate } from './TemplateManager'
 
 const inputClass =
   'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500'
@@ -32,6 +33,8 @@ type Props = {
   initialTo?: string[]
   /** 받은 메일 전달. 제목·본문을 미리 채우고, 고른 받은 첨부는 서버가 비공개 저장소에서 복사해 붙인다. */
   forward?: ForwardSource
+  /** 답장 템플릿 — "템플릿 넣기"로 본문 끝에 덧붙인다. */
+  templates?: ReplyTemplate[]
 }
 
 export type ForwardSource = {
@@ -159,7 +162,14 @@ function isExternal(address: string): boolean {
  *  - 유지: 성공, "처리 중/확인 필요"(409), 네트워크 오류(요청이 닿았는지 모른다 — 같은 키로 다시 보내도 안전하다).
  *  - 새로 발급: 서버가 거절했다(검증 실패·상한 초과·발송 거절). 이 키의 행은 이미 끝난 상태라 재사용할 수 없다.
  */
-export default function ComposeModal({ quota, onClose, onDone, initialTo, forward }: Props) {
+export default function ComposeModal({
+  quota,
+  onClose,
+  onDone,
+  initialTo,
+  forward,
+  templates = [],
+}: Props) {
   const keyRef = useRef<string>(crypto.randomUUID())
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -461,9 +471,17 @@ export default function ComposeModal({ quota, onClose, onDone, initialTo, forwar
               </div>
 
               <div className="space-y-1">
-                <label className="block text-xs font-medium text-gray-600">
-                  본문 <span className="text-red-500">*</span>
-                </label>
+                <div className="flex items-center justify-between gap-2">
+                  <label className="block text-xs font-medium text-gray-600">
+                    본문 <span className="text-red-500">*</span>
+                  </label>
+                  <TemplatePicker
+                    templates={templates}
+                    disabled={frozen}
+                    body={body}
+                    onChange={setBody}
+                  />
+                </div>
                 <textarea
                   rows={10}
                   value={body}

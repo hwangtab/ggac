@@ -1209,3 +1209,114 @@ test.describe('전달', () => {
     }
   })
 })
+
+/**
+ * 답장 템플릿 — 관리자만 만들고 쓴다(답장·새 메일 작성이 관리자만). 작성 창의 "템플릿 넣기"는 쓰던 본문 끝에
+ * 덧붙인다. 이름이 `MAILBOX-E2E-TPL-`로 시작하는 템플릿만 쓰고 지운다. 직렬로 돈다.
+ */
+test.describe('답장 템플릿', () => {
+  test.describe.configure({ mode: 'serial' })
+  const PREFIX = 'MAILBOX-E2E-TPL-'
+  const TEMPLATE_BODY = '대관 안내드립니다.\n이용 시간은 오전 10시부터입니다.'
+  let admin: APIRequestContext
+
+  async function cleanup() {
+    const client = db()
+    try {
+      await client.execute(`DELETE FROM mail_reply_templates WHERE name LIKE '${PREFIX}%'`)
+    } finally {
+      client.close()
+    }
+  }
+
+  test.beforeAll(async ({ playwright, baseURL }) => {
+    await cleanup()
+    admin = await playwright.request.newContext({
+      baseURL,
+      storageState: storageStatePath('admin'),
+    })
+  })
+  test.afterAll(async () => {
+    await cleanup()
+    await admin.dispose()
+  })
+
+  test('템플릿은 관리자만 — 비로그인 401, 이사 403이고 아무것도 안 생긴다', async ({
+    playwright,
+    baseURL,
+    request,
+  }) => {
+    expect((await request.get('/api/admin/mailbox/templates')).status()).toBe(401)
+    const director = await playwright.request.newContext({
+      baseURL,
+      storageState: storageStatePath('director'),
+    })
+    try {
+      expect((await director.get('/api/admin/mailbox/templates')).status()).toBe(403)
+      expect(
+        (
+          await director.post('/api/admin/mailbox/templates', {
+            data: { name: `${PREFIX}이사`, body: 'x' },
+          })
+        ).status()
+      ).toBe(403)
+      const made = await admin.post('/api/admin/mailbox/templates', {
+        data: { name: `${PREFIX}권한`, body: '권한 시험' },
+      })
+      const id = (await made.json()).data.template.id
+      expect(
+        (
+          await director.patch(`/api/admin/mailbox/templates/${id}`, { data: { body: 'y' } })
+        ).status()
+      ).toBe(403)
+      expect((await director.delete(`/api/admin/mailbox/templates/${id}`)).status()).toBe(403)
+      const list = (await (await admin.get('/api/admin/mailbox/templates')).json()).data
+        .templates as {
+        name: string
+        body: string
+      }[]
+      expect(list.filter(t => t.name.startsWith(PREFIX)).map(t => t.body)).toEqual(['권한 시험'])
+    } finally {
+      await director.dispose()
+    }
+  })
+
+  test('이름은 대소문자 무시로 겹칠 수 없고, 빈 값·너무 긴 값은 400', async () => {
+    const post = (data: object) => admin.post('/api/admin/mailbox/templates', { data })
+    expect((await post({ name: `${PREFIX}Case`, body: '본문' })).status()).toBe(201)
+    expect((await post({ name: `${PREFIX}case`.toUpperCase(), body: '본문' })).status()).toBe(409)
+    expect((await post({ name: '  ', body: '본문' })).status()).toBe(400)
+    expect((await post({ name: `${PREFIX}빈 본문`, body: ' \n ' })).status()).toBe(400)
+    expect((await post({ name: `${PREFIX}${'x'.repeat(40)}`, body: '본문' })).status()).toBe(400)
+    expect((await post({ name: `${PREFIX}긴 본문`, body: 'x'.repeat(5001) })).status()).toBe(400)
+  })
+
+  test('화면: 답장·새 메일 창에서 템플릿을 넣으면 쓰던 글 끝에 덧붙는다', async ({ browser }) => {
+    const name = `${PREFIX}대관`
+    expect(
+      (
+        await admin.post('/api/admin/mailbox/templates', { data: { name, body: TEMPLATE_BODY } })
+      ).status()
+    ).toBe(201)
+
+    const ctx = await browser.newContext({ storageState: storageStatePath('admin') })
+    try {
+      const page = await ctx.newPage()
+      await page.goto('/admin/mailbox', { waitUntil: 'domcontentloaded' })
+      await page.getByText('MAILBOX-E2E-REPLY-PARENT').first().click({ timeout: 15000 })
+      await page.getByRole('button', { name: '답장', exact: true }).click()
+      const replyBox = page.getByPlaceholder('답장 내용을 입력하세요.')
+      await replyBox.fill('안녕하세요.')
+      await page.getByLabel('템플릿 넣기').selectOption({ label: name })
+      await expect(replyBox).toHaveValue(`안녕하세요.\n\n${TEMPLATE_BODY}`)
+      await page.getByRole('button', { name: '취소' }).click()
+
+      await page.getByRole('button', { name: '새 메일' }).click()
+      const composeBox = page.getByPlaceholder('내용을 입력하세요.')
+      await page.getByLabel('템플릿 넣기').selectOption({ label: name })
+      await expect(composeBox).toHaveValue(TEMPLATE_BODY)
+    } finally {
+      await ctx.close()
+    }
+  })
+})
