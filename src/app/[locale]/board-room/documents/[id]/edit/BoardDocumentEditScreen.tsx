@@ -43,6 +43,7 @@ export default function BoardDocumentEditScreen({
 
   return (
     <AppEditScreen
+      mobileNote="휴대전화에서는 서류를 내려받을 수 있습니다."
       editor={editor}
       fileName={fileName}
       sourceUrl={`/api/board-room/documents/${documentId}/download`}

@@ -3,6 +3,11 @@
 import { useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { BOARD_DOCUMENT_CATEGORIES } from '@/constants/boardRoom'
+import {
+  BoardDocumentUploadError,
+  boardDocumentFileProblem,
+  uploadBoardDocument,
+} from '@/lib/boardDocuments/uploadClient'
 
 interface DocumentUploadProps {
   onUploaded: () => void
@@ -59,31 +64,24 @@ export default function DocumentUpload({
       return
     }
 
+    // 50MB·형식은 올리기 전에 거른다(서버가 다시 본다)
+    const problem = boardDocumentFileProblem(file)
+    if (problem) {
+      setValidationError(problem)
+      return
+    }
+
     setUploading(true)
     try {
-      const formData = new FormData()
-      formData.append('file', file)
       const trimmed = title.trim()
       const finalTitle =
         prefix && prefix !== '기타' && !trimmed.includes(prefix) ? `${prefix} ${trimmed}` : trimmed
-      formData.append('title', finalTitle)
-      formData.append('category', category)
-      formData.append('visibility', visibility)
-
-      // Note: do NOT set Content-Type — the browser sets the multipart boundary.
-      const res = await fetch('/api/board-room/documents', {
-        method: 'POST',
-        body: formData,
-      })
-      const json = await res.json()
-      if (json.success) {
-        resetForm()
-        onUploaded()
-      } else {
-        setApiError(json.error || t('errorGeneric'))
-      }
-    } catch {
-      setApiError(t('errorGeneric'))
+      // 파일은 비공개 저장소로 직접 올리고(함수 본문 4.5MB 한도를 지나지 않는다) 서류는 JSON 으로 등록한다
+      await uploadBoardDocument(file, { title: finalTitle, category, visibility })
+      resetForm()
+      onUploaded()
+    } catch (e) {
+      setApiError(e instanceof BoardDocumentUploadError ? e.message : t('errorGeneric'))
     } finally {
       setUploading(false)
     }

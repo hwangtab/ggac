@@ -176,7 +176,7 @@ export default function BoardDocumentDetailPage() {
           앱 편집은 이 서류를 올린 사람과 관리자만 할 수 있습니다.
         </p>
       )}
-      {doc.hasBody && doc.canEdit && (
+      {doc.hasBody && canOpenEditor && desktop === true && (
         <p className="-mt-6 mb-8 text-sm text-gray-500">
           웹 본문이 있는 서류입니다. 앱에서 저장하면 새 파일로 본문을 다시 만들고, 되돌리면 그
           버전의 본문이 돌아옵니다.
@@ -256,7 +256,7 @@ export default function BoardDocumentDetailPage() {
         </ol>
         {versions.length === 1 && (
           <p className="mt-3 text-xs text-gray-500">
-            아직 앱에서 고친 적이 없습니다. 처음 저장하면 지금 파일이 v1 으로 남고 새 파일이 v2 가
+            아직 앱에서 고친 적이 없습니다. 처음 저장하면 지금 파일이 v1로 남고 새 파일이 v2가
             됩니다.
           </p>
         )}

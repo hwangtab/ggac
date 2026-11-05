@@ -19,38 +19,32 @@ import {
   hasValidFileSignature,
 } from '@/utils/fileUploadValidation'
 import { deleteBoardDocument, putBoardDocument } from '@/lib/storage/privateProvider'
-import { createDocument, listDocuments } from '@/db/queries/board'
+import { createDocument, documentFilePathExists, listDocuments } from '@/db/queries/board'
 import { scheduleBoardDocumentTextExtraction } from '@work/lib/files/extract-schedule'
+import {
+  BOARD_DOCUMENT_MAX_FILE_SIZE,
+  BOARD_DOCUMENT_TOO_LARGE_MESSAGE,
+  BOARD_DOCUMENT_UNSUPPORTED_TYPE_MESSAGE,
+  checkStoredBoardDocument,
+  isAllowedBoardDocumentMime,
+  sanitizeBoardDocumentFileName,
+  validateBoardDocumentRegistration,
+} from '@/lib/boardDocuments/uploadRules'
+import {
+  boardDocumentObjectPath,
+  downloadBoardDocumentObject,
+  removeBoardDocumentObjects,
+  statBoardDocumentObject,
+} from '@/lib/boardDocuments/storage'
+import { limitBoardDocumentEdit } from '@/lib/server/boardDocumentEditRoute'
+import { StorageUnconfiguredError } from '@work/lib/files/private-store'
+import { parseJsonObjectBody } from '@/utils/requestBody'
 
 const log = createLogger('boardRoom/documents')
 
 export const runtime = 'nodejs'
 
-const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
-
-const ALLOWED_MIME_TYPES = new Set([
-  'application/pdf',
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-  'image/gif',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/haansofthwp',
-  'application/x-hwp',
-  'text/plain',
-])
-
-/** Strip path separators and unusual chars; keep alnum, dash, underscore, dot */
-function sanitizeFileName(name: string): string {
-  const sanitized = name
-    .replace(/[/\\]/g, '_')
-    .replace(/[^a-zA-Z0-9._\-가-힣]/g, '_')
-    .replace(/^\.+/, '')
-  return sanitized || 'file'
-}
+// 크기 상한·허용 형식·파일 이름 정리는 브라우저 직접 업로드(`/uploads`)와 함께 쓴다 — `@/lib/boardDocuments/uploadRules`
 
 export async function GET(request: NextRequest) {
   // 열람 게이트다. 조합원은 visibility='members' 자료만 받는다 — 관리자가
@@ -109,7 +103,19 @@ export async function GET(request: NextRequest) {
   )
 }
 
+function isJsonRequest(request: NextRequest): boolean {
+  return (request.headers.get('content-type') ?? '').toLowerCase().startsWith('application/json')
+}
+
+/**
+ * POST /api/board-room/documents — 서류 등록. 두 갈래다:
+ *  - **JSON**(`content-type: application/json`) — 화면이 쓰는 길. 브라우저가 `/uploads`로 비공개 저장소에 직접 올린 뒤
+ *    `{ filePath, fileName, title, category, visibility }`만 보낸다(Vercel 함수 본문 4.5MB 한도를 지나지 않는다).
+ *  - **multipart**(`file` 칸) — 예전 길. 4.5MB 아래 파일과 권한 E2E·스크립트가 그대로 쓴다.
+ */
 export async function POST(request: NextRequest) {
+  if (isJsonRequest(request)) return registerUploadedDocument(request)
+
   // 문서 업로드 남용 방지 (전수감사 안정성 M-4)
   const rl = await rateLimit(request, 'FILE_UPLOAD')
   if (!rl.success) {
@@ -143,14 +149,13 @@ export async function POST(request: NextRequest) {
         )
       }
       if (!file) throw ApiError.badRequest('업로드된 파일이 없습니다.')
-      if (file.size > MAX_FILE_SIZE) throw ApiError.badRequest('파일 크기는 최대 50MB입니다.')
-      if (!ALLOWED_MIME_TYPES.has(file.type))
-        throw ApiError.badRequest(
-          `지원하지 않는 파일 형식입니다. 허용 형식: PDF, 이미지, Word, Excel, 한글(HWP), 텍스트`
-        )
+      if (file.size > BOARD_DOCUMENT_MAX_FILE_SIZE)
+        throw ApiError.badRequest(BOARD_DOCUMENT_TOO_LARGE_MESSAGE)
+      if (!isAllowedBoardDocumentMime(file.type))
+        throw ApiError.badRequest(BOARD_DOCUMENT_UNSUPPORTED_TYPE_MESSAGE)
 
       // Build safe storage path
-      const safeName = sanitizeFileName(file.name)
+      const safeName = sanitizeBoardDocumentFileName(file.name)
       const storagePath = `${user.id}/${Date.now()}_${safeName}`
 
       // Upload to private bucket via service-role client
@@ -201,6 +206,118 @@ export async function POST(request: NextRequest) {
 
       // 업무 검색이 파일 속 글자도 찾도록 본문 추출을 예약한다(03 §10). 응답 뒤에 돌고 던지지 않는다 —
       // 실패해도 업로드는 성공이고, 추출 크론이 최신 순으로 따라잡는다.
+      scheduleBoardDocumentTextExtraction([doc.id])
+
+      return ApiSuccess.created({ id: doc.id }, '서류가 등록되었습니다.')
+    },
+    '/api/board-room/documents',
+    { userId: user.id }
+  )
+}
+
+/**
+ * JSON 등록 — 브라우저가 `/api/board-room/documents/uploads`로 올린 객체를 서류 행으로 만든다.
+ *
+ * 순서: requireBoardMember(비로그인 401·조합원 403) → 사용자 단위 쓰기 한도(올리기 한 번은 준비 단계가 `FILE_UPLOAD`로
+ * 이미 셌다) → 입력(제목·분류·열람 범위 — 조합원 공개는 관리자만, 경로는 **내 폴더**만) → 이미 쓰는 경로면 409(지우지
+ * 않는다 — 남의 행의 파일이다) → 객체 메타(없으면 409 · 크기·형식이 어긋나면 지우고 400) → 앞머리 서명·텍스트 널 바이트
+ * (어긋나면 지우고 400) → 행 삽입(실패하면 객체를 되돌린다) → 본문 추출 예약.
+ */
+async function registerUploadedDocument(request: NextRequest): Promise<NextResponse> {
+  const auth = await requireBoardMember()
+  if (auth instanceof NextResponse) return auth
+  const { user, isAdmin } = auth
+  const limited = await limitBoardDocumentEdit(user.id)
+  if (limited) return limited
+
+  return apiPost(
+    async () => {
+      const body = await parseJsonObjectBody(request)
+      if (!body) throw ApiError.badRequest('유효한 JSON body가 필요합니다.')
+      const input = validateBoardDocumentRegistration(user.id, isAdmin, body)
+      if (input.ok === false) throw new ApiError(input.error, input.status)
+      const { filePath, fileName, title, category, visibility } = input.data
+      const pathname = boardDocumentObjectPath(filePath)
+
+      let exists: boolean
+      try {
+        exists = await documentFilePathExists(filePath)
+      } catch {
+        throw ApiError.internalServerError('서류 등록에 실패했습니다.')
+      }
+      if (exists) throw new ApiError('이미 등록된 파일입니다.', 409)
+
+      const discard = async () => {
+        try {
+          await removeBoardDocumentObjects([pathname])
+        } catch (removeErr) {
+          log.error('거절한 업로드 객체 삭제 실패', {
+            error: removeErr instanceof Error ? removeErr.name : String(removeErr),
+          })
+        }
+      }
+
+      let meta: Awaited<ReturnType<typeof statBoardDocumentObject>>
+      try {
+        meta = await statBoardDocumentObject(pathname)
+      } catch (e) {
+        if (e instanceof StorageUnconfiguredError) {
+          throw ApiError.serviceUnavailable('파일 저장소가 설정되지 않았습니다.')
+        }
+        log.error('업로드 객체 확인 실패', { error: e instanceof Error ? e.name : String(e) })
+        throw ApiError.serviceUnavailable(
+          '파일 저장소에 닿지 못했습니다. 잠시 후 다시 시도해 주세요.'
+        )
+      }
+      if (!meta) {
+        throw new ApiError('올린 파일을 찾을 수 없습니다. 파일을 다시 올려 주세요.', 409)
+      }
+      const stored = checkStoredBoardDocument(meta)
+      if (stored.ok === false) {
+        await discard()
+        throw ApiError.badRequest(stored.error)
+      }
+      const { size, mime } = stored.data
+
+      let buffer: Buffer
+      try {
+        buffer = await downloadBoardDocumentObject(pathname)
+      } catch (e) {
+        log.error('업로드 객체 읽기 실패', { error: e instanceof Error ? e.name : String(e) })
+        throw ApiError.serviceUnavailable(
+          '파일 저장소에 닿지 못했습니다. 잠시 후 다시 시도해 주세요.'
+        )
+      }
+      if (hasKnownFileSignature(mime) && !hasValidFileSignature(buffer, mime)) {
+        await discard()
+        throw ApiError.badRequest('파일 내용이 선언된 파일 형식과 일치하지 않습니다.')
+      }
+      if (mime === 'text/plain' && hasBinaryNullBytes(buffer)) {
+        await discard()
+        throw ApiError.badRequest('텍스트 파일 내용이 올바르지 않습니다.')
+      }
+
+      let doc: { id: string }
+      try {
+        doc = await createDocument({
+          title,
+          category,
+          filePath,
+          fileName,
+          fileSize: size,
+          mimeType: mime,
+          uploadedBy: user.id,
+          visibility,
+        })
+      } catch (insertError) {
+        log.error('메타데이터 삽입 실패', {
+          error: insertError instanceof Error ? insertError.message : String(insertError),
+        })
+        await discard()
+        throw ApiError.internalServerError('서류 등록에 실패했습니다.')
+      }
+
+      // 업무 검색이 파일 속 글자도 찾도록 본문 추출을 예약한다(03 §10) — multipart 분기와 같다
       scheduleBoardDocumentTextExtraction([doc.id])
 
       return ApiSuccess.created({ id: doc.id }, '서류가 등록되었습니다.')

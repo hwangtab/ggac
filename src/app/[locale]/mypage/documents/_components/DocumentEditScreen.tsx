@@ -5,6 +5,7 @@ import {
   addMemberDocumentVersion,
   createMemberDocument,
   markEditorUsed,
+  MemberDocumentApiError,
   memberDocumentFileUrl,
   uploadMemberDocumentFile,
   type PromoteResponse,
@@ -36,8 +37,29 @@ export default function DocumentEditScreen({
   backHref: string
 }) {
   const documentId = useRef<string | null>(target.kind === 'existing' ? target.documentId : null)
+  // 새 문서 첫 저장이 네트워크 오류로 끝나 **됐는지 모르는** 업로드 id — 다음 저장이 먼저 이것으로 다시 만들어 본다(서버는 같은
+  // 업로드면 이미 만든 문서를 돌려준다). 새 업로드로 바로 만들면 문서가 둘 생겼다(2026-11-05 점검).
+  const unsettledCreate = useRef<string | null>(null)
+
+  const adopt = (id: string) => {
+    documentId.current = id
+    // 주소만 편집 화면으로 바꾼다(라우터로 옮기면 편집기가 다시 로드된다) — 새로 고치면 이 문서가 열린다
+    window.history.replaceState(null, '', window.location.pathname.replace(/\/new$/, `/${id}/edit`))
+  }
 
   const save: AppEditSave = async (file, { baseVersionNo, report }) => {
+    if (!documentId.current && unsettledCreate.current) {
+      report('지난 저장을 확인하는 중…')
+      try {
+        const prev = await createMemberDocument(unsettledCreate.current, 'editor')
+        unsettledCreate.current = null
+        adopt(prev.documentId)
+      } catch (e) {
+        // 아직도 연결이 안 되면 그대로 둔다(다음에 다시). 서버가 답했으면(404 등) 그 업로드로는 안 만들어졌다 — 새로 만든다.
+        if (e instanceof MemberDocumentApiError && e.status === 0) throw e
+        unsettledCreate.current = null
+      }
+    }
     report('저장본을 올리는 중…')
     const uploadId = await uploadMemberDocumentFile(file, {
       documentId: documentId.current ?? undefined,
@@ -46,14 +68,14 @@ export default function DocumentEditScreen({
     report(editor.kind === 'hwp' ? '저장본을 검사하는 중…' : '저장하는 중…')
     let saved: PromoteResponse
     if (!documentId.current) {
-      saved = await createMemberDocument(uploadId, 'editor')
-      documentId.current = saved.documentId
-      // 주소만 편집 화면으로 바꾼다(라우터로 옮기면 편집기가 다시 로드된다) — 새로 고치면 이 문서가 열린다
-      window.history.replaceState(
-        null,
-        '',
-        window.location.pathname.replace(/\/new$/, `/${saved.documentId}/edit`)
-      )
+      try {
+        saved = await createMemberDocument(uploadId, 'editor')
+      } catch (e) {
+        if (e instanceof MemberDocumentApiError && e.status === 0)
+          unsettledCreate.current = uploadId
+        throw e
+      }
+      adopt(saved.documentId)
     } else {
       saved = await addMemberDocumentVersion(documentId.current, {
         uploadId,

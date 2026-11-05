@@ -18,6 +18,11 @@ import { useDesktopEditorKnown } from '../office-edit/use-desktop-editor'
 import { BOARD_VISIBILITY_LABEL } from '@work/lib/files/board-folders'
 import { FILE_KIND_LABEL, fileKindOf, formatBytes } from '@work/lib/files/mime'
 import { formatDateTime } from '@work/lib/format/datetime'
+import {
+  BoardDocumentUploadError,
+  boardDocumentFileProblem,
+  uploadBoardDocument,
+} from '@/lib/boardDocuments/uploadClient'
 import FileIcon from '../FileIcon'
 import FilePreviewBody from '../FilePreviewBody'
 import { BOARD_DOCUMENT_API_BASE, FileApiBaseContext } from '../file-api-base'
@@ -65,11 +70,18 @@ export default function BoardDocumentsPanel({
   const [uploadOpen, setUploadOpen] = useState(false)
   const [previewId, setPreviewId] = useState<string | null>(openDocId)
   const [deleting, setDeleting] = useState<BoardDocumentItem | null>(null)
+  /** 지우는 중인 서류 — 확인 창을 두 번 눌러도 DELETE 가 두 번 가지 않게(두 번째는 404 로 '못 지웠다'가 떴다) */
+  const [removingId, setRemovingId] = useState<string | null>(null)
+  const removingRef = useRef(false)
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
   const preview = items.find(i => i.id === previewId) ?? null
 
   async function remove(doc: BoardDocumentItem) {
     setDeleting(null)
+    // 상태 갱신은 다음 렌더에야 보이므로, 같은 틱의 두 번째 호출은 ref 로 막는다
+    if (removingRef.current) return
+    removingRef.current = true
+    setRemovingId(doc.id)
     try {
       const res = await fetch(`/api/board-room/documents/${doc.id}`, { method: 'DELETE' })
       const json = (await res.json().catch(() => null)) as { success?: boolean; error?: string }
@@ -81,6 +93,9 @@ export default function BoardDocumentsPanel({
         kind: 'error',
         text: e instanceof Error ? e.message : '서류를 지우지 못했습니다.',
       })
+    } finally {
+      removingRef.current = false
+      setRemovingId(null)
     }
   }
 
@@ -240,6 +255,8 @@ export default function BoardDocumentsPanel({
                           aria-label={`${doc.title} 삭제`}
                           title="삭제"
                           className="text-destructive hover:text-destructive"
+                          disabled={removingId !== null}
+                          aria-busy={removingId === doc.id || undefined}
                           onClick={() => setDeleting(doc)}
                         >
                           <Trash2Icon aria-hidden="true" />
@@ -265,7 +282,7 @@ export default function BoardDocumentsPanel({
             : ''
         }
         confirmLabel="삭제"
-        onConfirm={() => deleting && remove(deleting)}
+        onConfirm={() => deleting && removingId === null && remove(deleting)}
         onCancel={() => setDeleting(null)}
       />
     </>
@@ -338,28 +355,21 @@ function BoardDocumentUploadForm({
     setError(null)
     if (!file) return setError('파일을 선택해 주세요.')
     if (!title.trim()) return setError('제목을 입력해 주세요.')
+    // 50MB·형식은 올리기 전에 거른다(서버가 다시 본다)
+    const problem = boardDocumentFileProblem(file)
+    if (problem) return setError(problem)
     setPending(true)
     try {
-      const form = new FormData()
-      form.append('file', file)
-      form.append('title', title.trim())
-      form.append('category', category)
-      form.append('visibility', visibility)
-      // Content-Type 을 직접 넣지 않는다 — 브라우저가 multipart 경계를 붙인다
-      const res = await fetch('/api/board-room/documents', { method: 'POST', body: form })
-      const json = (await res.json().catch(() => null)) as { success?: boolean; error?: string }
-      if (!res.ok || !json?.success) {
-        setError(json?.error || '서류를 올리지 못했습니다.')
-        return
-      }
+      // 파일은 비공개 저장소로 직접 올리고(함수 본문 4.5MB 한도를 지나지 않는다) 서류는 JSON 으로 등록한다
+      await uploadBoardDocument(file, { title: title.trim(), category, visibility })
       const done = title.trim()
       setFile(null)
       setTitle('')
       setVisibility('board')
       if (fileRef.current) fileRef.current.value = ''
       onUploaded(done)
-    } catch {
-      setError('서류를 올리지 못했습니다.')
+    } catch (e) {
+      setError(e instanceof BoardDocumentUploadError ? e.message : '서류를 올리지 못했습니다.')
     } finally {
       setPending(false)
     }

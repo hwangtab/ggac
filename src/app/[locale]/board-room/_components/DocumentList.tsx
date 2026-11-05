@@ -38,11 +38,18 @@ function formatFileSize(bytes: number | null): string {
   return `${mb.toFixed(1)} MB`
 }
 
+/** ISO → `YYYY-MM-DD`(한국 시간). 브라우저 시간대로 찍으면 해외에서 보거나 자정 무렵 올린 서류의 날짜가 하루 어긋난다 */
+const SEOUL_DATE = new Intl.DateTimeFormat('sv-SE', {
+  timeZone: 'Asia/Seoul',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+})
+
 function formatDate(iso: string): string {
   const d = new Date(iso)
   if (isNaN(d.getTime())) return iso
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+  return SEOUL_DATE.format(d)
 }
 
 export default function DocumentList({
@@ -55,20 +62,29 @@ export default function DocumentList({
   const t = useTranslations('boardRoom.documents')
   const desktop = useDesktopEditorKnown()
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const handleDelete = async (id: string) => {
+    if (deletingId) return
     if (!confirm(t('confirmDelete'))) return
     setDeletingId(id)
+    setDeleteError(null)
     try {
       const res = await fetch(`/api/board-room/documents/${id}`, {
         method: 'DELETE',
       })
-      const json = await res.json()
-      if (json.success) {
-        onChanged()
+      const json = (await res.json().catch(() => null)) as {
+        success?: boolean
+        error?: string
+      } | null
+      if (!res.ok || !json?.success) {
+        // 실패를 삼키면 눌러도 아무 일이 없는 것처럼 보인다 — 자료실(BoardDocumentsPanel)처럼 이유를 보여 준다
+        setDeleteError(json?.error || '서류를 지우지 못했습니다.')
+        return
       }
+      onChanged()
     } catch {
-      // silently fail — user can retry
+      setDeleteError('네트워크 문제로 서류를 지우지 못했습니다. 잠시 후 다시 시도해 주세요.')
     } finally {
       setDeletingId(null)
     }
@@ -80,6 +96,14 @@ export default function DocumentList({
 
   return (
     <div className="space-y-3">
+      {deleteError && (
+        <p
+          role="alert"
+          className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm"
+        >
+          {deleteError}
+        </p>
+      )}
       {documents.map(doc => {
         const canDelete = doc.uploaded_by === currentUserId || isAdmin
         // download_url은 이제 우리 API의 내부 경로다(`/api/board-room/...`).

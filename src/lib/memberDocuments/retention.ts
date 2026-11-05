@@ -230,23 +230,47 @@ export async function runMemberDocumentRetention(
 const ORPHAN_MIN_AGE_MS = 48 * 3600 * 1000
 const ORPHAN_MAX_PAGES = 20
 const ORPHAN_MAX_REMOVALS = 500
+const ORPHAN_BUDGET_MS = 30_000
+/**
+ * 대량 삭제 차단기 — 한 페이지에서 이만큼 넘게, 그리고 훑은 오래된 객체의 절반 넘게 "행 없음"이면 **지우지 않고 멈춘다.**
+ * 정상 운영에서 고아는 드물다(행을 먼저 지운 뒤 객체 삭제가 실패한 흔적뿐). 그 비율이 높다면 DB 와 저장소가 다른 환경이다 —
+ * 예: 빈 로컬 DB 에 운영 저장소 토큰으로 이 크론을 손으로 부르면 운영 개인 파일이 전부 고아로 보인다(2026-11-05 리뷰).
+ */
+const ORPHAN_BREAKER_MIN = 20
 
-/** 행 없는 문서함 객체를 지운다. 지운 수. 훑는 양·지우는 양에 상한 — 남은 건 다음 실행이 이어서 한다 */
+export class OrphanSweepAbortedError extends Error {
+  readonly orphans: number
+  readonly scanned: number
+  constructor(orphans: number, scanned: number) {
+    super(
+      `고아로 보이는 객체가 너무 많아 멈췄다(${orphans}/${scanned}) — DB 와 저장소가 같은 환경인지 확인할 것`
+    )
+    this.name = 'OrphanSweepAbortedError'
+    this.orphans = orphans
+    this.scanned = scanned
+  }
+}
+
+/** 행 없는 문서함 객체를 지운다. 지운 수. 훑는 양·지우는 양·시간에 상한 — 남은 건 다음 실행이 이어서 한다 */
 export async function sweepMemberDocumentOrphans(
   now: Date,
   deps: {
     listPage?: typeof listMemberDocumentObjectsPage
     findReferenced?: typeof findReferencedMemberDocumentPaths
     remove?: (paths: string[]) => Promise<void>
+    clock?: () => number
   } = {}
 ): Promise<number> {
   const listPage = deps.listPage ?? listMemberDocumentObjectsPage
   const findReferenced = deps.findReferenced ?? findReferencedMemberDocumentPaths
   const remove = deps.remove ?? removeMemberDocumentObjects
+  const clock = deps.clock ?? Date.now
+  const started = clock()
   const cutoff = now.getTime() - ORPHAN_MIN_AGE_MS
   let removed = 0
   let cursor: string | undefined
   for (let page = 0; page < ORPHAN_MAX_PAGES && removed < ORPHAN_MAX_REMOVALS; page++) {
+    if (clock() - started >= ORPHAN_BUDGET_MS) break
     const res = await listPage(cursor)
     const old = res.objects
       .filter(o => isSafeMemberDocumentPath(o.pathname))
@@ -254,7 +278,11 @@ export async function sweepMemberDocumentOrphans(
       .map(o => o.pathname)
     if (old.length > 0) {
       const referenced = await findReferenced(old)
-      const orphans = old.filter(p => !referenced.has(p)).slice(0, ORPHAN_MAX_REMOVALS - removed)
+      const orphanAll = old.filter(p => !referenced.has(p))
+      if (orphanAll.length >= ORPHAN_BREAKER_MIN && orphanAll.length * 2 > old.length) {
+        throw new OrphanSweepAbortedError(orphanAll.length, old.length)
+      }
+      const orphans = orphanAll.slice(0, ORPHAN_MAX_REMOVALS - removed)
       if (orphans.length > 0) {
         await remove(orphans)
         removed += orphans.length

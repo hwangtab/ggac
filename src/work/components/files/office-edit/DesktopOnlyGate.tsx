@@ -28,8 +28,8 @@ export default function DesktopOnlyGate({
         <EmptyState
           icon={MonitorIcon}
           as="h1"
-          title="PC 에서 열어 주세요"
-          description="문서 편집은 넓은 화면과 마우스가 있는 PC 에서만 쓸 수 있습니다."
+          title="PC에서 열어 주세요"
+          description="문서 편집은 넓은 화면과 마우스가 있는 PC에서만 쓸 수 있습니다."
         >
           <Link href={backHref} className={buttonVariants({ size: 'sm' })}>
             돌아가기
