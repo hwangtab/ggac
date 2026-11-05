@@ -1,7 +1,7 @@
 import { test, expect, request as apiRequest } from '@playwright/test'
 import { createClient } from '@libsql/client'
 
-import { assertLocalTurso, storageStatePath } from './helpers/authState'
+import { assertLocalTurso, readFixtures, storageStatePath } from './helpers/authState'
 import { expectReachedStorage } from './helpers/storageRoute'
 
 assertLocalTurso()
@@ -435,6 +435,105 @@ test.describe('관리자 메일함 API 경계', () => {
   })
 
   /**
+   * 상세 검색(첨부·기간). 픽스처의 첨부는 `content_id`가 없는 PDF라 "진짜 첨부"로 센다.
+   */
+  test('첨부·기간 필터가 걸리고 없는 날짜는 400이다', async ({ baseURL }) => {
+    const directorCtx = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('director'),
+    })
+    try {
+      const res = await directorCtx.get('/api/admin/mailbox?limit=100&has=attachment')
+      expect(res.status()).toBe(200)
+      const emails = (await res.json()).data?.emails ?? []
+      const ids = emails.map((e: { id: string }) => e.id)
+      expect(ids).toContain(EMAIL_DONE_ID)
+      expect(ids).not.toContain(EMAIL_PENDING_ID)
+      expect(emails.find((e: { id: string }) => e.id === EMAIL_DONE_ID)?.attachment_count).toBe(1)
+
+      // 픽스처는 방금 받은 메일이다 — 먼 과거로 끝나는 기간에는 없다.
+      const past = await directorCtx.get('/api/admin/mailbox?limit=100&before=2020-01-01')
+      expect(past.status()).toBe(200)
+      expect(
+        ((await past.json()).data?.emails ?? []).map((e: { id: string }) => e.id)
+      ).not.toContain(EMAIL_DONE_ID)
+
+      for (const query of [
+        'after=2026-02-31',
+        'before=2026-1-1',
+        'has=image',
+        'after=2026-03-02&before=2026-03-01',
+      ]) {
+        expect((await directorCtx.get(`/api/admin/mailbox?${query}`)).status(), query).toBe(400)
+      }
+    } finally {
+      await directorCtx.dispose()
+    }
+  })
+
+  /**
+   * 발신자 카드의 회원 매칭은 **관리자에게만** 간다. 이사 응답에는 `member` 키 자체가 없어야 한다 — null이면
+   * "회원이 아니다"로 읽혀 그것도 명부 정보다.
+   */
+  test('발신자 카드: 이사는 집계만 받고 회원 매칭은 관리자만 받는다', async ({
+    baseURL,
+    request,
+  }) => {
+    const url = `/api/admin/mailbox/sender?email=${encodeURIComponent(SENDER_DONE_EMAIL)}`
+    expect((await request.get(url)).status()).toBe(401)
+
+    const otherCtx = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('other'),
+    })
+    const directorCtx = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('director'),
+    })
+    const adminCtx = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('admin'),
+    })
+    try {
+      expect((await otherCtx.get(url)).status()).toBe(403)
+
+      const director = await directorCtx.get(url)
+      expect(director.status()).toBe(200)
+      const directorData = (await director.json()).data
+      expect(directorData.sender.email).toBe(SENDER_DONE_EMAIL)
+      expect(directorData.sender.name).toBe(SENDER_DONE_NAME)
+      expect(directorData.sender.inbound_count).toBeGreaterThanOrEqual(1)
+      expect('member' in directorData).toBe(false)
+
+      const admin = await adminCtx.get(url)
+      expect(admin.status()).toBe(200)
+      const adminData = (await admin.json()).data
+      expect('member' in adminData).toBe(true)
+      expect(adminData.member).toBeNull()
+
+      // 관리자 본인 주소로 물으면 매칭된다 — 배지 칸 말고는 내려가지 않는다.
+      const adminId = readFixtures().users.admin
+      const client = createClient({ url: process.env.TURSO_DATABASE_URL! })
+      const adminEmail = await client
+        .execute({ sql: 'SELECT email FROM member_profiles WHERE id = ?', args: [adminId] })
+        .then(res => String(res.rows[0]?.email ?? ''))
+        .finally(() => client.close())
+      const self = await adminCtx.get(
+        `/api/admin/mailbox/sender?email=${encodeURIComponent(adminEmail)}`
+      )
+      const member = (await self.json()).data?.member
+      expect(member?.id).toBe(adminId)
+      expect(Object.keys(member).sort()).toEqual(
+        ['display_name', 'id', 'is_active', 'registration_status'].sort()
+      )
+
+      expect((await directorCtx.get('/api/admin/mailbox/sender?email=%3C%3E')).status()).toBe(400)
+    } finally {
+      await Promise.all([otherCtx.dispose(), directorCtx.dispose(), adminCtx.dispose()])
+    }
+  })
+
+  /**
    * 스코프 대조(브리프 B) — 이번 변경의 핵심 보안 수정. 메일
    * A(EMAIL_DONE_ID)의 첨부 id를 메일 B(EMAIL_SCOPE_OTHER_ID)의 경로에
    * 넣으면, 첨부는 실재하지만 그 메일의 것이 아니므로 404여야 한다. 관리자
@@ -698,6 +797,11 @@ test.describe('관리자 메일함 페이지 인가', () => {
       await page.getByRole('button', { name: SENDER_DONE_NAME, exact: true }).first().click()
       await expect(page).toHaveURL(/[?&]from=sender-done%40example\.com/, { timeout: 15000 })
       await expect(page.getByLabel('보낸 사람 필터 해제')).toBeVisible()
+      const card = page.getByTestId('sender-card')
+      await expect(card).toContainText(SENDER_DONE_EMAIL)
+      await expect(card).toContainText('받은 메일 1통')
+      // 이사 화면에는 회원 매칭 줄이 아예 없다.
+      await expect(card).not.toContainText('회원')
       await expect(page.getByText(LONG_SUBJECT_PREFIX, { exact: false }).first()).toBeVisible()
       await expect(page.getByText(PENDING_SUBJECT)).toHaveCount(0)
 

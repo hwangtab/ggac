@@ -6,6 +6,7 @@ import { logSecurityEvent } from '@/utils/security'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { listInboundEmails } from '@/db/queries/mailbox'
 import { normalizeSenderDomain, parseMailbox } from '@/lib/mail/senderAddress'
+import { DAY_MS, parseSeoulDay } from '@/lib/mail/seoulDay'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -49,6 +50,24 @@ export const GET = defineApiRoute<undefined, BoardAuthSuccess>({
       throw ApiError.badRequest('도메인이 올바르지 않습니다.')
     }
 
+    // 기간: `after`는 그날부터, `before`는 그날까지(포함) — 쿼리는 배타 상한이라 다음 날 0시를 넘긴다.
+    const afterParam = params.get('after')
+    const beforeParam = params.get('before')
+    const receivedFrom = afterParam ? parseSeoulDay(afterParam) : null
+    const beforeDay = beforeParam ? parseSeoulDay(beforeParam) : null
+    if ((afterParam && !receivedFrom) || (beforeParam && !beforeDay)) {
+      throw ApiError.badRequest('날짜는 YYYY-MM-DD 형식이어야 합니다.')
+    }
+    const receivedUntil = beforeDay ? new Date(beforeDay.getTime() + DAY_MS) : null
+    if (receivedFrom && receivedUntil && receivedFrom >= receivedUntil) {
+      throw ApiError.badRequest('시작일이 종료일보다 늦습니다.')
+    }
+
+    const has = params.get('has')
+    if (has && has !== 'attachment') {
+      throw ApiError.badRequest('알 수 없는 조건입니다.')
+    }
+
     const result = await listInboundEmails({
       status: status ?? undefined,
       search,
@@ -56,6 +75,9 @@ export const GET = defineApiRoute<undefined, BoardAuthSuccess>({
       offset,
       fromEmail: fromEmail || undefined,
       fromDomain: fromDomain ?? undefined,
+      hasAttachment: has === 'attachment',
+      receivedFrom: receivedFrom ?? undefined,
+      receivedUntil: receivedUntil ?? undefined,
     })
     return ApiSuccess.ok({
       emails: result.emails,

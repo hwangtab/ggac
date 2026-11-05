@@ -26,6 +26,8 @@ type Props = {
   onClose: () => void
   /** 발송이 끝났다(나갔거나, 나갔는지 확인해야 하는 상태). 목록을 새로 읽는 데 쓴다. */
   onDone: () => void
+  /** 받는 사람을 미리 채운다(발신자 카드의 "메일 쓰기"). 발송 전에 서버가 다시 검증한다. */
+  initialTo?: string[]
 }
 
 type Outcome = { tone: 'ok' | 'warn'; message: string }
@@ -146,11 +148,11 @@ function isExternal(address: string): boolean {
  *  - 유지: 성공, "처리 중/확인 필요"(409), 네트워크 오류(요청이 닿았는지 모른다 — 같은 키로 다시 보내도 안전하다).
  *  - 새로 발급: 서버가 거절했다(검증 실패·상한 초과·발송 거절). 이 키의 행은 이미 끝난 상태라 재사용할 수 없다.
  */
-export default function ComposeModal({ quota, onClose, onDone }: Props) {
+export default function ComposeModal({ quota, onClose, onDone, initialTo }: Props) {
   const keyRef = useRef<string>(crypto.randomUUID())
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const [to, setTo] = useState<string[]>([])
+  const [to, setTo] = useState<string[]>(() => initialTo ?? [])
   const [cc, setCc] = useState<string[]>([])
   const [bcc, setBcc] = useState<string[]>([])
   const [showCcBcc, setShowCcBcc] = useState(false)

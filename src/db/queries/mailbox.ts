@@ -6,7 +6,7 @@
  * 응답 조립이나 인가 판정에 쓰는 것은 아무것도 이 파일에 들여오지 않는다.
  */
 
-import { and, asc, desc, eq, gte, inArray, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, inArray, lt, or, sql } from 'drizzle-orm'
 
 import { db } from '../client.ts'
 import {
@@ -15,6 +15,7 @@ import {
   inboundEmailReplies,
   outboundEmails,
   outboundEmailAttachments,
+  memberProfiles,
 } from '../schema/index.ts'
 
 import {
@@ -54,7 +55,24 @@ export type ListInboundOptions = {
   fromEmail?: string
   /** 정규화된 도메인(`a.org`). `from_email`이 `@a.org`로 끝나는 행. */
   fromDomain?: string
+  /** 첨부(인라인 이미지 제외)가 있는 메일만. */
+  hasAttachment?: boolean
+  /** `received_at >= receivedFrom` */
+  receivedFrom?: Date
+  /** `received_at < receivedUntil` (배타 — 호출부가 "그날 끝"을 다음 날 0시로 넘긴다) */
+  receivedUntil?: Date
 }
+
+/**
+ * "첨부가 있다"로 셀 첨부 — 본문에 박힌 인라인 이미지(`cid:` 참조가 있는 `image/*`)는 뺀다. 서명 로고 하나로
+ * 거의 모든 메일이 "첨부 있음"이 되는 것을 막는다. 목록의 클립 아이콘과 `hasAttachment` 필터가 같은 규칙을 쓴다.
+ *
+ * 바깥 행 참조는 표 이름까지 박아 쓴다 — Drizzle은 단일 표 select 목록에서 `inboundEmails.id`를 `"id"`로만
+ * 그려, 서브쿼리 안에서 첨부 행 자신의 `id`로 묶여 버린다(조건절에서는 맞고 select 목록에서만 0이 나왔다).
+ */
+const realAttachmentCount = sql<number>`(select count(*) from ${inboundEmailAttachments} a
+  where a.email_id = "inbound_emails"."id"
+    and not (a.content_id is not null and coalesce(a.content_type, '') like 'image/%'))`
 
 function rowToEmail(row: Record<string, unknown>): Record<string, unknown> {
   const snake = toSnakeCase(row)
@@ -196,11 +214,26 @@ export async function listInboundEmails(
     )
   }
 
+  if (options.hasAttachment) {
+    conditions.push(sql`${realAttachmentCount} > 0`)
+  }
+
+  if (options.receivedFrom) {
+    conditions.push(gte(inboundEmails.receivedAt, options.receivedFrom))
+  }
+
+  if (options.receivedUntil) {
+    conditions.push(lt(inboundEmails.receivedAt, options.receivedUntil))
+  }
+
   if (options.search) {
+    // 본문은 `body_text`만 본다 — `body_html`은 태그·속성까지 걸려 엉뚱한 메일이 나온다. 수신량이 하루 수십
+    // 건이라 LIKE 전체 훑기로 충분하다. 느려지면 FTS5로 옮긴다.
     conditions.push(
       or(
         likeContains(inboundEmails.subject, options.search),
-        likeContains(inboundEmails.fromAddress, options.search)
+        likeContains(inboundEmails.fromAddress, options.search),
+        likeContains(inboundEmails.bodyText, options.search)
       )
     )
   }
@@ -224,6 +257,7 @@ export async function listInboundEmails(
     receivedAt: inboundEmails.receivedAt,
     createdAt: inboundEmails.createdAt,
     updatedAt: inboundEmails.updatedAt,
+    attachmentCount: realAttachmentCount,
   }
 
   const rowsQuery = db
@@ -241,8 +275,91 @@ export async function listInboundEmails(
   ])
 
   return {
-    emails: rows.map(rowToEmail),
+    emails: rows.map(row => ({
+      ...rowToEmail(row),
+      attachment_count: Number(row.attachmentCount ?? 0),
+    })),
     total_count: Number(countRows[0]?.count ?? 0),
+  }
+}
+
+export type SenderSummary = {
+  email: string
+  /** 가장 최근 메일의 표시 이름. */
+  name: string | null
+  inbound_count: number
+  first_received_at: string | null
+  last_received_at: string | null
+  /** 이 사람의 메일에 우리가 보낸 답장 수. */
+  reply_count: number
+  /** 이 사람을 받는 사람·참조로 넣어 **나간**(`sent`) 새 메일 수. */
+  sent_count: number
+}
+
+/**
+ * 발신자 카드. `email`은 정규화된 주소(`from_email`과 같은 꼴)여야 한다.
+ *
+ * 새 메일 수는 **받는 사람·참조만** 센다. 숨은참조(`bcc_addresses`)는 넣지 않는다 — 이사·감사도 이 카드를
+ * 보므로 BCC까지 세면 "이 주소의 숫자가 늘었다"로 BCC 수신자를 알아낼 수 있다(`listSentMail`과 같은 규칙).
+ * 새 메일의 주소는 `normalizeAddress`(composeValidation)가 소문자 순수 주소로 저장하므로 완전 일치로 본다.
+ */
+export async function getSenderSummary(email: string): Promise<SenderSummary> {
+  const [inbound] = await db.all<{ n: number; first: number | null; last: number | null }>(
+    sql`select count(*) as n, min(received_at) as first, max(received_at) as last
+        from inbound_emails where from_email = ${email}`
+  )
+  const [named] = await db.all<{ from_name: string | null }>(
+    sql`select from_name from inbound_emails where from_email = ${email} and from_name is not null
+        order by received_at desc limit 1`
+  )
+  const [replies] = await db.all<{ n: number }>(
+    sql`select count(*) as n from inbound_email_replies r
+        join inbound_emails ie on ie.id = r.email_id where ie.from_email = ${email}`
+  )
+  const [sent] = await db.all<{ n: number }>(
+    sql`select count(*) as n from outbound_emails o where o.status = 'sent' and (
+          exists (select 1 from json_each(o.to_addresses) where value = ${email})
+          or exists (select 1 from json_each(o.cc_addresses) where value = ${email}))`
+  )
+  const at = (ms: number | null) =>
+    ms === null || ms === undefined ? null : toIso(new Date(Number(ms)))
+  return {
+    email,
+    name: named?.from_name ?? null,
+    inbound_count: Number(inbound?.n ?? 0),
+    first_received_at: at(inbound?.first ?? null),
+    last_received_at: at(inbound?.last ?? null),
+    reply_count: Number(replies?.n ?? 0),
+    sent_count: Number(sent?.n ?? 0),
+  }
+}
+
+/**
+ * 이 주소로 가입한 회원. 없으면 null. 회원 정보라 **누구에게 보여 줄지는 라우트가 정한다**(지금은 관리자만).
+ * 고르는 칸은 화면 배지에 필요한 것뿐이다 — 연락처·계좌 같은 칸은 꺼내지 않는다.
+ */
+export async function findMemberByEmail(email: string): Promise<{
+  id: string
+  display_name: string
+  registration_status: string
+  is_active: boolean
+} | null> {
+  const [row] = await db
+    .select({
+      id: memberProfiles.id,
+      displayName: memberProfiles.displayName,
+      registrationStatus: memberProfiles.registrationStatus,
+      isActive: memberProfiles.isActive,
+    })
+    .from(memberProfiles)
+    .where(sql`lower(${memberProfiles.email}) = ${email}`)
+    .limit(1)
+  if (!row) return null
+  return {
+    id: row.id,
+    display_name: row.displayName,
+    registration_status: String(row.registrationStatus ?? ''),
+    is_active: Boolean(row.isActive),
   }
 }
 
