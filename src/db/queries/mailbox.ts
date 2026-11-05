@@ -65,6 +65,8 @@ export type ListInboundOptions = {
   receivedFrom?: Date
   /** `received_at < receivedUntil` (배타 — 호출부가 "그날 끝"을 다음 날 0시로 넘긴다) */
   receivedUntil?: Date
+  /** 이 사람이 담당자인 메일만("내 담당"). */
+  assignedTo?: string
 }
 
 /**
@@ -222,6 +224,10 @@ export async function listInboundEmails(
     )
   }
 
+  if (options.assignedTo) {
+    conditions.push(eq(inboundEmails.assignedTo, options.assignedTo))
+  }
+
   if (options.hasAttachment) {
     conditions.push(sql`${realAttachmentCount} > 0`)
   }
@@ -270,6 +276,10 @@ export async function listInboundEmails(
     // 같은 대화의 받은 메일 수(자기 포함). 바깥 열은 `realAttachmentCount`와 같은 이유로 표 이름까지 박는다.
     threadCount: sql<number>`(select count(*) from inbound_emails t
       where t.thread_id = "inbound_emails"."thread_id")`,
+    assignedTo: inboundEmails.assignedTo,
+    // 담당자 이름(표시 이름만). 바깥 열은 위의 개수들과 같은 이유로 표 이름까지 박는다.
+    assigneeName: sql<string | null>`(select display_name from member_profiles m
+      where m.id = "inbound_emails"."assigned_to")`,
     // 내부 메모 수 — 개수만 센다. 메모 본문은 이 파일에서 읽지 않는다(발송 경로가 들여오는 파일이라 메모 쿼리는 따로 둔다).
     noteCount: sql<number>`(select count(*) from inbound_email_notes n
       where n.email_id = "inbound_emails"."id")`,
@@ -291,9 +301,10 @@ export async function listInboundEmails(
 
   return {
     emails: rows.map(row => {
-      const { attachmentCount, threadCount, noteCount, ...rest } = row
+      const { attachmentCount, threadCount, noteCount, assigneeName, ...rest } = row
       return {
         ...rowToEmail(rest),
+        assignee_name: assigneeName ?? null,
         attachment_count: Number(attachmentCount ?? 0),
         thread_count: Number(threadCount ?? 1),
         note_count: Number(noteCount ?? 0),
@@ -552,6 +563,36 @@ export async function updateInboundStatus(
     .from(inboundEmails)
     .where(eq(inboundEmails.id, id))
   return existing ? ('conflict' as const) : ('missing' as const)
+}
+
+/**
+ * 담당자 지정·해제 — 상태 변경과 같은 낙관적 동시성. 화면이 알던 담당자(`expected`, 없으면 null)와 지금 값이 다르면
+ * (다른 관리자가 먼저 바꿈) 아무것도 바꾸지 않고 `conflict`. 비교는 `IS`로 한다 — "담당자 없음"(NULL)도 기대값이다.
+ * 누가 담당자가 될 수 있는지는 라우트가 판정한다.
+ */
+export async function setInboundAssignee(input: {
+  id: string
+  expected: string | null
+  next: string | null
+  by: string
+}): Promise<'updated' | 'conflict' | 'missing'> {
+  const updated = await db
+    .update(inboundEmails)
+    .set({
+      assignedTo: input.next,
+      assignedAt: input.next ? new Date() : null,
+      assignedBy: input.next ? input.by : null,
+    })
+    .where(
+      and(eq(inboundEmails.id, input.id), sql`${inboundEmails.assignedTo} IS ${input.expected}`)
+    )
+    .returning({ id: inboundEmails.id })
+  if (updated.length > 0) return 'updated'
+  const [existing] = await db
+    .select({ id: inboundEmails.id })
+    .from(inboundEmails)
+    .where(eq(inboundEmails.id, input.id))
+  return existing ? 'conflict' : 'missing'
 }
 
 export type BulkStatusOutcome = { updated: string[]; conflict: string[]; missing: string[] }

@@ -238,6 +238,77 @@ test('일괄 상태 변경: 이미 목표 상태인 메일은 바뀐 것으로 �
   assert.deepEqual(outcome, { updated: [a.id], conflict: [], missing: [] })
 })
 
+async function boardPerson(name) {
+  const id = crypto.randomUUID()
+  await setupClient.execute({
+    sql: `insert into member_profiles (id, display_name, email) values (?, ?, ?)`,
+    args: [id, name, `${id}@assignee.example`],
+  })
+  return id
+}
+
+test('담당자 지정은 기대한 담당자(없음 포함)일 때만 먹고, 목록이 이름과 "내 담당"을 준다', async () => {
+  const mod = await loadFreshMailboxModule()
+  const director = await boardPerson('담당이사')
+  const auditor = await boardPerson('담당감사')
+  const admin = await boardPerson('지정관리자')
+  const mail = await mod.insertInboundEmail(sample())
+
+  // 처음은 "없음"(null)이 기대값이다
+  assert.equal(
+    await mod.setInboundAssignee({ id: mail.id, expected: auditor, next: director, by: admin }),
+    'conflict'
+  )
+  assert.equal(
+    await mod.setInboundAssignee({ id: mail.id, expected: null, next: director, by: admin }),
+    'updated'
+  )
+  const row = await mod.getInboundEmail(mail.id)
+  assert.equal(row.assigned_to, director)
+  assert.equal(row.assigned_by, admin)
+  assert.ok(row.assigned_at)
+
+  // 다른 관리자가 먼저 바꾼 뒤 옛 기대값으로 오면 conflict
+  assert.equal(
+    await mod.setInboundAssignee({ id: mail.id, expected: director, next: auditor, by: admin }),
+    'updated'
+  )
+  assert.equal(
+    await mod.setInboundAssignee({ id: mail.id, expected: director, next: null, by: admin }),
+    'conflict'
+  )
+
+  const mine = await mod.listInboundEmails({ limit: 100, offset: 0, assignedTo: auditor })
+  assert.deepEqual(
+    mine.emails.map(e => e.id),
+    [mail.id]
+  )
+  assert.equal(mine.emails[0].assignee_name, '담당감사')
+  assert.equal(
+    (await mod.listInboundEmails({ limit: 100, offset: 0, assignedTo: director })).total_count,
+    0
+  )
+
+  // 해제하면 시각·지정한 사람도 비운다
+  assert.equal(
+    await mod.setInboundAssignee({ id: mail.id, expected: auditor, next: null, by: admin }),
+    'updated'
+  )
+  const cleared = await mod.getInboundEmail(mail.id)
+  assert.equal(cleared.assigned_to, null)
+  assert.equal(cleared.assigned_at, null)
+  assert.equal(cleared.assigned_by, null)
+  assert.equal(
+    await mod.setInboundAssignee({
+      id: crypto.randomUUID(),
+      expected: null,
+      next: null,
+      by: admin,
+    }),
+    'missing'
+  )
+})
+
 test('검색어의 %는 와일드카드로 해석되지 않는다', async () => {
   const { insertInboundEmail, listInboundEmails } = await loadFreshMailboxModule()
   await insertInboundEmail(sample({ subject: '정상 제목' }))

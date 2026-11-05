@@ -1,4 +1,4 @@
-import { test, expect, request as apiRequest } from '@playwright/test'
+import { test, expect, request as apiRequest, type APIRequestContext } from '@playwright/test'
 import { createClient } from '@libsql/client'
 
 import { assertLocalTurso, readFixtures, storageStatePath } from './helpers/authState'
@@ -1190,6 +1190,170 @@ test.describe('메일함 내부 메모', () => {
       await expect(page.getByText(/^메모 \d+$/).first()).toBeVisible()
     } finally {
       await ctx.close()
+    }
+  })
+})
+
+/**
+ * 담당자 지정 — 지정·해제는 관리자만, 후보는 지금 이사·감사·관리자인 사람만. 낙관적 동시성(기대한 담당자). 푸시는
+ * E2E 서버에 VAPID 키가 없어 no-op이라 링크(`?mail=<id>`)로 메일이 바로 열리는지만 본다.
+ */
+test.describe('메일함 담당자', () => {
+  test.describe.configure({ mode: 'serial' })
+  const ASSIGN_EMAIL_ID = '00000000-0000-4000-8000-00000000c030'
+  const ASSIGN_SUBJECT = 'MAILBOX-E2E-ASSIGNEE'
+  const assignUrl = `/api/admin/mailbox/${ASSIGN_EMAIL_ID}/assignee`
+
+  async function exec(sql: string, args: (string | number | null)[] = []) {
+    const client = createClient({ url: process.env.TURSO_DATABASE_URL! })
+    try {
+      return await client.execute({ sql, args })
+    } finally {
+      client.close()
+    }
+  }
+  async function assignedTo(): Promise<string | null> {
+    const row = (
+      await exec('SELECT assigned_to FROM inbound_emails WHERE id = ?', [ASSIGN_EMAIL_ID])
+    ).rows[0]
+    return (row?.assigned_to as string | null) ?? null
+  }
+  async function ctxFor(baseURL: string | undefined, role: string) {
+    return apiRequest.newContext({ baseURL, storageState: storageStatePath(role) })
+  }
+
+  test.beforeAll(async () => {
+    await exec('DELETE FROM inbound_emails WHERE id = ?', [ASSIGN_EMAIL_ID])
+    await exec(
+      `INSERT INTO inbound_emails
+        (id, thread_id, resend_email_id, from_address, from_email, to_addresses, subject, status,
+         body_fetch_status, received_at)
+       VALUES (?, ?, 'authz-mailbox-assignee', 'assign@example.com', 'assign@example.com',
+               '["mailbox@ggac.kr"]', ?, 'read', 'done', ?)`,
+      [ASSIGN_EMAIL_ID, ASSIGN_EMAIL_ID, ASSIGN_SUBJECT, Date.now()]
+    )
+  })
+  test.afterAll(async () => {
+    await exec('DELETE FROM inbound_emails WHERE id = ?', [ASSIGN_EMAIL_ID])
+  })
+
+  test('지정은 관리자만 — 비로그인 401, 이사·일반 조합원 403이고 값이 그대로다', async ({
+    baseURL,
+    request,
+  }) => {
+    const users = readFixtures().users
+    const data = { assignee_id: users.director, expected_assignee_id: null }
+    expect((await request.patch(assignUrl, { data })).status()).toBe(401)
+    for (const role of ['director', 'auditor', 'other']) {
+      const ctx = await ctxFor(baseURL, role)
+      try {
+        expect((await ctx.patch(assignUrl, { data })).status(), role).toBe(403)
+        expect((await ctx.get('/api/admin/mailbox/assignees')).status(), role).toBe(403)
+      } finally {
+        await ctx.dispose()
+      }
+    }
+    expect(await assignedTo()).toBeNull()
+  })
+
+  test('후보는 지금 이사·감사·관리자뿐이고, 그 밖의 사람은 지정할 수 없다', async ({ baseURL }) => {
+    const users = readFixtures().users
+    const admin = await ctxFor(baseURL, 'admin')
+    try {
+      const options = (await (await admin.get('/api/admin/mailbox/assignees')).json()).data
+        .assignees as { id: string }[]
+      const ids = options.map(o => o.id)
+      for (const role of ['admin', 'director', 'auditor'] as const) {
+        expect(ids, role).toContain(users[role])
+      }
+      for (const role of ['other', 'pending'] as const) {
+        expect(ids, role).not.toContain(users[role])
+      }
+
+      for (const assignee of [users.other, users.pending, 'not-a-uuid']) {
+        const res = await admin.patch(assignUrl, {
+          data: { assignee_id: assignee, expected_assignee_id: null },
+        })
+        expect(res.status(), String(assignee)).toBe(400)
+      }
+      expect(await assignedTo()).toBeNull()
+    } finally {
+      await admin.dispose()
+    }
+  })
+
+  test('관리자가 지정하고, 옛 기대값으로 다시 오면 409, "내 담당"은 지정받은 사람에게만 보인다', async ({
+    baseURL,
+  }) => {
+    const users = readFixtures().users
+    const admin = await ctxFor(baseURL, 'admin')
+    const director = await ctxFor(baseURL, 'director')
+    const auditor = await ctxFor(baseURL, 'auditor')
+    try {
+      const res = await admin.patch(assignUrl, {
+        data: { assignee_id: users.director, expected_assignee_id: null },
+      })
+      expect(res.status()).toBe(200)
+      const data = (await res.json()).data
+      expect(data.assigned_to).toBe(users.director)
+      expect(data.assignee_name).toBeTruthy()
+
+      const stale = await admin.patch(assignUrl, {
+        data: { assignee_id: users.auditor, expected_assignee_id: null },
+      })
+      expect(stale.status()).toBe(409)
+      expect(await assignedTo()).toBe(users.director)
+
+      const mineIds = async (ctx: APIRequestContext) =>
+        (
+          (await (await ctx.get('/api/admin/mailbox?assignee=me&limit=100')).json()).data
+            .emails as {
+            id: string
+          }[]
+        ).map(e => e.id)
+      expect(await mineIds(director)).toContain(ASSIGN_EMAIL_ID)
+      expect(await mineIds(auditor)).not.toContain(ASSIGN_EMAIL_ID)
+      expect((await director.get('/api/admin/mailbox?assignee=someone')).status()).toBe(400)
+
+      const detail = (await (await auditor.get(`/api/admin/mailbox/${ASSIGN_EMAIL_ID}`)).json())
+        .data.email
+      expect(detail.assigned_to).toBe(users.director)
+      expect(detail.assignee_name).toBe(data.assignee_name)
+    } finally {
+      await Promise.all([admin.dispose(), director.dispose(), auditor.dispose()])
+    }
+  })
+
+  test('화면: 푸시 링크(?mail=)로 들어오면 그 메일이 열리고 주소에서 지워진다, 관리자는 목록에서 담당자를 바꾼다', async ({
+    browser,
+  }) => {
+    const users = readFixtures().users
+    const directorCtx = await browser.newContext({ storageState: storageStatePath('director') })
+    try {
+      const page = await directorCtx.newPage()
+      await page.goto(`/board-room/mailbox?mail=${ASSIGN_EMAIL_ID}`, {
+        waitUntil: 'domcontentloaded',
+      })
+      await expect(page.getByRole('heading', { name: ASSIGN_SUBJECT })).toBeVisible({
+        timeout: 15000,
+      })
+      await expect(page).not.toHaveURL(/[?&]mail=/)
+      await expect(page.getByTestId('mail-assignee')).toContainText('담당:')
+      // 이사 화면에는 지정 도구가 없다
+      await expect(page.getByLabel('담당자 지정')).toHaveCount(0)
+    } finally {
+      await directorCtx.close()
+    }
+
+    const adminCtx = await browser.newContext({ storageState: storageStatePath('admin') })
+    try {
+      const page = await adminCtx.newPage()
+      await page.goto('/admin/mailbox', { waitUntil: 'domcontentloaded' })
+      await page.getByText(ASSIGN_SUBJECT, { exact: true }).first().click({ timeout: 15000 })
+      await page.getByLabel('담당자 지정').selectOption(users.auditor)
+      await expect.poll(assignedTo).toBe(users.auditor)
+    } finally {
+      await adminCtx.close()
     }
   })
 })
