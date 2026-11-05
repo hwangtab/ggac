@@ -19,7 +19,12 @@ import {
   hasValidFileSignature,
 } from '@/utils/fileUploadValidation'
 import { deleteBoardDocument, putBoardDocument } from '@/lib/storage/privateProvider'
-import { createDocument, documentFilePathExists, listDocuments } from '@/db/queries/board'
+import {
+  createDocument,
+  createDocumentIfPathFree,
+  documentFilePathExists,
+  listDocuments,
+} from '@/db/queries/board'
 import { scheduleBoardDocumentTextExtraction } from '@work/lib/files/extract-schedule'
 import {
   BOARD_DOCUMENT_MAX_FILE_SIZE,
@@ -221,7 +226,8 @@ export async function POST(request: NextRequest) {
  * 순서: requireBoardMember(비로그인 401·조합원 403) → 사용자 단위 쓰기 한도(올리기 한 번은 준비 단계가 `FILE_UPLOAD`로
  * 이미 셌다) → 입력(제목·분류·열람 범위 — 조합원 공개는 관리자만, 경로는 **내 폴더**만) → 이미 쓰는 경로면 409(지우지
  * 않는다 — 남의 행의 파일이다) → 객체 메타(없으면 409 · 크기·형식이 어긋나면 지우고 400) → 앞머리 서명·텍스트 널 바이트
- * (어긋나면 지우고 400) → 행 삽입(실패하면 객체를 되돌린다) → 본문 추출 예약.
+ * (어긋나면 지우고 400) → 경로 확인과 행 삽입을 한 트랜잭션으로(그 사이 다른 등록이 차지했으면 409 — 지우지 않는다 ·
+ * 실패하면 경로가 비어 있을 때만 객체를 되돌린다) → 본문 추출 예약.
  */
 async function registerUploadedDocument(request: NextRequest): Promise<NextResponse> {
   const auth = await requireBoardMember()
@@ -297,9 +303,11 @@ async function registerUploadedDocument(request: NextRequest): Promise<NextRespo
         throw ApiError.badRequest('텍스트 파일 내용이 올바르지 않습니다.')
       }
 
-      let doc: { id: string }
+      // 확인과 삽입을 한 트랜잭션으로 — 위의 확인은 빠른 거절일 뿐, 거의 동시에 온 두 등록은 둘 다 그것을 지난다.
+      // 진 쪽(null)은 객체를 지우지 않는다: 이긴 쪽 행의 파일이다.
+      let doc: { id: string } | null
       try {
-        doc = await createDocument({
+        doc = await createDocumentIfPathFree({
           title,
           category,
           filePath,
@@ -313,9 +321,16 @@ async function registerUploadedDocument(request: NextRequest): Promise<NextRespo
         log.error('메타데이터 삽입 실패', {
           error: insertError instanceof Error ? insertError.message : String(insertError),
         })
-        await discard()
+        // 실패가 경합(잠금) 때문이면 그 사이 다른 등록이 이 경로를 차지했을 수 있다 — 비어 있다고 확인될 때만 지운다.
+        // 확인도 못 하면 남겨 둔다(행이 없으면 고아 청소가 48시간 뒤 치운다).
+        const stillFree = await documentFilePathExists(filePath).then(
+          exists => !exists,
+          () => false
+        )
+        if (stillFree) await discard()
         throw ApiError.internalServerError('서류 등록에 실패했습니다.')
       }
+      if (!doc) throw new ApiError('이미 등록된 파일입니다.', 409)
 
       // 업무 검색이 파일 속 글자도 찾도록 본문 추출을 예약한다(03 §10) — multipart 분기와 같다
       scheduleBoardDocumentTextExtraction([doc.id])

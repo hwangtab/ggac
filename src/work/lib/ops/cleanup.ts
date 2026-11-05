@@ -10,6 +10,11 @@ import {
   type PurgeCursor,
 } from '@/db/queries/work/cleanup'
 import { deleteStalePushSubscriptions } from '@/db/queries/work/push'
+import {
+  sweepBoardDocumentOrphans,
+  type BoardDocumentOrphanSweepResult,
+} from '@/lib/boardDocuments/orphans'
+import { OrphanSweepAbortedError } from '@/lib/memberDocuments/retention'
 import { logAudit } from '@work/lib/audit/log'
 import { draftLayoutPaths } from '@work/lib/files/doc-edit-draft'
 import { PENDING_RETENTION_HOURS } from '@work/lib/files/schema'
@@ -40,6 +45,11 @@ export type PendingPurgeResult = {
   objects: number
   unsafe: number
   orphans: { scanned: number; removed: number; capped: boolean } | null
+  /**
+   * 행 없이 남은 이사회 서류 객체(`board-documents/` — 올리고 등록하지 않은 업로드·승격 전에 끊긴 앱 편집 저장본) 청소.
+   * 실패하면 null(위 결과를 바꾸지 않는다), 대량 삭제 차단기가 멈추면 `aborted: true`.
+   */
+  boardDocumentOrphans: (BoardDocumentOrphanSweepResult & { aborted?: true }) | null
   /** 행 기준 정리가 저장소·DB 오류로 중간에 멈췄다(남은 행은 다음 실행이 다시 시도한다) */
   error?: 'storage' | 'query'
 }
@@ -54,7 +64,13 @@ export async function purgeStalePendingUploads(
 ): Promise<PendingPurgeResult> {
   const retentionMs = PENDING_RETENTION_HOURS * 3600 * 1000
   const cutoff = new Date(now.getTime() - retentionMs)
-  const result: PendingPurgeResult = { purged: 0, objects: 0, unsafe: 0, orphans: null }
+  const result: PendingPurgeResult = {
+    purged: 0,
+    objects: 0,
+    unsafe: 0,
+    orphans: null,
+    boardDocumentOrphans: null,
+  }
 
   for (let round = 0; round < PENDING_MAX_ROUNDS; round++) {
     let rows: Awaited<ReturnType<typeof listStalePendingUploads>>
@@ -135,6 +151,18 @@ export async function purgeStalePendingUploads(
     })
   } catch (e) {
     console.error('[purge-pending-uploads] 고아 객체 정리 실패:', e instanceof Error ? e.name : e)
+  }
+
+  // 이사회 서류 고아 청소 — 실패해도 위 단계의 결과·응답을 바꾸지 않는다(다음 실행이 다시 한다)
+  try {
+    result.boardDocumentOrphans = await sweepBoardDocumentOrphans(now)
+  } catch (e) {
+    if (e instanceof OrphanSweepAbortedError) {
+      console.error(`[purge-pending-uploads] 서류 고아 청소 멈춤: ${e.message}`)
+      result.boardDocumentOrphans = { scanned: e.scanned, removed: 0, capped: false, aborted: true }
+    } else {
+      console.error('[purge-pending-uploads] 서류 고아 청소 실패:', e instanceof Error ? e.name : e)
+    }
   }
   return result
 }

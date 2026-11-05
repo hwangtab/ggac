@@ -82,6 +82,8 @@ export function levelAllows(
  * 보낼 사용자 id(중복 없음, 후보 순서 유지).
  * `canAccess(candidate)` — 이 사람이 **지금** 업무툴에 들어올 수 있고 이 채널을 읽을 수 있는가(호출부가
  * `canAccessBoardRoom` + `canReadChannelRow`로 판정한다). 거짓이면 다른 조건과 무관하게 뺀다.
+ * `onlyUserIds` — 주면 이 사람들 가운데서만 고른다(대소문자 무시). 메시지를 고쳐 **새로** 멘션된 사람에게만 보낼 때 쓴다
+ * (고치기 전부터 멘션돼 있던 사람에게 다시 보내지 않는다). 빈 목록이면 아무도 없다.
  */
 export function selectPushRecipients<C extends RecipientCandidate>(input: {
   reason: PushReason
@@ -89,14 +91,18 @@ export function selectPushRecipients<C extends RecipientCandidate>(input: {
   candidates: readonly C[]
   canAccess: (candidate: C) => boolean
   now?: Date
+  onlyUserIds?: readonly string[]
 }): string[] {
   const { reason, message } = input
   if (!reasonApplies(reason, message)) return []
   const now = input.now ?? new Date()
+  const only = input.onlyUserIds ? new Set(input.onlyUserIds.map(id => id.toLowerCase())) : null
+  if (only && only.size === 0) return []
   const out: string[] = []
   const seen = new Set<string>()
   for (const c of input.candidates) {
     if (!c.userId || seen.has(c.userId)) continue
+    if (only && !only.has(c.userId.toLowerCase())) continue
     if (message.authorId && c.userId === message.authorId) continue
     // 채널 비멤버 제외(원본 `join channel_members cm`) — 관리자가 비공개 채널을 읽을 수 있어도 멤버가 아니면 보내지 않는다
     if (!c.memberRole) continue

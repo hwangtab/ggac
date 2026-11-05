@@ -19,6 +19,7 @@ const { isAllowedPushEndpoint, isPublicPushHost, subscribeBodySchema, unsubscrib
 const { buildPushPayload, pushUrl } = await import('../../src/work/lib/push/payload.ts')
 const { deliverPush, isSendableEndpoint } = await import('../../src/work/lib/push/deliver.ts')
 const { isPushSyncFresh, formatPushSyncMark } = await import('../../src/work/lib/push/device.ts')
+const { scheduleEditMentionPush } = await import('../../src/work/lib/messages/edit-mention-push.ts')
 
 // ── 방해 금지(Asia/Seoul) ────────────────────────────────────────────────────
 
@@ -206,6 +207,62 @@ test('같은 사람이 후보에 두 번 있어도 한 번만', () => {
     pick('mention', channelMsg, [cand('a', { mentioned: true }), cand('a', { mentioned: true })]),
     ['a']
   )
+})
+
+test('수신자 좁히기(onlyUserIds): 그 사람들 가운데서만 — 다른 조건은 그대로, 빈 목록이면 아무도 없다', () => {
+  const c = [
+    cand('old', { mentioned: true }),
+    cand('NEW', { mentioned: true }),
+    cand('new-muted', { mentioned: true, notifyLevel: 'off' }),
+  ]
+  const only = ids =>
+    selectPushRecipients({
+      reason: 'mention',
+      message: channelMsg,
+      candidates: c,
+      canAccess: all,
+      now: WEEKDAY_NOON,
+      onlyUserIds: ids,
+    })
+  assert.deepEqual(only(['new', 'new-muted']), ['NEW'], '대소문자 무시 · 뮤트는 여전히 빠진다')
+  assert.deepEqual(only([]), [])
+  assert.deepEqual(pick('mention', channelMsg, c), ['old', 'NEW'], '주지 않으면 예전과 같다')
+})
+
+test('메시지 고침: 새로 멘션된 사람이 있으면 그 사람만으로 멘션 푸시를 예약하고, 없으면 예약하지 않는다', async () => {
+  const calls = []
+  const scheduled = []
+  const deps = {
+    notify: async (messageId, opts) => {
+      calls.push({ messageId, only: [...opts.onlyUserIds] })
+    },
+    schedule: run => scheduled.push(run),
+  }
+  assert.equal(scheduleEditMentionPush({ messageId: 'm1', added: [], ...deps }), false)
+  assert.equal(scheduled.length, 0, '새 멘션이 없으면 after 도 안 돈다')
+
+  assert.equal(scheduleEditMentionPush({ messageId: 'm1', added: ['b', 'b'], ...deps }), true)
+  assert.equal(scheduled.length, 1)
+  assert.equal(calls.length, 0, '응답 뒤(after)에 보낸다')
+  await scheduled[0]()
+  assert.deepEqual(calls, [{ messageId: 'm1', only: ['b'] }])
+
+  // notify 가 던져도 예약된 일이 던지지 않는다(메시지 고침은 이미 성공)
+  const quiet = console.error
+  console.error = () => {}
+  try {
+    scheduleEditMentionPush({
+      messageId: 'm2',
+      added: ['c'],
+      notify: async () => {
+        throw new Error('boom')
+      },
+      schedule: run => scheduled.push(run),
+    })
+    await scheduled[1]()
+  } finally {
+    console.error = quiet
+  }
 })
 
 // ── endpoint 허용 목록·SSRF ───────────────────────────────────────────────────

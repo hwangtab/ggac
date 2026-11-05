@@ -217,6 +217,75 @@ test('멘션 푸시: 멘션된 멤버만 — 작성자·멘션 안 된 사람 �
   assert.deepEqual(await recipients(msg, 'mention'), [target].sort())
 })
 
+test('메시지를 고쳐 새로 멘션: 새로 들어간 사람만 added — 그 사람만 받고, 고치기 전부터 멘션된 사람은 다시 받지 않는다', async () => {
+  const author = await seedPerson()
+  const before = await seedPerson()
+  const added = await seedPerson()
+  const ch = await seedChannel({ creatorId: author })
+  await Q.channels.addChannelMemberRows(ch, [before, added])
+  const msg = await send(ch, author, '안건 @before')
+  const first = await Q.messages.recordMentionRowsDetailed({
+    messageId: msg,
+    authorId: author,
+    explicitIds: [before],
+    everyone: false,
+  })
+  // 새 메시지는 대상 전원이 새 행이다(sendMessage 의 모양 그대로)
+  assert.deepEqual(first, { targets: [before], added: [before] })
+
+  // 고친 본문: 원래 사람 + 새 사람
+  await Q.messages.editMessageBody({
+    messageId: msg,
+    actorId: author,
+    body: '안건 @before @added',
+    actorIsAdmin: false,
+  })
+  const edit = await Q.messages.recordMentionRowsDetailed({
+    messageId: msg,
+    authorId: author,
+    explicitIds: [before, added],
+    everyone: false,
+  })
+  assert.deepEqual(edit.targets.sort(), [before, added].sort())
+  assert.deepEqual(edit.added, [added], '새로 들어간 행만')
+
+  // 멘션 푸시 수신자를 added 로 좁히면 새 사람만 — 원래 사람은 멘션 행이 있어도 빠진다
+  const found = await Q.push.listPushCandidates(msg, 'mention')
+  const pick = onlyUserIds =>
+    Q.recipients.selectPushRecipients({
+      reason: 'mention',
+      message: found.message,
+      candidates: found.candidates,
+      canAccess: c => canAccessBoardRoom(c.profile),
+      now: NOON,
+      onlyUserIds,
+    })
+  assert.deepEqual(pick(edit.added), [added])
+  assert.deepEqual(
+    (await recipients(msg, 'mention')).sort(),
+    [before, added].sort(),
+    '좁히지 않으면 둘 다'
+  )
+
+  // 새 멘션 없이 다시 고치면 added 가 비고 → 아무에게도 보내지 않는다
+  const again = await Q.messages.recordMentionRowsDetailed({
+    messageId: msg,
+    authorId: author,
+    explicitIds: [before, added],
+    everyone: false,
+  })
+  assert.deepEqual(again.added, [])
+  assert.deepEqual(pick(again.added), [])
+  // 기존 recordMentionRows 는 예전처럼 대상 전원을 돌려준다(sendMessage 호환)
+  const compat = await Q.messages.recordMentionRows({
+    messageId: msg,
+    authorId: author,
+    explicitIds: [before, added],
+    everyone: false,
+  })
+  assert.deepEqual(compat.sort(), [before, added].sort())
+})
+
 test('읽기 범위: 비공개 채널에서 나간 사람은 멘션 행이 남아도 받지 않는다(멤버만)', async () => {
   const owner = await seedPerson()
   const leaver = await seedPerson()
@@ -314,6 +383,11 @@ const minAgo = m => new Date(DNOW.getTime() - m * 60_000)
 
 async function backdate(messageId, at) {
   await exec('update work_messages set created_at = ? where id = ?', [at.getTime(), messageId])
+  // 함께 기록된 멘션도 같은 시각으로 — 실제로는 멘션이 메시지 직후에 기록된다(0046 멘션 시각)
+  await exec('update work_mentions set created_at = ? where message_id = ?', [
+    at.getTime(),
+    messageId,
+  ])
 }
 async function setLastRead(channelId, userId, at) {
   await exec(
@@ -486,6 +560,65 @@ test('다이제스트 실행이 겹치거나 연달아 두 번 돌아도 같은 
   const second = sent.filter(m => m.html.includes('겹침 시험 2'))
   assert.equal(second.length, 1)
   assert.equal(second[0].html.includes('겹침 시험 1'), false, '이미 보낸 글이 다시 실렸다')
+})
+
+test('다이제스트: 오래된 메시지를 고쳐 나중에 넣은 멘션도 멘션된 시각으로 잡혀 한 번만 간다(0046 — 2026-11-05 점검)', async () => {
+  const { runMentionDigest } = await import(src('work/lib/digest/run.ts'))
+  const author = await seedPerson()
+  const me = await seedPerson()
+  const ch = await seedChannel({ creatorId: author })
+  await Q.channels.addChannelMemberRows(ch, [me])
+  await setLastRead(ch, me, minAgo(900))
+  await Q.prefs.upsertMemberPrefs(me, { digestMode: 'normal' })
+  // 이미 다이제스트가 나간 뒤(기준 200분 전)에, 그보다 오래된(300분 전) 메시지를 고쳐 나를 멘션했다
+  const old = await send(ch, author, '고쳐서 멘션한 옛 글')
+  await backdate(old, minAgo(300))
+  await Q.digest.upsertDigestState(me, minAgo(200))
+  await Q.messages.recordMentionRows({
+    messageId: old,
+    authorId: author,
+    explicitIds: [me],
+    everyone: false,
+  })
+  await exec('update work_mentions set created_at = ? where message_id = ? and user_id = ?', [
+    minAgo(30).getTime(),
+    old,
+    me,
+  ])
+  const ids = (await digestFor(me)).map(r => r.message_id)
+  assert.deepEqual(ids, [old], '고쳐 넣은 멘션이 다이제스트 후보에 있어야 한다')
+  const sent = []
+  const opts = {
+    mailer: async m => {
+      sent.push(m)
+      return { ok: true }
+    },
+    sendGapMs: 0,
+    siteUrl: 'https://ggac.kr',
+  }
+  await runMentionDigest(DNOW, opts)
+  await runMentionDigest(DNOW, opts)
+  assert.equal(sent.filter(m => m.html.includes('고쳐서 멘션한 옛 글')).length, 1)
+})
+
+test('멘션 행에 멘션된 시각이 남는다(0046)', async () => {
+  const author = await seedPerson()
+  const me = await seedPerson()
+  const ch = await seedChannel({ creatorId: author })
+  await Q.channels.addChannelMemberRows(ch, [me])
+  const id = await send(ch, author, '시각 기록')
+  const before = Date.now()
+  await Q.messages.recordMentionRows({
+    messageId: id,
+    authorId: author,
+    explicitIds: [me],
+    everyone: false,
+  })
+  const rs = await setupClient.execute({
+    sql: 'select created_at from work_mentions where message_id = ? and user_id = ?',
+    args: [id, me],
+  })
+  assert.ok(Number(rs.rows[0].created_at) >= before - 1000)
 })
 
 test('다이제스트: 읽을 수 없는 내용은 없다 — 채널에서 나간 뒤의 멘션, 이사에서 빠진 사람', async () => {

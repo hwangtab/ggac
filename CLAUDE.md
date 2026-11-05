@@ -449,11 +449,7 @@ noreply@ggac.kr로 가서 유실된다), `MAILBOX_BACKFILL_CRON_TOKEN`(메일함
   프리뷰는 PR마다 생기는데 같은 키가 있으면 운영 쿼터와 평판을 공유한다.
   프리뷰·로컬에서는 인증 메일이 안 나가는 것이 정상이다.
 - 메일함 백필 크론은 매 실행 `메일함 크론 요약` 한 줄을 남긴다(Vercel이 정상
-  응답 로그를 안 남기므로 이 줄이 유일한 실행 증거다). **`log.summary`로 남긴다
-  — `createLogger`의 `info`는 운영에서 지워진다**(`src/utils/logger.ts`).
-  예전에는 `info`라 이 줄이 운영에 한 번도 안 남았다(2026-11-05 확인). 다른
-  크론의 요약 (`dues/charge`·`dues/expire`·`funding/expire`·`tickets/expire`
-  등)은 아직 `info`라 운영 로그에 보이지 않는다.
+  응답 로그를 안 남기므로 이 줄이 유일한 실행 증거다).
 
 ### Database Migration Issues
 
@@ -466,7 +462,7 @@ noreply@ggac.kr로 가서 유실된다), `MAILBOX_BACKFILL_CRON_TOKEN`(메일함
   **앱 코드가 전부 판정한다**. "RLS 정책을 고친다"는 접근은 아무것도 바꾸지
   않으면서 경계가 지켜진다고 믿게 만든다.
 - **권한의 안전망은 E2E다. 정적 가드가 아니다.** 인가를 바꿨으면
-  `npm run test:e2e:authz`(기준선 **369 passed**, 총 371건 — 1건은 정책 36으로
+  `npm run test:e2e:authz`(기준선 **376 passed**, 총 378건 — 1건은 정책 36으로
   `PUBLIC_BLOB_READ_WRITE_TOKEN` 없이 돌리면 실패하고, 1건은 스킵이다 — 메일함
   첨부 다운로드 기록 테스트가 실제 Blob 객체를 요구해서다. 시험 Blob 저장소
   토큰과 편집기 env(HWPX 플래그 `NEXT_PUBLIC_HWPX_EDITOR_ENABLED=1` 포함 —

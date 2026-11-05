@@ -13,7 +13,7 @@ import {
   editMessageBody,
   hasAllLevelWatcher,
   insertMessage,
-  recordMentionRows,
+  recordMentionRowsDetailed,
   softDeleteMessage,
   toggleBookmarkRow,
   togglePinRow,
@@ -36,6 +36,7 @@ import { uuidSchema } from '@work/lib/channels/schema'
 import { boundedArray } from '@work/lib/validation/bounded-array'
 import { extractMentionIds, hasChannelMention } from './mentions'
 import { notifyChannel, notifyDm, notifyMention, notifyThreadReply } from '@work/lib/push/notify'
+import { scheduleEditMentionPush } from './edit-mention-push'
 import { pushTriggersFor, type PushTrigger } from './push-triggers'
 import {
   fetchAttachmentsFor,
@@ -72,21 +73,30 @@ async function recordMentions(opts: {
   messageId: string
   body: string
   authorId: string
-}): Promise<{ ids: string[]; failed: boolean }> {
+}): Promise<{ ids: string[]; added: string[]; failed: boolean }> {
   const explicit = extractMentionIds(opts.body)
   const everyone = hasChannelMention(opts.body)
-  if (explicit.length === 0 && !everyone) return { ids: [], failed: false }
+  if (explicit.length === 0 && !everyone) return { ids: [], added: [], failed: false }
   try {
-    const ids = await recordMentionRows({
+    const { targets, added } = await recordMentionRowsDetailed({
       messageId: opts.messageId,
       authorId: opts.authorId,
       explicitIds: explicit,
       everyone,
     })
-    return { ids, failed: false }
+    return { ids: targets, added, failed: false }
   } catch (e) {
     console.error('[recordMentions] 멘션 저장 실패:', e)
-    return { ids: [], failed: true }
+    return { ids: [], added: [], failed: true }
+  }
+}
+
+/** next/server `after()` — 요청 범위 밖(테스트·스크립트)이면 기다리지 않고 돌린다(`schedulePush`와 같다) */
+function runAfterResponse(run: () => Promise<void>): void {
+  try {
+    after(run)
+  } catch {
+    void run()
   }
 }
 
@@ -276,7 +286,19 @@ export async function editMessage(
     if (isWorkWriteError(e)) return fail(FORBIDDEN_MESSAGE)
     return dbFailure('editMessage', e)
   }
-  const { failed } = await recordMentions({ messageId: current.id, body, authorId: user.id })
+  const { added, failed } = await recordMentions({
+    messageId: current.id,
+    body,
+    authorId: user.id,
+  })
+  // 고친 본문으로 **새로** 멘션된 사람에게만 푸시(이미 멘션돼 있던 사람에게는 다시 보내지 않는다). 스레드·채널 푸시는
+  // 새 글일 때만이라 고칠 때는 보내지 않는다.
+  scheduleEditMentionPush({
+    messageId: current.id,
+    added,
+    notify: notifyMention,
+    schedule: runAfterResponse,
+  })
   const message = await fetchMessage(ctx, current.id).catch(() => null)
   if (!message) return fail(FORBIDDEN_MESSAGE)
   return ok({ message, ...(failed ? { mentionsFailed: true } : {}) })

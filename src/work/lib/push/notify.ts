@@ -11,6 +11,7 @@ import { getVapidConfig, sendPushToUsers, type PushSendResult, type PushTranspor
  * 푸시 발송 트리거 — 원본 kosmart-work `lib/push/notify.ts`. 메시지 저장(멘션 행 포함) **직후** 서버에서 부른다.
  *
  *   await notifyMention(messageId)      // 멘션된 사용자들에게
+ *   await notifyMention(messageId, { onlyUserIds })  // 그 가운데 이 사람들에게만(메시지를 고쳐 새로 멘션된 사람)
  *   await notifyDm(messageId)           // DM·그룹 채팅의 다른 멤버에게
  *   await notifyThreadReply(messageId)  // 부모 작성자 + 스레드 참여자에게(parent_id 가 있는 메시지)
  *   await notifyChannel(messageId)      // 채널 최상위 새 글 → 알림 수준 '모든 새 글'인 멤버에게
@@ -45,8 +46,10 @@ export function candidateCanRead(
 export async function pushRecipientsFor(
   messageId: string,
   reason: PushReason,
-  now: Date = new Date()
+  now: Date = new Date(),
+  onlyUserIds?: readonly string[]
 ): Promise<string[]> {
+  if (onlyUserIds && onlyUserIds.length === 0) return []
   const found = await listPushCandidates(messageId, reason)
   if (!found) return []
   return selectPushRecipients({
@@ -55,18 +58,19 @@ export async function pushRecipientsFor(
     candidates: found.candidates,
     canAccess: c => candidateCanRead(c, found.message.channelKind),
     now,
+    onlyUserIds,
   })
 }
 
 async function notify(
   reason: PushReason,
   messageId: string,
-  opts: { transport?: PushTransport } = {}
+  opts: { transport?: PushTransport; onlyUserIds?: readonly string[] } = {}
 ): Promise<PushSendResult> {
   const empty: PushSendResult = { sent: 0, failed: 0, removed: 0 }
   try {
     if (!getVapidConfig()) return { ...empty, skipped: 'not_configured' }
-    const userIds = await pushRecipientsFor(messageId, reason)
+    const userIds = await pushRecipientsFor(messageId, reason, new Date(), opts.onlyUserIds)
     if (userIds.length === 0) return { ...empty, skipped: 'no_recipients' }
 
     const info = await loadPushMessageInfo(messageId)
@@ -88,15 +92,22 @@ async function notify(
       body: info.body,
       sensitive: info.sensitive,
     })
-    return await sendPushToUsers(userIds, payload, opts)
+    return await sendPushToUsers(userIds, payload, { transport: opts.transport })
   } catch (err) {
     console.error(`[push] notify(${reason}) 예외:`, err)
     return { ...empty, failed: 1 }
   }
 }
 
-export function notifyMention(messageId: string): Promise<PushSendResult> {
-  return notify('mention', messageId)
+/**
+ * 멘션 푸시. `onlyUserIds`를 주면 멘션된 사람 가운데 그 사람들에게만 보낸다 — `editMessage`가 고친 본문으로 **새로** 멘션된
+ * 사람만 넘긴다(전부 다시 보내면 고치기 전부터 멘션돼 있던 사람이 같은 글로 또 알림을 받는다).
+ */
+export function notifyMention(
+  messageId: string,
+  opts: { onlyUserIds?: readonly string[] } = {}
+): Promise<PushSendResult> {
+  return notify('mention', messageId, opts.onlyUserIds ? { onlyUserIds: opts.onlyUserIds } : {})
 }
 
 export function notifyDm(messageId: string): Promise<PushSendResult> {

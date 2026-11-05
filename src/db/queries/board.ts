@@ -37,7 +37,7 @@ import {
 } from '../schema/index.ts'
 
 import type { BoardMeetingStatus } from '@/constants/boardRoom'
-import { toIso } from './_helpers.ts'
+import { retryOnLockContention, toIso } from './_helpers.ts'
 
 // -------------------------------------------------------------------------
 // board_meetings
@@ -765,6 +765,89 @@ export async function documentFilePathExists(filePath: string): Promise<boolean>
     .where(eq(boardDocumentVersions.filePath, filePath))
     .limit(1)
   return Boolean(version)
+}
+
+/**
+ * 경로가 비어 있을 때만 서류 행을 넣는다 — `/api/board-room/documents` POST(JSON 등록). 이미 쓰는 경로면 null.
+ *
+ * `documentFilePathExists` → `createDocument`를 따로 부르면 거의 동시에 온 두 등록이 둘 다 "없음"을 보고 같은 파일의 행을
+ * 두 개 만들었다(`file_path`에는 유일 제약이 없고, 마이그레이션 없이 막는다). 확인과 삽입을 쓰기 트랜잭션 하나로 묶는다 —
+ * libsql 의 기본 모드(`write` = `BEGIN IMMEDIATE`)는 시작할 때 쓰기 잠금을 잡으므로, 두 번째 등록은 첫 번째가 커밋한
+ * 뒤에야 확인을 하고 그 행을 본다. 판정 기준은 `documentFilePathExists`와 같다(서류·버전 둘 다 본다).
+ * 잠금 경합(`SQLITE_BUSY`)에 진 쪽은 잠시 뒤 다시 한다 — 다시 하면 이긴 쪽 행을 보고 null 로 끝난다(500 대신 409).
+ */
+export async function createDocumentIfPathFree(
+  input: CreateDocumentInput
+): Promise<{ id: string } | null> {
+  return retryOnLockContention(() => insertDocumentIfPathFree(input))
+}
+
+function insertDocumentIfPathFree(input: CreateDocumentInput): Promise<{ id: string } | null> {
+  return db.transaction(async tx => {
+    const [doc] = await tx
+      .select({ id: boardDocuments.id })
+      .from(boardDocuments)
+      .where(eq(boardDocuments.filePath, input.filePath))
+      .limit(1)
+    if (doc) return null
+    const [version] = await tx
+      .select({ id: boardDocumentVersions.id })
+      .from(boardDocumentVersions)
+      .where(eq(boardDocumentVersions.filePath, input.filePath))
+      .limit(1)
+    if (version) return null
+    const [row] = await tx
+      .insert(boardDocuments)
+      .values({
+        title: input.title,
+        category: input.category,
+        filePath: input.filePath,
+        fileName: input.fileName,
+        fileSize: input.fileSize,
+        mimeType: input.mimeType,
+        uploadedBy: input.uploadedBy,
+        visibility: input.visibility,
+        bodyMarkdown: input.bodyMarkdown ?? null,
+      })
+      .returning({ id: boardDocuments.id })
+    return row
+  })
+}
+
+/**
+ * 서류 고아 청소(`src/lib/boardDocuments/orphans.ts`)용 — 받은 `file_path` 값(저장소 접두 `board-documents/`를 뗀 것) 가운데
+ * 서류 행(`board_documents.file_path` — 지금 파일) 또는 버전 행(`board_document_versions.file_path` — v1 의 옛 경로
+ * `<올린 사람>/<파일>`과 `versions/<서류>/<버전>/<이름>`)이 가리키는 것. 두 칸 모두 접두 없이 저장되고 객체 키는
+ * `board-documents/` + 그 값이다(`blobPathForBoardDocument`).
+ *
+ * **대소문자를 무시하고** 맞춘다 — 저장소 키와 행의 값은 같은 문자열로 만들지만, 어긋나는 행이 하나라도 있으면 산 서류를
+ * 지우게 되므로 보수적으로 "가리킨다" 쪽으로 기운다. 돌려주는 값은 **받은 문자열 그대로**다.
+ */
+export async function findReferencedBoardDocumentPaths(paths: string[]): Promise<Set<string>> {
+  const out = new Set<string>()
+  for (let i = 0; i < paths.length; i += 200) {
+    const chunk = paths.slice(i, i + 200)
+    const lowered = [...new Set(chunk.map(asciiLower))]
+    const docs = await db
+      .select({ p: boardDocuments.filePath })
+      .from(boardDocuments)
+      .where(inArray(sql`lower(${boardDocuments.filePath})`, lowered))
+    const versions = await db
+      .select({ p: boardDocumentVersions.filePath })
+      .from(boardDocumentVersions)
+      .where(inArray(sql`lower(${boardDocumentVersions.filePath})`, lowered))
+    const found = new Set([...docs, ...versions].map(r => asciiLower(r.p)))
+    for (const p of chunk) if (found.has(asciiLower(p))) out.add(p)
+  }
+  return out
+}
+
+/**
+ * SQLite 의 `lower()`(ICU 없음)와 같은 규칙 — ASCII 대문자만 바꾼다. JS `toLowerCase()`는 다른 문자도 바꿔, 양쪽이
+ * 어긋나면 가리키는 행을 못 찾는 쪽(= 지우는 쪽)으로 틀린다.
+ */
+function asciiLower(s: string): string {
+  return s.replace(/[A-Z]/g, c => c.toLowerCase())
 }
 
 /** `/api/board-room/documents/[id]` DELETE의 소유권/경로 확인. */

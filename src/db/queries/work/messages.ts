@@ -910,7 +910,7 @@ export async function toggleBookmarkRow(input: {
 /**
  * 멘션 행(원본 recordMentions + guard_mention_target): 대상은 그 채널 멤버로 한정, `everyone`이면 멤버 전원,
  * 작성자 본인 제외, 지워진 메시지는 멘션하지 않는다. 이미 있는 멘션은 그대로 둔다(읽음 상태 유지).
- * 반환은 대상 전원(원본과 같다 — 이미 있던 행 포함).
+ * 반환은 대상 전원(원본과 같다 — 이미 있던 행 포함). 새로 넣은 사람만 알고 싶으면 `recordMentionRowsDetailed`.
  */
 export async function recordMentionRows(input: {
   messageId: string
@@ -918,14 +918,28 @@ export async function recordMentionRows(input: {
   explicitIds: string[]
   everyone: boolean
 }): Promise<string[]> {
-  if (input.explicitIds.length === 0 && !input.everyone) return []
+  return (await recordMentionRowsDetailed(input)).targets
+}
+
+/**
+ * `recordMentionRows`와 같은 규칙으로 멘션 행을 넣고, 대상 전원(`targets`)과 **이번에 새로 들어간** 사람(`added`)을 함께
+ * 돌려준다. `added`는 `onConflictDoNothing().returning()`이 실제로 넣은 행만 돌려주는 것으로 고른다 — 같은 메시지를 고쳐
+ * 이미 멘션돼 있던 사람은 빠진다(`editMessage`가 새로 멘션된 사람에게만 푸시한다). 새 메시지는 둘이 같다.
+ */
+export async function recordMentionRowsDetailed(input: {
+  messageId: string
+  authorId: string
+  explicitIds: string[]
+  everyone: boolean
+}): Promise<{ targets: string[]; added: string[] }> {
+  if (input.explicitIds.length === 0 && !input.everyone) return { targets: [], added: [] }
   return db.transaction(async tx => {
     const [m] = await tx
       .select({ channelId: workMessages.channelId, deletedAt: workMessages.deletedAt })
       .from(workMessages)
       .where(eq(workMessages.id, input.messageId))
       .limit(1)
-    if (!m || m.deletedAt) return []
+    if (!m || m.deletedAt) return { targets: [], added: [] }
     const members = await tx
       .select({ userId: workChannelMembers.userId })
       .from(workChannelMembers)
@@ -939,12 +953,16 @@ export async function recordMentionRows(input: {
     for (const id of [...targets]) {
       if (id.toLowerCase() === input.authorId.toLowerCase()) targets.delete(id)
     }
-    if (targets.size === 0) return []
-    await tx
+    if (targets.size === 0) return { targets: [], added: [] }
+    const inserted = await tx
       .insert(workMentions)
-      .values([...targets].map(userId => ({ messageId: input.messageId, userId })))
+      .values(
+        [...targets].map(userId => ({ messageId: input.messageId, userId, createdAt: new Date() }))
+      )
       .onConflictDoNothing()
-    return [...targets]
+      .returning({ userId: workMentions.userId })
+    const addedSet = new Set(inserted.map(r => r.userId))
+    return { targets: [...targets], added: [...targets].filter(id => addedSet.has(id)) }
   })
 }
 

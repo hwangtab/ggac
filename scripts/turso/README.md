@@ -346,8 +346,12 @@ webServer에 `{...process.env, ...webServer.env}`를 넘긴다. e2e 전용 변�
   11개 스펙
 - `authz-public`: `authz-boundaries` 21건
 
-**실측 기준선(2026-11-05, 이사회 서류 직접 업로드(큰 파일)·화면 오류 상태 수정 뒤, HWPX 플래그를 준 실행, 운영 빌드 서버):**
-총 371건 중 **369 passed, 1 failed, 1 skipped**(8.2분). 355에서 늘어난 14건은 `authz-board-document-edit.spec.ts`의 직접 업로드 5건
+**실측 기준선(2026-11-05, 남은 것 해결 — 서류 고아 청소·수정 멘션 알림·한글 편집기 인쇄 — 뒤, HWPX 플래그를 준 실행, 운영 빌드 서버):**
+총 378건 중 **376 passed, 1 failed, 1 skipped**(8.3분). 369에서 늘어난 7건은 main 의 메일함 PR #91~#93 이다. 한글 편집 E2E 에
+인쇄(파일 → 인쇄 → 미리보기 새 창) 단계를 더했고, 편집기 사이트(ggac-office)가 인쇄를 되살린 배포를 본다.
+
+직전 기준선(2026-11-05, 이사회 서류 직접 업로드(큰 파일)·화면 오류 상태 수정 뒤, HWPX 플래그를 준 실행, 운영 빌드 서버):
+총 371건 중 369 passed, 1 failed, 1 skipped(8.2분). 355에서 늘어난 14건은 `authz-board-document-edit.spec.ts`의 직접 업로드 5건
 (비로그인·조합원 차단, 남의 폴더 토큰 거부, 남의 경로·없는 객체 등록 거부, 서명 불일치, 6MB PDF 실제 업로드)과 main 의 메일함 PR #89 다.
 
 직전 기준선(2026-11-05, 회귀 수정 — 다이제스트 비교 기준·정리 순서·문서함 고아 청소 — 뒤, HWPX 플래그를 준 실행, 운영 빌드 서버):
@@ -1179,7 +1183,7 @@ EXPLAIN QUERY PLAN SELECT count(*) FROM notifications WHERE user_id = '<아무 �
 가드도 타입 검사도 통과한다. 가드는 **"이 문자열이 이 파일에 있는가"**만 보고
 도달 가능성·실행 순서·데이터 흐름을 보지 않는다.
 
-**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 369 passed, 실행 절차는
+**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 376 passed, 실행 절차는
 위 "권한 E2E" 절). 같은 감사에서 **E2E는 관리자 게이트 무력화를 실제로 잡았다.**
 
 `assert-runtime-risks.mjs`가 여전히 값을 하는 자리는 **지워진 것**(게이트를 통째로

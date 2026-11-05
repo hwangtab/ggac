@@ -17,9 +17,12 @@ export const HWP_DIRTY_POLL_MS = 2_000
 /**
  * 편집기 iframe 의 sandbox·referrerPolicy — 오피스 편집기와 같은 수준(docs/11 §1).
  * SDK(`@rhwp/editor` 0.8.7)는 iframe 에 이 속성을 주지 않으므로 `guardEditorIframe` 가 DOM 삽입 전에 건다.
- * allow-top-navigation·allow-popups·allow-forms 는 주지 않는다. (allow 속성 clipboard 는 SDK 가 이미 건다.)
+ * allow-top-navigation·allow-forms 는 주지 않는다. (allow 속성 clipboard 는 SDK 가 이미 건다.)
+ * **allow-popups 는 준다**(2026-11-05) — 편집기 안 인쇄·PDF 로 인쇄가 미리보기 **새 창**을 연다(rhwp `runPrintPreview`).
+ * 없으면 창이 막혀 인쇄가 되지 않는다. 새 창은 이 sandbox 를 그대로 물려받는다(`allow-popups-to-escape-sandbox`는 주지 않는다 —
+ * 그 창도 최상위 이동·폼 제출을 못 한다). 오피스 편집기(ONLYOFFICE)는 새 창이 필요 없어 그대로다.
  */
-export const HWP_IFRAME_SANDBOX = OFFICE_IFRAME_SANDBOX
+export const HWP_IFRAME_SANDBOX = `${OFFICE_IFRAME_SANDBOX} allow-popups`
 export const HWP_IFRAME_REFERRER_POLICY = 'no-referrer'
 
 /**
