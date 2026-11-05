@@ -170,7 +170,33 @@ export async function saveEditedVersion(
   const objectPath = boardDocumentObjectPath(filePath)
   const mime = resolveMime('', name)
   const max = maxBytesFor(current)
-  const discard = () => removeBoardDocumentObjects([objectPath]).catch(() => undefined)
+
+  // 같은 업로드 id 로 다시 온 저장(응답이 늦어 다시 누름·프록시 재시도)은 이미 승격된 것이다 — 그 객체는 지금 서류의 최신
+  // 파일이라 아래 검사·실패 처리가 지우면 서류가 통째로 404 가 된다(2026-11-05 리뷰). 객체를 건드리지 않고 같은 결과를 돌려준다.
+  const already = await getBoardDocumentVersion(doc.id, input.uploadId).catch(() => null)
+  if (already) {
+    return {
+      ok: true,
+      data: {
+        documentId: doc.id,
+        versionId: already.id,
+        versionNo: already.versionNo,
+        name: already.fileName ?? name,
+        bodyUpdated: false,
+      },
+    }
+  }
+  // 저장본을 치울 때는 **어떤 버전 행도 그 업로드를 가리키지 않을 때만** 지운다 — 같은 업로드가 동시에 두 번 와서 한쪽이
+  // 먼저 승격했으면 그 객체가 최신 파일이다. 확인 조회가 실패하면 지우지 않는다(고아 객체가 남는 쪽이 되돌릴 수 있다).
+  const discard = async () => {
+    if (objectPath === boardDocumentObjectPath(doc.filePath)) return
+    const claimed = await getBoardDocumentVersion(doc.id, input.uploadId).then(
+      row => row !== null,
+      () => true
+    )
+    if (claimed) return
+    await removeBoardDocumentObjects([objectPath]).catch(() => undefined)
+  }
   const blocked = async (reason: string) => {
     await discard()
     return fail<SaveResult>(
@@ -203,7 +229,10 @@ export async function saveEditedVersion(
   const format = hwpEditFormatOf(current)
   try {
     if (format) {
-      if (!isSafeBoardDocumentFilePath(doc.filePath)) return fail(404, '서류를 찾을 수 없습니다.')
+      if (!isSafeBoardDocumentFilePath(doc.filePath)) {
+        await discard()
+        return fail(404, '서류를 찾을 수 없습니다.')
+      }
       if ((doc.fileSize ?? 0) > DOC_EDIT_MAX_BYTES) return blocked('파일이 20MB를 넘습니다.')
       const [original, saved] = await Promise.all([
         downloadBoardDocumentObject(boardDocumentObjectPath(doc.filePath)),

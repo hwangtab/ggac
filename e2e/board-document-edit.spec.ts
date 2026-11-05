@@ -267,6 +267,22 @@ test.describe('이사회 서류 앱 편집 — 실제 저장소·편집기', () 
       expect(v1.status()).toBe(200)
       expect(await docxText(await v1.body())).not.toMatch(/board docs e2e/i)
 
+      // 같은 저장이 다시 와도(응답이 늦어 다시 누름·프록시 재시도) 최신 파일을 지우지 않고 같은 결과다 — 예전에는 승격
+      // 실패 처리가 그 업로드 객체(= 지금 최신 파일)를 지워 서류가 404 가 됐다(2026-11-05 리뷰)
+      const resubmit = await context.request.post(`/api/board-room/documents/${id}/versions`, {
+        data: {
+          uploadId: v[1].id,
+          name: decodeURIComponent(v[1].filePath.split('/').pop() ?? ''),
+          baseVersionNo: 1,
+        },
+      })
+      expect(resubmit.ok(), await resubmit.text()).toBe(true)
+      expect((await resubmit.json()).data?.versionNo).toBe(2)
+      expect((await versionsOf(id)).map(x => x.versionNo)).toEqual([1, 2])
+      const stillThere = await context.request.get(`/api/board-room/documents/${id}/download`)
+      expect(stillThere.status()).toBe(200)
+      expect(await docxText(await stillThere.body())).toMatch(/board docs e2e/i)
+
       // 미리보기 캐시가 지워졌다 · 검색 본문이 새 파일로 다시 뽑힌다(저장 직후 훅 또는 크론)
       expect(await renderCacheKeys(id)).toEqual([])
       const docId = id

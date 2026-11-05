@@ -1,3 +1,4 @@
+import { retryOnTransientDbError } from './transient-db'
 import {
   claimAttachmentText,
   getExtractionCandidates,
@@ -221,7 +222,7 @@ export async function extractAndStore(
     attempts,
   }
   try {
-    await store.upsert(target.id, row)
+    await retryOnTransientDbError(() => store.upsert(target.id, row))
   } catch (error) {
     // 본문이 문제였을 수 있다(크기·문자 등) — 본문 없이 failed 행이라도 남겨 재시도 규칙에 태운다.
     try {

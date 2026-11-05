@@ -346,8 +346,12 @@ webServer에 `{...process.env, ...webServer.env}`를 넘긴다. e2e 전용 변�
   11개 스펙
 - `authz-public`: `authz-boundaries` 21건
 
-**실측 기준선(2026-11-05, 이사회 서류 앱 편집(0038)·main 메일함 발신자 필터(0037) 뒤 — HWPX 플래그를 준 실행, 운영 빌드 서버):**
-총 330건 중 **328 passed, 1 failed, 1 skipped**(7.3분). 늘어난 2건은 main의 메일함 PR #73~#75다.
+**실측 기준선(2026-11-05, 앱 편집 버그 수정 — 중복 저장·CSP 거짓 경보 — 뒤, HWPX 플래그를 준 실행, 운영 빌드 서버):**
+총 333건 중 **331 passed, 1 failed, 1 skipped**(8.1분). 328에서 늘어난 3건은 `board-work-layout.spec.ts`의 CSP 회귀 1건과
+main 의 메일함 테스트 2건이다.
+
+직전 기준선(2026-11-05, 이사회 서류 앱 편집(0038)·main 메일함 발신자 필터(0037) 뒤 — HWPX 플래그를 준 실행, 운영 빌드 서버):
+총 330건 중 328 passed, 1 failed, 1 skipped(7.3분). 늘어난 2건은 main의 메일함 PR #73~#75다.
 
 직전 실측(같은 날, main 병합 전, `PLAYWRIGHT_PORT=3103`): 총 328건 중 326 passed, 1 failed, 1 skipped(8.7분). 실패 1건은 정책 36, 스킵 1건은 메일함 첨부 다운로드 기록이다.
 313에서 늘어난 13건은 `authz-board-document-edit.spec.ts` 8건(비로그인 401·조합원/미승인 403·감사 403과 올린 사람·관리자
@@ -1158,7 +1162,7 @@ EXPLAIN QUERY PLAN SELECT count(*) FROM notifications WHERE user_id = '<아무 �
 가드도 타입 검사도 통과한다. 가드는 **"이 문자열이 이 파일에 있는가"**만 보고
 도달 가능성·실행 순서·데이터 흐름을 보지 않는다.
 
-**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 328 passed, 실행 절차는
+**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 331 passed, 실행 절차는
 위 "권한 E2E" 절). 같은 감사에서 **E2E는 관리자 게이트 무력화를 실제로 잡았다.**
 
 `assert-runtime-risks.mjs`가 여전히 값을 하는 자리는 **지워진 것**(게이트를 통째로
