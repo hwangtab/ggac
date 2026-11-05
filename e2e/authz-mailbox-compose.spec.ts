@@ -834,6 +834,8 @@ test.describe('화면', () => {
  * 건너뛴다), 한도에도 세지 않는다(`recipient_count` 0). 그래서 키 없이 발송 뒤 기록까지 끝까지 탄다.
  */
 test.describe('답장 받는 사람·전체 답장·인용', () => {
+  // 픽스처를 beforeAll에서 지우고 다시 넣는다 — 워커가 나뉘면 한 워커의 재시드가 다른 워커의 테스트와 겹친다.
+  test.describe.configure({ mode: 'serial' })
   const PARENT_ID = '00000000-0000-4000-8000-00000000d0e2'
   const QUOTE_MARKER = 'MAILBOX-E2E-QUOTE <b>원문</b>'
   const OUR_ADDRESS = 'mailbox@ggac.kr'
@@ -1003,6 +1005,8 @@ test.describe('답장 받는 사람·전체 답장·인용', () => {
  * 하므로, 복사 단계의 실패가 "아무것도 안 나가고 행은 failed"로 끝나는지를 본다.
  */
 test.describe('전달', () => {
+  // 픽스처를 beforeAll에서 지우고 다시 넣는다 — 워커가 나뉘면 한 워커의 재시드가 다른 워커의 테스트와 겹친다.
+  test.describe.configure({ mode: 'serial' })
   const SOURCE_ID = '00000000-0000-4000-8000-00000000d0e3'
   const OTHER_ID = '00000000-0000-4000-8000-00000000d0e4'
   const ATT_OK = '00000000-0000-4000-8000-00000000d0c1'

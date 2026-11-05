@@ -4,7 +4,8 @@ import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import type { BoardAuthSuccess } from '@/lib/server/boardRoomAuth'
 import { logSecurityEvent } from '@/utils/security'
 import { parseIntegerParam } from '@/utils/queryParams'
-import { listInboundEmails } from '@/db/queries/mailbox'
+import { listInboundEmails, updateInboundStatusBulk } from '@/db/queries/mailbox'
+import { validateUUID } from '@/utils/validation'
 import { normalizeSenderDomain, parseMailbox } from '@/lib/mail/senderAddress'
 import { DAY_MS, parseSeoulDay } from '@/lib/mail/seoulDay'
 
@@ -12,6 +13,10 @@ export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
 const ALLOWED_STATUSES = ['unread', 'read', 'replied', 'archived', 'spam'] as const
+/** 일괄 변경 상한 — 목록 한 페이지(최대 100건)를 넘지 않는다. */
+const BULK_MAX = 100
+
+type BulkBody = { status?: unknown; items?: unknown }
 
 // GET: 이사·감사·관리자 메일함 목록 조회 (브리프 A)
 export const GET = defineApiRoute<undefined, BoardAuthSuccess>({
@@ -84,5 +89,58 @@ export const GET = defineApiRoute<undefined, BoardAuthSuccess>({
       pagination: { total_count: result.total_count, limit, offset },
       can_manage: auth.isAdmin,
     })
+  },
+})
+
+// PATCH: 여러 메일의 상태를 한 번에 바꾼다(관리자만). 메일마다 화면이 알던 상태(`expected_status`)를 함께 받아
+// 단건 PATCH와 같은 낙관적 동시성을 지킨다 — 다른 관리자가 먼저 바꾼 메일은 건드리지 않고 `conflict`로 돌려준다.
+// 일부만 바뀌어도 200이다(무엇이 바뀌었는지는 본문이 말한다). 전부 검증한 뒤에만 쓴다.
+export const PATCH = defineApiRoute<BulkBody>({
+  method: 'PATCH',
+  name: 'api/admin/mailbox',
+  rateLimit: {
+    ...RATE_LIMITS.ADMIN_API,
+    keyGenerator: createUserKeyGenerator('admin_mailbox'),
+  },
+  rateLimitHeaders: true,
+  auth: 'admin',
+  body: {
+    invalidResponse: () => ApiError.badRequest('유효하지 않은 JSON 본문입니다.').toNextResponse(),
+  },
+  errorResponse: () => {
+    logSecurityEvent('ADMIN_MAILBOX_API_ERROR', { error: '서버 오류가 발생했습니다.' }, 'medium')
+    return ApiError.internalServerError('상태를 변경하는 중 오류가 발생했습니다.').toNextResponse()
+  },
+  handler: async ({ body }) => {
+    const next = String(body?.status ?? '')
+    if (!ALLOWED_STATUSES.includes(next as (typeof ALLOWED_STATUSES)[number])) {
+      throw ApiError.badRequest('알 수 없는 상태입니다.')
+    }
+    const rawItems = body?.items
+    if (!Array.isArray(rawItems) || rawItems.length === 0) {
+      throw ApiError.badRequest('바꿀 메일을 골라 주세요.')
+    }
+    if (rawItems.length > BULK_MAX) {
+      throw ApiError.badRequest(`한 번에 ${BULK_MAX}건까지 바꿀 수 있습니다.`)
+    }
+    const seen = new Set<string>()
+    const items: { id: string; expected: string }[] = []
+    for (const raw of rawItems) {
+      const record = (raw ?? {}) as { id?: unknown; expected_status?: unknown }
+      const idCheck = validateUUID(String(record.id ?? ''), '메일 ID')
+      const expected = String(record.expected_status ?? '')
+      if (
+        !idCheck.isValid ||
+        !ALLOWED_STATUSES.includes(expected as (typeof ALLOWED_STATUSES)[number])
+      ) {
+        throw ApiError.badRequest('메일 id 또는 기대 상태가 올바르지 않습니다.')
+      }
+      if (seen.has(idCheck.sanitized)) continue
+      seen.add(idCheck.sanitized)
+      items.push({ id: idCheck.sanitized, expected })
+    }
+
+    const outcome = await updateInboundStatusBulk(items, next)
+    return ApiSuccess.ok({ status: next, ...outcome })
   },
 })

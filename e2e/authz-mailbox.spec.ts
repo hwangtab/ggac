@@ -902,3 +902,148 @@ test.describe('관리자 메일함 페이지 인가', () => {
     }
   })
 })
+
+/**
+ * 일괄 처리 — `PATCH /api/admin/mailbox`. 메일마다 기대 상태를 받아 단건 PATCH와 같은 낙관적 동시성을 지킨다.
+ * 다른 테스트의 픽스처 상태를 흔들지 않게 이 묶음만의 메일을 심고, 재시드가 겹치지 않게 직렬로 돈다.
+ */
+test.describe('메일함 일괄 처리', () => {
+  test.describe.configure({ mode: 'serial' })
+  const BULK_IDS = [
+    '00000000-0000-4000-8000-00000000c010',
+    '00000000-0000-4000-8000-00000000c011',
+    '00000000-0000-4000-8000-00000000c012',
+  ]
+  const BULK_SUBJECT = 'MAILBOX-E2E-BULK'
+
+  async function exec(sql: string, args: (string | number)[] = []) {
+    const client = createClient({ url: process.env.TURSO_DATABASE_URL! })
+    try {
+      return await client.execute({ sql, args })
+    } finally {
+      client.close()
+    }
+  }
+
+  async function resetBulkFixtures() {
+    const now = Date.now()
+    for (const [i, id] of BULK_IDS.entries()) {
+      await exec(
+        `INSERT INTO inbound_emails
+          (id, thread_id, resend_email_id, from_address, from_email, to_addresses, subject, status,
+           body_fetch_status, received_at)
+         VALUES (?, ?, ?, 'bulk@example.com', 'bulk@example.com', '["mailbox@ggac.kr"]', ?, 'unread', 'done', ?)
+         ON CONFLICT(id) DO UPDATE SET status = 'unread', received_at = excluded.received_at`,
+        [id, id, `authz-mailbox-bulk-${i}`, `${BULK_SUBJECT}-${i}`, now - i * 1000]
+      )
+    }
+  }
+
+  async function statusOf(id: string): Promise<string> {
+    return String(
+      (await exec('SELECT status FROM inbound_emails WHERE id = ?', [id])).rows[0]?.status
+    )
+  }
+
+  test.beforeEach(resetBulkFixtures)
+  test.afterAll(async () => {
+    await exec(`DELETE FROM inbound_emails WHERE id IN (?, ?, ?)`, BULK_IDS)
+  })
+
+  test('관리자는 여러 통을 한 번에 바꾸고, 먼저 바뀐 메일은 conflict로 남는다', async ({
+    baseURL,
+  }) => {
+    const adminCtx = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('admin'),
+    })
+    try {
+      // 다른 관리자가 세 번째 메일을 먼저 스팸으로 옮겼다
+      await exec(`UPDATE inbound_emails SET status = 'spam' WHERE id = ?`, [BULK_IDS[2]])
+      const res = await adminCtx.patch('/api/admin/mailbox', {
+        data: {
+          status: 'archived',
+          items: BULK_IDS.map(id => ({ id, expected_status: 'unread' })),
+        },
+      })
+      expect(res.status()).toBe(200)
+      const data = (await res.json()).data
+      expect(data.updated).toEqual([BULK_IDS[0], BULK_IDS[1]])
+      expect(data.conflict).toEqual([BULK_IDS[2]])
+      expect(await statusOf(BULK_IDS[0])).toBe('archived')
+      expect(await statusOf(BULK_IDS[2])).toBe('spam')
+    } finally {
+      await adminCtx.dispose()
+    }
+  })
+
+  test('잘못된 요청은 아무것도 바꾸지 않고 400이다', async ({ baseURL }) => {
+    const adminCtx = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('admin'),
+    })
+    try {
+      const valid = { id: BULK_IDS[0], expected_status: 'unread' }
+      const bad = [
+        { status: 'deleted', items: [valid] },
+        { status: 'read', items: [] },
+        { status: 'read', items: [valid, { id: 'not-a-uuid', expected_status: 'unread' }] },
+        { status: 'read', items: [valid, { id: BULK_IDS[1], expected_status: 'nope' }] },
+        {
+          status: 'read',
+          items: Array.from({ length: 101 }, () => valid),
+        },
+      ]
+      for (const data of bad) {
+        expect((await adminCtx.patch('/api/admin/mailbox', { data })).status()).toBe(400)
+      }
+      expect(await statusOf(BULK_IDS[0])).toBe('unread')
+    } finally {
+      await adminCtx.dispose()
+    }
+  })
+
+  test('이사·일반 조합원은 일괄 변경이 막히고 행은 그대로다', async ({ baseURL, request }) => {
+    const data = { status: 'archived', items: [{ id: BULK_IDS[0], expected_status: 'unread' }] }
+    expect((await request.patch('/api/admin/mailbox', { data })).status()).toBe(401)
+    for (const role of ['director', 'other']) {
+      const ctx = await apiRequest.newContext({ baseURL, storageState: storageStatePath(role) })
+      try {
+        expect((await ctx.patch('/api/admin/mailbox', { data })).status(), role).toBe(403)
+      } finally {
+        await ctx.dispose()
+      }
+    }
+    expect(await statusOf(BULK_IDS[0])).toBe('unread')
+  })
+
+  test('화면: 관리자는 골라서 보관하고, 이사 화면에는 체크박스가 없다', async ({ browser }) => {
+    const adminCtx = await browser.newContext({ storageState: storageStatePath('admin') })
+    try {
+      const page = await adminCtx.newPage()
+      await page.goto('/admin/mailbox', { waitUntil: 'domcontentloaded' })
+      await page.getByLabel(`${BULK_SUBJECT}-0 선택`).check({ timeout: 15000 })
+      await page.getByLabel(`${BULK_SUBJECT}-1 선택`).check()
+      const toolbar = page.getByTestId('bulk-toolbar')
+      await expect(toolbar).toContainText('2개 선택')
+      await toolbar.getByRole('button', { name: '보관', exact: true }).click()
+      await expect(toolbar).toContainText('전체 선택')
+      await expect.poll(() => statusOf(BULK_IDS[0])).toBe('archived')
+      await expect.poll(() => statusOf(BULK_IDS[1])).toBe('archived')
+      expect(await statusOf(BULK_IDS[2])).toBe('unread')
+    } finally {
+      await adminCtx.close()
+    }
+
+    const directorCtx = await browser.newContext({ storageState: storageStatePath('director') })
+    try {
+      const page = await directorCtx.newPage()
+      await page.goto('/board-room/mailbox', { waitUntil: 'domcontentloaded' })
+      await expect(page.getByText(`${BULK_SUBJECT}-0`).first()).toBeVisible({ timeout: 15000 })
+      await expect(page.getByTestId('bulk-toolbar')).toHaveCount(0)
+      await expect(page.getByLabel(`${BULK_SUBJECT}-0 선택`)).toHaveCount(0)
+    } finally {
+      await directorCtx.close()
+    }
+  })
+})

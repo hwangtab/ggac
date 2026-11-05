@@ -550,6 +550,54 @@ export async function updateInboundStatus(
   return existing ? ('conflict' as const) : ('missing' as const)
 }
 
+export type BulkStatusOutcome = { updated: string[]; conflict: string[]; missing: string[] }
+
+/**
+ * 여러 메일의 상태를 한 번에 바꾼다 — `updateInboundStatus`와 같은 낙관적 동시성을 메일마다 지킨다. 화면이 알던
+ * 상태(`expected`)와 지금 값이 다른 메일(다른 관리자가 먼저 바꿈)은 건드리지 않고 `conflict`로, 행이 없으면
+ * `missing`으로 돌려준다.
+ *
+ * 메일마다 왕복하지 않는다 — 기대 상태별로 묶어 조건부 UPDATE를 한 번씩(상태가 다섯이라 많아야 다섯 번) 보낸다.
+ * 이미 목표 상태인 메일은 바꿀 것이 없으므로 `updated`로 친다(같은 상태로 두 번 누른 것과 같다).
+ */
+export async function updateInboundStatusBulk(
+  items: { id: string; expected: string }[],
+  next: string
+): Promise<BulkStatusOutcome> {
+  const byExpected = new Map<string, string[]>()
+  for (const item of items) {
+    byExpected.set(item.expected, [...(byExpected.get(item.expected) ?? []), item.id])
+  }
+  const updated = new Set<string>()
+  for (const [expected, ids] of byExpected) {
+    const rows = await db
+      .update(inboundEmails)
+      .set({ status: next })
+      .where(and(inArray(inboundEmails.id, ids), eq(inboundEmails.status, expected)))
+      .returning({ id: inboundEmails.id })
+    for (const row of rows) updated.add(row.id)
+  }
+  const rest = items.map(item => item.id).filter(id => !updated.has(id))
+  const existing =
+    rest.length === 0
+      ? []
+      : await db
+          .select({ id: inboundEmails.id, status: inboundEmails.status })
+          .from(inboundEmails)
+          .where(inArray(inboundEmails.id, rest))
+  const conflict: string[] = []
+  for (const row of existing) {
+    if (row.status === next) updated.add(row.id)
+    else conflict.push(row.id)
+  }
+  const found = new Set(existing.map(row => row.id))
+  return {
+    updated: items.map(item => item.id).filter(id => updated.has(id)),
+    conflict,
+    missing: rest.filter(id => !found.has(id)),
+  }
+}
+
 export async function insertReply(input: InsertReplyInput): Promise<void> {
   await db.insert(inboundEmailReplies).values({
     emailId: input.email_id,
