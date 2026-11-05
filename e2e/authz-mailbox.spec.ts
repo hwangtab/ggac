@@ -50,6 +50,9 @@ const ATTACHMENT_ID = '00000000-0000-4000-8000-00000000c003'
 // 스코프 대조 픽스처(브리프 B) — 메일 A(EMAIL_DONE_ID)의 첨부를 메일
 // B(EMAIL_SCOPE_OTHER_ID)의 경로에 넣으면 404여야 한다.
 const EMAIL_SCOPE_OTHER_ID = '00000000-0000-4000-8000-00000000c004'
+/** EMAIL_DONE 대화에 이어진 메일 — 대화 묶기(0038). 발신자 필터의 집계를 흔들지 않게 다른 사람이 보냈다. */
+const EMAIL_THREAD_FOLLOW_ID = '00000000-0000-4000-8000-00000000c005'
+const THREAD_FOLLOW_SUBJECT = 'MAILBOX-E2E-THREAD-FOLLOW-UP'
 
 // 목록/펼침 화면에서 실제로 이 마커를 찾아 "그려졌다"를 확인한다 —
 // 요소 존재가 아니라 텍스트 가시성을 본다.
@@ -81,6 +84,12 @@ async function assertMailboxSchemaApplied(client: ReturnType<typeof createClient
     )
   }
   const columns = await client.execute({ sql: `PRAGMA table_info(inbound_emails)` })
+  if (!columns.rows.some(row => row.name === 'thread_id')) {
+    throw new Error(
+      '`inbound_emails.thread_id`가 없다. 로컬 Turso에 마이그레이션 0038을 먼저 적용할 것 ' +
+        '(`src/db/migrations/0038_mailbox_threads.sql`, 절차는 scripts/turso/README.md).'
+    )
+  }
   if (!columns.rows.some(row => row.name === 'from_email')) {
     throw new Error(
       '`inbound_emails.from_email`이 없다. 로컬 Turso에 마이그레이션 0037을 먼저 적용할 것 ' +
@@ -102,6 +111,7 @@ async function seedMailboxFixtures(): Promise<void> {
       from_address: 'sender-pending@example.com',
       from_email: 'sender-pending@example.com',
       from_name: null,
+      thread_id: EMAIL_PENDING_ID,
       to_addresses: JSON.stringify(['mailbox@ggac.kr']),
       subject: PENDING_SUBJECT,
       body_html: null,
@@ -117,6 +127,7 @@ async function seedMailboxFixtures(): Promise<void> {
       from_address: `"${SENDER_DONE_NAME}" <${SENDER_DONE_EMAIL.toUpperCase()}>`,
       from_email: SENDER_DONE_EMAIL,
       from_name: SENDER_DONE_NAME,
+      thread_id: EMAIL_DONE_ID,
       to_addresses: JSON.stringify(['mailbox@ggac.kr']),
       subject: LONG_SUBJECT,
       body_html: `<p>${BODY_MARKER}</p>`,
@@ -132,6 +143,7 @@ async function seedMailboxFixtures(): Promise<void> {
       from_address: 'sender-scope-other@example.com',
       from_email: 'sender-scope-other@example.com',
       from_name: null,
+      thread_id: EMAIL_SCOPE_OTHER_ID,
       to_addresses: JSON.stringify(['mailbox@ggac.kr']),
       subject: 'MAILBOX-E2E-SCOPE-OTHER-FIXTURE',
       body_html: null,
@@ -140,18 +152,35 @@ async function seedMailboxFixtures(): Promise<void> {
       received_at: now - 20_000,
     }
 
-    for (const email of [pendingEmail, doneEmail, scopeOtherEmail]) {
+    const threadFollowEmail = {
+      id: EMAIL_THREAD_FOLLOW_ID,
+      resend_email_id: 'authz-mailbox-thread-follow-fixture',
+      message_id: '<authz-mailbox-thread-follow@fixture.local>',
+      from_address: 'sender-thread@example.com',
+      from_email: 'sender-thread@example.com',
+      from_name: null,
+      thread_id: EMAIL_DONE_ID,
+      to_addresses: JSON.stringify(['mailbox@ggac.kr']),
+      subject: THREAD_FOLLOW_SUBJECT,
+      body_html: null,
+      status: 'unread',
+      body_fetch_status: 'done',
+      received_at: now - 10_000,
+    }
+
+    for (const email of [pendingEmail, doneEmail, scopeOtherEmail, threadFollowEmail]) {
       await client.execute({
         sql: `INSERT INTO inbound_emails
-                (id, resend_email_id, message_id, from_address, from_email, from_name,
+                (id, resend_email_id, message_id, from_address, from_email, from_name, thread_id,
                  to_addresses, subject, body_html, status, body_fetch_status, received_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               ON CONFLICT(id) DO UPDATE SET
                 resend_email_id = excluded.resend_email_id,
                 message_id = excluded.message_id,
                 from_address = excluded.from_address,
                 from_email = excluded.from_email,
                 from_name = excluded.from_name,
+                thread_id = excluded.thread_id,
                 to_addresses = excluded.to_addresses,
                 subject = excluded.subject,
                 body_html = excluded.body_html,
@@ -165,6 +194,7 @@ async function seedMailboxFixtures(): Promise<void> {
           email.from_address,
           email.from_email,
           email.from_name,
+          email.thread_id,
           email.to_addresses,
           email.subject,
           email.body_html,
@@ -532,6 +562,44 @@ test.describe('관리자 메일함 API 경계', () => {
   })
 
   /**
+   * 대화 묶기(0038). 상세의 `thread`는 같은 대화의 메일만 머리글로 싣는다 — 다른 대화의 메일이 섞이면 이사가
+   * 열어 본 적 없는 메일의 발신자·제목이 엉뚱한 상세에 뜬다. 본문은 싣지 않는다.
+   */
+  test('상세의 대화 목록은 같은 대화의 메일만, 본문 없이 싣는다', async ({ baseURL }) => {
+    const directorCtx = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('director'),
+    })
+    try {
+      const done = (await (await directorCtx.get(`/api/admin/mailbox/${EMAIL_DONE_ID}`)).json())
+        .data
+      const inboundIds = done.thread
+        .filter((item: { kind: string }) => item.kind === 'inbound')
+        .map((item: { id: string }) => item.id)
+      expect(inboundIds).toEqual([EMAIL_DONE_ID, EMAIL_THREAD_FOLLOW_ID])
+      for (const item of done.thread) {
+        expect(item).not.toHaveProperty('body_html')
+        expect(item).not.toHaveProperty('body_text')
+      }
+
+      const other = (
+        await (await directorCtx.get(`/api/admin/mailbox/${EMAIL_SCOPE_OTHER_ID}`)).json()
+      ).data
+      expect(other.thread.map((item: { id: string }) => item.id)).toEqual([EMAIL_SCOPE_OTHER_ID])
+
+      const list = (await (await directorCtx.get('/api/admin/mailbox?limit=100')).json()).data
+      const counts = Object.fromEntries(
+        list.emails.map((e: { id: string; thread_count: number }) => [e.id, e.thread_count])
+      )
+      expect(counts[EMAIL_DONE_ID]).toBe(2)
+      expect(counts[EMAIL_THREAD_FOLLOW_ID]).toBe(2)
+      expect(counts[EMAIL_SCOPE_OTHER_ID]).toBe(1)
+    } finally {
+      await directorCtx.dispose()
+    }
+  })
+
+  /**
    * 스코프 대조(브리프 B) — 이번 변경의 핵심 보안 수정. 메일
    * A(EMAIL_DONE_ID)의 첨부 id를 메일 B(EMAIL_SCOPE_OTHER_ID)의 경로에
    * 넣으면, 첨부는 실재하지만 그 메일의 것이 아니므로 404여야 한다. 관리자
@@ -779,6 +847,29 @@ test.describe('관리자 메일함 페이지 인가', () => {
       await doneRow.click()
       await expect(page.getByRole('button', { name: '답장', exact: true })).toHaveCount(0)
       await expect(page.getByText('상태 변경:')).toHaveCount(0)
+    } finally {
+      await ctx.close()
+    }
+  })
+
+  test('상세의 대화 목록에서 같은 대화의 다른 메일로 넘어간다', async ({ browser }) => {
+    const ctx = await browser.newContext({ storageState: storageStatePath('director') })
+    try {
+      const page = await ctx.newPage()
+      await page.goto('/board-room/mailbox', { waitUntil: 'domcontentloaded' })
+
+      await page.getByText(LONG_SUBJECT_PREFIX, { exact: false }).first().click()
+      const summary = page.getByText('이 대화의 메일 2통')
+      await expect(summary).toBeVisible({ timeout: 15000 })
+      await summary.click()
+      // 목록 행의 보낸 사람 링크에도 같은 주소가 보이므로 대화 목록(<details>) 안으로 좁힌다.
+      await summary
+        .locator('xpath=..')
+        .getByRole('button', { name: /sender-thread@example\.com/ })
+        .click()
+      await expect(page.getByRole('heading', { name: THREAD_FOLLOW_SUBJECT })).toBeVisible({
+        timeout: 15000,
+      })
     } finally {
       await ctx.close()
     }

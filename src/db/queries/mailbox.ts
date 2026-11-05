@@ -95,9 +95,13 @@ function rowToAttachment(row: Record<string, unknown>): Record<string, unknown> 
  */
 export async function insertInboundEmail(input: InsertInboundEmailInput) {
   const sender = parseMailbox(input.from_address)
+  // 대화 id는 처음에 자기 id다 — 본문을 당겨 헤더가 오면 `assignThread`가 앞 메일의 대화로 옮긴다.
+  const id = crypto.randomUUID()
   const [row] = await db
     .insert(inboundEmails)
     .values({
+      id,
+      threadId: id,
       resendEmailId: input.resend_email_id,
       messageId: input.message_id ?? null,
       fromAddress: input.from_address,
@@ -258,6 +262,10 @@ export async function listInboundEmails(
     createdAt: inboundEmails.createdAt,
     updatedAt: inboundEmails.updatedAt,
     attachmentCount: realAttachmentCount,
+    threadId: inboundEmails.threadId,
+    // 같은 대화의 받은 메일 수(자기 포함). 바깥 열은 `realAttachmentCount`와 같은 이유로 표 이름까지 박는다.
+    threadCount: sql<number>`(select count(*) from inbound_emails t
+      where t.thread_id = "inbound_emails"."thread_id")`,
   }
 
   const rowsQuery = db
@@ -275,10 +283,14 @@ export async function listInboundEmails(
   ])
 
   return {
-    emails: rows.map(row => ({
-      ...rowToEmail(row),
-      attachment_count: Number(row.attachmentCount ?? 0),
-    })),
+    emails: rows.map(row => {
+      const { attachmentCount, threadCount, ...rest } = row
+      return {
+        ...rowToEmail(rest),
+        attachment_count: Number(attachmentCount ?? 0),
+        thread_count: Number(threadCount ?? 1),
+      }
+    }),
     total_count: Number(countRows[0]?.count ?? 0),
   }
 }
@@ -361,6 +373,109 @@ export async function findMemberByEmail(email: string): Promise<{
     registration_status: String(row.registrationStatus ?? ''),
     is_active: Boolean(row.isActive),
   }
+}
+
+/**
+ * 헤더가 가리키는 앞 메일(`messageIds`, `referencedMessageIds`의 결과)을 찾아 이 메일을 그 대화로 옮긴다.
+ *
+ * 앞 메일(이 메일보다 늦지 않게 받은 것)이 여럿이면 가장 먼저 받은 것의 대화를 고른다(0038 백필과 같은 규칙).
+ * 못 찾으면 아무것도 바꾸지 않는다 —
+ * 삽입 때 둔 자기 id가 그대로 남는다. 본문 재시도에서 다시 불려도 같은 결과다(멱등).
+ *
+ * 한계: 앞 메일이 **나중에** 도착하면(순서 뒤바뀜) 이미 들어온 뒷 메일을 거슬러 옮기지 않는다.
+ */
+export async function assignThread(id: string, messageIds: string[]): Promise<string | null> {
+  if (messageIds.length === 0) return null
+  const [parent] = await db
+    .select({ id: inboundEmails.id, threadId: inboundEmails.threadId })
+    .from(inboundEmails)
+    .where(
+      and(
+        inArray(inboundEmails.messageId, messageIds),
+        sql`${inboundEmails.id} <> ${id}`,
+        // 앞 메일만 — 서로를 가리키는 두 메일이 대화를 맞바꾸지 않게 한다(0038과 같은 조건).
+        sql`${inboundEmails.receivedAt} <= (select received_at from inbound_emails where id = ${id})`
+      )
+    )
+    .orderBy(asc(inboundEmails.receivedAt), asc(inboundEmails.id))
+    .limit(1)
+  if (!parent) return null
+  const threadId = parent.threadId ?? parent.id
+  await db.update(inboundEmails).set({ threadId }).where(eq(inboundEmails.id, id))
+  return threadId
+}
+
+export type ThreadItem =
+  | {
+      kind: 'inbound'
+      id: string
+      from_email: string | null
+      from_name: string | null
+      from_address: string
+      subject: string | null
+      status: string
+      at: string | null
+    }
+  | { kind: 'reply'; id: string; email_id: string; subject: string; at: string | null }
+
+/**
+ * 대화 한 줄기 — 받은 메일과 그 메일들에 보낸 우리 답장을 시간순으로. 본문은 싣지 않는다(각 메일 상세에서 읽는다).
+ * 대화 id로만 고르므로 다른 대화의 메일은 섞이지 않는다.
+ */
+export async function listThread(threadId: string): Promise<ThreadItem[]> {
+  const inbound = await db
+    .select({
+      id: inboundEmails.id,
+      fromEmail: inboundEmails.fromEmail,
+      fromName: inboundEmails.fromName,
+      fromAddress: inboundEmails.fromAddress,
+      subject: inboundEmails.subject,
+      status: inboundEmails.status,
+      receivedAt: inboundEmails.receivedAt,
+    })
+    .from(inboundEmails)
+    .where(eq(inboundEmails.threadId, threadId))
+    .orderBy(asc(inboundEmails.receivedAt), asc(inboundEmails.id))
+  const replies =
+    inbound.length === 0
+      ? []
+      : await db
+          .select({
+            id: inboundEmailReplies.id,
+            emailId: inboundEmailReplies.emailId,
+            subject: inboundEmailReplies.subject,
+            createdAt: inboundEmailReplies.createdAt,
+          })
+          .from(inboundEmailReplies)
+          .where(
+            inArray(
+              inboundEmailReplies.emailId,
+              inbound.map(row => row.id)
+            )
+          )
+  const items: (ThreadItem & { sortAt: number })[] = [
+    ...inbound.map(row => ({
+      kind: 'inbound' as const,
+      id: row.id,
+      from_email: row.fromEmail,
+      from_name: row.fromName,
+      from_address: row.fromAddress,
+      subject: row.subject,
+      status: row.status,
+      at: toIso(row.receivedAt),
+      sortAt: row.receivedAt?.getTime() ?? 0,
+    })),
+    ...replies.map(row => ({
+      kind: 'reply' as const,
+      id: row.id,
+      email_id: row.emailId,
+      subject: row.subject,
+      at: toIso(row.createdAt),
+      sortAt: row.createdAt?.getTime() ?? 0,
+    })),
+  ]
+  items.sort((a, b) => a.sortAt - b.sortAt)
+  return items.map(({ sortAt: _sortAt, ...item }) => item)
 }
 
 export async function getInboundEmail(id: string): Promise<Record<string, unknown> | null> {

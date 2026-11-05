@@ -46,6 +46,11 @@ export const inboundEmails = sqliteTable(
      * (본문 자체가 없다)와는 구분해 둔다.
      */
     bodyFetchStatus: text('body_fetch_status').notNull().default('pending'),
+    /**
+     * 대화 id — 대화를 시작한 받은 메일의 id(시작 메일은 자기 id). 새 행은 삽입 때 자기 id로 두고, 본문을 당겨
+     * 헤더가 오면 `assignThread`가 앞 메일의 대화로 옮긴다. 기존 행은 0038이 백필했다.
+     */
+    threadId: text('thread_id'),
     /** 답장 스레드용 References 누적. 공백으로 이은 message_id 목록. */
     threadReferences: text('thread_references'),
     receivedAt: integer('received_at', { mode: 'timestamp_ms' }).notNull(),
@@ -57,6 +62,7 @@ export const inboundEmails = sqliteTable(
     index('inbound_emails_received_idx').on(table.receivedAt),
     index('inbound_emails_from_idx').on(table.fromAddress),
     index('inbound_emails_from_email_idx').on(table.fromEmail, table.receivedAt),
+    index('inbound_emails_thread_idx').on(table.threadId, table.receivedAt),
     index('inbound_emails_fetch_status_idx').on(table.bodyFetchStatus),
   ]
 )
