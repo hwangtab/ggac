@@ -57,6 +57,16 @@ interface InboundEmail {
   thread_count?: number
   /** 목록 응답에만 있다. 내부 메모 수. */
   note_count?: number
+  /** 담당자(0041)와 그 표시 이름. */
+  assigned_to?: string | null
+  assignee_name?: string | null
+}
+
+type AssigneeOption = { id: string; display_name: string; role: 'admin' | 'director' | 'auditor' }
+const ROLE_LABELS: Record<AssigneeOption['role'], string> = {
+  admin: '관리자',
+  director: '이사',
+  auditor: '감사',
 }
 
 /** 내부 메모 — 이사·감사·관리자만 본다. 메일로 나가지 않는다. */
@@ -204,6 +214,11 @@ export default function MailboxView({ className = '' }: { className?: string }) 
   const [updating, setUpdating] = useState<string | null>(null)
   // 일괄 처리(관리자만) — 지금 목록 페이지에서 고른 메일. 목록이 바뀌면 페이지에 없는 id는 버린다.
   const [checkedIds, setCheckedIds] = useState<string[]>([])
+  // "내 담당" — 지금 로그인한 사람이 담당자인 메일만. 이사·감사도 쓴다.
+  const [mineOnly, setMineOnly] = useState(false)
+  // 담당자 후보(관리자만 받는다 — 지정은 관리자만 한다).
+  const [assigneeOptions, setAssigneeOptions] = useState<AssigneeOption[]>([])
+  const [assigning, setAssigning] = useState(false)
   const [bulkUpdating, setBulkUpdating] = useState(false)
   const [canManage, setCanManage] = useState(false)
   // 발신자 필터는 URL(`?from=`·`?domain=`)이 정본이다 — 뒤로 가기로 풀리고 링크로 공유된다. 서버 렌더에는
@@ -261,6 +276,7 @@ export default function MailboxView({ className = '' }: { className?: string }) 
       if (hasAttachment) params.set('has', 'attachment')
       if (afterDate) params.set('after', afterDate)
       if (beforeDate) params.set('before', beforeDate)
+      if (mineOnly) params.set('assignee', 'me')
       params.set('limit', String(LIMIT))
       params.set('offset', String(offset))
 
@@ -279,7 +295,7 @@ export default function MailboxView({ className = '' }: { className?: string }) 
     } finally {
       setLoading(false)
     }
-  }, [statusFilter, search, offset, senderFilter, hasAttachment, afterDate, beforeDate])
+  }, [statusFilter, search, offset, senderFilter, hasAttachment, afterDate, beforeDate, mineOnly])
 
   // 발신자 카드 — 주소 필터일 때만. 카드가 실패해도 목록은 그대로 보여야 하므로 오류는 카드만 지운다.
   useEffect(() => {
@@ -313,6 +329,18 @@ export default function MailboxView({ className = '' }: { className?: string }) 
     }
     sync()
     setUrlReady(true)
+    // 담당자 지정 푸시의 링크(`?mail=<id>`)로 들어오면 그 메일을 바로 펼친다. 한 번만 쓰고 주소에서 지운다 —
+    // 남겨 두면 새로고침할 때마다 같은 메일이 다시 열린다.
+    const url = new URL(window.location.href)
+    const mailId = url.searchParams.get('mail')
+    if (mailId && /^[0-9a-f-]{36}$/i.test(mailId)) {
+      setSelectedId(mailId)
+      fetchDetail(mailId)
+    }
+    if (mailId !== null) {
+      url.searchParams.delete('mail')
+      window.history.replaceState(null, '', url)
+    }
     window.addEventListener('popstate', sync)
     return () => window.removeEventListener('popstate', sync)
   }, [])
@@ -433,6 +461,53 @@ export default function MailboxView({ className = '' }: { className?: string }) 
       }
     } finally {
       setUpdating(null)
+    }
+  }
+
+  useEffect(() => {
+    if (!canManage) return
+    let cancelled = false
+    fetch('/api/admin/mailbox/assignees')
+      .then(res => (res.ok ? res.json() : null))
+      .then(json => {
+        if (!cancelled) setAssigneeOptions(json?.data?.assignees ?? [])
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [canManage])
+
+  const changeAssignee = async (email: InboundEmail, next: string | null) => {
+    if (assigning) return
+    setAssigning(true)
+    try {
+      const res = await fetch(`/api/admin/mailbox/${email.id}/assignee`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          assignee_id: next,
+          expected_assignee_id: email.assigned_to ?? null,
+        }),
+      })
+      const json = await res.json().catch(() => null)
+      if (res.status === 409) {
+        alert('다른 관리자가 먼저 담당자를 바꿨습니다. 다시 불러옵니다.')
+        await Promise.all([fetchEmails(), fetchDetail(email.id)])
+        return
+      }
+      if (!res.ok) throw new Error(json?.error || '담당자를 바꾸지 못했습니다.')
+      const patch = {
+        assigned_to: json?.data?.assigned_to ?? null,
+        assignee_name: json?.data?.assignee_name ?? null,
+      }
+      setEmails(prev => prev.map(e => (e.id === email.id ? { ...e, ...patch } : e)))
+      setDetail(prev => (prev && prev.id === email.id ? { ...prev, ...patch } : prev))
+      if (mineOnly) await fetchEmails()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '담당자를 바꾸지 못했습니다.')
+    } finally {
+      setAssigning(false)
     }
   }
 
@@ -949,6 +1024,21 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                     {label}
                   </button>
                 ))}
+                <button
+                  type="button"
+                  aria-pressed={mineOnly}
+                  onClick={() => {
+                    setMineOnly(v => !v)
+                    setOffset(0)
+                  }}
+                  className={`px-2.5 py-1 text-xs rounded-lg border transition-colors ${
+                    mineOnly
+                      ? 'bg-amber-600 text-white border-amber-600'
+                      : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  내 담당
+                </button>
               </div>
             </div>
 
@@ -1026,6 +1116,14 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                           <span className="font-medium text-gray-900 truncate min-w-0 text-sm">
                             {email.subject || '(제목 없음)'}
                           </span>
+                          {email.assigned_to && (
+                            <span
+                              className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-50 text-indigo-700 shrink-0"
+                              title="담당자"
+                            >
+                              담당 {email.assignee_name ?? '탈퇴한 회원'}
+                            </span>
+                          )}
                           {(email.note_count ?? 0) > 0 && (
                             <span
                               className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 shrink-0"
@@ -1194,6 +1292,42 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                   </div>
                   <div className="text-xs text-gray-400 mt-0.5">
                     {formatDate(selectedEmail.received_at)}
+                  </div>
+                  <div
+                    className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-600"
+                    data-testid="mail-assignee"
+                  >
+                    <span>
+                      담당:{' '}
+                      <span className="font-medium text-gray-800">
+                        {selectedEmail.assigned_to
+                          ? (selectedEmail.assignee_name ?? '탈퇴한 회원')
+                          : '없음'}
+                      </span>
+                    </span>
+                    {canManage && assigneeOptions.length > 0 && (
+                      <select
+                        aria-label="담당자 지정"
+                        disabled={assigning}
+                        value={selectedEmail.assigned_to ?? ''}
+                        onChange={e => changeAssignee(selectedEmail, e.target.value || null)}
+                        className="rounded border border-gray-300 px-1.5 py-0.5 text-xs"
+                      >
+                        <option value="">담당자 없음</option>
+                        {/* 이사에서 빠진 사람에게 남은 지정 — 후보에는 없지만 지금 값이 "없음"으로 보이면 안 된다. */}
+                        {selectedEmail.assigned_to &&
+                          !assigneeOptions.some(o => o.id === selectedEmail.assigned_to) && (
+                            <option value={selectedEmail.assigned_to} disabled>
+                              {selectedEmail.assignee_name ?? '탈퇴한 회원'} (후보 아님)
+                            </option>
+                          )}
+                        {assigneeOptions.map(option => (
+                          <option key={option.id} value={option.id}>
+                            {option.display_name} ({ROLE_LABELS[option.role]})
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </div>
                   {attachments.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-3">

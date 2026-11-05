@@ -11,6 +11,7 @@ import {
   updateInboundStatus,
 } from '@/db/queries/mailbox'
 import { listNotesForEmail } from '@/db/queries/mailboxNotes'
+import { getDisplayNames } from '@/db/queries/work/directory'
 import { validateUUID } from '@/utils/validation'
 
 export const dynamic = 'force-dynamic'
@@ -46,14 +47,16 @@ export const GET = defineApiRoute<undefined, BoardAuthSuccess>({
     }
 
     const threadId = email.thread_id ? String(email.thread_id) : null
-    const [attachments, replies, thread, notes] = await Promise.all([
+    const assignedTo = email.assigned_to ? String(email.assigned_to) : null
+    const [attachments, replies, thread, notes, names] = await Promise.all([
       listAttachmentsForEmail(id),
       listRepliesForEmail(id),
       threadId ? listThread(threadId) : Promise.resolve([]),
       listNotesForEmail(id),
+      assignedTo ? getDisplayNames([assignedTo]) : Promise.resolve(new Map<string, string>()),
     ])
     return ApiSuccess.ok({
-      email,
+      email: { ...email, assignee_name: assignedTo ? (names.get(assignedTo) ?? null) : null },
       attachments,
       replies,
       thread,

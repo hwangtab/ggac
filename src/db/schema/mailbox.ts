@@ -51,6 +51,14 @@ export const inboundEmails = sqliteTable(
      * 헤더가 오면 `assignThread`가 앞 메일의 대화로 옮긴다. 기존 행은 0038이 백필했다.
      */
     threadId: text('thread_id'),
+    /**
+     * 담당자(0041) — 이 메일을 맡은 이사·감사·관리자. 지정·해제는 관리자만, 후보 판정은 라우트가 한다
+     * (`canAccessBoardRoom`). 프로필이 지워지면 비운다.
+     */
+    assignedTo: text('assigned_to').references(() => memberProfiles.id, { onDelete: 'set null' }),
+    assignedAt: integer('assigned_at', { mode: 'timestamp_ms' }),
+    /** 지정한 관리자. 프로필이 지워지면 비운다. */
+    assignedBy: text('assigned_by').references(() => memberProfiles.id, { onDelete: 'set null' }),
     /** 답장 스레드용 References 누적. 공백으로 이은 message_id 목록. */
     threadReferences: text('thread_references'),
     receivedAt: integer('received_at', { mode: 'timestamp_ms' }).notNull(),
@@ -63,6 +71,7 @@ export const inboundEmails = sqliteTable(
     index('inbound_emails_from_idx').on(table.fromAddress),
     index('inbound_emails_from_email_idx').on(table.fromEmail, table.receivedAt),
     index('inbound_emails_thread_idx').on(table.threadId, table.receivedAt),
+    index('inbound_emails_assigned_idx').on(table.assignedTo, table.receivedAt),
     index('inbound_emails_fetch_status_idx').on(table.bodyFetchStatus),
   ]
 )

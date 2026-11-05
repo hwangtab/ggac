@@ -68,6 +68,12 @@ export const GET = defineApiRoute<undefined, BoardAuthSuccess>({
       throw ApiError.badRequest('시작일이 종료일보다 늦습니다.')
     }
 
+    // "내 담당" — 지금 로그인한 사람이 담당자인 메일. 다른 사람의 id로 거르는 것은 열지 않는다(필요 없다).
+    const assignee = params.get('assignee')
+    if (assignee && assignee !== 'me') {
+      throw ApiError.badRequest('알 수 없는 담당자 조건입니다.')
+    }
+
     const has = params.get('has')
     if (has && has !== 'attachment') {
       throw ApiError.badRequest('알 수 없는 조건입니다.')
@@ -83,6 +89,7 @@ export const GET = defineApiRoute<undefined, BoardAuthSuccess>({
       hasAttachment: has === 'attachment',
       receivedFrom: receivedFrom ?? undefined,
       receivedUntil: receivedUntil ?? undefined,
+      assignedTo: assignee === 'me' ? auth.user.id : undefined,
     })
     return ApiSuccess.ok({
       emails: result.emails,
