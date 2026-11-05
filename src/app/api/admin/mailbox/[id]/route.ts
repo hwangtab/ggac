@@ -10,6 +10,7 @@ import {
   listThread,
   updateInboundStatus,
 } from '@/db/queries/mailbox'
+import { listNotesForEmail } from '@/db/queries/mailboxNotes'
 import { validateUUID } from '@/utils/validation'
 
 export const dynamic = 'force-dynamic'
@@ -45,12 +46,22 @@ export const GET = defineApiRoute<undefined, BoardAuthSuccess>({
     }
 
     const threadId = email.thread_id ? String(email.thread_id) : null
-    const [attachments, replies, thread] = await Promise.all([
+    const [attachments, replies, thread, notes] = await Promise.all([
       listAttachmentsForEmail(id),
       listRepliesForEmail(id),
       threadId ? listThread(threadId) : Promise.resolve([]),
+      listNotesForEmail(id),
     ])
-    return ApiSuccess.ok({ email, attachments, replies, thread, can_manage: auth.isAdmin })
+    return ApiSuccess.ok({
+      email,
+      attachments,
+      replies,
+      thread,
+      notes,
+      can_manage: auth.isAdmin,
+      // 화면이 "내 메모"(고치기·지우기 버튼)를 가리는 데 쓴다. 판정 자체는 메모 라우트가 다시 한다.
+      viewer_id: auth.user.id,
+    })
   },
 })
 

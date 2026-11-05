@@ -55,6 +55,19 @@ interface InboundEmail {
   thread_id: string | null
   /** 목록 응답에만 있다. 같은 대화의 받은 메일 수(자기 포함). */
   thread_count?: number
+  /** 목록 응답에만 있다. 내부 메모 수. */
+  note_count?: number
+}
+
+/** 내부 메모 — 이사·감사·관리자만 본다. 메일로 나가지 않는다. */
+interface MailboxNote {
+  id: string
+  email_id: string
+  author_id: string | null
+  author_name: string | null
+  body: string
+  created_at: string | null
+  updated_at: string | null
 }
 
 /** 상세 응답의 `thread` — 같은 대화의 받은 메일과 우리 답장, 시간순. 본문은 없다. */
@@ -214,6 +227,11 @@ export default function MailboxView({ className = '' }: { className?: string }) 
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [replies, setReplies] = useState<SentReply[]>([])
   const [thread, setThread] = useState<ThreadItem[]>([])
+  const [notes, setNotes] = useState<MailboxNote[]>([])
+  const [viewerId, setViewerId] = useState<string | null>(null)
+  const [noteDraft, setNoteDraft] = useState('')
+  const [noteSaving, setNoteSaving] = useState(false)
+  const [editingNote, setEditingNote] = useState<{ id: string; body: string } | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState<string | null>(null)
 
@@ -329,6 +347,8 @@ export default function MailboxView({ className = '' }: { className?: string }) 
       setAttachments(json.data?.attachments ?? [])
       setReplies(json.data?.replies ?? [])
       setThread(json.data?.thread ?? [])
+      setNotes(json.data?.notes ?? [])
+      setViewerId(json.data?.viewer_id ?? null)
       setCanManage(json.data?.can_manage === true)
     } catch (err) {
       setDetailError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.')
@@ -343,6 +363,9 @@ export default function MailboxView({ className = '' }: { className?: string }) 
     setAttachments([])
     setReplies([])
     setThread([])
+    setNotes([])
+    setNoteDraft('')
+    setEditingNote(null)
     setShowRemoteImages(false)
     fetchDetail(email.id)
 
@@ -362,6 +385,9 @@ export default function MailboxView({ className = '' }: { className?: string }) 
     setAttachments([])
     setReplies([])
     setThread([])
+    setNotes([])
+    setNoteDraft('')
+    setEditingNote(null)
     setShowRemoteImages(false)
   }
 
@@ -449,6 +475,74 @@ export default function MailboxView({ className = '' }: { className?: string }) 
       alert(err instanceof Error ? err.message : '일괄 변경에 실패했습니다.')
     } finally {
       setBulkUpdating(false)
+    }
+  }
+
+  // 메모 수는 목록 배지에도 보인다 — 바꾼 뒤 목록 행의 수도 맞춘다.
+  const syncNoteCount = (emailId: string, count: number) =>
+    setEmails(prev => prev.map(e => (e.id === emailId ? { ...e, note_count: count } : e)))
+
+  const saveNote = async () => {
+    if (!selectedId || !noteDraft.trim() || noteSaving) return
+    const emailId = selectedId
+    setNoteSaving(true)
+    try {
+      const res = await fetch(`/api/admin/mailbox/${emailId}/notes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body: noteDraft }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || '메모를 남기지 못했습니다.')
+      const next = [...notes, json.data.note as MailboxNote]
+      setNotes(next)
+      syncNoteCount(emailId, next.length)
+      setNoteDraft('')
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '메모를 남기지 못했습니다.')
+    } finally {
+      setNoteSaving(false)
+    }
+  }
+
+  const saveNoteEdit = async () => {
+    if (!selectedId || !editingNote || !editingNote.body.trim() || noteSaving) return
+    setNoteSaving(true)
+    try {
+      const res = await fetch(`/api/admin/mailbox/${selectedId}/notes/${editingNote.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body: editingNote.body }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || '메모를 고치지 못했습니다.')
+      const updated = json.data.note as MailboxNote
+      setNotes(prev => prev.map(n => (n.id === updated.id ? updated : n)))
+      setEditingNote(null)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '메모를 고치지 못했습니다.')
+    } finally {
+      setNoteSaving(false)
+    }
+  }
+
+  const removeNote = async (note: MailboxNote) => {
+    if (!selectedId || noteSaving || !window.confirm('이 메모를 지울까요?')) return
+    const emailId = selectedId
+    setNoteSaving(true)
+    try {
+      const res = await fetch(`/api/admin/mailbox/${emailId}/notes/${note.id}`, {
+        method: 'DELETE',
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || '메모를 지우지 못했습니다.')
+      const next = notes.filter(n => n.id !== note.id)
+      setNotes(next)
+      syncNoteCount(emailId, next.length)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '메모를 지우지 못했습니다.')
+    } finally {
+      setNoteSaving(false)
     }
   }
 
@@ -932,6 +1026,14 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                           <span className="font-medium text-gray-900 truncate min-w-0 text-sm">
                             {email.subject || '(제목 없음)'}
                           </span>
+                          {(email.note_count ?? 0) > 0 && (
+                            <span
+                              className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 shrink-0"
+                              title="내부 메모 수"
+                            >
+                              메모 {email.note_count}
+                            </span>
+                          )}
                           {(email.thread_count ?? 1) > 1 && (
                             <span
                               className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 shrink-0"
@@ -1207,6 +1309,127 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                       srcDoc={buildBodySrcDoc(detail, showRemoteImages)}
                       className="w-full flex-1 min-h-[12rem] bg-white"
                     />
+                    {/*
+                      내부 메모 — 이사·감사·관리자 누구나 쓴다. 답장 목록과 같은 이유로 기본은 접는다(펼쳐 두면 본문
+                      iframe이 눌린다). 본문은 텍스트로만 그린다 — HTML로 해석하지 않는다.
+                    */}
+                    <details
+                      key={`notes-${selectedEmail.id}`}
+                      data-testid="mail-notes"
+                      className="shrink-0 border-t border-gray-100 bg-amber-50/40"
+                    >
+                      <summary className="cursor-pointer px-4 py-2 text-xs font-medium text-gray-600">
+                        내부 메모 {notes.length}건{' '}
+                        <span className="font-normal text-gray-400">
+                          (이사·감사·관리자만 봅니다. 메일로 나가지 않습니다)
+                        </span>
+                      </summary>
+                      <div className="max-h-60 overflow-y-auto">
+                        {notes.map(note => {
+                          const mine = viewerId !== null && note.author_id === viewerId
+                          const editing = editingNote?.id === note.id
+                          return (
+                            <div
+                              key={note.id}
+                              className="px-4 py-2 border-t border-gray-100 text-xs"
+                            >
+                              <div className="flex items-center justify-between gap-2 text-gray-500">
+                                <span>
+                                  <span className="font-medium text-gray-700">
+                                    {note.author_name ?? '탈퇴한 회원'}
+                                  </span>{' '}
+                                  · {note.created_at ? formatDate(note.created_at) : ''}
+                                  {/* 삽입 때 두 시각이 따로 찍혀 몇 ms 어긋날 수 있다 — 1초 넘게 차이 날 때만 고친 것으로 본다. */}
+                                  {note.updated_at &&
+                                    note.created_at &&
+                                    Date.parse(note.updated_at) - Date.parse(note.created_at) >
+                                      1000 &&
+                                    ' (수정됨)'}
+                                </span>
+                                {!editing && (mine || canManage) && (
+                                  <span className="flex gap-2 shrink-0">
+                                    {mine && (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setEditingNote({ id: note.id, body: note.body })
+                                        }
+                                        className="hover:text-gray-800"
+                                      >
+                                        고치기
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => removeNote(note)}
+                                      className="hover:text-red-700"
+                                    >
+                                      지우기
+                                    </button>
+                                  </span>
+                                )}
+                              </div>
+                              {editing ? (
+                                <div className="mt-1 space-y-1">
+                                  <textarea
+                                    rows={3}
+                                    value={editingNote.body}
+                                    onChange={e =>
+                                      setEditingNote({ id: note.id, body: e.target.value })
+                                    }
+                                    maxLength={2000}
+                                    aria-label="메모 고치기"
+                                    className={`${inputClass} resize-none text-xs`}
+                                  />
+                                  <div className="flex justify-end gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingNote(null)}
+                                      className="px-2 py-1 text-gray-600 hover:text-gray-900"
+                                    >
+                                      취소
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={noteSaving || !editingNote.body.trim()}
+                                      onClick={saveNoteEdit}
+                                      className="px-2 py-1 rounded bg-gray-800 text-white disabled:opacity-50"
+                                    >
+                                      저장
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <p className="mt-0.5 whitespace-pre-wrap break-words text-gray-800">
+                                  {note.body}
+                                </p>
+                              )}
+                            </div>
+                          )
+                        })}
+                        <div className="px-4 py-2 border-t border-gray-100 space-y-1">
+                          <textarea
+                            rows={2}
+                            value={noteDraft}
+                            onChange={e => setNoteDraft(e.target.value)}
+                            maxLength={2000}
+                            placeholder="이 메일에 대해 함께 볼 메모를 남기세요."
+                            aria-label="새 메모"
+                            className={`${inputClass} resize-none text-xs`}
+                          />
+                          <div className="flex justify-end">
+                            <button
+                              type="button"
+                              disabled={noteSaving || !noteDraft.trim()}
+                              onClick={saveNote}
+                              className="px-3 py-1 text-xs font-medium rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
+                            >
+                              메모 남기기
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </details>
                     {replies.length > 0 && (
                       /*
                         기본은 접어 둔다. 펼쳐 둔 채로 두면 이 영역이 세로를 먹어 본문 iframe이 거의 0으로 눌린다

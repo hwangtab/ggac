@@ -169,3 +169,26 @@ export const outboundEmailAttachments = sqliteTable(
   },
   table => [index('outbound_email_attachments_email_idx').on(table.emailId)]
 )
+
+/**
+ * 받은 메일의 **내부 메모** — 이사·감사·관리자가 메일마다 남기는 조합 안의 글. 메일로 나가지 않는다.
+ *
+ * 쓰기는 메일함 열람 범위(이사·감사·관리자) 전원, 고치기는 쓴 사람만, 지우기는 쓴 사람과 관리자다(라우트가 판정).
+ * 발송 경로(답장·새 메일·전달)는 이 표를 읽는 쿼리를 들여오지 않는다 — 메모가 바깥으로 나갈 길을 코드 구조로 막는다.
+ */
+export const inboundEmailNotes = sqliteTable(
+  'inbound_email_notes',
+  {
+    id: uuidPk(),
+    emailId: text('email_id')
+      .notNull()
+      .references(() => inboundEmails.id, { onDelete: 'cascade' }),
+    /** 쓴 사람. 프로필이 지워지면 null — 메모는 남기고 "탈퇴한 회원"으로 보인다. */
+    authorId: text('author_id').references(() => memberProfiles.id, { onDelete: 'set null' }),
+    /** 평문. 화면은 텍스트로만 그린다(HTML로 해석하지 않는다). 길이(1~2000자)는 라우트가 판정한다. */
+    body: text('body').notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  table => [index('inbound_email_notes_email_idx').on(table.emailId, table.createdAt)]
+)
