@@ -86,6 +86,9 @@ export const SERVER_ONLY_ACTIVITY_ACTION_TYPES = [
   'timebank_settings_changed',
   'timebank_coop_task_created',
   'timebank_transfer_admin_canceled',
+  // 이사회 서류 앱 편집(docs/board-work/05-이사회-서류-앱-편집.md §6). 새 버전이 생겼다는 증거라 서버만 적는다.
+  'board_document_version_saved',
+  'board_document_version_reverted',
 ] as const satisfies readonly ActivityActionType[]
 
 /**
@@ -115,6 +118,7 @@ export const ACTIVITY_TARGET_TYPES = [
   'ticket_reservation',
   'timebank_transfer',
   'timebank_listing',
+  'board_document',
 ] as const satisfies readonly ActivityTargetType[]
 
 /** 원장에 있을 수 있는 종류인가(필터·표시용). **기록 허가가 아니다.** */

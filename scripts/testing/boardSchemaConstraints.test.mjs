@@ -485,11 +485,13 @@ describe('0002 마이그레이션의 성질', () => {
     // "0002가 무엇을 지웠는가"와 "0004가 무엇을 더했는가"가 둘 다 드러난다.
     // 그다음 하나는 0009(안건 토론)가 더한 조회 인덱스이고, 마지막은 0017이
     // 더한 회의 목록 정렬 인덱스다(`board_meetings`에는 인덱스가 하나도 없어
-    // 목록이 매번 전체 스캔 뒤 정렬이었다).
+    // 목록이 매번 전체 스캔 뒤 정렬이었다). `board_document_versions_doc_no_key`는 0038(이사회 서류 앱 편집의
+    // 버전 기록)이 새 표와 함께 만든 UNIQUE(서류, 버전 번호)다 — 재작성과 무관하다.
     assert.deepEqual(
       r.rows.map(x => String(x.name)),
       [
         'board_agenda_comments_agenda_created_idx',
+        'board_document_versions_doc_no_key',
         'board_meeting_attendees_meeting_member_idx',
         'board_meeting_date_votes_option_voter_idx',
         'board_minutes_meeting_id_idx',

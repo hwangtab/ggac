@@ -75,6 +75,10 @@ export const ACTIVITY_ACTION_TYPE = [
   // 계획 Task 9: 조합 업무 글 등록, 관리자의 pending 취소(분쟁 정리).
   'timebank_coop_task_created',
   'timebank_transfer_admin_canceled',
+  // 이사회 서류 앱 편집(docs/board-work/05-이사회-서류-앱-편집.md §6) — 누가 언제 어느 서류를 새 버전으로 저장·되돌렸는지.
+  // 문서 내용은 싣지 않는다. 타입 배열일 뿐 DB CHECK가 없으므로 마이그레이션 불필요.
+  'board_document_version_saved',
+  'board_document_version_reverted',
 ] as const
 
 export const ACTIVITY_TARGET_TYPE = [
@@ -96,6 +100,8 @@ export const ACTIVITY_TARGET_TYPE = [
   // 타임뱅크 원장 행·게시판 글(계획 Task 9 관리자 기록). 타입 배열일 뿐 DB CHECK가 없다.
   'timebank_transfer',
   'timebank_listing',
+  // 이사회 서류(앱 편집 저장·되돌리기 기록의 대상)
+  'board_document',
 ] as const
 
 export const systemSettings = sqliteTable(

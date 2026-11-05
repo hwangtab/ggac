@@ -135,3 +135,27 @@ test('편집 화면 판정', () => {
     assert.equal(isBoardWorkEditPath(p), false, String(p))
   }
 })
+
+test('이사회 서류 앱 편집 화면도 편집 화면이다(메뉴 접기) — 업무 화면은 아니고 메뉴는 자료실', () => {
+  const id = '7d0c8f7e-0000-4000-8000-000000000000'
+  for (const p of [
+    `/board-room/documents/${id}/edit`,
+    `/board-room/documents/${id}/edit/`,
+    `/en/board-room/documents/${id}/edit`,
+    `/board-room/documents/${id}/edit?from=files`,
+  ]) {
+    assert.equal(isBoardWorkEditPath(p), true, p)
+    assert.equal(isBoardWorkPath(p), false, p)
+    assert.equal(boardMenuKey(p), 'files', p)
+  }
+  for (const p of [
+    '/board-room/documents',
+    `/board-room/documents/${id}`,
+    `/board-room/documents/${id}/editor`,
+    `/board-room/documents/${id}/edit/x`,
+    '/board-room/documents//edit',
+    `/board-room/meetings/${id}/edit`,
+  ]) {
+    assert.equal(isBoardWorkEditPath(p), false, p)
+  }
+})

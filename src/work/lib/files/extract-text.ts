@@ -188,3 +188,52 @@ export async function extractText(
     return { status: 'failed', reason: e instanceof Error ? e.message.slice(0, 200) : 'error' }
   }
 }
+
+/** 웹 본문으로 쓸 마크다운 상한(문자) — 검색 본문 상한과 같다. 넘으면 다시 만들지 않는다(지금 본문을 둔다) */
+export const BODY_MARKDOWN_MAX_CHARS = EXTRACT_MAX_CHARS
+
+export type MarkdownOutcome =
+  | { status: 'ok'; markdown: string }
+  | { status: Exclude<ExtractStatus, 'ok'> }
+
+/**
+ * 파일 내용 → 웹 본문용 마크다운(이사회 서류 앱 편집이 저장 뒤 `body_markdown`을 다시 만들 때 — 05 §5). 검색 추출
+ * (`extractText`)과 같은 kordoc·같은 보호 장치(압축 폭탄 검사·OCR 끔·시간 제한)를 쓰되, 평문으로 줄이지 않고 뷰어와 같은
+ * 정리(`cleanMarkdown` — 그림 자리표시·표 칸 줄바꿈)만 한 마크다운을 돌려준다. 텍스트 파일은 그대로. 절대 던지지 않는다.
+ */
+export async function extractMarkdown(
+  buffer: Buffer,
+  name: string,
+  opts: { timeoutMs?: number } = {}
+): Promise<MarkdownOutcome> {
+  const ext = extensionOf(name)
+  if (buffer.length > EXTRACT_MAX_BYTES) return { status: 'too_large' }
+  const done = (md: string): MarkdownOutcome => {
+    const clean = cleanExtractedText(md).trim()
+    if (clean.replace(/\s/g, '').length < EXTRACT_MIN_CHARS) return { status: 'unsupported' }
+    if (clean.length > BODY_MARKDOWN_MAX_CHARS) return { status: 'too_large' }
+    return { status: 'ok', markdown: clean }
+  }
+  if (TEXT_EXT.has(ext)) return done(decodeTextFile(buffer))
+  if (!KORDOC_EXT.has(ext)) return { status: 'unsupported' }
+  try {
+    const work = (async (): Promise<MarkdownOutcome> => {
+      await guardZipBuffer(buffer, name)
+      const { parse } = await import('kordoc')
+      const ab = buffer.buffer.slice(
+        buffer.byteOffset,
+        buffer.byteOffset + buffer.byteLength
+      ) as ArrayBuffer
+      const result = await parse(ab, { ocr: false, tableFormat: 'gfm' })
+      if (!result.success) {
+        const failed = mapFailure(result as Extract<ParseResult, { success: false }>)
+        return { status: failed.status as Exclude<ExtractStatus, 'ok'> }
+      }
+      return done(cleanMarkdown((result as Extract<ParseResult, { success: true }>).markdown))
+    })()
+    return await withTimeout(work, opts.timeoutMs ?? EXTRACT_TIMEOUT_MS)
+  } catch (e) {
+    if (e instanceof RenderError && e.code === 'too_large') return { status: 'too_large' }
+    return { status: 'failed' }
+  }
+}

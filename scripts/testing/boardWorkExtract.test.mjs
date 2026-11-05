@@ -240,3 +240,45 @@ test('mergeDocumentHits: 이름·본문이 둘 다 맞으면 파일에 스니펫
     ['c']
   )
 })
+
+// ── 웹 본문용 마크다운(이사회 서류 앱 편집 — docs/board-work/05-이사회-서류-앱-편집.md §5) ─────────────────
+
+test('extractMarkdown: DOCX 문구가 마크다운 본문으로 나오고, 표는 표 기호를 남긴다', async () => {
+  const docx = await rewriteZip(fixture('blank.docx'), 'word/document.xml', xml =>
+    xml.replace('<w:body>', `<w:body><w:p><w:r><w:t>${PHRASE}</w:t></w:r></w:p>`)
+  )
+  const out = await X.extractMarkdown(docx, '정관.docx')
+  assert.equal(out.status, 'ok', JSON.stringify(out))
+  assert.match(out.markdown, new RegExp(PHRASE))
+
+  const xlsx = await rewriteZip(fixture('blank.xlsx'), 'xl/worksheets/sheet1.xml', xml =>
+    xml.replace(
+      '<sheetData/>',
+      `<sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>항목</t></is></c><c r="B1" t="inlineStr"><is><t>${PHRASE}</t></is></c></row></sheetData>`
+    )
+  )
+  const sheet = await X.extractMarkdown(xlsx, '예산.xlsx')
+  assert.equal(sheet.status, 'ok', JSON.stringify(sheet))
+  assert.match(sheet.markdown, /\|/, '검색 본문과 달리 표 모양을 남긴다')
+})
+
+test('extractMarkdown: HWPX 문구, 텍스트 파일은 그대로, 대상 밖·빈 서식은 ok 가 아니다', async () => {
+  const hwpx = await rewriteZip(fixture('blank.hwpx'), 'Contents/section0.xml', xml =>
+    xml.replace('<hp:t></hp:t>', `<hp:t>${PHRASE}</hp:t>`)
+  )
+  const out = await X.extractMarkdown(hwpx, '정관.hwpx')
+  assert.equal(out.status, 'ok', JSON.stringify(out))
+  assert.match(out.markdown, new RegExp(PHRASE))
+
+  const md = await X.extractMarkdown(Buffer.from(`# 제목\n\n${PHRASE}\n`), '본문.md')
+  assert.deepEqual(md, { status: 'ok', markdown: `# 제목\n\n${PHRASE}` })
+
+  assert.deepEqual(await X.extractMarkdown(fixture('blank.pptx'), '발표.pptx'), {
+    status: 'unsupported',
+  })
+  const blank = await X.extractMarkdown(fixture('blank.docx'), '빈.docx')
+  assert.notEqual(blank.status, 'ok')
+  // 실패해도 던지지 않는다
+  const broken = await X.extractMarkdown(Buffer.from('not a zip'), '깨짐.docx')
+  assert.notEqual(broken.status, 'ok')
+})

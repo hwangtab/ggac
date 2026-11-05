@@ -133,9 +133,10 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         ...(process.env.CI ? {} : { channel: 'chrome' as const }),
       },
-      // board-work-chat·tabs·files·member-documents: 로그인 상태(authz-setup)와 로컬 Turso 시드가 필요해 authz 프로젝트에서만 돈다
+      // board-work-chat·tabs·files·member-documents·board-document-edit: 로그인 상태(authz-setup)와 로컬 Turso 시드가 필요해
+      // authz 프로젝트에서만 돈다
       testIgnore:
-        /authz[.-]|board-work-(chat|tabs|files|editors|search|cron|layout|library)\.spec\.ts|member-documents\.spec\.ts/,
+        /authz[.-]|board-work-(chat|tabs|files|editors|search|cron|layout|library)\.spec\.ts|member-documents\.spec\.ts|board-document-edit\.spec\.ts/,
     },
     // authz 계열은 로컬 Turso(`turso dev`)와 픽스처 시드가 있어야 도는 로컬 전용
     // 프로젝트다(CI는 돌리지 않는다). 단계 4 Task 5로 앱에서 Supabase가 사라진 뒤로
@@ -151,7 +152,7 @@ export default defineConfig({
     {
       name: 'authz',
       testMatch:
-        /(authz-(ownership|personal|remaining|maintenance|roles|mailbox|mailbox-compose|funding|features|email-verification|market|timebank|board-work|member-documents)|board-work-(chat|tabs|files|editors|search|cron|layout|library)|member-documents)\.spec\.ts/,
+        /(authz-(ownership|personal|remaining|maintenance|roles|mailbox|mailbox-compose|funding|features|email-verification|market|timebank|board-work|member-documents|board-document-edit)|board-work-(chat|tabs|files|editors|search|cron|layout|library)|member-documents|board-document-edit)\.spec\.ts/,
       dependencies: ['authz-setup'],
       use: { ...devices['Desktop Chrome'], channel: 'chrome' },
     },
