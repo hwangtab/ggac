@@ -27,3 +27,18 @@ export function buildAssignmentPush(input: {
     tag: `mailbox-assign-${input.emailId}`,
   }
 }
+
+/** 다시 알림이 깨었을 때의 푸시 — 지정 알림과 같은 링크 규칙. 같은 메일의 알림은 하나로 합친다. */
+export function buildSnoozePush(input: {
+  emailId: string
+  subject: string | null | undefined
+}): AssignmentPush {
+  const subject = String(input.subject ?? '').trim() || '(제목 없음)'
+  const clipped = subject.length > SUBJECT_MAX ? `${subject.slice(0, SUBJECT_MAX)}…` : subject
+  return {
+    title: '다시 볼 메일입니다',
+    body: clipped,
+    url: `/board-room/mailbox?mail=${encodeURIComponent(input.emailId)}`,
+    tag: `mailbox-snooze-${input.emailId}`,
+  }
+}

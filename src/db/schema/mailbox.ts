@@ -60,6 +60,13 @@ export const inboundEmails = sqliteTable(
     assignedAt: integer('assigned_at', { mode: 'timestamp_ms' }),
     /** 지정한 관리자. 프로필이 지워지면 비운다. */
     assignedBy: text('assigned_by').references(() => memberProfiles.id, { onDelete: 'set null' }),
+    /**
+     * 다시 알림(0044) — 이 시각까지 목록에서 숨기고, 지나면 메일함 크론(매시)이 안 읽음으로 되돌리며 푸시한다.
+     * 크론이 돌 때 비운다. 걸기·풀기는 관리자만(라우트가 판정).
+     */
+    snoozedUntil: integer('snoozed_until', { mode: 'timestamp_ms' }),
+    /** 마지막으로 다시 알림을 건 사람(담당자가 없으면 이 사람에게 알린다). 프로필이 지워지면 비운다. */
+    snoozedBy: text('snoozed_by').references(() => memberProfiles.id, { onDelete: 'set null' }),
     /** 답장 스레드용 References 누적. 공백으로 이은 message_id 목록. */
     threadReferences: text('thread_references'),
     receivedAt: integer('received_at', { mode: 'timestamp_ms' }).notNull(),
@@ -73,6 +80,7 @@ export const inboundEmails = sqliteTable(
     index('inbound_emails_from_email_idx').on(table.fromEmail, table.receivedAt),
     index('inbound_emails_thread_idx').on(table.threadId, table.receivedAt),
     index('inbound_emails_assigned_idx').on(table.assignedTo, table.receivedAt),
+    index('inbound_emails_snoozed_idx').on(table.snoozedUntil),
     index('inbound_emails_fetch_status_idx').on(table.bodyFetchStatus),
   ]
 )

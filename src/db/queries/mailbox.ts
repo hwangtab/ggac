@@ -69,6 +69,13 @@ export type ListInboundOptions = {
   assignedTo?: string
   /** 이 라벨이 붙은 메일만. */
   labelId?: string
+  /**
+   * 다시 알림을 건 메일(시각이 아직 안 지난 것) — `hide`(기본: 목록에서 뺀다) | `only`("다시 알림" 보기) | `include`
+   * (검색·거르기 중에는 함께 보인다).
+   */
+  snoozed?: 'hide' | 'only' | 'include'
+  /** 다시 알림 판정의 기준 시각. 시험이 고정하려고 받는다. */
+  now?: Date
 }
 
 /**
@@ -238,6 +245,15 @@ export async function listInboundEmails(
     )
   }
 
+  const snoozeNow = options.now ?? new Date()
+  if ((options.snoozed ?? 'hide') === 'hide') {
+    conditions.push(
+      or(sql`${inboundEmails.snoozedUntil} is null`, lt(inboundEmails.snoozedUntil, snoozeNow))
+    )
+  } else if (options.snoozed === 'only') {
+    conditions.push(gte(inboundEmails.snoozedUntil, snoozeNow))
+  }
+
   if (options.labelId) {
     conditions.push(
       sql`exists (select 1 from inbound_email_labels l
@@ -298,6 +314,7 @@ export async function listInboundEmails(
     threadCount: sql<number>`(select count(*) from inbound_emails t
       where t.thread_id = "inbound_emails"."thread_id")`,
     assignedTo: inboundEmails.assignedTo,
+    snoozedUntil: inboundEmails.snoozedUntil,
     // 담당자 이름(표시 이름만). 바깥 열은 위의 개수들과 같은 이유로 표 이름까지 박는다.
     assigneeName: sql<string | null>`(select display_name from member_profiles m
       where m.id = "inbound_emails"."assigned_to")`,
@@ -619,6 +636,62 @@ export async function setInboundAssignee(input: {
     .from(inboundEmails)
     .where(eq(inboundEmails.id, input.id))
   return existing ? 'conflict' : 'missing'
+}
+
+/** 다시 알림 걸기(`until`)·풀기(null). 없는 메일이면 `missing`. 판정(시각 범위·권한)은 라우트가 한다. */
+export async function setInboundSnooze(input: {
+  id: string
+  until: Date | null
+  by: string
+}): Promise<'updated' | 'missing'> {
+  const rows = await db
+    .update(inboundEmails)
+    .set({ snoozedUntil: input.until, snoozedBy: input.until ? input.by : null })
+    .where(eq(inboundEmails.id, input.id))
+    .returning({ id: inboundEmails.id })
+  return rows.length > 0 ? 'updated' : 'missing'
+}
+
+/**
+ * 시각이 지난 다시 알림을 깨운다 — 메일함 크론이 매시 부른다. 안 읽음으로 되돌리고 `snoozed_until`을 비운다(건 사람은
+ * 남긴다 — 알림 받을 사람을 고르는 데 쓴다). 조건부 UPDATE … RETURNING 한 번이라 두 크론이 겹쳐도 한 메일을 두 번
+ * 깨우지 않는다. 스팸으로 옮긴 메일은 상태를 되돌리지 않는다(다시 알림만 풀린다). 한 번에 `limit`통까지.
+ */
+export async function wakeSnoozedEmails(
+  now: Date,
+  limit = 100
+): Promise<
+  { id: string; subject: string | null; assigned_to: string | null; snoozed_by: string | null }[]
+> {
+  const due = db
+    .select({ id: inboundEmails.id })
+    .from(inboundEmails)
+    .where(lt(inboundEmails.snoozedUntil, new Date(now.getTime() + 1)))
+    .limit(limit)
+  const rows = await db
+    .update(inboundEmails)
+    .set({
+      snoozedUntil: null,
+      status: sql`case when ${inboundEmails.status} = 'spam' then 'spam' else 'unread' end`,
+    })
+    .where(
+      and(
+        inArray(inboundEmails.id, due),
+        lt(inboundEmails.snoozedUntil, new Date(now.getTime() + 1))
+      )
+    )
+    .returning({
+      id: inboundEmails.id,
+      subject: inboundEmails.subject,
+      assignedTo: inboundEmails.assignedTo,
+      snoozedBy: inboundEmails.snoozedBy,
+    })
+  return rows.map(row => ({
+    id: row.id,
+    subject: row.subject,
+    assigned_to: row.assignedTo,
+    snoozed_by: row.snoozedBy,
+  }))
 }
 
 export type BulkStatusOutcome = { updated: string[]; conflict: string[]; missing: string[] }

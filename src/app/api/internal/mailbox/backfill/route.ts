@@ -31,7 +31,12 @@ import {
   markBodyFetchFailed,
   markAttachmentsExpired,
   markStaleSendingAsUnknown,
+  wakeSnoozedEmails,
 } from '@/db/queries/mailbox'
+import { getWorkPeople } from '@/db/queries/work/directory'
+import { canAccessBoardRoom } from '@/lib/server/authz'
+import { buildSnoozePush } from '@/lib/mail/assigneePush'
+import { sendPushToUsers } from '@work/lib/push/send'
 import { ingestInboundEmail } from '@/lib/mail/ingestInbound'
 import {
   defaultBlobOps,
@@ -101,6 +106,26 @@ async function handleBackfill(request: NextRequest) {
       log.error('멈춘 보낸 메일 정리 실패', error)
     }
 
+    // 다시 알림 깨우기 — 시각이 지난 메일을 안 읽음으로 되돌리고 담당자(없으면 건 사람)에게 푸시한다. 받을 사람은
+    // 보내는 순간 다시 이사·감사·관리자인지 본다(빠진 사람에게는 보내지 않는다). 실패해도 백필을 막지 않는다.
+    let snoozeWoken = 0
+    try {
+      const woken = await wakeSnoozedEmails(new Date(housekeepingNow))
+      snoozeWoken = woken.length
+      const recipientIds = [
+        ...new Set(woken.map(row => row.assigned_to ?? row.snoozed_by).filter(Boolean) as string[]),
+      ]
+      const people = await getWorkPeople(recipientIds)
+      for (const row of woken) {
+        const to = row.assigned_to ?? row.snoozed_by
+        const person = to ? people.get(to) : undefined
+        if (!to || !person || !canAccessBoardRoom(person)) continue
+        await sendPushToUsers([to], buildSnoozePush({ emailId: row.id, subject: row.subject }))
+      }
+    } catch (error) {
+      log.error('다시 알림 깨우기 실패', error)
+    }
+
     // 보낸 메일의 보관 기한·고아 Blob 정리. 마찬가지로 본문 백필 결과를 막지 않는다.
     // 비공개 저장소 토큰이 없으면(로컬·미설정) Blob을 건드릴 수 없으니 건너뛴다.
     let sweep: Awaited<ReturnType<typeof sweepOutbound>> | null = null
@@ -166,12 +191,14 @@ async function handleBackfill(request: NextRequest) {
       refetched: attempted,
       abandoned,
       staleSendingMarkedUnknown: staleSending,
+      snoozeWoken,
       sweep,
     })
 
     return ApiSuccess.ok({
       pending_before: pending.length,
       stale_sending_marked_unknown: staleSending,
+      snooze_woken: snoozeWoken,
       outbound_sweep: sweep,
       // 재시도를 **건 수**다. `ingestInboundEmail`은 실패해도 던지지 않고
       // 상태로만 남기므로, 이 숫자는 성공 건수가 아니다.
