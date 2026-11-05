@@ -542,3 +542,89 @@ test('보낸 편지함 페이지네이션은 전체 개수를 유지한다', asy
   assert.equal(rest.total_count, page.total_count)
   assert.ok(!page.items.some(a => rest.items.some(b => a.id === b.id)))
 })
+
+// ── 보낸 편지함 검색 ──────────────────────────────────────────────────────────
+
+test('보낸 편지함 검색: 제목·받는 사람·참조를 찾고 숨은참조는 찾지 않는다', async () => {
+  const { insertOutboundSending, listSentMail } = await loadFreshMailboxModule()
+  const tag = `srch${Math.random().toString(36).slice(2, 8)}`
+  const bySubject = await insertOutboundSending(outboundInput({ subject: `제목-${tag}-끝` }))
+  const byTo = await insertOutboundSending(
+    outboundInput({ to_addresses: [`to-${tag}@example.com`], bcc_addresses: [] })
+  )
+  const byCc = await insertOutboundSending(
+    outboundInput({ cc_addresses: [`cc-${tag}@example.com`], bcc_addresses: [] })
+  )
+  const byBcc = await insertOutboundSending(
+    outboundInput({ subject: '숨은참조 검색 금지', bcc_addresses: [`bcc-${tag}@example.com`] })
+  )
+
+  const ids = async search =>
+    (await listSentMail({ limit: 100, offset: 0, kind: 'all', search })).items.map(i => i.id)
+
+  assert.ok((await ids(`제목-${tag}`)).includes(bySubject.row.id))
+  assert.ok((await ids(`to-${tag}`)).includes(byTo.row.id))
+  assert.ok((await ids(`cc-${tag}`)).includes(byCc.row.id))
+  // 핵심 보안 단언: BCC 주소로는 어떤 경로로도 찾을 수 없다(찾히면 이사·감사가 BCC를 추측할 수 있다).
+  assert.deepEqual(await ids(`bcc-${tag}`), [])
+  assert.deepEqual(await ids(`bcc-${tag}@example.com`), [])
+  assert.ok(!(await ids(tag)).includes(byBcc.row.id), '제목에 tag가 없는 BCC 행이 나오면 안 된다')
+})
+
+test('보낸 편지함 검색: 답장은 제목과 원본 발신자로 찾는다', async () => {
+  const { insertInboundEmail, insertReply, listSentMail } = await loadFreshMailboxModule()
+  const tag = `rply${Math.random().toString(36).slice(2, 8)}`
+  const mail = await insertInboundEmail(sample({ from_address: `asker-${tag}@example.com` }))
+  await insertReply({ email_id: mail.id, subject: `Re: ${tag} 문의`, body_html: '<p>r</p>' })
+
+  const bySubject = await listSentMail({ limit: 50, offset: 0, kind: 'all', search: `${tag} 문의` })
+  const byAddress = await listSentMail({
+    limit: 50,
+    offset: 0,
+    kind: 'reply',
+    search: `asker-${tag}`,
+  })
+  assert.equal(bySubject.items.length, 1)
+  assert.equal(byAddress.items.length, 1)
+  assert.equal(byAddress.items[0].kind, 'reply')
+})
+
+test('보낸 편지함 검색: % _ 는 와일드카드가 아니라 글자이고 전체 개수도 검색을 따른다', async () => {
+  const { insertOutboundSending, listSentMail } = await loadFreshMailboxModule()
+  const tag = `wild${Math.random().toString(36).slice(2, 6)}`
+  await insertOutboundSending(outboundInput({ subject: `100% 확정 ${tag}` }))
+  await insertOutboundSending(outboundInput({ subject: `1000 확정 ${tag}` }))
+
+  const percent = await listSentMail({
+    limit: 50,
+    offset: 0,
+    kind: 'compose',
+    search: `100% 확정 ${tag}`,
+  })
+  assert.equal(percent.items.length, 1, '%가 와일드카드로 해석되면 두 건이 나온다')
+  assert.equal(percent.total_count, 1)
+
+  const underscore = await listSentMail({
+    limit: 50,
+    offset: 0,
+    kind: 'compose',
+    search: `_000 확정 ${tag}`,
+  })
+  assert.equal(underscore.items.length, 0, '_가 한 글자 와일드카드면 1000 확정이 걸린다')
+
+  const none = await listSentMail({
+    limit: 50,
+    offset: 0,
+    kind: 'all',
+    search: `없는검색어-${tag}-zzz`,
+  })
+  assert.equal(none.total_count, 0)
+  assert.deepEqual(none.items, [])
+})
+
+test('검색어가 비었거나 공백이면 검색하지 않는다', async () => {
+  const { listSentMail } = await loadFreshMailboxModule()
+  const all = await listSentMail({ limit: 5, offset: 0, kind: 'all' })
+  const blank = await listSentMail({ limit: 5, offset: 0, kind: 'all', search: '   ' })
+  assert.equal(blank.total_count, all.total_count)
+})
