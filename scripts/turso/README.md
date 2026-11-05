@@ -346,8 +346,15 @@ webServer에 `{...process.env, ...webServer.env}`를 넘긴다. e2e 전용 변�
   11개 스펙
 - `authz-public`: `authz-boundaries` 21건
 
-**실측 기준선(2026-11-05, 새 한글 문서(HWPX) 켜기 — 플래그를 준 실행, 운영 빌드 서버):**
-총 315건 중 **313 passed, 1 failed, 1 skipped**(6.8분). 실패 1건은 정책 36, 스킵 1건은 메일함 첨부 다운로드 기록이다.
+**실측 기준선(2026-11-05, 이사회 서류 앱 편집(0037) 뒤 — HWPX 플래그를 준 실행, 운영 빌드 서버, `PLAYWRIGHT_PORT=3103`):**
+총 328건 중 **326 passed, 1 failed, 1 skipped**(8.7분). 실패 1건은 정책 36, 스킵 1건은 메일함 첨부 다운로드 기록이다.
+313에서 늘어난 13건은 `authz-board-document-edit.spec.ts` 8건(비로그인 401·조합원/미승인 403·감사 403과 올린 사람·관리자
+통과의 짝·지나간 버전·없는 id 404·토큰 경로·PDF 415·편집 화면)과 `board-document-edit.spec.ts` 2건(DOCX 편집 v2→되돌리기
+v3·HWP 편집 저장)이다. 나머지 3건은 main 쪽 313 실측과의 차이로, 이 브랜치가 만든 스펙이 아니다(어느 스펙인지는 대조하지 않았다). 3101이 아닌 포트에서는 편집기 사이트의 frame-ancestors가
+iframe을 막으므로 `e2e/helpers/editorFrame.ts`가 시험 브라우저 안에서만 그 지시어를 걷어 낸다.
+
+**이전 기준선(2026-11-05, 새 한글 문서(HWPX) 켜기 — 플래그를 준 실행, 운영 빌드 서버):**
+총 315건 중 313건 통과, 1 failed, 1 skipped(6.8분). 실패 1건은 정책 36, 스킵 1건은 메일함 첨부 다운로드 기록이다.
 305에서 늘어난 7건은 `authz-mailbox-compose.spec.ts` 5건(main의 PR #68·#69)과 `board-work-editors.spec.ts`의 HWPX 2건
 (업무툴 새 한글 문서 v1→v2·기존 HWPX 편집 v2)이고, 내 문서함 새 HWPX가 스킵에서 통과로 바뀌었다.
 편집기 env는 `NEXT_PUBLIC_OFFICE_EDITOR_ORIGIN`·`NEXT_PUBLIC_HWP_EDITOR_ENABLED=1`·`NEXT_PUBLIC_HWPX_EDITOR_ENABLED=1`이다.
@@ -1149,7 +1156,7 @@ EXPLAIN QUERY PLAN SELECT count(*) FROM notifications WHERE user_id = '<아무 �
 가드도 타입 검사도 통과한다. 가드는 **"이 문자열이 이 파일에 있는가"**만 보고
 도달 가능성·실행 순서·데이터 흐름을 보지 않는다.
 
-**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 313 passed, 실행 절차는
+**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 326 passed, 실행 절차는
 위 "권한 E2E" 절). 같은 감사에서 **E2E는 관리자 게이트 무력화를 실제로 잡았다.**
 
 `assert-runtime-risks.mjs`가 여전히 값을 하는 자리는 **지워진 것**(게이트를 통째로
