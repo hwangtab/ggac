@@ -75,6 +75,11 @@ export type TopicEvent =
   | { type: 'user'; event: 'MEMBER_ADDED' | 'DM_MESSAGE'; channelId: string | null }
   | { type: 'status'; status: TopicStatus }
   /**
+   * 바뀐 것이 너무 많아(200건 넘게) 커서를 최신으로 건너뛰었다 — 받는 쪽은 이미 불러 둔 오래된 메시지도 다시 읽어야 한다
+   * (그 사이의 수정·삭제를 따로 받지 못한다). 뒤이어 status error→connected 가 와서 최신 페이지를 다시 읽는다.
+   */
+  | { type: 'resync' }
+  /**
    * 신호의 재조회가 끝내 실패했다 — 화면이 최신이 아닐 수 있다.
    * reason 'stale-deploy' = 배포로 서버 액션 id 가 바뀐 낡은 탭(새로고침만 해결).
    */
@@ -393,6 +398,7 @@ async function applyChannel(
     // 200건 넘게 바뀌었다 — 원본 재연결 경로(끊김 → 연결)로 최신 페이지·스레드를 다시 읽게 한다
     entry.rev = change.rev
     entry.since = now
+    emit(entry, { type: 'resync' })
     setStatus(entry, 'error')
     setStatus(entry, 'connected')
     if (change.pinsChanged) emit(entry, { type: 'pins' })

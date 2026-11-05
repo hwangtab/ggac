@@ -91,7 +91,10 @@ export const LEAVE_CONFIRM_MESSAGE =
 export function useLeaveGuard(dirty: boolean): void {
   useEffect(() => {
     if (!dirty) return
+    // 링크 클릭에서 이미 "떠난다"를 골랐으면 이어지는 페이지 떠남(Next 밖 주소)에서 브라우저가 한 번 더 묻지 않게 한다
+    let confirmedAt = 0
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (Date.now() - confirmedAt < 3_000) return
       e.preventDefault()
       e.returnValue = ''
     }
@@ -107,7 +110,9 @@ export function useLeaveGuard(dirty: boolean): void {
       if (!window.confirm(LEAVE_CONFIRM_MESSAGE)) {
         e.preventDefault()
         e.stopPropagation()
+        return
       }
+      confirmedAt = Date.now()
     }
     window.addEventListener('beforeunload', onBeforeUnload)
     document.addEventListener('click', onClick, true)

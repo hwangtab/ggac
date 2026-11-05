@@ -2,7 +2,8 @@ import { createBulkNotifications, createNotification } from '@/db/queries/notifi
 import {
   claimExpiredMemberDocument,
   clearDeletionNotified,
-  deleteMemberDocumentUploadRows,
+  claimMemberDocumentUploadRows,
+  findReferencedMemberDocumentPaths,
   listExpiredMemberDocumentUploads,
   listRetentionDeleteCandidates,
   listRetentionNotifyCandidates,
@@ -17,7 +18,7 @@ import { createLogger } from '@/utils/logger'
 import { getSiteUrl } from '@/utils/site'
 import { deletionDueAt } from './rules'
 import { removeMemberDocumentRenderCaches } from './service'
-import { removeMemberDocumentObjects } from './storage'
+import { listMemberDocumentObjectsPage, removeMemberDocumentObjects } from './storage'
 
 const log = createLogger('member-documents/retention')
 
@@ -34,6 +35,8 @@ export type RetentionRunResult = {
   /** 객체를 못 지워 다음 실행으로 미룬 문서 */
   deferredDocuments: number
   purgedUploads: number
+  /** 행 없이 저장소에만 남은 문서함 객체를 지운 수(고아 청소) */
+  orphansRemoved: number
 }
 
 function formatKstDate(d: Date): string {
@@ -75,6 +78,7 @@ export async function runMemberDocumentRetention(
     deletedDocuments: 0,
     deferredDocuments: 0,
     purgedUploads: 0,
+    orphansRemoved: 0,
   }
   const siteUrl = getSiteUrl().replace(/\/$/, '')
   const listUrl = `${siteUrl}/ko/mypage/documents`
@@ -185,23 +189,79 @@ export async function runMemberDocumentRetention(
     }
   }
 
-  // 3. 오래된 임시 업로드
+  // 3. 오래된 임시 업로드 — 행을 먼저 지우고 실제로 지운 행의 객체만 지운다(그 사이 승격된 업로드의 객체를 건드리지 않게).
+  //    객체 삭제가 실패하면 고아 객체가 남고 아래 4가 다음 실행에 치운다.
   const stale = await listExpiredMemberDocumentUploads(now, RETENTION_PENDING_BATCH)
-  const removable = stale.filter(s => isSafeMemberDocumentPath(s.blobPath))
-  if (removable.length > 0) {
-    let objectsGone = true
-    try {
-      await removeMemberDocumentObjects(removable.map(s => s.blobPath))
-    } catch (e) {
-      objectsGone = e instanceof StorageUnconfiguredError
-      if (!objectsGone) log.error('오래된 임시 업로드 객체 정리 실패 — 다음 실행에 다시')
+  if (stale.length > 0) {
+    const gonePaths = await claimMemberDocumentUploadRows(stale.map(s => s.id))
+    result.purgedUploads = gonePaths.length
+    const removable = gonePaths.filter(p => isSafeMemberDocumentPath(p))
+    if (removable.length > 0) {
+      await removeMemberDocumentObjects(removable).catch(e => {
+        if (!(e instanceof StorageUnconfiguredError)) {
+          log.error('오래된 임시 업로드 객체 정리 실패 — 고아 청소가 다음에 치운다')
+        }
+      })
     }
-    if (objectsGone)
-      result.purgedUploads = await deleteMemberDocumentUploadRows(removable.map(s => s.id))
   }
 
-  if (result.notifiedDocuments || result.deletedDocuments || result.purgedUploads) {
+  // 4. 고아 청소 — 행이 하나도 가리키지 않는 `member-documents/` 객체(행을 먼저 지운 뒤 객체 삭제가 실패한 보존 삭제·탈퇴·
+  //    폐기의 흔적). 업무툴과 달리 문서함에는 이 청소가 없어, 실패하면 개인 파일이 영영 남았다(2026-11-05 회귀 리뷰).
+  //    올린 지 48시간이 지난 것만 본다(올리는 중·승격 전인 업로드를 지우지 않게 — 임시 업로드는 24시간이면 행째 정리된다).
+  try {
+    result.orphansRemoved = await sweepMemberDocumentOrphans(now)
+  } catch (e) {
+    log.error('문서함 고아 청소 실패 — 다음 실행에 다시', {
+      error: e instanceof Error ? e.name : typeof e,
+    })
+  }
+
+  if (
+    result.notifiedDocuments ||
+    result.deletedDocuments ||
+    result.purgedUploads ||
+    result.orphansRemoved
+  ) {
     log.info('내 문서함 보존 정리', result)
   }
   return result
+}
+
+const ORPHAN_MIN_AGE_MS = 48 * 3600 * 1000
+const ORPHAN_MAX_PAGES = 20
+const ORPHAN_MAX_REMOVALS = 500
+
+/** 행 없는 문서함 객체를 지운다. 지운 수. 훑는 양·지우는 양에 상한 — 남은 건 다음 실행이 이어서 한다 */
+export async function sweepMemberDocumentOrphans(
+  now: Date,
+  deps: {
+    listPage?: typeof listMemberDocumentObjectsPage
+    findReferenced?: typeof findReferencedMemberDocumentPaths
+    remove?: (paths: string[]) => Promise<void>
+  } = {}
+): Promise<number> {
+  const listPage = deps.listPage ?? listMemberDocumentObjectsPage
+  const findReferenced = deps.findReferenced ?? findReferencedMemberDocumentPaths
+  const remove = deps.remove ?? removeMemberDocumentObjects
+  const cutoff = now.getTime() - ORPHAN_MIN_AGE_MS
+  let removed = 0
+  let cursor: string | undefined
+  for (let page = 0; page < ORPHAN_MAX_PAGES && removed < ORPHAN_MAX_REMOVALS; page++) {
+    const res = await listPage(cursor)
+    const old = res.objects
+      .filter(o => isSafeMemberDocumentPath(o.pathname))
+      .filter(o => Number.isFinite(o.uploadedAt.getTime()) && o.uploadedAt.getTime() < cutoff)
+      .map(o => o.pathname)
+    if (old.length > 0) {
+      const referenced = await findReferenced(old)
+      const orphans = old.filter(p => !referenced.has(p)).slice(0, ORPHAN_MAX_REMOVALS - removed)
+      if (orphans.length > 0) {
+        await remove(orphans)
+        removed += orphans.length
+      }
+    }
+    if (!res.hasMore || !res.cursor) break
+    cursor = res.cursor
+  }
+  return removed
 }

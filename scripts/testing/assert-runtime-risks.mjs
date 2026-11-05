@@ -26,7 +26,7 @@
  *
  * ## 그럼 인가는 무엇이 지키는가 — **E2E다**
  *
- * `npm run test:e2e:authz`(기준선 347 passed, 총 349건 — 정책 36 1건은 공개 Blob 토큰 없이 실패, 1 skipped.
+ * `npm run test:e2e:authz`(기준선 355 passed, 총 357건 — 정책 36 1건은 공개 Blob 토큰 없이 실패, 1 skipped.
  * Blob 토큰·토스 키가 없으면 환경 의존 실패가 더 나온다 — dev 서버 시절 2026-11-02 실측 206 passed·4 failed·1 skipped).
  * 같은 감사에서 **E2E는 관리자 게이트
  * 무력화를 실제로 잡았다.** 인가를 바꿨으면 그걸 돌려라. 이 파일이 초록불인 것은

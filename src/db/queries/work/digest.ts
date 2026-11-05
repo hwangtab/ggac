@@ -29,6 +29,11 @@ export type DigestCandidateRow = {
   created_at: Date
   /** 받는 사람 판정 원자료 */
   recipient_email: string | null
+  /**
+   * 이 후보를 뽑을 때 본 발송 기준(`work_digest_state.last_sent_at`, 없으면 null). 발송 차지(`claimDigestSend`)는 **이 값**과
+   * 비교한다 — 차지 직전에 새로 읽으면 겹친 실행이 이미 올린 값을 보고 같은 묶음을 또 차지해 보냈다(2026-11-05 회귀 리뷰).
+   */
+  recipient_digest_last_sent_at: Date | null
   recipient_member_role: 'owner' | 'member' | null
   recipient_digest_mode: string
   recipient_quiet: { enabled: boolean; start: number; end: number; weekends: boolean } | null
@@ -43,6 +48,7 @@ export type DigestCandidateRow = {
 
 type RawRow = {
   recipient_id: string
+  digest_last_sent_at: number | null
   kind: string
   message_id: string
   parent_id: string | null
@@ -93,7 +99,7 @@ export async function listDigestCandidates(input: {
              sp.digest_mode as digest_mode, sp.quiet_enabled as quiet_enabled, sp.quiet_start as quiet_start,
              sp.quiet_end as quiet_end, sp.quiet_weekends as quiet_weekends,
              rp.registration_status as registration_status, rp.is_active as is_active, rp.is_admin as is_admin,
-             rp.is_director as is_director, rp.is_auditor as is_auditor
+             rp.is_director as is_director, rp.is_auditor as is_auditor, ds.last_sent_at as digest_last_sent_at
       from work_mentions mn
       join work_messages m on m.id = mn.message_id
       join work_channels c on c.id = m.channel_id
@@ -118,7 +124,7 @@ export async function listDigestCandidates(input: {
              sp.digest_mode as digest_mode, sp.quiet_enabled as quiet_enabled, sp.quiet_start as quiet_start,
              sp.quiet_end as quiet_end, sp.quiet_weekends as quiet_weekends,
              rp.registration_status as registration_status, rp.is_active as is_active, rp.is_admin as is_admin,
-             rp.is_director as is_director, rp.is_auditor as is_auditor
+             rp.is_director as is_director, rp.is_auditor as is_auditor, ds.last_sent_at as digest_last_sent_at
       from work_channels c
       join work_channel_members cm on cm.channel_id = c.id
       join work_messages m on m.channel_id = c.id
@@ -154,6 +160,10 @@ export async function listDigestCandidates(input: {
     sensitive: Boolean(r.sensitive),
     created_at: new Date(Number(r.created_at)),
     recipient_email: r.recipient_email,
+    recipient_digest_last_sent_at:
+      r.digest_last_sent_at === null || r.digest_last_sent_at === undefined
+        ? null
+        : new Date(Number(r.digest_last_sent_at)),
     recipient_member_role:
       r.member_role === 'owner' ? 'owner' : r.member_role === 'member' ? 'member' : null,
     recipient_digest_mode: r.digest_mode ?? 'off',
@@ -202,6 +212,8 @@ export async function claimDigestSend(
       .returning({ userId: workDigestState.userId })
     return rows.length === 1
   }
+  // 앞으로만 간다 — 겹친 실행의 더 낡은 묶음이 기준을 뒤로 돌리지 않게
+  if (next.getTime() <= prev.getTime()) return false
   const rows = await db
     .update(workDigestState)
     .set({ lastSentAt: next })

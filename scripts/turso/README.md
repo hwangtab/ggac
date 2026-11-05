@@ -346,8 +346,13 @@ webServer에 `{...process.env, ...webServer.env}`를 넘긴다. e2e 전용 변�
   11개 스펙
 - `authz-public`: `authz-boundaries` 21건
 
-**실측 기준선(2026-11-05, 편집기 내장 모드·이탈 확인·다이제스트 중복 발송 등 수정 뒤, HWPX 플래그를 준 실행, 운영 빌드 서버):**
-총 349건 중 **347 passed, 1 failed, 1 skipped**(7.8분). 337에서 늘어난 10건은 main 의 메일함 PR #83(`authz-mailbox-compose` 6·
+**실측 기준선(2026-11-05, 회귀 수정 — 다이제스트 비교 기준·정리 순서·문서함 고아 청소 — 뒤, HWPX 플래그를 준 실행, 운영 빌드 서버):**
+총 357건 중 **355 passed, 1 failed, 1 skipped**(8.4분). 347에서 늘어난 8건은 main 의 메일함 PR #85·#86 이다.
+같은 날 main 병합 전 한 번은 `member-documents.spec.ts`의 DOCX 실제 업로드가 부하 속 시간 초과로 실패했고, 단독 재실행에서는
+14건 모두 통과했다(시험 Blob 저장소 업로드 지연 — 앱 오류 로그 없음).
+
+직전 기준선(2026-11-05, 편집기 내장 모드·이탈 확인·다이제스트 중복 발송 등 수정 뒤, HWPX 플래그를 준 실행, 운영 빌드 서버):
+총 349건 중 347 passed, 1 failed, 1 skipped(7.8분). 337에서 늘어난 10건은 main 의 메일함 PR #83(`authz-mailbox-compose` 6·
 `authz-mailbox` 4)이다.
 
 직전 기준선(2026-11-05, 내 문서함·업무툴 정리 순서 버그 수정 뒤, HWPX 플래그를 준 실행, 운영 빌드 서버):
@@ -1170,7 +1175,7 @@ EXPLAIN QUERY PLAN SELECT count(*) FROM notifications WHERE user_id = '<아무 �
 가드도 타입 검사도 통과한다. 가드는 **"이 문자열이 이 파일에 있는가"**만 보고
 도달 가능성·실행 순서·데이터 흐름을 보지 않는다.
 
-**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 347 passed, 실행 절차는
+**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 355 passed, 실행 절차는
 위 "권한 E2E" 절). 같은 감사에서 **E2E는 관리자 게이트 무력화를 실제로 잡았다.**
 
 `assert-runtime-risks.mjs`가 여전히 값을 하는 자리는 **지워진 것**(게이트를 통째로

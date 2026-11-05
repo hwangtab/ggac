@@ -1,3 +1,4 @@
+import { list } from '@vercel/blob'
 import { isSafeMemberDocumentPath } from '@/lib/storage/memberDocuments'
 import { createGuardedPrivateStore, privateStoreToken } from '@work/lib/files/private-store'
 
@@ -28,4 +29,28 @@ export function hasMemberDocumentStore(): boolean {
 /** 저장소 토큰(업로드 토큰 발급 `handleUpload({ token })` — 명시하지 않으면 SDK 가 `BLOB_READ_WRITE_TOKEN`으로 떨어진다) */
 export function memberDocumentStoreToken(): string | null {
   return privateStoreToken()
+}
+
+/** 문서함 객체의 공통 접두 — 고아 청소가 이 아래만 훑는다 */
+export const MEMBER_DOCUMENTS_LIST_PREFIX = 'member-documents/'
+
+/**
+ * 문서함 객체 한 페이지(고아 청소용 — `member-documents/` 아래만). 저장소가 없으면 빈 페이지. 경로 판정을 지나지 못한 키는
+ * 결과에서 뺀다(지울 후보가 되지 않게).
+ */
+export async function listMemberDocumentObjectsPage(cursor?: string): Promise<{
+  objects: { pathname: string; uploadedAt: Date }[]
+  cursor: string | null
+  hasMore: boolean
+}> {
+  const token = privateStoreToken()
+  if (!token) return { objects: [], cursor: null, hasMore: false }
+  const res = await list({ prefix: MEMBER_DOCUMENTS_LIST_PREFIX, cursor, limit: 1000, token })
+  return {
+    objects: res.blobs
+      .filter(b => isSafeMemberDocumentPath(b.pathname))
+      .map(b => ({ pathname: b.pathname, uploadedAt: new Date(b.uploadedAt) })),
+    cursor: res.cursor ?? null,
+    hasMore: res.hasMore,
+  }
 }

@@ -65,8 +65,26 @@ export async function purgeStalePendingUploads(
       return { ...result, error: 'query' }
     }
     if (rows.length === 0) break
-    // 행을 **먼저** 지우고 실제로 지운 행의 객체만 지운다 — 그 사이 승격된 업로드(승격이 임시 행을 지운다)의 객체를 건드리지
-    // 않는다(`discardPending`과 같은 이유, 2026-11-05 감사). 객체 삭제가 실패하면 고아 객체가 남고 아래 고아 청소가 치운다.
+    // ① 초안 미리보기 캐시(`board-work/renders/<업로드 id>-draft-layout…`)를 **먼저** 지운다 — 미리보기일 뿐 살아 있는
+    //    데이터가 아니라 언제 지워도 안전하고, 아래 고아 청소(`board-work/files/`만 본다)가 줍지 않으므로 행을 지운 뒤에
+    //    실패하면 영영 남는다(2026-11-05 회귀 리뷰). 실패하면 행을 그대로 두고 멈춰 다음 실행이 다시 한다.
+    const draftCaches = pendingObjectPaths(
+      rows.filter(r => r.isDraft).map(r => ({ ...r, blobPath: '' })),
+      draftLayoutPaths
+    ).paths
+    try {
+      for (let i = 0; i < draftCaches.length; i += 100) {
+        await removeObjects(draftCaches.slice(i, i + 100))
+      }
+    } catch (e) {
+      console.error(
+        '[purge-pending-uploads] 초안 미리보기 캐시 삭제 실패:',
+        e instanceof Error ? e.name : e
+      )
+      return { ...result, error: 'storage' }
+    }
+    // ② 행을 지우고 **실제로 지운 행의** 업로드 객체만 지운다 — 그 사이 승격된 업로드(승격이 임시 행을 지운다)의 객체를
+    //    건드리지 않는다(`discardPending`과 같은 이유, 2026-11-05 감사).
     let claimed: string[]
     try {
       claimed = await claimPendingUploadRows(rows.map(r => r.id))
@@ -77,7 +95,7 @@ export async function purgeStalePendingUploads(
     result.purged += claimed.length
     const gone = new Set(claimed)
     const plan = pendingObjectPaths(
-      rows.filter(r => gone.has(r.id)),
+      rows.filter(r => gone.has(r.id)).map(r => ({ ...r, isDraft: false })),
       draftLayoutPaths
     )
     if (plan.unsafe > 0) {
@@ -86,18 +104,21 @@ export async function purgeStalePendingUploads(
         `[purge-pending-uploads] 안전하지 않은 경로 ${plan.unsafe}건 — 객체 삭제 건너뜀`
       )
     }
+    result.unsafe += plan.unsafe
+    // ③ 업로드 객체 삭제가 실패하면 고아 객체가 남는다 — `board-work/files/`라 아래 고아 청소가 24시간 뒤 치운다. 그래도
+    //    저장소 장애는 크론 실패로 알려야 하므로(예전처럼) 'storage' 로 끝낸다.
     try {
       for (let i = 0; i < plan.paths.length; i += 100) {
         await removeObjects(plan.paths.slice(i, i + 100))
+        result.objects += plan.paths.slice(i, i + 100).length
       }
     } catch (e) {
       console.error(
         '[purge-pending-uploads] 객체 삭제 실패(고아 청소가 정리):',
         e instanceof Error ? e.name : e
       )
+      return { ...result, error: 'storage' }
     }
-    result.objects += plan.paths.length
-    result.unsafe += plan.unsafe
     if (rows.length < PENDING_BATCH) break
   }
 

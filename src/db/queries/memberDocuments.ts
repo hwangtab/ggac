@@ -721,6 +721,37 @@ export async function listExpiredMemberDocumentUploads(
     .limit(limit)
 }
 
+/**
+ * 24시간 지난 임시 업로드 행을 지우고 **실제로 지운 행의 객체 경로**를 돌려준다(행 → 객체 순서). 그 사이 승격된 업로드(승격이
+ * 임시 행을 지운다)는 빠져 그 객체(= 새 버전 파일)를 건드리지 않는다(업무툴 정리 크론과 같은 이유, 2026-11-05 회귀 리뷰).
+ */
+export async function claimMemberDocumentUploadRows(ids: string[]): Promise<string[]> {
+  if (ids.length === 0) return []
+  const res = await db
+    .delete(memberDocumentUploads)
+    .where(inArray(memberDocumentUploads.id, ids))
+    .returning({ blobPath: memberDocumentUploads.blobPath })
+  return res.map(r => r.blobPath)
+}
+
+/** 이 키들 중 아직 행(버전·임시 업로드의 blob_path)이 가리키는 것 — 고아 청소는 여기 나온 키를 절대 지우지 않는다 */
+export async function findReferencedMemberDocumentPaths(paths: string[]): Promise<Set<string>> {
+  const out = new Set<string>()
+  for (let i = 0; i < paths.length; i += 200) {
+    const chunk = paths.slice(i, i + 200)
+    const v = await db
+      .select({ p: memberDocumentVersions.blobPath })
+      .from(memberDocumentVersions)
+      .where(inArray(memberDocumentVersions.blobPath, chunk))
+    const u = await db
+      .select({ p: memberDocumentUploads.blobPath })
+      .from(memberDocumentUploads)
+      .where(inArray(memberDocumentUploads.blobPath, chunk))
+    for (const r of [...v, ...u]) out.add(r.p)
+  }
+  return out
+}
+
 export async function deleteMemberDocumentUploadRows(ids: string[]): Promise<number> {
   if (ids.length === 0) return 0
   const res = await db
