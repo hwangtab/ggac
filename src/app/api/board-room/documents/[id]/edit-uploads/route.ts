@@ -2,7 +2,7 @@ import { handleUpload, type HandleUploadBody } from '@vercel/blob/client'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { boardDocumentEditStoreToken } from '@/lib/boardDocuments/storage'
-import { decideEditUploadToken, prepareEditUpload } from '@/lib/boardDocuments/versions'
+import { decideEditUploadToken, prepareEditUpload } from '@/lib/boardDocuments/editUploads'
 import { requireBoardMember } from '@/lib/server/boardRoomAuth'
 import {
   boardDocumentNotFound,
