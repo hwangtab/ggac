@@ -279,3 +279,21 @@ export const mailSenderRules = sqliteTable(
       .where(sql`${table.labelId} is not null`),
   ]
 )
+
+/**
+ * 답장 템플릿 — 자주 쓰는 안내문(대관·후원 영수증·가입 안내 등). 관리자만 만들고 고치고 지운다(답장·새 메일 작성이
+ * 관리자만이라 같은 등급). 본문은 평문이고, 작성 창이 쓰던 본문 끝에 덧붙인다(치환 변수 없음 — 엉뚱한 이름이 나갈
+ * 위험보다 사람이 고치는 쪽이 낫다). 이름은 대소문자를 가리지 않고 겹칠 수 없다(`lower(name)` 유일 인덱스).
+ */
+export const mailReplyTemplates = sqliteTable(
+  'mail_reply_templates',
+  {
+    id: uuidPk(),
+    name: text('name').notNull(),
+    body: text('body').notNull(),
+    createdBy: text('created_by').references(() => memberProfiles.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  table => [uniqueIndex('mail_reply_templates_name_idx').on(sql`lower(${table.name})`)]
+)

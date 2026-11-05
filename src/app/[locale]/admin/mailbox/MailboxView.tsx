@@ -26,6 +26,7 @@ import { snoozePresets } from '@/lib/mail/snooze'
 import ComposeModal, { type ForwardSource } from './ComposeModal'
 import LabelManager, { LabelChip, type MailLabel } from './LabelManager'
 import RuleManager from './RuleManager'
+import TemplateManager, { TemplatePicker, type ReplyTemplate } from './TemplateManager'
 import SentMailbox from './SentMailbox'
 import {
   buildBodySrcDoc,
@@ -241,6 +242,9 @@ export default function MailboxView({ className = '' }: { className?: string }) 
   const [labels, setLabels] = useState<MailLabel[]>([])
   const [labelFilter, setLabelFilter] = useState<string | null>(null)
   const [labelManagerOpen, setLabelManagerOpen] = useState(false)
+  // 답장 템플릿(관리자만 — 답장·새 메일 작성이 관리자만이다).
+  const [templates, setTemplates] = useState<ReplyTemplate[]>([])
+  const [templateManagerOpen, setTemplateManagerOpen] = useState(false)
   // 발신자 규칙 창(관리자만). 발신자 카드에서 열면 그 주소로 채운다.
   const [ruleManager, setRuleManager] = useState<{
     initial?: { matchType: 'address' | 'domain'; matchValue: string }
@@ -524,6 +528,19 @@ export default function MailboxView({ className = '' }: { className?: string }) 
       setUpdating(null)
     }
   }
+
+  const fetchTemplates = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/mailbox/templates')
+      if (res.ok) setTemplates((await res.json())?.data?.templates ?? [])
+    } catch {
+      // 템플릿이 안 와도 답장은 쓸 수 있다.
+    }
+  }, [])
+
+  useEffect(() => {
+    if (canManage) fetchTemplates()
+  }, [canManage, fetchTemplates])
 
   useEffect(() => {
     if (!canManage) return
@@ -1222,6 +1239,15 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                       className="px-2 py-0.5 text-xs text-gray-500 hover:text-gray-800 hover:underline"
                     >
                       라벨 관리
+                    </button>
+                  )}
+                  {canManage && (
+                    <button
+                      type="button"
+                      onClick={() => setTemplateManagerOpen(true)}
+                      className="px-2 py-0.5 text-xs text-gray-500 hover:text-gray-800 hover:underline"
+                    >
+                      답장 템플릿
                     </button>
                   )}
                   {canManage && (
@@ -2012,6 +2038,13 @@ export default function MailboxView({ className = '' }: { className?: string }) 
       )}
 
       {/* 새 메일 작성 모달 — 관리자 + 서버 스위치가 켜졌을 때만 그린다. */}
+      {canManage && templateManagerOpen && (
+        <TemplateManager
+          templates={templates}
+          onClose={() => setTemplateManagerOpen(false)}
+          onChanged={fetchTemplates}
+        />
+      )}
       {canManage && ruleManager && (
         <RuleManager
           labels={labels}
@@ -2040,6 +2073,7 @@ export default function MailboxView({ className = '' }: { className?: string }) 
           quota={composeQuota}
           initialTo={composeTo}
           forward={composeForward}
+          templates={templates}
           onClose={() => {
             setComposeOpen(false)
             setComposeTo(undefined)
@@ -2113,9 +2147,17 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                 제목: <span className="text-gray-900">{replySubject(replyTarget.subject)}</span>
               </div>
               <div className="space-y-1">
-                <label className="block text-xs font-medium text-gray-600">
-                  본문 <span className="text-red-500">*</span>
-                </label>
+                <div className="flex items-center justify-between gap-2">
+                  <label className="block text-xs font-medium text-gray-600">
+                    본문 <span className="text-red-500">*</span>
+                  </label>
+                  <TemplatePicker
+                    templates={templates}
+                    disabled={replySending}
+                    body={replyBody}
+                    onChange={setReplyBody}
+                  />
+                </div>
                 <textarea
                   rows={10}
                   value={replyBody}
