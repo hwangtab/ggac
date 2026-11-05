@@ -189,6 +189,9 @@ export default function MailboxView({ className = '' }: { className?: string }) 
   const [totalCount, setTotalCount] = useState(0)
   const [offset, setOffset] = useState(0)
   const [updating, setUpdating] = useState<string | null>(null)
+  // 일괄 처리(관리자만) — 지금 목록 페이지에서 고른 메일. 목록이 바뀌면 페이지에 없는 id는 버린다.
+  const [checkedIds, setCheckedIds] = useState<string[]>([])
+  const [bulkUpdating, setBulkUpdating] = useState(false)
   const [canManage, setCanManage] = useState(false)
   // 발신자 필터는 URL(`?from=`·`?domain=`)이 정본이다 — 뒤로 가기로 풀리고 링크로 공유된다. 서버 렌더에는
   // `window`가 없어 마운트 뒤에 읽고, 그 전에는 목록을 부르지 않는다(필터 없는 목록이 한 번 깜빡이지 않게).
@@ -404,6 +407,48 @@ export default function MailboxView({ className = '' }: { className?: string }) 
       }
     } finally {
       setUpdating(null)
+    }
+  }
+
+  // 목록이 바뀌면(필터·페이지·새로고침) 화면에 없는 메일은 고른 목록에서 뺀다 — 보이지 않는 메일이 함께 바뀌지 않게.
+  useEffect(() => {
+    setCheckedIds(prev => prev.filter(id => emails.some(e => e.id === id)))
+  }, [emails])
+
+  const toggleChecked = (id: string) =>
+    setCheckedIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]))
+
+  const bulkUpdate = async (status: InboundEmail['status']) => {
+    const targets = emails.filter(e => checkedIds.includes(e.id))
+    if (targets.length === 0 || bulkUpdating) return
+    setBulkUpdating(true)
+    try {
+      const res = await fetch('/api/admin/mailbox', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status,
+          items: targets.map(e => ({ id: e.id, expected_status: e.status })),
+        }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || '일괄 변경에 실패했습니다.')
+      const updated = new Set<string>(json?.data?.updated ?? [])
+      const skipped = (json?.data?.conflict?.length ?? 0) + (json?.data?.missing?.length ?? 0)
+      setEmails(prev => prev.map(e => (updated.has(e.id) ? { ...e, status } : e)))
+      setDetail(prev => (prev && updated.has(prev.id) ? { ...prev, status } : prev))
+      setCheckedIds([])
+      if (skipped > 0) {
+        alert(`${skipped}건은 다른 관리자가 먼저 처리해 바꾸지 않았습니다. 목록을 새로고침합니다.`)
+        await fetchEmails()
+      } else if (statusFilter !== 'all') {
+        // 상태로 거른 목록이면 옮긴 메일은 더 이상 이 목록에 속하지 않는다.
+        await fetchEmails()
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '일괄 변경에 실패했습니다.')
+    } finally {
+      setBulkUpdating(false)
     }
   }
 
@@ -813,6 +858,42 @@ export default function MailboxView({ className = '' }: { className?: string }) 
               </div>
             </div>
 
+            {canManage && emails.length > 0 && (
+              <div
+                data-testid="bulk-toolbar"
+                className="flex flex-wrap items-center gap-1.5 px-3 py-2 border-b border-gray-100 bg-gray-50 text-xs shrink-0"
+              >
+                <label className="flex items-center gap-1.5 text-gray-600 mr-1">
+                  <input
+                    type="checkbox"
+                    aria-label="이 페이지 전체 선택"
+                    checked={checkedIds.length > 0 && checkedIds.length === emails.length}
+                    ref={el => {
+                      if (el) {
+                        el.indeterminate =
+                          checkedIds.length > 0 && checkedIds.length < emails.length
+                      }
+                    }}
+                    onChange={e => setCheckedIds(e.target.checked ? emails.map(m => m.id) : [])}
+                    className="rounded border-gray-300"
+                  />
+                  {checkedIds.length > 0 ? `${checkedIds.length}개 선택` : '전체 선택'}
+                </label>
+                {checkedIds.length > 0 &&
+                  (['read', 'unread', 'archived', 'spam'] as const).map(s => (
+                    <button
+                      key={s}
+                      type="button"
+                      disabled={bulkUpdating}
+                      onClick={() => bulkUpdate(s)}
+                      className={`px-2 py-1 rounded-md font-medium disabled:opacity-50 hover:opacity-80 ${STATUS_LABELS[s].color}`}
+                    >
+                      {STATUS_LABELS[s].label}
+                    </button>
+                  ))}
+              </div>
+            )}
+
             {/* 목록 — 독립 스크롤 */}
             <div className="flex-1 min-h-0 overflow-y-auto">
               {loading ? (
@@ -837,6 +918,17 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                         }`}
                       >
                         <div className="flex items-center gap-2 flex-wrap">
+                          {canManage && (
+                            <input
+                              type="checkbox"
+                              aria-label={`${email.subject || '(제목 없음)'} 선택`}
+                              checked={checkedIds.includes(email.id)}
+                              // 행 클릭(메일 열기)으로 번지지 않게 한다.
+                              onClick={e => e.stopPropagation()}
+                              onChange={() => toggleChecked(email.id)}
+                              className="rounded border-gray-300 shrink-0"
+                            />
+                          )}
                           <span className="font-medium text-gray-900 truncate min-w-0 text-sm">
                             {email.subject || '(제목 없음)'}
                           </span>

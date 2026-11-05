@@ -203,6 +203,41 @@ test('상태 변경은 expected가 맞을 때만 먹는다', async () => {
   assert.equal(await updateInboundStatus('없는-id', 'unread', 'read'), 'missing')
 })
 
+test('일괄 상태 변경: 기대 상태가 맞는 메일만 바꾸고 나머지는 conflict·missing으로 나눈다', async () => {
+  const mod = await loadFreshMailboxModule()
+  const a = await mod.insertInboundEmail(sample())
+  const b = await mod.insertInboundEmail(sample())
+  const c = await mod.insertInboundEmail(sample())
+  // 다른 관리자가 c를 먼저 스팸으로 옮겼다
+  await mod.updateInboundStatus(c.id, 'unread', 'spam')
+  await mod.updateInboundStatus(b.id, 'unread', 'read')
+  const ghost = crypto.randomUUID()
+
+  const outcome = await mod.updateInboundStatusBulk(
+    [
+      { id: a.id, expected: 'unread' },
+      { id: b.id, expected: 'read' },
+      { id: c.id, expected: 'unread' },
+      { id: ghost, expected: 'unread' },
+    ],
+    'archived'
+  )
+  assert.deepEqual(outcome.updated, [a.id, b.id])
+  assert.deepEqual(outcome.conflict, [c.id])
+  assert.deepEqual(outcome.missing, [ghost])
+  assert.equal((await mod.getInboundEmail(a.id)).status, 'archived')
+  assert.equal((await mod.getInboundEmail(b.id)).status, 'archived')
+  assert.equal((await mod.getInboundEmail(c.id)).status, 'spam', 'conflict는 건드리지 않는다')
+})
+
+test('일괄 상태 변경: 이미 목표 상태인 메일은 바뀐 것으로 친다', async () => {
+  const mod = await loadFreshMailboxModule()
+  const a = await mod.insertInboundEmail(sample())
+  await mod.updateInboundStatus(a.id, 'unread', 'archived')
+  const outcome = await mod.updateInboundStatusBulk([{ id: a.id, expected: 'unread' }], 'archived')
+  assert.deepEqual(outcome, { updated: [a.id], conflict: [], missing: [] })
+})
+
 test('검색어의 %는 와일드카드로 해석되지 않는다', async () => {
   const { insertInboundEmail, listInboundEmails } = await loadFreshMailboxModule()
   await insertInboundEmail(sample({ subject: '정상 제목' }))
