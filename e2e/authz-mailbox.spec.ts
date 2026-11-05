@@ -472,13 +472,10 @@ test.describe('관리자 메일함 API 경계', () => {
   })
 
   /**
-   * 발신자 카드의 회원 매칭은 **관리자에게만** 간다. 이사 응답에는 `member` 키 자체가 없어야 한다 — null이면
-   * "회원이 아니다"로 읽혀 그것도 명부 정보다.
+   * 발신자 카드의 회원 매칭은 메일함 열람 범위(이사·감사·관리자)에 내려간다(2026-11-05 결정). 명부의
+   * 일부이므로 **배지 칸(이름·가입 상태·활성)만** 실려야 한다 — 회원 id·연락처가 섞이면 실패한다.
    */
-  test('발신자 카드: 이사는 집계만 받고 회원 매칭은 관리자만 받는다', async ({
-    baseURL,
-    request,
-  }) => {
+  test('발신자 카드: 이사·관리자 모두 집계와 배지 칸만 받는다', async ({ baseURL, request }) => {
     const url = `/api/admin/mailbox/sender?email=${encodeURIComponent(SENDER_DONE_EMAIL)}`
     expect((await request.get(url)).status()).toBe(401)
 
@@ -503,29 +500,30 @@ test.describe('관리자 메일함 API 경계', () => {
       expect(directorData.sender.email).toBe(SENDER_DONE_EMAIL)
       expect(directorData.sender.name).toBe(SENDER_DONE_NAME)
       expect(directorData.sender.inbound_count).toBeGreaterThanOrEqual(1)
-      expect('member' in directorData).toBe(false)
+      expect(directorData.member).toBeNull()
 
       const admin = await adminCtx.get(url)
       expect(admin.status()).toBe(200)
-      const adminData = (await admin.json()).data
-      expect('member' in adminData).toBe(true)
-      expect(adminData.member).toBeNull()
+      expect((await admin.json()).data.member).toBeNull()
 
-      // 관리자 본인 주소로 물으면 매칭된다 — 배지 칸 말고는 내려가지 않는다.
+      // 회원 주소로 물으면 이사도 매칭을 받는다 — 배지 칸 말고는 내려가지 않는다.
       const adminId = readFixtures().users.admin
       const client = createClient({ url: process.env.TURSO_DATABASE_URL! })
-      const adminEmail = await client
-        .execute({ sql: 'SELECT email FROM member_profiles WHERE id = ?', args: [adminId] })
-        .then(res => String(res.rows[0]?.email ?? ''))
+      const profile = await client
+        .execute({
+          sql: 'SELECT email, display_name FROM member_profiles WHERE id = ?',
+          args: [adminId],
+        })
+        .then(res => res.rows[0])
         .finally(() => client.close())
-      const self = await adminCtx.get(
-        `/api/admin/mailbox/sender?email=${encodeURIComponent(adminEmail)}`
-      )
-      const member = (await self.json()).data?.member
-      expect(member?.id).toBe(adminId)
-      expect(Object.keys(member).sort()).toEqual(
-        ['display_name', 'id', 'is_active', 'registration_status'].sort()
-      )
+      const memberUrl = `/api/admin/mailbox/sender?email=${encodeURIComponent(String(profile?.email ?? ''))}`
+      for (const ctx of [directorCtx, adminCtx]) {
+        const member = (await (await ctx.get(memberUrl)).json()).data?.member
+        expect(member?.display_name).toBe(String(profile?.display_name))
+        expect(Object.keys(member).sort()).toEqual(
+          ['display_name', 'is_active', 'registration_status'].sort()
+        )
+      }
 
       expect((await directorCtx.get('/api/admin/mailbox/sender?email=%3C%3E')).status()).toBe(400)
     } finally {
@@ -800,8 +798,8 @@ test.describe('관리자 메일함 페이지 인가', () => {
       const card = page.getByTestId('sender-card')
       await expect(card).toContainText(SENDER_DONE_EMAIL)
       await expect(card).toContainText('받은 메일 1통')
-      // 이사 화면에는 회원 매칭 줄이 아예 없다.
-      await expect(card).not.toContainText('회원')
+      // 이사 화면에도 회원 매칭 줄이 있다(픽스처 발신자는 회원이 아니다).
+      await expect(card).toContainText('가입한 회원 주소가 아닙니다')
       await expect(page.getByText(LONG_SUBJECT_PREFIX, { exact: false }).first()).toBeVisible()
       await expect(page.getByText(PENDING_SUBJECT)).toHaveCount(0)
 
