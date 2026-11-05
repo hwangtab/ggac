@@ -132,8 +132,12 @@ export async function sendEmail(input: SendEmailInput): Promise<string | null> {
   if (!response.ok) {
     // 본문에 API 키가 들어가지 않는다 — 상태 코드와 Resend의 오류 메시지만 남긴다.
     const detail = await response.text().catch(() => '')
+    // 4xx는 Resend가 요청을 **받아들이지 않았다**(안 나갔다). 5xx·408은 그렇게 단정할 수 없다 — 메일을
+    // 받아 처리한 뒤 응답 단계에서 실패하는 것은 메일 API의 알려진 패턴이다. 안 나갔다고 보면 사람이 다시
+    // 눌러 같은 메일이 두 번 나가고, 나간 메일의 기록이 `failed`로 남아 정리 대상이 된다.
+    const notSureItWasRefused = response.status >= 500 || response.status === 408
     throw new MailSendError(
-      'rejected',
+      notSureItWasRefused ? 'unknown' : 'rejected',
       `Resend 발송 실패 (${response.status}): ${detail.slice(0, 200)}`,
       response.status
     )

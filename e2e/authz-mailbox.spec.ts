@@ -2,6 +2,7 @@ import { test, expect, request as apiRequest } from '@playwright/test'
 import { createClient } from '@libsql/client'
 
 import { assertLocalTurso, storageStatePath } from './helpers/authState'
+import { expectReachedStorage } from './helpers/storageRoute'
 
 assertLocalTurso()
 
@@ -318,7 +319,7 @@ test.describe('관리자 메일함 API 경계', () => {
       const download = await adminCtx.get(
         `/api/admin/mailbox/${EMAIL_DONE_ID}/attachments/${ATTACHMENT_ID}/download`
       )
-      expect([200, 404]).toContain(download.status())
+      await expectReachedStorage(download)
       if (download.status() === 200) {
         // 실제 Blob 객체가 있었다면(로컬 사설 스토어 등) 헤더까지 단언한다.
         // 이번 스위트가 만드는 픽스처로는 이 분기가 실행되지 않는다 — 배선
@@ -360,7 +361,7 @@ test.describe('관리자 메일함 API 경계', () => {
       const download = await directorCtx.get(
         `/api/admin/mailbox/${EMAIL_DONE_ID}/attachments/${ATTACHMENT_ID}/download`
       )
-      expect([200, 404]).toContain(download.status())
+      await expectReachedStorage(download)
 
       const patch = await directorCtx.patch(`/api/admin/mailbox/${EMAIL_DONE_ID}`, {
         data: { status: 'read', expected_status: 'unread' },

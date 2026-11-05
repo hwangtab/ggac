@@ -32,6 +32,7 @@ import {
 } from '@/lib/mail/composeQuota'
 import { blobPathForSentAttachment } from '@/lib/storage/mailboxAttachments'
 import { deleteObject, putObject } from '@/lib/storage/blob'
+import { parseIntegerParam } from '@/utils/queryParams'
 import { sanitizePostHtml } from '@/utils/sanitizePostHtml'
 import { logSecurityEvent } from '@/utils/security'
 import { validateUUID } from '@/utils/validation'
@@ -333,8 +334,9 @@ export const GET = defineApiRoute<undefined, BoardAuthSuccess>({
     const params = new URL(request.url).searchParams
     const rawKind = params.get('kind')
     const kind: SentMailKind = rawKind === 'compose' || rawKind === 'reply' ? rawKind : 'all'
-    const limit = Math.min(Math.max(Number(params.get('limit')) || 30, 1), 100)
-    const offset = Math.max(Number(params.get('offset')) || 0, 0)
+    // 정수만 받는다 — `offset=1.5`나 `1e20`은 SQLite가 SQLITE_MISMATCH로 500을 낸다(받은 편지함과 같은 헬퍼).
+    const limit = parseIntegerParam(params.get('limit'), 30, { min: 1, max: 100 })
+    const offset = parseIntegerParam(params.get('offset'), 0, { min: 0, max: 100000 })
 
     // 검색어는 길이를 자른다. 쿼리 계층은 BCC를 검색하지 않는다(`listSentMail` 주석).
     const search = (params.get('search') ?? '').trim().slice(0, 100)

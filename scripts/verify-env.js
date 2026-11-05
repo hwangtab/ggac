@@ -348,6 +348,16 @@ if (env.NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL) {
   }
 }
 
+// 나간 메일은 영구 보관이 조직 결정이다(CLAUDE.md "메일함 새 메일 작성"). 이 변수를 설정하면 그 기간이 지난
+// 나간 메일의 본문·수신자·첨부가 크론에서 지워진다 — 실수로 설정된 경우를 눈에 띄게 한다.
+if (env.MAILBOX_OUTBOUND_RETENTION_DAYS) {
+  console.log(
+    '⚠️  MAILBOX_OUTBOUND_RETENTION_DAYS가 설정돼 있다 — 나간 메일은 영구 보관이 정책이다. 설정하면 ' +
+      env.MAILBOX_OUTBOUND_RETENTION_DAYS +
+      '일이 지난 나간 메일이 삭제된다. 의도한 것이 아니면 지워라.'
+  )
+}
+
 // MAILBOX_REPLY_TO(선택)가 MAILBOX_ALLOWED_RECIPIENTS(필수)에 없으면 관리자
 // 답장에 대한 회신이 화이트리스트를 통과하지 못해 에러도 로그도 없이
 // 사라진다. 둘 다 있을 때만 검사한다 — 어느 한쪽이 없으면(설정 자체를

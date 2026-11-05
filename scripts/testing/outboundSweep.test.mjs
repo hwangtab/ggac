@@ -29,14 +29,15 @@ process.env.TURSO_DATABASE_URL = `file:${DB_PATH}`
 const mod = () => import(`../../src/lib/mail/outboundSweep.ts?t=${Date.now()}-${Math.random()}`)
 
 /** 상태·나이를 지정해 행을 심는다(created_at을 과거로). */
-async function plant({ status, ageDays, attachment = true }) {
+async function plant({ status, ageDays, updatedDaysAgo = ageDays, attachment = true }) {
   const id = crypto.randomUUID()
   const created = Date.now() - ageDays * DAY
+  const updated = Date.now() - updatedDaysAgo * DAY
   await setup.execute({
     sql: `INSERT INTO outbound_emails
       (id, idempotency_key, to_addresses, recipient_count, subject, body_html, status, created_at, updated_at)
       VALUES (?, ?, '["a@example.com"]', 1, 's', '<p>x</p>', ?, ?, ?)`,
-    args: [id, `k-${id}`, status, created, created],
+    args: [id, `k-${id}`, status, created, updated],
   })
   let path = null
   if (attachment) {
@@ -179,18 +180,65 @@ test('Blob 삭제가 실패해도 행은 지운다 — 파일은 고아가 되�
   assert.ok(result.blobDeleteFailures >= 1)
 })
 
-test('정리 시점에 상태가 바뀐 행은 지우지 않는다', async () => {
-  const { deleteOutboundEmails } = await import(
+test('기한은 상태가 정해진 시각(updated_at) 기준이다 — 오래된 unknown을 방금 확정해도 바로 지워지지 않는다', async () => {
+  const { sweepOutbound } = await mod()
+  // 90일 전에 만들어져 unknown으로 남아 있다가 어제 운영자가 "안 나갔음"으로 확정한 행.
+  const justResolved = await plant({ status: 'failed', ageDays: 90, updatedDaysAgo: 1 })
+  // 같은 90일 전 행이지만 40일 전에 확정됐다 — 30일 기한을 넘겼다.
+  const resolvedLongAgo = await plant({ status: 'failed', ageDays: 90, updatedDaysAgo: 40 })
+  const blob = fakeBlob()
+
+  await sweepOutbound(Date.now(), CONFIG, blob)
+
+  assert.equal(
+    await exists(justResolved.id),
+    true,
+    'created_at 기준이면 어제 확정한 행이 바로 지워진다'
+  )
+  assert.equal(await attachmentRows(justResolved.id), 1)
+  assert.ok(!blob.removed.includes(justResolved.path))
+  assert.equal(await exists(resolvedLongAgo.id), false)
+})
+
+test('행을 먼저 지우고 그때 지워진 행의 첨부만 Blob에서 지운다 — 상태가 바뀐 행의 파일은 남는다', async () => {
+  const { deleteOutboundEmailsReturningPaths } = await import(
     `../../src/db/queries/mailbox.ts?t=${Date.now()}-${Math.random()}`
   )
-  const row = await plant({ status: 'failed', ageDays: 60 })
+  const stillFailed = await plant({ status: 'failed', ageDays: 60 })
+  const flipped = await plant({ status: 'failed', ageDays: 60 })
   // 후보로 뽑힌 뒤 운영자가 sent로 확정했다고 가정한다.
   await setup.execute({
     sql: "UPDATE outbound_emails SET status='sent' WHERE id = ?",
-    args: [row.id],
+    args: [flipped.id],
   })
-  assert.equal(await deleteOutboundEmails([row.id], ['failed', 'blocked']), 0)
-  assert.equal(await exists(row.id), true)
+
+  const result = await deleteOutboundEmailsReturningPaths(
+    [stillFailed.id, flipped.id],
+    ['failed', 'blocked']
+  )
+
+  assert.equal(result.deletedCount, 1)
+  assert.deepEqual(result.blobPaths, [stillFailed.path])
+  assert.ok(
+    !result.blobPaths.includes(flipped.path),
+    '바뀐 행의 첨부 경로가 지울 목록에 들어가면 안 된다'
+  )
+  assert.equal(await exists(flipped.id), true)
+  assert.equal(await attachmentRows(flipped.id), 1)
+  assert.equal(await exists(stillFailed.id), false)
+})
+
+test('정리는 운영 배포에서만 허용된다 — 로컬·E2E·프리뷰는 DB와 Blob이 같은 환경이라는 보장이 없다', async () => {
+  const { sweepAllowedHere } = await mod()
+  assert.equal(sweepAllowedHere({ VERCEL_ENV: 'production' }), true)
+  for (const env of [
+    {},
+    { VERCEL_ENV: 'preview' },
+    { VERCEL_ENV: 'development' },
+    { NODE_ENV: 'production' },
+  ]) {
+    assert.equal(sweepAllowedHere(env), false, JSON.stringify(env))
+  }
 })
 
 // ── 고아 Blob ────────────────────────────────────────────────────────────────
@@ -230,11 +278,70 @@ test('참조되지 않는 오래된 Blob만 지우고 참조되는 것·젊은 �
 test('한 번에 지우는 고아는 100개로 제한한다 — 크론 시간 제한', async () => {
   const { sweepOutbound } = await mod()
   const now = Date.now()
-  const listed = Array.from({ length: 150 }, () => ({
+  // 고아 150개만 있으면 차단기가 걸린다 — 정상 비율(참조 다수)이 되도록 참조 파일을 섞는다.
+  const referenced = []
+  for (let i = 0; i < 400; i++) referenced.push(await plant({ status: 'sent', ageDays: 3 }))
+  const orphans = Array.from({ length: 150 }, () => ({
     pathname: `mailbox-sent/${crypto.randomUUID()}/${crypto.randomUUID()}.pdf`,
     uploadedAt: new Date(now - 3 * DAY),
   }))
+  const listed = [
+    ...referenced.map(r => ({ pathname: r.path, uploadedAt: new Date(now - 3 * DAY) })),
+    ...orphans,
+  ]
   const blob = fakeBlob({ listed })
   const result = await sweepOutbound(now, CONFIG, blob)
+  assert.equal(result.orphanSweepAborted, null)
   assert.equal(result.orphanBlobsDeleted, 100)
+})
+
+test('차단기: 오래된 후보 대부분이 참조 없음으로 보이면 아무것도 지우지 않고 멈춘다', async () => {
+  // DB와 Blob 저장소가 서로 다른 환경을 가리키는 상황(예: 테스트 서버가 운영 토큰을 쥔 경우)을 흉내 낸다 —
+  // 운영 Blob의 파일 8개가 로컬 DB에는 하나도 없다.
+  const { sweepOutbound } = await mod()
+  const now = Date.now()
+  const listed = Array.from({ length: 8 }, () => ({
+    pathname: `mailbox-sent/${crypto.randomUUID()}/${crypto.randomUUID()}.pdf`,
+    uploadedAt: new Date(now - 5 * DAY),
+  }))
+  const blob = fakeBlob({ listed })
+
+  const result = await sweepOutbound(now, CONFIG, blob)
+
+  assert.equal(result.orphanSweepAborted, 'high_orphan_ratio')
+  assert.equal(result.orphanBlobsDeleted, 0)
+  assert.deepEqual(blob.removed, [], '차단기가 걸렸는데 파일이 지워졌다')
+})
+
+test('차단기: 후보가 적거나 고아 비율이 낮으면 정상적으로 지운다', async () => {
+  const { sweepOutbound } = await mod()
+  const now = Date.now()
+  // 후보 4개(기준 5개 미만)가 전부 고아 — 소규모에서는 차단하지 않는다.
+  const few = Array.from({ length: 4 }, () => ({
+    pathname: `mailbox-sent/${crypto.randomUUID()}/${crypto.randomUUID()}.pdf`,
+    uploadedAt: new Date(now - 5 * DAY),
+  }))
+  const r1 = await sweepOutbound(now, CONFIG, fakeBlob({ listed: few }))
+  assert.equal(r1.orphanSweepAborted, null)
+  assert.equal(r1.orphanBlobsDeleted, 4)
+
+  // 후보 10개 중 참조 8개, 고아 2개(20%) — 차단하지 않는다.
+  const referenced = []
+  for (let i = 0; i < 8; i++) referenced.push(await plant({ status: 'sent', ageDays: 3 }))
+  const orphans = Array.from({ length: 2 }, () => ({
+    pathname: `mailbox-sent/${crypto.randomUUID()}/${crypto.randomUUID()}.pdf`,
+    uploadedAt: new Date(now - 5 * DAY),
+  }))
+  const listed = [
+    ...referenced.map(r => ({ pathname: r.path, uploadedAt: new Date(now - 5 * DAY) })),
+    ...orphans,
+  ]
+  const blob = fakeBlob({ listed })
+  const r2 = await sweepOutbound(now, CONFIG, blob)
+  assert.equal(r2.orphanSweepAborted, null)
+  assert.equal(r2.orphanBlobsDeleted, 2)
+  assert.ok(
+    referenced.every(r => !blob.removed.includes(r.path)),
+    '참조되는 첨부가 지워졌다'
+  )
 })

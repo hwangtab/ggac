@@ -407,6 +407,22 @@ noreply@ggac.kr로 가서 유실된다), `MAILBOX_BACKFILL_CRON_TOKEN`(메일함
   확정하는 행). `mailbox-sent/` 아래에서 DB에 참조되지 않고 올라온 지 24시간이
   지난 Blob(고아)도 치운다 — 접두어 밖은 절대 건드리지 않는다. 한 번에 행
   100개·고아 100개까지, Blob 목록은 1000개까지만 본다(커서 페이지네이션 없음).
+- **정리는 운영 배포(`VERCEL_ENV=production`)에서만 돈다**(`sweepAllowedHere`).
+  로컬·E2E·프리뷰는 DB와 Blob이 같은 환경을 가리킨다는 보장이 없어, 거기서 돌면
+  다른 환경의 파일을 지울 수 있다. 추가로 **차단기**가 있다 — 오래된 후보 5개
+  이상 중 절반 넘게 "참조 없음"이면 아무것도 지우지 않고
+  `MAILBOX_OUTBOUND_SWEEP_ABORTED`를 남긴다(DB·Blob 환경 불일치의 신호). 기한은
+  `updated_at`(상태가 정해진 시각) 기준이고, 행을 먼저 조건부로 지운 뒤 **그때
+  지워진 행의 첨부만** Blob에서 지운다.
+- **E2E 서버는 `PRIVATE_BLOB_READ_WRITE_TOKEN`을 항상
+  비운다**(`playwright.config.ts`, 시험 토큰이 있으면 그것). 예전에는
+  `.env.local`의 운영 토큰이 그대로 서버에 들어가 로컬 DB를 보면서 운영 비공개
+  저장소(보낸 메일 첨부·이사회 서류·DB 백업)를 만졌다. 토큰이 없으면 첨부
+  다운로드는 저장소 단계에서 500 (`첨부를 불러올 수 없습니다`)이고, 인가 E2E는
+  그것을 `expectReachedStorage`로 "인가 통과"로 판정한다.
+- Resend 5xx·408은 "안 나갔다"가 아니라 `unknown`이다(`MailSendError`) — 받아
+  처리한 뒤 응답 단계에서 실패할 수 있어, 안 나갔다고 보면 재발송으로 중복이
+  나고 나간 메일 기록이 `failed`로 정리 대상이 된다.
 - 멈춘 `unknown`/오래된 `sending`은 관리자가 보낸 편지함에서 Resend 대시보드로
   확인한 뒤 `PATCH /api/admin/mailbox/outbound/[id]`(화면 버튼)로 확정한다.
   크론이 10분 지난 `sending`을 `unknown`으로 옮긴다.
