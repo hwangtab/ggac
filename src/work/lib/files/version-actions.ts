@@ -46,7 +46,12 @@ import {
   isDraftMeta,
 } from './doc-edit-types'
 import { buildUploadPath, isSafeAttachmentPath, thumbPathOf } from './paths'
-import { discardPending, preparePromotion, PromoteRejected } from './promote'
+import {
+  discardPending,
+  preparePromotion,
+  PromoteRejected,
+  removeCopyUnlessReferenced,
+} from './promote'
 import { STORAGE_RETRY_MESSAGE, StorageUnavailableError } from './storage-errors'
 import { copyObject, removeObjects, StorageUnconfiguredError } from './storage'
 import {
@@ -488,7 +493,7 @@ export async function restoreFileVersion(
       clearOwnCheckout: true,
     })
   } catch (e) {
-    await removeObjects(copiedThumb ? [path, thumbPathOf(path)] : [path]).catch(() => undefined)
+    await removeCopyUnlessReferenced(path, copiedThumb)
     if (isWorkWriteError(e, 'conflict')) {
       return fail('다른 사람이 먼저 새 버전을 저장했습니다. 새로 고친 뒤 다시 시도해 주세요.')
     }

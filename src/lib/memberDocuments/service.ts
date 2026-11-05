@@ -33,6 +33,7 @@ import {
   MEMBER_DOCUMENT_MAX_FILE_BYTES,
   MEMBER_DOCUMENT_MAX_PENDING,
   MEMBER_DOCUMENT_NAME_MAX,
+  normalizeRename,
   QUOTA_EXCEEDED_MESSAGE,
   quotaVerdict,
   renameWithExtension,
@@ -110,7 +111,9 @@ export async function prepareMemberDocumentUpload(
     )
   }
   const { name: rawName, size, mime: rawMime, documentId } = parsed.data
-  const name = displayFileName(rawName).slice(0, MEMBER_DOCUMENT_NAME_MAX)
+  // 길이만 잘라 내면 긴 이름(정부 서식 HWP 등)의 확장자가 떨어져 415 로 거부됐다(2026-11-05 리뷰) — 확장자를 지키며 줄인다
+  const display = displayFileName(rawName)
+  const name = normalizeRename(display, display) ?? display.slice(0, MEMBER_DOCUMENT_NAME_MAX)
   if (!isAllowedMemberDocument(name)) return fail(415, UNSUPPORTED_TYPE_MESSAGE)
 
   if (documentId) {

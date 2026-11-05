@@ -164,6 +164,9 @@ test('신청·취소가 조건부 UPDATE로 타임스탬프를 오가고, regist
  * 지우는 순서는 FK 자식 → 부모다(`PRAGMA foreign_keys`가 켜져 있다 — 실측).
  */
 const WITHDRAWAL_FIXTURE_TABLES = [
+  'member_document_uploads',
+  'member_document_versions',
+  'member_documents',
   'funding_pledges',
   'funding_rewards',
   'funding_campaigns',
@@ -733,6 +736,45 @@ test('전원이 활성일 때 listArtists()는 activeOnly 필터 없이도 같�
   const unfiltered = await listArtists({ activeOnly: false })
   assert.deepEqual(filtered.map(a => a.legacy_id).sort(), unfiltered.map(a => a.legacy_id).sort())
   assert.deepEqual(filtered.map(a => a.legacy_id).sort(), ['artist-014', 'artist-020'])
+})
+
+test('확정은 탈퇴자의 내 문서함(문서·버전·임시 업로드)을 지우고 객체 경로를 돌려준다 — 남의 문서는 그대로(2026-11-05 리뷰)', async () => {
+  await seedWithdrawalFixture(setupClient)
+  const now = Date.now()
+  for (const [doc, owner] of [
+    ['d1', 'm1'],
+    ['d2', 'm2'],
+  ]) {
+    await setupClient.execute({
+      sql: `INSERT INTO member_documents (id, owner_id, name, latest_version_no, last_opened_at, created_at, updated_at)
+            VALUES (?, ?, '계약서.docx', 1, ?, ?, ?)`,
+      args: [doc, owner, now, now, now],
+    })
+    await setupClient.execute({
+      sql: `INSERT INTO member_document_versions (id, document_id, owner_id, version_no, name, size, blob_path, created_at)
+            VALUES (?, ?, ?, 1, '계약서.docx', 10, ?, ?)`,
+      args: [`v-${doc}`, doc, owner, `member-documents/${owner}/v-${doc}/a.docx`, now],
+    })
+  }
+  await setupClient.execute({
+    sql: `INSERT INTO member_document_uploads (id, owner_id, document_id, blob_path, name, size, created_at)
+          VALUES ('u1', 'm1', NULL, 'member-documents/m1/u1/b.docx', 'b.docx', 10, ?)`,
+    args: [now],
+  })
+
+  const { withdrawMember } = await import(WITHDRAWAL_MODULE_URL.href)
+  const outcome = await withdrawMember('m1')
+  assert.equal(outcome.ok, true)
+  assert.deepEqual(outcome.memberDocumentCleanup, {
+    versionIds: ['v-d1'],
+    blobPaths: ['member-documents/m1/v-d1/a.docx', 'member-documents/m1/u1/b.docx'],
+  })
+  assert.equal(await countOf(setupClient, 'member_documents', "owner_id = 'm1'"), 0)
+  assert.equal(await countOf(setupClient, 'member_document_versions', "owner_id = 'm1'"), 0)
+  assert.equal(await countOf(setupClient, 'member_document_uploads', "owner_id = 'm1'"), 0)
+  // 남의 문서는 그대로다
+  assert.equal(await countOf(setupClient, 'member_documents', "owner_id = 'm2'"), 1)
+  assert.equal(await countOf(setupClient, 'member_document_versions', "owner_id = 'm2'"), 1)
 })
 
 test('확정은 펀딩 후원의 행은 남기고 개인정보·배송지만 묘비로 덮는다', async () => {

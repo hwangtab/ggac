@@ -657,11 +657,55 @@ export async function listRetentionDeleteCandidates(
 
 /** 조건이 아직 맞을 때만 문서 행을 지운다(그 사이 열었으면 남긴다). 지웠으면 true */
 export async function deleteExpiredMemberDocument(id: string, now: Date): Promise<boolean> {
+  return (await claimExpiredMemberDocument(id, now)) !== null
+}
+
+/**
+ * 보존 삭제의 **첫 단계** — 조건이 아직 맞으면 문서 행을 지우고(버전·임시 업로드는 FK cascade), 그 순간 그 문서가 가리키던
+ * 객체 경로·버전 id 를 돌려준다. 그 사이 열었으면(조건이 깨졌으면) null 이고 아무것도 지우지 않는다.
+ *
+ * 객체를 먼저 지우고 행을 나중에 조건부로 지우면, 목록을 만든 뒤 주인이 문서를 연 경우 행은 남고 파일만 사라졌다
+ * (2026-11-05 리뷰). 행을 먼저 지우면 최악이 "행 없는 고아 객체"라 화면은 깨지지 않는다.
+ */
+export async function claimExpiredMemberDocument(
+  id: string,
+  now: Date
+): Promise<{ versionIds: string[]; blobPaths: string[] } | null> {
+  return db.transaction(async tx => {
+    const versions = await tx
+      .select({ id: memberDocumentVersions.id, blobPath: memberDocumentVersions.blobPath })
+      .from(memberDocumentVersions)
+      .where(eq(memberDocumentVersions.documentId, id))
+    const uploads = await tx
+      .select({ blobPath: memberDocumentUploads.blobPath })
+      .from(memberDocumentUploads)
+      .where(eq(memberDocumentUploads.documentId, id))
+    const res = await tx
+      .delete(memberDocuments)
+      .where(and(eq(memberDocuments.id, id), deleteCondition(now)))
+      .returning({ id: memberDocuments.id })
+    if (res.length !== 1) return null
+    return {
+      versionIds: versions.map(v => v.id),
+      blobPaths: [...versions.map(v => v.blobPath), ...uploads.map(u => u.blobPath)],
+    }
+  })
+}
+
+/**
+ * 삭제 예고 알림을 보내지 못했을 때 알림 시각을 되돌린다 — 알리지 못한 채 30일 뒤 지우지 않게(2026-11-05 리뷰).
+ * 이번 실행이 남긴 시각(`notifiedAt`)과 같은 행만 되돌린다. 다음 실행이 다시 알린다.
+ */
+export async function clearDeletionNotified(ids: string[], notifiedAt: Date): Promise<number> {
+  if (ids.length === 0) return 0
   const res = await db
-    .delete(memberDocuments)
-    .where(and(eq(memberDocuments.id, id), deleteCondition(now)))
+    .update(memberDocuments)
+    .set({ deletionNotifiedAt: null })
+    .where(
+      and(inArray(memberDocuments.id, ids), eq(memberDocuments.deletionNotifiedAt, notifiedAt))
+    )
     .returning({ id: memberDocuments.id })
-  return res.length === 1
+  return res.length
 }
 
 /** 24시간이 지난 임시 업로드(객체 정리용) */

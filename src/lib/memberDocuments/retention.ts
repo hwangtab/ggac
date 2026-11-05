@@ -1,6 +1,7 @@
 import { createBulkNotifications, createNotification } from '@/db/queries/notifications'
 import {
-  deleteExpiredMemberDocument,
+  claimExpiredMemberDocument,
+  clearDeletionNotified,
   deleteMemberDocumentUploadRows,
   listExpiredMemberDocumentUploads,
   listRetentionDeleteCandidates,
@@ -111,6 +112,13 @@ export async function runMemberDocumentRetention(
       result.notifiedOwners++
     } catch (e) {
       log.error('삭제 예고 알림 실패', { error: e instanceof Error ? e.message : String(e) })
+      // 알리지 못했으면 알림 시각을 되돌린다 — 그대로 두면 주인이 모르는 채 30일 뒤 지워진다. 다음 실행이 다시 알린다.
+      const reverted = await clearDeletionNotified(
+        docs.map(d => d.id),
+        now
+      ).catch(() => 0)
+      result.notifiedDocuments -= reverted
+      continue
     }
     if (!mailReady) continue
     try {
@@ -135,20 +143,33 @@ export async function runMemberDocumentRetention(
       result.deferredDocuments++
       continue
     }
+    // 행을 **먼저** 조건부로 지운다(그 사이 열었으면 남기고 객체도 건드리지 않는다). 객체를 먼저 지우면 그 사이 연 문서의
+    // 행만 남고 파일이 사라졌다(2026-11-05 리뷰). 행을 지운 뒤 객체 삭제가 실패하면 고아 객체가 남을 뿐 화면은 깨지지 않는다.
+    let claimed: Awaited<ReturnType<typeof claimExpiredMemberDocument>>
     try {
-      await removeMemberDocumentObjects(doc.blobPaths)
+      claimed = await claimExpiredMemberDocument(doc.id, now)
+    } catch {
+      log.error('보존 삭제 — 행을 지우지 못해 미룸', { id: doc.id })
+      result.deferredDocuments++
+      continue
+    }
+    if (!claimed) continue
+    deleted.push({ ownerId: doc.ownerId, name: doc.name })
+    result.deletedDocuments++
+    const paths = claimed.blobPaths.filter(
+      p => isSafeMemberDocumentPath(p) && p.split('/')[1] === doc.ownerId
+    )
+    try {
+      await removeMemberDocumentObjects(paths)
     } catch (e) {
       if (!(e instanceof StorageUnconfiguredError)) {
-        log.error('보존 삭제 — 객체를 지우지 못해 미룸', { id: doc.id })
-        result.deferredDocuments++
-        continue
+        log.error('보존 삭제 — 행은 지웠고 객체 일부를 지우지 못함(고아 객체)', {
+          id: doc.id,
+          count: paths.length,
+        })
       }
     }
-    if (await deleteExpiredMemberDocument(doc.id, now)) {
-      deleted.push({ ownerId: doc.ownerId, name: doc.name })
-      result.deletedDocuments++
-      await removeMemberDocumentRenderCaches(doc.versionIds).catch(() => 0)
-    }
+    await removeMemberDocumentRenderCaches(claimed.versionIds).catch(() => 0)
   }
   for (const [ownerId, docs] of groupByOwner(deleted)) {
     try {

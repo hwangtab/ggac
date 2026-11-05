@@ -39,9 +39,19 @@ async function readBounded(path: string, max: number): Promise<Buffer | null> {
   return bytes.length > max ? null : bytes
 }
 
-async function blockedSave<T>(ownerId: string, pending: MemberDocumentPendingRow, reason: string) {
+/**
+ * 승격하지 못한 임시 업로드를 치운다 — **행을 먼저 지우고, 실제로 지웠을 때만 객체를 지운다.** 같은 업로드를 다른 요청이
+ * 그 사이 승격했으면(승격 트랜잭션이 임시 행을 지운다) 행이 없어 그 객체(= 새 버전 파일)를 건드리지 않는다. 그대로 두면
+ * 임시 업로드가 24시간 동안 200MB 용량을 차지해, 몇 번 실패하면 하루 동안 올리기가 전부 413 이었다(2026-11-05 리뷰).
+ */
+async function discardPendingUpload(ownerId: string, pending: MemberDocumentPendingRow) {
+  const removed = await deleteOwnedMemberDocumentUpload(ownerId, pending.id).catch(() => null)
+  if (!removed) return
   await removeMemberDocumentObjects([pending.blobPath]).catch(() => undefined)
-  await deleteOwnedMemberDocumentUpload(ownerId, pending.id).catch(() => undefined)
+}
+
+async function blockedSave<T>(ownerId: string, pending: MemberDocumentPendingRow, reason: string) {
+  await discardPendingUpload(ownerId, pending)
   return fail<T>(
     422,
     `${reason} 이 문서는 앱에서 저장하기 어렵습니다 — 내려받아 한글에서 고친 뒤 새 버전으로 올려 주세요.`
@@ -96,9 +106,9 @@ export async function createMemberDocument(
     }
   } catch (e) {
     const r = writeErrorResult<PromoteResult>(e)
-    if (r.status === 413) {
-      await removeMemberDocumentObjects([pending.blobPath]).catch(() => undefined)
-      await deleteOwnedMemberDocumentUpload(ownerId, pending.id).catch(() => undefined)
+    // 다시 시도해도 같은 업로드로는 저장되지 않는 실패(용량·개수·충돌·없음)면 임시 업로드를 치운다. 저장소 장애(5xx)는 남긴다.
+    if (r.status === 413 || r.status === 409 || r.status === 429 || r.status === 404) {
+      await discardPendingUpload(ownerId, pending)
     }
     return r
   }
@@ -120,6 +130,8 @@ export async function addUploadedVersion(
     return fail(404, '올린 파일을 찾을 수 없습니다. 다시 올려 주세요.')
   }
   if (input.baseVersionNo !== null && input.baseVersionNo !== doc.document.latestVersionNo) {
+    // 다른 탭이 먼저 저장했다 — 이 업로드로는 저장하지 않으니 치운다(다시 저장하면 새로 올린다)
+    await discardPendingUpload(ownerId, pending)
     return fail(
       409,
       `다른 곳에서 먼저 v${doc.document.latestVersionNo}을 저장했습니다. 새로 연 뒤 다시 저장해 주세요.`
@@ -192,9 +204,9 @@ export async function addUploadedVersion(
     }
   } catch (e) {
     const r = writeErrorResult<PromoteResult>(e)
-    if (r.status === 413) {
-      await removeMemberDocumentObjects([pending.blobPath]).catch(() => undefined)
-      await deleteOwnedMemberDocumentUpload(ownerId, pending.id).catch(() => undefined)
+    // 다시 시도해도 같은 업로드로는 저장되지 않는 실패(용량·개수·충돌·없음)면 임시 업로드를 치운다. 저장소 장애(5xx)는 남긴다.
+    if (r.status === 413 || r.status === 409 || r.status === 429 || r.status === 404) {
+      await discardPendingUpload(ownerId, pending)
     }
     return r
   }

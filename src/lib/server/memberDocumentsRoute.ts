@@ -34,7 +34,7 @@ export function memberDocumentNotFound(): NextResponse {
 const LIMIT_URL = 'https://member-documents.internal/write'
 
 /**
- * 사용자 단위 분산 레이트 리밋 — 쓰기(MEMBER_DOCUMENT_WRITE 분당 30)·편집기 저장본 검사(MEMBER_DOCUMENT_VERIFY 분당 10).
+ * 사용자 단위 분산 레이트 리밋 — 쓰기(MEMBER_DOCUMENT_WRITE 분당 90)·편집기 저장본 검사(MEMBER_DOCUMENT_VERIFY 분당 10).
  * 키는 사용자 id(게이트를 지난 뒤라 신원이 확정돼 있다). 넘으면 429 응답, 아니면 null. 쓰기라 리미터 장애 때 닫힌다.
  */
 export async function limitMemberDocumentWrite(

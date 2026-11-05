@@ -39,9 +39,13 @@ export async function GET(_request: NextRequest, ctx: Ctx) {
   if (!isUuid(id)) return memberDocumentNotFound()
   const found = await getOwnedMemberDocument(auth.user.id, id)
   if (!found) return memberDocumentNotFound()
-  await touchOwnedMemberDocument(auth.user.id, id).catch(() => false)
+  const touched = await touchOwnedMemberDocument(auth.user.id, id).catch(() => false)
 
-  const d = found.document
+  // 방금 열어 보존 시계를 되돌렸으면 그 상태로 답한다(읽은 행은 열기 전 값이라 "곧 지워짐"으로 나왔다 — 2026-11-05 리뷰)
+  const now = new Date()
+  const d = touched
+    ? { ...found.document, lastOpenedAt: now, deletionNotifiedAt: null }
+    : found.document
   return ApiSuccess.ok({
     document: {
       id: d.id,
@@ -49,7 +53,7 @@ export async function GET(_request: NextRequest, ctx: Ctx) {
       latestVersionNo: d.latestVersionNo,
       createdAt: d.createdAt.toISOString(),
       updatedAt: d.updatedAt.toISOString(),
-      retention: retentionActionOf(d, new Date()),
+      retention: retentionActionOf(d, now),
     },
     versions: found.versions.map(versionView),
   }).toNextResponse()

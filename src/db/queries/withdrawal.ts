@@ -20,6 +20,9 @@ import {
   marketAuctions,
   marketBids,
   marketListings,
+  memberDocumentUploads,
+  memberDocumentVersions,
+  memberDocuments,
   memberProfiles,
   notifications,
   reservations,
@@ -105,6 +108,11 @@ export type WithdrawOutcome =
        * 음수가 아니면 **키 자체가 없다** — 기존 호출부·테스트의 결과 모양을 바꾸지 않는다.
        */
       timebankNegativeMinutes?: number
+      /**
+       * 내 문서함에 파일이 있었으면 그 객체 경로·버전 id(행은 이미 지웠다). 호출부가 커밋 뒤 저장소·미리보기 캐시를 지운다.
+       * 없으면 **키 자체가 없다**(기존 결과 모양 유지).
+       */
+      memberDocumentCleanup?: { versionIds: string[]; blobPaths: string[] }
     }
   | { ok: false; reason: 'not_requested' | 'last_admin' }
 
@@ -305,6 +313,27 @@ export async function withdrawMember(userId: string): Promise<WithdrawOutcome> {
       const reason = wasRequested && row?.isAdmin ? 'last_admin' : 'not_requested'
       return { ok: false, reason }
     }
+
+    // ⑤ 내 문서함 — 조합원이 올린 개인 파일(계약서·신분증 사본일 수 있다)이다. 행을 지우고(버전은 문서 FK cascade),
+    // 객체 경로를 돌려줘 호출부가 커밋 뒤 저장소에서 지운다(외부 호출이라 트랜잭션 밖 — 빌링키·아티스트 사진과 같다).
+    // 예전에는 손대지 않아 탈퇴한 사람의 파일이 보존 정리(1년+30일)까지 남았다(2026-11-05 리뷰).
+    const docVersions = await tx
+      .select({ id: memberDocumentVersions.id, blobPath: memberDocumentVersions.blobPath })
+      .from(memberDocumentVersions)
+      .where(eq(memberDocumentVersions.ownerId, userId))
+    const docUploads = await tx
+      .select({ blobPath: memberDocumentUploads.blobPath })
+      .from(memberDocumentUploads)
+      .where(eq(memberDocumentUploads.ownerId, userId))
+    await tx.delete(memberDocumentUploads).where(eq(memberDocumentUploads.ownerId, userId))
+    await tx.delete(memberDocuments).where(eq(memberDocuments.ownerId, userId))
+    const memberDocumentCleanup =
+      docVersions.length + docUploads.length > 0
+        ? {
+            versionIds: docVersions.map(v => v.id),
+            blobPaths: [...docVersions.map(v => v.blobPath), ...docUploads.map(u => u.blobPath)],
+          }
+        : null
 
     // ③ 로그 — 지운다. `user_activities`에 IP·User-Agent가 있다.
     await tx.delete(userActivities).where(eq(userActivities.userId, userId))
@@ -553,13 +582,11 @@ export async function withdrawMember(userId: string): Promise<WithdrawOutcome> {
       throw new Error('탈퇴 처리 후에도 펀딩 후원에 개인정보가 남았다 — 전체를 롤백한다')
     }
 
+    const base = memberDocumentCleanup
+      ? { ok: true as const, revokedBillingKeys, artistPhotoCleanup, memberDocumentCleanup }
+      : { ok: true as const, revokedBillingKeys, artistPhotoCleanup }
     return timebank.negativeMinutes === null
-      ? { ok: true, revokedBillingKeys, artistPhotoCleanup }
-      : {
-          ok: true,
-          revokedBillingKeys,
-          artistPhotoCleanup,
-          timebankNegativeMinutes: timebank.negativeMinutes,
-        }
+      ? base
+      : { ...base, timebankNegativeMinutes: timebank.negativeMinutes }
   })
 }

@@ -53,6 +53,19 @@ export async function deletePendingUploadRows(ids: readonly string[]): Promise<n
   return n
 }
 
+/** 크론용 — 행을 지우고 실제로 지운 행의 id 를 돌려준다(그 사이 승격된 업로드는 빠진다 — `claimPendingUploads`와 같은 이유) */
+export async function claimPendingUploadRows(ids: readonly string[]): Promise<string[]> {
+  const out: string[] = []
+  for (const chunk of chunks([...new Set(ids)])) {
+    const rows = await db
+      .delete(workPendingUploads)
+      .where(inArray(workPendingUploads.id, chunk))
+      .returning({ id: workPendingUploads.id })
+    out.push(...rows.map(r => r.id))
+  }
+  return out
+}
+
 /**
  * 주어진 객체 키 중 **아직 행이 가리키는 것**(첨부 또는 임시 업로드의 blob_path). 고아 판정의 반대편이다 —
  * 여기 나온 키는 절대 지우지 않는다.

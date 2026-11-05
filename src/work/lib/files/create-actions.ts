@@ -32,7 +32,7 @@ import { discardDraftPreview } from './doc-edit-draft'
 import { isDraftMeta } from './doc-edit-types'
 import { loadEditContext, NOT_FOUND as FILE_NOT_FOUND } from './edit-context'
 import { buildUploadPath, isSafeAttachmentPath, thumbPathOf } from './paths'
-import { preparePromotion, PromoteRejected } from './promote'
+import { preparePromotion, PromoteRejected, removeCopyUnlessReferenced } from './promote'
 import { copyObject, removeObjects, StorageUnconfiguredError } from './storage'
 import { STORAGE_RETRY_MESSAGE, StorageUnavailableError } from './storage-errors'
 import { extensionOf } from './version-rules'
@@ -272,7 +272,7 @@ export async function copyAsNewDocument(
       folderPath: src.folder_path,
     })
   } catch (e) {
-    await removeObjects(withThumb ? [path, thumbPathOf(path)] : [path]).catch(() => undefined)
+    await removeCopyUnlessReferenced(path, withThumb)
     if (isWorkWriteError(e, 'owners_only')) return fail('이 채널은 소유자만 글을 올릴 수 있습니다.')
     return dbFailure('copy-doc:insert', e)
   }
