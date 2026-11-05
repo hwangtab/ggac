@@ -20,6 +20,14 @@ class Logger {
     }
   }
 
+  /**
+   * 운영에서도 **항상** 남기는 정보 줄 — 크론의 실행 요약처럼 "돌았다는 사실" 자체가 증거인 기록용. `info`는 운영에서
+   * 지워지므로(위) 그것으로 남긴 요약은 Vercel 로그에 한 줄도 남지 않았다. 개인정보·비밀값을 싣지 말 것.
+   */
+  summary(message: string, ...args: any[]) {
+    console.info(message, ...args)
+  }
+
   warn(message: string, ...args: any[]) {
     console.warn(message, ...args)
   }
@@ -41,6 +49,7 @@ export const logger = new Logger()
 export const createLogger = (context: string) => ({
   debug: (message: string, ...args: any[]) => logger.debug(`[${context}] ${message}`, ...args),
   info: (message: string, ...args: any[]) => logger.info(`[${context}] ${message}`, ...args),
+  summary: (message: string, ...args: any[]) => logger.summary(`[${context}] ${message}`, ...args),
   warn: (message: string, ...args: any[]) => logger.warn(`[${context}] ${message}`, ...args),
   error: (message: string, ...args: any[]) => logger.error(`[${context}] ${message}`, ...args),
   log: (message: string, ...args: any[]) => logger.log(`[${context}] ${message}`, ...args),

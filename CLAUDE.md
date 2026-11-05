@@ -449,7 +449,11 @@ noreply@ggac.kr로 가서 유실된다), `MAILBOX_BACKFILL_CRON_TOKEN`(메일함
   프리뷰는 PR마다 생기는데 같은 키가 있으면 운영 쿼터와 평판을 공유한다.
   프리뷰·로컬에서는 인증 메일이 안 나가는 것이 정상이다.
 - 메일함 백필 크론은 매 실행 `메일함 크론 요약` 한 줄을 남긴다(Vercel이 정상
-  응답 로그를 안 남기므로 이 줄이 유일한 실행 증거다).
+  응답 로그를 안 남기므로 이 줄이 유일한 실행 증거다). **`log.summary`로 남긴다
+  — `createLogger`의 `info`는 운영에서 지워진다**(`src/utils/logger.ts`).
+  예전에는 `info`라 이 줄이 운영에 한 번도 안 남았다(2026-11-05 확인). 다른
+  크론의 요약 (`dues/charge`·`dues/expire`·`funding/expire`·`tickets/expire`
+  등)은 아직 `info`라 운영 로그에 보이지 않는다.
 
 ### Database Migration Issues
 
