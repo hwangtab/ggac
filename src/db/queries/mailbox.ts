@@ -17,7 +17,13 @@ import {
   outboundEmailAttachments,
 } from '../schema/index.ts'
 
-import { toIso, toSnakeCase, likeContains } from './_helpers.ts'
+import {
+  toIso,
+  toSnakeCase,
+  likeContains,
+  escapeLikePattern,
+  LIKE_ESCAPE_CHAR,
+} from './_helpers.ts'
 
 export type InsertInboundEmailInput = {
   resend_email_id: string
@@ -530,6 +536,79 @@ export async function markStaleSendingAsUnknown(olderThanMs: number): Promise<nu
   return updated.length
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 보관 기한·고아 Blob 정리 (크론: `lib/mail/outboundSweep.ts`)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * 정리 대상 보낸 메일 id. `statuses`는 호출부가 정한다 — `unknown`·`sending`은 사람이 확인해야 하는
+ * 상태라 어떤 보관 기한으로도 지우지 않는다(호출부가 넣지 않는다).
+ */
+export async function listOutboundIdsForPurge(
+  statuses: string[],
+  olderThanMs: number,
+  limit: number
+): Promise<string[]> {
+  if (statuses.length === 0) return []
+  const rows = await db
+    .select({ id: outboundEmails.id })
+    .from(outboundEmails)
+    .where(
+      and(
+        inArray(outboundEmails.status, statuses),
+        sql`${outboundEmails.createdAt} < ${olderThanMs}`
+      )
+    )
+    .orderBy(asc(outboundEmails.createdAt))
+    .limit(limit)
+  return rows.map(r => r.id)
+}
+
+export async function listAttachmentPathsForOutbound(ids: string[]): Promise<string[]> {
+  if (ids.length === 0) return []
+  const rows = await db
+    .select({ blobPath: outboundEmailAttachments.blobPath })
+    .from(outboundEmailAttachments)
+    .where(inArray(outboundEmailAttachments.emailId, ids))
+  return rows.map(r => r.blobPath)
+}
+
+/**
+ * 첨부 행을 먼저, 메일 행을 나중에 지운다. FK의 ON DELETE CASCADE가 연결에 따라 꺼져 있을 수 있어
+ * 캐스케이드에 기대지 않는다. 지우는 시점에도 상태를 다시 확인해, 그 사이 사람이 확정하거나 다른 상태로
+ * 바뀐 행은 건드리지 않는다.
+ */
+export async function deleteOutboundEmails(ids: string[], statuses: string[]): Promise<number> {
+  if (ids.length === 0 || statuses.length === 0) return 0
+  const eligible = await db
+    .select({ id: outboundEmails.id })
+    .from(outboundEmails)
+    .where(and(inArray(outboundEmails.id, ids), inArray(outboundEmails.status, statuses)))
+  const eligibleIds = eligible.map(r => r.id)
+  if (eligibleIds.length === 0) return 0
+  await db
+    .delete(outboundEmailAttachments)
+    .where(inArray(outboundEmailAttachments.emailId, eligibleIds))
+  await db.delete(outboundEmails).where(inArray(outboundEmails.id, eligibleIds))
+  return eligibleIds.length
+}
+
+/** 후보 경로 중 DB 어디에도 참조되지 않는 것만 돌려준다(고아 Blob). */
+export async function filterUnreferencedSentPaths(paths: string[]): Promise<string[]> {
+  if (paths.length === 0) return []
+  const referenced = new Set<string>()
+  // SQLite 변수 한도를 넘지 않게 나눠서 묻는다.
+  for (let i = 0; i < paths.length; i += 200) {
+    const chunk = paths.slice(i, i + 200)
+    const rows = await db
+      .select({ blobPath: outboundEmailAttachments.blobPath })
+      .from(outboundEmailAttachments)
+      .where(inArray(outboundEmailAttachments.blobPath, chunk))
+    rows.forEach(r => referenced.add(r.blobPath))
+  }
+  return paths.filter(p => !referenced.has(p))
+}
+
 export async function getOutboundEmail(id: string): Promise<Record<string, unknown> | null> {
   const [row] = await db.select().from(outboundEmails).where(eq(outboundEmails.id, id)).limit(1)
   return row ? rowToOutbound(row) : null
@@ -605,21 +684,37 @@ export type SentMailKind = 'all' | 'compose' | 'reply'
  * 보낸 편지함 — 새 메일(`outbound_emails`)과 답장(`inbound_email_replies`)을 최신순으로 합친다.
  * 답장의 수신자는 원본 메일의 발신자다. 본문은 싣지 않는다(상세에서 읽는다). BCC도 싣지 않는다.
  */
+/**
+ * 검색은 **제목·받는 사람·참조**만 본다. 숨은참조(`bcc_addresses`)는 어떤 조건에도 넣지 않는다 —
+ * 이사·감사도 이 목록을 보므로, BCC를 검색 대상에 넣으면 "이 주소로 검색하면 나온다/안 나온다"로 BCC
+ * 주소를 알아낼 수 있다. 관리자에게도 열지 않는다(권한을 모르는 쿼리 계층이 한 가지 규칙만 갖게 한다).
+ */
 export async function listSentMail(options: {
   limit: number
   offset: number
   kind: SentMailKind
+  search?: string
 }): Promise<{ items: Record<string, unknown>[]; total_count: number }> {
+  const needle = options.search?.trim()
+  const pattern = needle ? `%${escapeLikePattern(needle)}%` : null
+  const like = (column: ReturnType<typeof sql.raw>) =>
+    sql`${column} LIKE ${pattern} ESCAPE ${LIKE_ESCAPE_CHAR}`
+  const composeWhere = pattern
+    ? sql` where (${like(sql.raw('o.subject'))} or ${like(sql.raw('o.to_addresses'))} or ${like(sql.raw('o.cc_addresses'))})`
+    : sql``
+  const replyWhere = pattern
+    ? sql` where (${like(sql.raw('r.subject'))} or ${like(sql.raw('ie.from_address'))})`
+    : sql``
   const composeSql = sql`
     select o.id as id, 'compose' as kind, o.to_addresses as to_addresses, o.subject as subject,
            o.status as status, o.created_at as created_at, null as related_email_id,
            (select count(*) from outbound_email_attachments a where a.email_id = o.id) as attachment_count
-    from outbound_emails o`
+    from outbound_emails o${composeWhere}`
   const replySql = sql`
     select r.id as id, 'reply' as kind, json_array(ie.from_address) as to_addresses, r.subject as subject,
            'sent' as status, r.created_at as created_at, r.email_id as related_email_id,
            0 as attachment_count
-    from inbound_email_replies r join inbound_emails ie on ie.id = r.email_id`
+    from inbound_email_replies r join inbound_emails ie on ie.id = r.email_id${replyWhere}`
   const union =
     options.kind === 'compose'
       ? composeSql

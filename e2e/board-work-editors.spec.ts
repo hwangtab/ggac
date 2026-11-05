@@ -350,4 +350,146 @@ test.describe('업무툴 앱 안 편집 — 실제 편집기(ggac-office)', () =
       await auditor.context.close()
     }
   })
+  /** 한글 문서 저장: 머리의 저장 → (검사·미리보기 대화상자가 뜨면) 대화상자의 저장 */
+  async function saveHwp(page: Page, dialogLabel: '저장' | '새 버전으로 저장') {
+    const dialogSave = page
+      .getByRole('dialog')
+      .getByRole('button', { name: dialogLabel, exact: true })
+    await expect(dialogSave).toBeEnabled({ timeout: 120_000 })
+    await page.screenshot({ path: `test-results/board-work-editors-hwpx-${dialogLabel}.png` })
+    await dialogSave.click()
+  }
+
+  test('새 한글 문서(HWPX): 입력창 "새 문서" → rhwp 에서 처음 저장하면 v1, 다시 고쳐 저장하면 v2 가 생기고 둘 다 HWPX 다', async ({
+    browser,
+  }) => {
+    test.skip(
+      process.env.NEXT_PUBLIC_HWP_EDITOR_ENABLED !== '1' ||
+        process.env.NEXT_PUBLIC_HWPX_EDITOR_ENABLED !== '1',
+      'HWP·HWPX 편집 플래그가 꺼져 있다'
+    )
+    test.setTimeout(420_000)
+    const director = await openChannel(browser, 'director')
+    try {
+      const stamp = Date.now()
+      const page = director.page
+      await page.getByRole('button', { name: '새 문서 만들기' }).click()
+      const dialog = page.getByRole('dialog', { name: '새 문서 만들기' })
+      await expect(dialog).toBeVisible()
+      await dialog.getByRole('radio', { name: /한글 문서\(HWPX\)/ }).check()
+      await dialog.getByLabel('파일 이름').fill(`e2e-새 한글-${stamp}`)
+      await dialog.getByRole('button', { name: '만들기' }).click()
+      await expect(page).toHaveURL(/\/board-room\/edit\/new\?.*type=hwpx/, { timeout: 30_000 })
+      await expect(page.getByTestId('hwp-edit-screen')).toBeVisible({ timeout: 30_000 })
+
+      const frameSel = `[data-testid="hwp-editor-container"] iframe[src^="${ORIGIN}/rhwp/"]`
+      await expect(page.locator(frameSel)).toHaveCount(1, { timeout: 60_000 })
+      await expect(editorStatus(page)).toHaveText('변경 없음', { timeout: 120_000 })
+      await page.waitForTimeout(3_000)
+      await typeInEditor(page, frameSel, '새 한글 문서 시험', { x: 0.5, y: 0.25 })
+      await expect(editorStatus(page)).toHaveText('저장 안 된 변경', { timeout: 30_000 })
+      await page.getByRole('button', { name: '저장', exact: true }).click()
+      await saveHwp(page, '저장')
+      await expect(editorStatus(page)).toHaveText('저장됨', { timeout: 120_000 })
+
+      // 저장 결과 대화상자("새 문서를 저장했습니다")를 닫고 같은 화면에서 이어 고친다
+      await page
+        .getByRole('dialog')
+        .getByRole('button', { name: '닫기', exact: true })
+        .first()
+        .click()
+      await expect(page.getByRole('dialog')).toHaveCount(0)
+      await typeInEditor(page, frameSel, ' 둘째 판', { x: 0.5, y: 0.25 })
+      await expect(editorStatus(page)).toHaveText('저장 안 된 변경', { timeout: 30_000 })
+      await page.getByRole('button', { name: '저장(새 버전)' }).click()
+      await saveHwp(page, '새 버전으로 저장')
+      await expect(editorStatus(page)).toHaveText('저장됨 v2', { timeout: 120_000 })
+      await page
+        .getByRole('dialog')
+        .getByRole('button', { name: '닫기', exact: true })
+        .first()
+        .click()
+
+      const db = e2eDb()
+      let rootId = ''
+      try {
+        const rs = await db.execute({
+          sql: `select coalesce(version_root_id, id) root from work_attachments where name = ? limit 1`,
+          args: [`e2e-새 한글-${stamp}.hwpx`],
+        })
+        rootId = String(rs.rows[0]?.root ?? '')
+      } finally {
+        db.close()
+      }
+      expect(rootId).toBeTruthy()
+      const lineage = await lineageOf(rootId)
+      expect(lineage.map(v => [v.versionNo, v.isLatest])).toEqual([
+        [1, false],
+        [2, true],
+      ])
+      for (const v of lineage) {
+        const res = await director.context.request.get(
+          `/api/board-room/work/files/${v.id}?download=1`
+        )
+        const bytes = await res.body()
+        expect([...bytes.subarray(0, 4)], `v${v.versionNo} 은 ZIP(HWPX)`).toEqual([
+          0x50, 0x4b, 0x03, 0x04,
+        ])
+        const zip = await JSZip.loadAsync(bytes)
+        expect(await zip.file('mimetype')?.async('string')).toBe('application/hwp+zip')
+      }
+    } finally {
+      await director.context.close()
+    }
+  })
+
+  test('기존 HWPX: 첨부의 "앱에서 편집"으로 열어 고쳐 저장하면 HWPX 그대로 v2 가 생긴다', async ({
+    browser,
+  }) => {
+    test.skip(
+      process.env.NEXT_PUBLIC_HWP_EDITOR_ENABLED !== '1' ||
+        process.env.NEXT_PUBLIC_HWPX_EDITOR_ENABLED !== '1',
+      'HWP·HWPX 편집 플래그가 꺼져 있다'
+    )
+    test.setTimeout(300_000)
+    const director = await openChannel(browser, 'director')
+    try {
+      const stamp = Date.now()
+      const name = `e2e-한글-${stamp}.hwpx`
+      const hwpx = readFileSync('scripts/testing/fixtures/board-work/blank.hwpx')
+      const id = await postFile(
+        director.page,
+        name,
+        'application/vnd.hancom.hwpx',
+        hwpx,
+        `HWPX 편집 시험 ${stamp}`
+      )
+      const page = director.page
+      const row = messageRow(page, `HWPX 편집 시험 ${stamp}`)
+      await row.getByRole('button', { name }).click()
+      await page.getByRole('button', { name: '앱에서 편집' }).first().click({ timeout: 30_000 })
+      await expect(page).toHaveURL(new RegExp(`/board-room/edit/${id}$`), { timeout: 30_000 })
+      const frameSel = `[data-testid="hwp-editor-container"] iframe[src^="${ORIGIN}/rhwp/"]`
+      await expect(page.locator(frameSel)).toHaveCount(1, { timeout: 60_000 })
+      await expect(editorStatus(page)).toHaveText('변경 없음', { timeout: 120_000 })
+      await page.waitForTimeout(3_000)
+      await typeInEditor(page, frameSel, '한글 편집 시험', { x: 0.5, y: 0.25 })
+      await expect(editorStatus(page)).toHaveText('저장 안 된 변경', { timeout: 30_000 })
+      await page.getByRole('button', { name: '저장(새 버전)' }).click()
+      await saveHwp(page, '새 버전으로 저장')
+      await expect(page.getByText(/v2으로 저장됨/)).toBeVisible({ timeout: 60_000 })
+
+      const lineage = await lineageOf(id)
+      expect(lineage.map(v => [v.versionNo, v.isLatest, v.name])).toEqual([
+        [1, false, name],
+        [2, true, name],
+      ])
+      const v2 = await director.context.request.get(
+        `/api/board-room/work/files/${lineage[1].id}?download=1`
+      )
+      expect([...(await v2.body()).subarray(0, 4)]).toEqual([0x50, 0x4b, 0x03, 0x04])
+    } finally {
+      await director.context.close()
+    }
+  })
 })

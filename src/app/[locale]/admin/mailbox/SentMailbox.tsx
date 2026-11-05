@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { FiArrowLeft, FiPaperclip } from 'react-icons/fi'
+import { FiArrowLeft, FiPaperclip, FiSearch } from 'react-icons/fi'
 
 import { buildBodySrcDoc, formatBytes, formatDate } from './mailboxUtils'
 
@@ -97,6 +97,8 @@ export default function SentMailbox({
 }) {
   const [kind, setKind] = useState<Kind>('all')
   const [offset, setOffset] = useState(0)
+  const [search, setSearch] = useState('')
+  const [searchInput, setSearchInput] = useState('')
   const [items, setItems] = useState<SentItem[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -124,6 +126,7 @@ export default function SentMailbox({
         limit: String(LIMIT),
         offset: String(offset),
       })
+      if (search) params.set('search', search)
       const res = await fetch(`/api/admin/mailbox/outbound?${params}`)
       if (!res.ok) throw new Error('보낸 편지함을 불러오지 못했습니다.')
       const json = await res.json()
@@ -137,7 +140,7 @@ export default function SentMailbox({
     } finally {
       if (seq === listSeq.current) setLoading(false)
     }
-  }, [kind, offset, onMeta])
+  }, [kind, offset, search, onMeta])
 
   useEffect(() => {
     fetchList()
@@ -225,6 +228,13 @@ export default function SentMailbox({
     }
   }
 
+  const runSearch = () => {
+    setOffset(0)
+    setSelected(null)
+    setDetail(null)
+    setSearch(searchInput.trim())
+  }
+
   const page = Math.floor(offset / LIMIT) + 1
   const totalPages = Math.max(1, Math.ceil(total / LIMIT))
   const detailStatus = detail
@@ -245,7 +255,29 @@ export default function SentMailbox({
             selected ? 'hidden lg:flex' : 'flex'
           } min-h-0 w-full flex-col overflow-hidden rounded-lg border border-gray-200 bg-white lg:w-1/3 lg:max-w-sm`}
         >
-          <div className="shrink-0 border-b border-gray-100 p-3">
+          <div className="shrink-0 space-y-3 border-b border-gray-100 p-3">
+            {/* 제목·받는 사람·참조만 검색한다. 숨은참조는 검색되지 않는다. */}
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={searchInput}
+                onChange={e => setSearchInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') runSearch()
+                }}
+                placeholder="제목 또는 받는 주소 검색"
+                aria-label="보낸 메일 검색"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+              <button
+                type="button"
+                onClick={runSearch}
+                aria-label="검색"
+                className="flex shrink-0 items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm transition-colors hover:bg-gray-50"
+              >
+                <FiSearch className="h-4 w-4" />
+              </button>
+            </div>
             <div className="flex flex-wrap gap-1.5">
               {KIND_FILTERS.map(({ key, label }) => (
                 <button
@@ -273,7 +305,9 @@ export default function SentMailbox({
                 ))}
               </div>
             ) : items.length === 0 ? (
-              <div className="py-16 text-center text-sm text-gray-500">보낸 메일이 없습니다.</div>
+              <div className="py-16 text-center text-sm text-gray-500">
+                {search ? '검색 결과가 없습니다.' : '보낸 메일이 없습니다.'}
+              </div>
             ) : (
               <div className="divide-y divide-gray-100">
                 {items.map(item => {

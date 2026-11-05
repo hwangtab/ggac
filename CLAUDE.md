@@ -28,6 +28,17 @@ npm run audit:security           # Security audit
 ANALYZE=true npm run build       # Bundle size analysis
 ```
 
+#### `test:unit`은 동시성 4로 돈다 — libsql 네이티브 크래시 때문이다
+
+`@libsql/client`의 `file:` 연결을 쓰는 테스트가 병렬로 많이 돌면 libsql 네이티브
+애드온이 GC finalizer 도중 **SIGSEGV로 프로세스째 죽는다**(`index.node`,
+`DrainFinalizerQueue`). 테스트는 통과한 채 파일 하나가 실패로 찍히고 어느
+파일인지는 매번 다르다 — 코드 버그가 아니다. 동시성 4 이하에서는 거의 안
+나고(8회 중 1회) 9에서는 5회 중 3회 난다. **`@libsql/client`를 0.18.0으로 올리지
+마라** — 네이티브 `libsql`은 그대로 0.5.29(최신)이고, `drizzle-orm@0.45.2`와
+맞물려 **같은 조건에서 50건이 매번 깨진다**(2026-11-05 실측). 올리려면
+drizzle-orm 호환부터 확인해라.
+
 #### 단위 테스트는 준비된 `local.db`를 요구한다
 
 `scripts/testing/ingestInbound.test.mjs`는 `TURSO_DATABASE_URL=file:local.db`로
@@ -381,6 +392,24 @@ noreply@ggac.kr로 가서 유실된다), `MAILBOX_BACKFILL_CRON_TOKEN`(메일함
   않는다**(`sendEmail`·`sendAuthEmail`). 이 규칙은 E2E가 실제 키로 일일 한도를
   소진한 사고(2026-11-02, 하루 176건 반송)의 방어선이다. 테스트 전용 메일은
   `recipient_count=0`으로 저장되어 일일 한도에 세지 않는다.
+- **보낸 편지함 검색은 제목·받는 사람·참조만 본다. 숨은참조(`bcc_addresses`)는
+  어떤 조건에도 넣지 마라**(`listSentMail`) — 이사·감사도 이 목록을 보므로 BCC를
+  검색 대상에 넣으면 "나온다/안 나온다"로 BCC 주소를 알아낼 수 있다.
+  관리자에게도 열지 않는다. E2E가 이를 단언한다.
+- **보관·정리(`lib/mail/outboundSweep.ts`, 메일함 백필 크론이 매시 호출).**
+  `failed`·`blocked`는 기본 30일 뒤 행·첨부를
+  지운다(`MAILBOX_OUTBOUND_FAILED_RETENTION_DAYS`, 최소 7). **나간
+  메일(`sent`)은 영구 보관한다 — 조직 결정(2026-11-05).** 누구에게 무엇을
+  보냈는지는 감사 기록이다. 운영에 `MAILBOX_OUTBOUND_RETENTION_DAYS`를
+  **설정하지 마라** — 설정하면 그 기간 뒤 나간 메일의 본문·수신자·첨부가
+  지워진다(코드는 선택 기능으로 남겨 뒀다). 이 정책을 바꾸려면 조직 결정을 먼저
+  받아라. **`unknown`·`sending`은 어떤 기한으로도 지우지 않는다**(사람이
+  확정하는 행). `mailbox-sent/` 아래에서 DB에 참조되지 않고 올라온 지 24시간이
+  지난 Blob(고아)도 치운다 — 접두어 밖은 절대 건드리지 않는다. 한 번에 행
+  100개·고아 100개까지, Blob 목록은 1000개까지만 본다(커서 페이지네이션 없음).
+- 멈춘 `unknown`/오래된 `sending`은 관리자가 보낸 편지함에서 Resend 대시보드로
+  확인한 뒤 `PATCH /api/admin/mailbox/outbound/[id]`(화면 버튼)로 확정한다.
+  크론이 10분 지난 `sending`을 `unknown`으로 옮긴다.
 - 킬스위치 `MAILBOX_COMPOSE_ENABLED`가 꺼져 있으면 POST는 403이고 화면은 버튼을
   그리지 않는다. E2E 서버(`playwright.config.ts`)만 켠다 — 그 서버는
   `RESEND_API_KEY`가 비어 있다.
@@ -396,16 +425,16 @@ noreply@ggac.kr로 가서 유실된다), `MAILBOX_BACKFILL_CRON_TOKEN`(메일함
   **앱 코드가 전부 판정한다**. "RLS 정책을 고친다"는 접근은 아무것도 바꾸지
   않으면서 경계가 지켜진다고 믿게 만든다.
 - **권한의 안전망은 E2E다. 정적 가드가 아니다.** 인가를 바꿨으면
-  `npm run test:e2e:authz`(기준선 **305 passed**, 총 308건 — 1건은 정책 36으로
-  `PUBLIC_BLOB_READ_WRITE_TOKEN` 없이 돌리면 실패하고, 2건은 스킵이다 — 메일함
-  첨부 다운로드 기록 테스트가 실제 Blob 객체를 요구해서고, 내 문서함 새 HWPX
-  테스트가 `NEXT_PUBLIC_HWPX_EDITOR_ENABLED`를 요구해서다. 시험 Blob 저장소
-  토큰과 편집기 env를 준 실행 기준이며 실행법은 `scripts/turso/README.md`)를
-  돌려라. Blob 토큰·토스 키가 없으면 환경 탓으로 더 빨간불일 수 있다(dev 서버
-  시절 2026-11-02 실측 206 passed·4 failed·1 skipped — 정책 36, 메일함 다운로드
-  2, 펀딩 settle). **환경에 따라 하나 더 빨간불일 수 있다**:
-  `authz-mailbox.spec.ts`의 "관리자는 화면에 들어가 메일함을 본다"는 메일 본문
-  iframe이 뜨길 기다리는데, 로컬에서는 main 기준으로도 같은 자리에서
+  `npm run test:e2e:authz`(기준선 **313 passed**, 총 315건 — 1건은 정책 36으로
+  `PUBLIC_BLOB_READ_WRITE_TOKEN` 없이 돌리면 실패하고, 1건은 스킵이다 — 메일함
+  첨부 다운로드 기록 테스트가 실제 Blob 객체를 요구해서다. 시험 Blob 저장소
+  토큰과 편집기 env(HWPX 플래그 `NEXT_PUBLIC_HWPX_EDITOR_ENABLED=1` 포함 —
+  빠지면 HWPX 3건이 스킵된다)를 준 실행 기준이며 실행법은
+  `scripts/turso/README.md`)를 돌려라. Blob 토큰·토스 키가 없으면 환경 탓으로 더
+  빨간불일 수 있다(dev 서버 시절 2026-11-02 실측 206 passed·4 failed·1 skipped —
+  정책 36, 메일함 다운로드 2, 펀딩 settle). **환경에 따라 하나 더 빨간불일 수
+  있다**: `authz-mailbox.spec.ts`의 "관리자는 화면에 들어가 메일함을 본다"는
+  메일 본문 iframe이 뜨길 기다리는데, 로컬에서는 main 기준으로도 같은 자리에서
   실패한다(2026-09-11 대조 실측). 인가 변경 탓인지 가릴 때는 main 워크트리에서
   같은 스펙 하나만 돌려 비교해라.
 - **메일함 게이트(단계 5).** 관리자 메일함(`/api/admin/mailbox*`,

@@ -157,6 +157,10 @@ const optionalEnvVars = [
   // 인증·다이제스트 메일 몫을 남기려는 값이다.
   'MAILBOX_DAILY_OUTBOUND_LIMIT',
   'MAILBOX_DAILY_TOTAL_GUARD',
+  // 보내지 못한 메일(failed·blocked)을 지우는 기한(일, 최소 7, 기본 30).
+  'MAILBOX_OUTBOUND_FAILED_RETENTION_DAYS',
+  // 나간 메일의 보관 기한(일, 최소 7). **없으면 지우지 않는다** — 감사 기록이라 조직이 정할 일이다.
+  'MAILBOX_OUTBOUND_RETENTION_DAYS',
   // 결제 킬스위치. `isPaymentEnabled()`(src/lib/payments/toss/config.ts)이 값이
   // 정확히 'toss'일 때만 true다 — 비어 있으면 신규 결제가 전부 막히고
   // funding/expire 크론도 skipped로 빠진다. 켜지 않은 상태가 정상 동작이라

@@ -33,6 +33,7 @@ import {
   markStaleSendingAsUnknown,
 } from '@/db/queries/mailbox'
 import { ingestInboundEmail } from '@/lib/mail/ingestInbound'
+import { defaultBlobOps, sweepConfigFromEnv, sweepOutbound } from '@/lib/mail/outboundSweep'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
 import { logSecurityEvent } from '@/utils/security'
@@ -132,9 +133,21 @@ async function handleBackfill(request: NextRequest) {
       log.error('멈춘 보낸 메일 정리 실패', error)
     }
 
+    // 보낸 메일의 보관 기한·고아 Blob 정리. 마찬가지로 본문 백필 결과를 막지 않는다.
+    // 비공개 저장소 토큰이 없으면(로컬·미설정) Blob을 건드릴 수 없으니 건너뛴다.
+    let sweep: Awaited<ReturnType<typeof sweepOutbound>> | null = null
+    if (process.env.PRIVATE_BLOB_READ_WRITE_TOKEN) {
+      try {
+        sweep = await sweepOutbound(now, sweepConfigFromEnv(), defaultBlobOps())
+      } catch (error) {
+        log.error('보낸 메일 정리 실패', error)
+      }
+    }
+
     return ApiSuccess.ok({
       pending_before: pending.length,
       stale_sending_marked_unknown: staleSending,
+      outbound_sweep: sweep,
       // 재시도를 **건 수**다. `ingestInboundEmail`은 실패해도 던지지 않고
       // 상태로만 남기므로, 이 숫자는 성공 건수가 아니다.
       refetched: attempted,

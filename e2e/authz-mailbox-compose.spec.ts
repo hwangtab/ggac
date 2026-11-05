@@ -4,6 +4,7 @@ import { test, expect, request as apiRequest, type APIRequestContext } from '@pl
 import { createClient } from '@libsql/client'
 
 import { assertLocalTurso, storageStatePath } from './helpers/authState'
+import { cronHeaders } from './helpers/cron'
 
 assertLocalTurso()
 
@@ -342,6 +343,48 @@ test.describe('관리자 발송 (수신자 @test.local)', () => {
     }
   })
 
+  test('보낸 편지함 검색은 제목·받는 사람은 찾고 숨은참조는 이사에게도 관리자에게도 찾지 못한다', async ({
+    baseURL,
+  }) => {
+    const tag = `srch${Date.now()}`
+    const bcc = `bcc-${tag}@test.local`
+    const sent = await admin.post('/api/admin/mailbox/outbound', {
+      multipart: composeForm({
+        idempotency_key: randomUUID(),
+        to: JSON.stringify([`to-${tag}@test.local`]),
+        bcc: JSON.stringify([bcc]),
+        subject: `MAILBOX-E2E-${tag}`,
+      }),
+    })
+    expect(sent.status()).toBe(200)
+
+    const search = async (ctx: APIRequestContext, q: string) => {
+      const res = await ctx.get(
+        `/api/admin/mailbox/outbound?limit=100&search=${encodeURIComponent(q)}`
+      )
+      expect(res.status(), q).toBe(200)
+      return (await res.json()).data.items as { subject: string }[]
+    }
+
+    const director = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('director'),
+    })
+    try {
+      for (const ctx of [admin, director]) {
+        expect((await search(ctx, `MAILBOX-E2E-${tag}`)).length).toBe(1)
+        expect((await search(ctx, `to-${tag}`)).length).toBe(1)
+        // 보안 단언: BCC 주소는 부분이든 전체든 검색되지 않는다 — 찾히면 이사·감사가 BCC를 추측할 수 있다.
+        expect(await search(ctx, `bcc-${tag}`), 'BCC 일부').toHaveLength(0)
+        expect(await search(ctx, bcc), 'BCC 전체').toHaveLength(0)
+      }
+      // 와일드카드는 글자일 뿐이다 — `%`만 넣어 전부 나오면 안 된다.
+      expect((await search(director, '%')).every(i => /%/.test(i.subject))).toBe(true)
+    } finally {
+      await director.dispose()
+    }
+  })
+
   test('첨부 목록은 저장소 경로를 내려보내지 않는다', async () => {
     const detail = await (
       await admin.get(`/api/admin/mailbox/outbound/${SEEDED_OUTBOUND_ID}`)
@@ -580,6 +623,29 @@ test.describe('멈춘 행 확정과 답장 한도', () => {
     expect(await statusOf(UNKNOWN_ID), '거부됐는데 상태가 바뀌었다').toBe('unknown')
   })
 
+  test('크론은 10분 지난 sending만 unknown으로 옮기고 인증 없이는 거부한다', async ({
+    request,
+  }) => {
+    const STALE_ID = '00000000-0000-4000-8000-00000000d0b1'
+    const FRESH_ID = '00000000-0000-4000-8000-00000000d0b2'
+    await plant(STALE_ID, 'sending', 30 * 60_000)
+    await plant(FRESH_ID, 'sending', 2 * 60_000)
+    try {
+      expect((await request.post('/api/internal/mailbox/backfill')).status(), '인증 없이').toBe(401)
+      expect(await statusOf(STALE_ID)).toBe('sending')
+
+      const res = await request.post('/api/internal/mailbox/backfill', { headers: cronHeaders() })
+      expect(res.status()).toBe(200)
+      expect((await res.json()).data.stale_sending_marked_unknown).toBeGreaterThanOrEqual(1)
+
+      expect(await statusOf(STALE_ID), '오래된 sending → unknown').toBe('unknown')
+      // `failed`로 옮기면 안 된다 — 메일이 이미 나갔을 수 있다.
+      expect(await statusOf(FRESH_ID), '방금 만든 sending은 그대로').toBe('sending')
+    } finally {
+      await exec('DELETE FROM outbound_emails WHERE id IN (?, ?)', [STALE_ID, FRESH_ID])
+    }
+  })
+
   test('답장도 일일 상한에 걸리면 429이고 발송을 시도하지 않는다', async () => {
     await exec('DELETE FROM outbound_emails WHERE id = ?', [REPLY_QUOTA_SEED_ID])
     await exec(
@@ -661,6 +727,28 @@ test.describe('화면', () => {
       await expect(
         page.frameLocator('iframe[title="보낸 메일 본문"]').getByText('둘째 줄')
       ).toBeVisible({ timeout: 15000 })
+    } finally {
+      await ctx.close()
+    }
+  })
+
+  test('보낸 편지함에서 검색하면 목록이 걸러진다', async ({ browser }) => {
+    const ctx = await browser.newContext({ storageState: storageStatePath('admin') })
+    try {
+      const page = await ctx.newPage()
+      await page.goto('/admin/mailbox', { waitUntil: 'domcontentloaded' })
+      await page.getByRole('tab', { name: '보낸 편지함' }).click({ timeout: 15000 })
+      await expect(page.getByText(SEEDED_SUBJECT).first()).toBeVisible({ timeout: 15000 })
+
+      const box = page.getByRole('textbox', { name: '보낸 메일 검색' })
+      await box.fill('존재하지-않는-검색어-zzz')
+      await box.press('Enter')
+      await expect(page.getByText('검색 결과가 없습니다.')).toBeVisible({ timeout: 15000 })
+
+      await box.fill(SEEDED_SUBJECT)
+      await box.press('Enter')
+      await expect(page.getByText(SEEDED_SUBJECT).first()).toBeVisible({ timeout: 15000 })
+      await expect(page.getByText('검색 결과가 없습니다.')).toHaveCount(0)
     } finally {
       await ctx.close()
     }
