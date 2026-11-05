@@ -23,9 +23,8 @@ import {
   isSafeSentMailboxAttachmentPath,
 } from '../storage/mailboxAttachments.ts'
 import {
-  deleteOutboundEmails,
+  deleteOutboundEmailsReturningPaths,
   filterUnreferencedSentPaths,
-  listAttachmentPathsForOutbound,
   listOutboundIdsForPurge,
 } from '../../db/queries/mailbox.ts'
 
@@ -37,6 +36,22 @@ export const ORPHAN_MIN_AGE_MS = DAY_MS
 const PURGE_BATCH = 100
 const ORPHAN_LIST_LIMIT = 1000
 const ORPHAN_DELETE_LIMIT = 100
+/**
+ * 차단기: 오래된 후보가 이만큼 이상인데 그중 이 비율보다 많이 "참조 없음"이면 **삭제하지 않고 멈춘다.**
+ * 정상 운영에서 고아는 드물다(업로드 직후 함수가 죽은 경우 정도). 다수가 한꺼번에 고아로 보인다는 것은
+ * DB와 Blob 저장소가 서로 다른 환경을 가리키거나(예: 테스트 서버가 운영 토큰을 쥔 경우) DB 조회가
+ * 잘못됐다는 신호다 — 그때 "지운다"는 데이터 손실이다.
+ */
+export const ORPHAN_BREAKER_MIN_CANDIDATES = 5
+export const ORPHAN_BREAKER_MAX_RATIO = 0.5
+
+/**
+ * 이 환경에서 정리를 돌려도 되는가. **운영 배포(`VERCEL_ENV=production`)에서만 켠다.** 로컬·E2E·프리뷰는
+ * Blob 저장소와 DB가 같은 환경을 가리킨다는 보장이 없어, 거기서 도는 정리는 다른 환경의 파일을 지울 수 있다.
+ */
+export function sweepAllowedHere(env: Record<string, string | undefined> = process.env): boolean {
+  return env.VERCEL_ENV === 'production'
+}
 
 export type SweepConfig = {
   failedRetentionDays: number
@@ -79,6 +94,8 @@ export type SweepResult = {
   purgedBlobs: number
   blobDeleteFailures: number
   orphanBlobsDeleted: number
+  /** 차단기가 걸려 고아 삭제를 건너뛰었으면 사유. */
+  orphanSweepAborted: 'high_orphan_ratio' | null
 }
 
 async function purge(
@@ -90,8 +107,13 @@ async function purge(
   const ids = await listOutboundIdsForPurge(statuses, olderThanMs, PURGE_BATCH)
   if (ids.length === 0) return
 
-  const paths = (await listAttachmentPathsForOutbound(ids)).filter(isSafeSentMailboxAttachmentPath)
-  for (const path of paths) {
+  // **행을 먼저, 조건부로 지우고 그때 실제로 지워진 행의 첨부 경로만 받는다.** Blob을 먼저 지우면 그 사이
+  // 상태가 바뀐 행(예: 운영자가 확정)의 첨부만 사라지고 행은 남는다. 이 순서면 어느 단계에서 죽어도 최악은
+  // "행은 없고 파일이 남는" 고아이고, 그건 아래 고아 정리가 24시간 뒤 치운다.
+  const { deletedCount, blobPaths } = await deleteOutboundEmailsReturningPaths(ids, statuses)
+  result.purgedRows += deletedCount
+
+  for (const path of blobPaths.filter(isSafeSentMailboxAttachmentPath)) {
     try {
       await blob.remove(path)
       result.purgedBlobs += 1
@@ -100,7 +122,6 @@ async function purge(
       result.blobDeleteFailures += 1
     }
   }
-  result.purgedRows += await deleteOutboundEmails(ids, statuses)
 }
 
 export async function sweepOutbound(
@@ -113,6 +134,7 @@ export async function sweepOutbound(
     purgedBlobs: 0,
     blobDeleteFailures: 0,
     orphanBlobsDeleted: 0,
+    orphanSweepAborted: null,
   }
 
   await purge(['failed', 'blocked'], now - config.failedRetentionDays * DAY_MS, blob, result)
@@ -127,10 +149,15 @@ export async function sweepOutbound(
       isSafeSentMailboxAttachmentPath(b.pathname) &&
       now - b.uploadedAt.getTime() > ORPHAN_MIN_AGE_MS
   )
-  const orphans = (await filterUnreferencedSentPaths(old.map(b => b.pathname))).slice(
-    0,
-    ORPHAN_DELETE_LIMIT
-  )
+  const unreferenced = await filterUnreferencedSentPaths(old.map(b => b.pathname))
+  if (
+    old.length >= ORPHAN_BREAKER_MIN_CANDIDATES &&
+    unreferenced.length / old.length > ORPHAN_BREAKER_MAX_RATIO
+  ) {
+    result.orphanSweepAborted = 'high_orphan_ratio'
+    return result
+  }
+  const orphans = unreferenced.slice(0, ORPHAN_DELETE_LIMIT)
   for (const path of orphans) {
     try {
       await blob.remove(path)

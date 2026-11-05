@@ -136,7 +136,7 @@ export const boardDocuments = sqliteTable(
 )
 
 /**
- * 이사회 서류의 버전 기록 — 앱 편집(docs/board-work/05-이사회-서류-앱-편집.md §2). 마이그레이션 0037.
+ * 이사회 서류의 버전 기록 — 앱 편집(docs/board-work/05-이사회-서류-앱-편집.md §2). 마이그레이션 0038(main의 0037_mailbox_sender 뒤로 미뤘다).
  *
  * - **채우지 않고 시작한다(backfill 없음).** 한 번도 고치지 않은 서류에는 행이 없고, `board_documents`의 file_* 칸이
  *   곧 v1 이다. 처음 저장할 때 같은 트랜잭션에서 그 칸을 그대로 v1 행으로 옮기고 v2 를 넣는다. 그 뒤로

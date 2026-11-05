@@ -221,6 +221,61 @@ test('상태로 거를 수 있다', async () => {
   assert.ok(result.emails.every(e => e.status === 'archived'))
 })
 
+test('삽입하면 발신 주소를 정규화해 from_email·from_name에 담는다', async () => {
+  const { insertInboundEmail } = await loadFreshMailboxModule()
+  const row = await insertInboundEmail(sample({ from_address: '"홍길동" <Hong@A.org>' }))
+  assert.equal(row.from_address, '"홍길동" <Hong@A.org>')
+  assert.equal(row.from_email, 'hong@a.org')
+  assert.equal(row.from_name, '홍길동')
+})
+
+test('발신자 필터는 완전 일치다 — kim@로 찾을 때 akim@이 섞이지 않는다', async () => {
+  const { insertInboundEmail, listInboundEmails } = await loadFreshMailboxModule()
+  const tag = Math.random().toString(36).slice(2)
+  const kim = await insertInboundEmail(sample({ from_address: `김 <kim-${tag}@a.org>` }))
+  await insertInboundEmail(sample({ from_address: `akim-${tag}@a.org` }))
+  await insertInboundEmail(sample({ from_address: `kim-${tag}@a.org.evil.com` }))
+  const result = await listInboundEmails({ limit: 100, offset: 0, fromEmail: `kim-${tag}@a.org` })
+  assert.deepEqual(
+    result.emails.map(e => e.id),
+    [kim.id]
+  )
+  assert.equal(result.total_count, 1)
+})
+
+test('도메인 필터는 @ 뒤가 정확히 그 도메인인 행만 준다', async () => {
+  const { insertInboundEmail, listInboundEmails } = await loadFreshMailboxModule()
+  const domain = `d${Math.random().toString(36).slice(2)}.org`
+  const a = await insertInboundEmail(sample({ from_address: `a@${domain}` }))
+  const b = await insertInboundEmail(sample({ from_address: `B <b@${domain.toUpperCase()}>` }))
+  await insertInboundEmail(sample({ from_address: `c@x${domain}` }))
+  await insertInboundEmail(sample({ from_address: `d@sub.${domain}.evil.com` }))
+  const result = await listInboundEmails({ limit: 100, offset: 0, fromDomain: domain })
+  assert.deepEqual(new Set(result.emails.map(e => e.id)), new Set([a.id, b.id]))
+  assert.equal(result.total_count, 2)
+})
+
+test('발신자 필터는 상태·검색과 함께 걸린다', async () => {
+  const { insertInboundEmail, updateInboundStatus, listInboundEmails } =
+    await loadFreshMailboxModule()
+  const from = `combo-${Math.random().toString(36).slice(2)}@a.org`
+  const archived = await insertInboundEmail(sample({ from_address: from, subject: '총회 자료' }))
+  await updateInboundStatus(archived.id, 'unread', 'archived')
+  await insertInboundEmail(sample({ from_address: from, subject: '총회 자료' }))
+  await insertInboundEmail(sample({ from_address: from, subject: '다른 제목' }))
+  const result = await listInboundEmails({
+    limit: 100,
+    offset: 0,
+    fromEmail: from,
+    status: 'archived',
+    search: '총회',
+  })
+  assert.deepEqual(
+    result.emails.map(e => e.id),
+    [archived.id]
+  )
+})
+
 test('References는 공백으로 이어 쌓인다', async () => {
   const { insertInboundEmail, appendThreadReference, getInboundEmail } =
     await loadFreshMailboxModule()

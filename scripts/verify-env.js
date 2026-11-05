@@ -157,6 +157,11 @@ const optionalEnvVars = [
   // 인증·다이제스트 메일 몫을 남기려는 값이다.
   'MAILBOX_DAILY_OUTBOUND_LIMIT',
   'MAILBOX_DAILY_TOTAL_GUARD',
+  // 인증 메일(가입 인증·재설정) 발송 예산 — 하루 전체(기본 30)와 수신자별(기본 3). 넘으면 메일을 보내지
+  // 않고 넘어간다(Resend 하루 쿼터를 다른 메일과 나눠 쓰므로 외부에서 인증 메일을 마구 유발해도 한도가 안 찬다).
+  // 0은 인증 메일 전면 차단이다.
+  'AUTH_MAIL_DAILY_LIMIT',
+  'AUTH_MAIL_PER_RECIPIENT_DAILY',
   // 보내지 못한 메일(failed·blocked)을 지우는 기한(일, 최소 7, 기본 30).
   'MAILBOX_OUTBOUND_FAILED_RETENTION_DAYS',
   // 나간 메일의 보관 기한(일, 최소 7). **없으면 지우지 않는다** — 감사 기록이라 조직이 정할 일이다.
@@ -346,6 +351,16 @@ if (env.NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL) {
     )
     hasErrors = true
   }
+}
+
+// 나간 메일은 영구 보관이 조직 결정이다(CLAUDE.md "메일함 새 메일 작성"). 이 변수를 설정하면 그 기간이 지난
+// 나간 메일의 본문·수신자·첨부가 크론에서 지워진다 — 실수로 설정된 경우를 눈에 띄게 한다.
+if (env.MAILBOX_OUTBOUND_RETENTION_DAYS) {
+  console.log(
+    '⚠️  MAILBOX_OUTBOUND_RETENTION_DAYS가 설정돼 있다 — 나간 메일은 영구 보관이 정책이다. 설정하면 ' +
+      env.MAILBOX_OUTBOUND_RETENTION_DAYS +
+      '일이 지난 나간 메일이 삭제된다. 의도한 것이 아니면 지워라.'
+  )
 }
 
 // MAILBOX_REPLY_TO(선택)가 MAILBOX_ALLOWED_RECIPIENTS(필수)에 없으면 관리자

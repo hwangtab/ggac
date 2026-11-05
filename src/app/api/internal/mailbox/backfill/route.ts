@@ -33,7 +33,12 @@ import {
   markStaleSendingAsUnknown,
 } from '@/db/queries/mailbox'
 import { ingestInboundEmail } from '@/lib/mail/ingestInbound'
-import { defaultBlobOps, sweepConfigFromEnv, sweepOutbound } from '@/lib/mail/outboundSweep'
+import {
+  defaultBlobOps,
+  sweepAllowedHere,
+  sweepConfigFromEnv,
+  sweepOutbound,
+} from '@/lib/mail/outboundSweep'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
 import { logSecurityEvent } from '@/utils/security'
@@ -84,6 +89,37 @@ async function handleBackfill(request: NextRequest) {
       return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
     }
 
+    // 보낸 메일 원장 정리는 본문 백필보다 **먼저** 돈다 — 아래 백필의 조회가 실패해 바깥 catch로 빠져도
+    // 이 정리가 건너뛰어지지 않게 하고, 정리 실패가 백필을 막지도 않게 각각 try로 감싼다.
+    const housekeepingNow = Date.now()
+    // 새 메일 작성의 원장 정리 — 같은 시간 단위 크론에 얹는다(크론 수를 늘리지 않는다).
+    // 실패해도 위의 본문 백필 결과를 막지 않는다.
+    let staleSending = 0
+    try {
+      staleSending = await markStaleSendingAsUnknown(housekeepingNow - STALE_SENDING_MS)
+    } catch (error) {
+      log.error('멈춘 보낸 메일 정리 실패', error)
+    }
+
+    // 보낸 메일의 보관 기한·고아 Blob 정리. 마찬가지로 본문 백필 결과를 막지 않는다.
+    // 비공개 저장소 토큰이 없으면(로컬·미설정) Blob을 건드릴 수 없으니 건너뛴다.
+    let sweep: Awaited<ReturnType<typeof sweepOutbound>> | null = null
+    if (sweepAllowedHere() && process.env.PRIVATE_BLOB_READ_WRITE_TOKEN) {
+      try {
+        sweep = await sweepOutbound(housekeepingNow, sweepConfigFromEnv(), defaultBlobOps())
+        if (sweep.orphanSweepAborted) {
+          // DB와 Blob 저장소가 서로 다른 환경을 가리키는 신호일 수 있다 — 삭제하지 않고 알린다.
+          logSecurityEvent(
+            'MAILBOX_OUTBOUND_SWEEP_ABORTED',
+            { reason: sweep.orphanSweepAborted },
+            'high'
+          )
+        }
+      } catch (error) {
+        log.error('보낸 메일 정리 실패', error)
+      }
+    }
+
     const pending = await listPendingInboundEmails(BATCH_SIZE)
     const now = Date.now()
 
@@ -124,25 +160,14 @@ async function handleBackfill(request: NextRequest) {
       attempted += 1
     }
 
-    // 새 메일 작성의 원장 정리 — 같은 시간 단위 크론에 얹는다(크론 수를 늘리지 않는다).
-    // 실패해도 위의 본문 백필 결과를 막지 않는다.
-    let staleSending = 0
-    try {
-      staleSending = await markStaleSendingAsUnknown(now - STALE_SENDING_MS)
-    } catch (error) {
-      log.error('멈춘 보낸 메일 정리 실패', error)
-    }
-
-    // 보낸 메일의 보관 기한·고아 Blob 정리. 마찬가지로 본문 백필 결과를 막지 않는다.
-    // 비공개 저장소 토큰이 없으면(로컬·미설정) Blob을 건드릴 수 없으니 건너뛴다.
-    let sweep: Awaited<ReturnType<typeof sweepOutbound>> | null = null
-    if (process.env.PRIVATE_BLOB_READ_WRITE_TOKEN) {
-      try {
-        sweep = await sweepOutbound(now, sweepConfigFromEnv(), defaultBlobOps())
-      } catch (error) {
-        log.error('보낸 메일 정리 실패', error)
-      }
-    }
+    // 정상 실행은 아무 로그도 남기지 않아 크론이 돌았는지·무엇을 했는지 볼 길이 없었다. 매 실행 한 줄을 남긴다.
+    log.info('메일함 크론 요약', {
+      pendingBefore: pending.length,
+      refetched: attempted,
+      abandoned,
+      staleSendingMarkedUnknown: staleSending,
+      sweep,
+    })
 
     return ApiSuccess.ok({
       pending_before: pending.length,

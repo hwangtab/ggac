@@ -1,5 +1,5 @@
 /**
- * 이사회 서류 버전 기록(`board_document_versions`, 마이그레이션 0037) 쿼리 계층 — docs/board-work/05-이사회-서류-앱-편집.md §2.
+ * 이사회 서류 버전 기록(`board_document_versions`, 마이그레이션 0038) 쿼리 계층 — docs/board-work/05-이사회-서류-앱-편집.md §2.
  *
  * 이 모듈은 **권한을 모른다.** `NextResponse`·`next/headers`·인가 모듈을 임포트하지 않는다. "올린 사람 또는 관리자만
  * 고친다"는 라우트(`/api/board-room/documents/[id]/…`)가 `requireBoardMember()` 뒤에 판정하고, 이 모듈의 쓰기 함수는

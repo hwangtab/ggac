@@ -346,7 +346,7 @@ webServer에 `{...process.env, ...webServer.env}`를 넘긴다. e2e 전용 변�
   11개 스펙
 - `authz-public`: `authz-boundaries` 21건
 
-**실측 기준선(2026-11-05, 이사회 서류 앱 편집(0037) 뒤 — HWPX 플래그를 준 실행, 운영 빌드 서버, `PLAYWRIGHT_PORT=3103`):**
+**실측 기준선(2026-11-05, 이사회 서류 앱 편집(0038) 뒤 — HWPX 플래그를 준 실행, 운영 빌드 서버, `PLAYWRIGHT_PORT=3103`):**
 총 328건 중 **326 passed, 1 failed, 1 skipped**(8.7분). 실패 1건은 정책 36, 스킵 1건은 메일함 첨부 다운로드 기록이다.
 313에서 늘어난 13건은 `authz-board-document-edit.spec.ts` 8건(비로그인 401·조합원/미승인 403·감사 403과 올린 사람·관리자
 통과의 짝·지나간 버전·없는 id 404·토큰 경로·PDF 415·편집 화면)과 `board-document-edit.spec.ts` 2건(DOCX 편집 v2→되돌리기

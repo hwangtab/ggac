@@ -224,6 +224,41 @@ test('HTTP 오류는 kind=rejected이고 메시지에 (상태코드)가 남는�
   }
 })
 
+test('Resend 5xx·408은 안 나갔다고 단정할 수 없어 kind=unknown이다', async () => {
+  process.env.RESEND_API_KEY = 'test-key'
+  const original = globalThis.fetch
+  try {
+    for (const status of [500, 502, 503, 504, 408]) {
+      globalThis.fetch = async () => new Response('upstream', { status })
+      await assert.rejects(
+        sendEmail({ to: 'a@x.com', subject: 's', html: '<p>x</p>' }),
+        e => e instanceof MailSendError && e.kind === 'unknown' && e.status === status,
+        String(status)
+      )
+    }
+  } finally {
+    globalThis.fetch = original
+  }
+})
+
+test('Resend 4xx는 요청을 받아들이지 않은 것이라 kind=rejected다', async () => {
+  process.env.RESEND_API_KEY = 'test-key'
+  const original = globalThis.fetch
+  try {
+    for (const status of [400, 401, 403, 404, 409, 422, 429]) {
+      globalThis.fetch = async () => new Response('no', { status })
+      await assert.rejects(
+        sendEmail({ to: 'a@x.com', subject: 's', html: '<p>x</p>' }),
+        e =>
+          e instanceof MailSendError && e.kind === 'rejected' && e.message.includes(`(${status})`),
+        String(status)
+      )
+    }
+  } finally {
+    globalThis.fetch = original
+  }
+})
+
 test('네트워크 오류·타임아웃은 kind=unknown이다 — 닿았는지 모른다', async () => {
   process.env.RESEND_API_KEY = 'test-key'
   const original = globalThis.fetch

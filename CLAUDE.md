@@ -407,12 +407,49 @@ noreply@ggac.kr로 가서 유실된다), `MAILBOX_BACKFILL_CRON_TOKEN`(메일함
   확정하는 행). `mailbox-sent/` 아래에서 DB에 참조되지 않고 올라온 지 24시간이
   지난 Blob(고아)도 치운다 — 접두어 밖은 절대 건드리지 않는다. 한 번에 행
   100개·고아 100개까지, Blob 목록은 1000개까지만 본다(커서 페이지네이션 없음).
+- **정리는 운영 배포(`VERCEL_ENV=production`)에서만 돈다**(`sweepAllowedHere`).
+  로컬·E2E·프리뷰는 DB와 Blob이 같은 환경을 가리킨다는 보장이 없어, 거기서 돌면
+  다른 환경의 파일을 지울 수 있다. 추가로 **차단기**가 있다 — 오래된 후보 5개
+  이상 중 절반 넘게 "참조 없음"이면 아무것도 지우지 않고
+  `MAILBOX_OUTBOUND_SWEEP_ABORTED`를 남긴다(DB·Blob 환경 불일치의 신호). 기한은
+  `updated_at`(상태가 정해진 시각) 기준이고, 행을 먼저 조건부로 지운 뒤 **그때
+  지워진 행의 첨부만** Blob에서 지운다.
+- **E2E 서버는 `PRIVATE_BLOB_READ_WRITE_TOKEN`을 항상
+  비운다**(`playwright.config.ts`, 시험 토큰이 있으면 그것). 예전에는
+  `.env.local`의 운영 토큰이 그대로 서버에 들어가 로컬 DB를 보면서 운영 비공개
+  저장소(보낸 메일 첨부·이사회 서류·DB 백업)를 만졌다. 토큰이 없으면 첨부
+  다운로드는 저장소 단계에서 500 (`첨부를 불러올 수 없습니다`)이고, 인가 E2E는
+  그것을 `expectReachedStorage`로 "인가 통과"로 판정한다.
+- Resend 5xx·408은 "안 나갔다"가 아니라 `unknown`이다(`MailSendError`) — 받아
+  처리한 뒤 응답 단계에서 실패할 수 있어, 안 나갔다고 보면 재발송으로 중복이
+  나고 나간 메일 기록이 `failed`로 정리 대상이 된다.
 - 멈춘 `unknown`/오래된 `sending`은 관리자가 보낸 편지함에서 Resend 대시보드로
   확인한 뒤 `PATCH /api/admin/mailbox/outbound/[id]`(화면 버튼)로 확정한다.
   크론이 10분 지난 `sending`을 `unknown`으로 옮긴다.
 - 킬스위치 `MAILBOX_COMPOSE_ENABLED`가 꺼져 있으면 POST는 403이고 화면은 버튼을
   그리지 않는다. E2E 서버(`playwright.config.ts`)만 켠다 — 그 서버는
   `RESEND_API_KEY`가 비어 있다.
+
+### 인증 메일 발송 예산 (Resend 쿼터 보호)
+
+- Resend 무료 한도는 **하루 100통**이고 가입 인증·비밀번호 재설정·주간
+  다이제스트·메일함 답장/작성이 한 통을 나눠 쓴다. 가입(`/api/member-signup`)은
+  로그인 없이 호출할 수 있고 **입력한 아무 주소로** 인증 메일을 보내는데, IP
+  제한(시간당 10회)만으로는 한 IP가 하루 240통을 유발할 수 있다 — 한도가 차면
+  조합원이 로그인도 못 하고, 임의 주소로 간 메일이 반송되면 발신 평판이 깎인다.
+- 그래서 **실제로 발송하기 직전**(`sendAuthEmailLogged`)에 예산을
+  소모한다(`lib/auth/mailBudget.ts`, Upstash). 수신자별 하루
+  3통(`AUTH_MAIL_PER_RECIPIENT_DAILY`)과 전체 하루
+  30통(`AUTH_MAIL_DAILY_LIMIT`). 수신자 한도에 걸린 요청은 전체 예산을 소모하지
+  않는다(한 사람 겨냥이 모두의 재설정을 막지 못하게). 넘으면 메일만 건너뛰고
+  응답은 그대로 200이며 `AUTH_EMAIL_BUDGET_EXCEEDED`가 남는다. **0은 전면
+  차단**이다. 예산 확인이 오류를 내면 막지 않고 보낸다(안전장치의 버그가
+  로그인을 막으면 안 된다).
+- **프리뷰·개발 환경에는 `RESEND_API_KEY`를 두지 않는다**(2026-11-05 제거) —
+  프리뷰는 PR마다 생기는데 같은 키가 있으면 운영 쿼터와 평판을 공유한다.
+  프리뷰·로컬에서는 인증 메일이 안 나가는 것이 정상이다.
+- 메일함 백필 크론은 매 실행 `메일함 크론 요약` 한 줄을 남긴다(Vercel이 정상
+  응답 로그를 안 남기므로 이 줄이 유일한 실행 증거다).
 
 ### Database Migration Issues
 

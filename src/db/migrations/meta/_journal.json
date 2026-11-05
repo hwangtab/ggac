@@ -265,7 +265,14 @@
       "idx": 37,
       "version": "6",
       "when": 1790500000000,
-      "tag": "0037_board_document_versions",
+      "tag": "0037_mailbox_sender",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "6",
+      "when": 1790600000000,
+      "tag": "0038_board_document_versions",
       "breakpoints": true
     }
   ]

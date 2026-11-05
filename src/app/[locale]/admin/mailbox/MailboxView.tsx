@@ -10,6 +10,7 @@ import {
   FiPaperclip,
   FiSearch,
   FiArrowLeft,
+  FiUser,
 } from 'react-icons/fi'
 
 import ComposeModal from './ComposeModal'
@@ -27,6 +28,9 @@ interface InboundEmail {
   resend_email_id: string
   message_id: string | null
   from_address: string
+  /** 정규화한 주소(0037). 발신자 필터의 값이다. */
+  from_email: string | null
+  from_name: string | null
   to_addresses: string
   cc_addresses: string
   received_for: string
@@ -78,6 +82,29 @@ const STATUS_ORDER: InboundEmail['status'][] = ['unread', 'read', 'replied', 'ar
 
 const LIMIT = 30
 
+/** 발신자 필터 — 주소 하나(`from`) 또는 같은 기관(`domain`). URL 쿼리와 같은 이름이다. */
+type SenderFilter = { kind: 'from' | 'domain'; value: string }
+
+function readSenderFilterFromUrl(): SenderFilter | null {
+  const params = new URLSearchParams(window.location.search)
+  const from = params.get('from')?.trim()
+  if (from) return { kind: 'from', value: from.toLowerCase() }
+  const domain = params.get('domain')?.trim()
+  if (domain) return { kind: 'domain', value: domain.replace(/^@/, '').toLowerCase() }
+  return null
+}
+
+function senderAddress(email: InboundEmail): string {
+  return email.from_email || email.from_address
+}
+
+function senderDomain(email: InboundEmail): string | null {
+  const address = email.from_email
+  if (!address) return null
+  const at = address.lastIndexOf('@')
+  return at >= 0 && at < address.length - 1 ? address.slice(at + 1) : null
+}
+
 const inputClass =
   'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500'
 
@@ -110,6 +137,10 @@ export default function MailboxView({ className = '' }: { className?: string }) 
   const [offset, setOffset] = useState(0)
   const [updating, setUpdating] = useState<string | null>(null)
   const [canManage, setCanManage] = useState(false)
+  // 발신자 필터는 URL(`?from=`·`?domain=`)이 정본이다 — 뒤로 가기로 풀리고 링크로 공유된다. 서버 렌더에는
+  // `window`가 없어 마운트 뒤에 읽고, 그 전에는 목록을 부르지 않는다(필터 없는 목록이 한 번 깜빡이지 않게).
+  const [senderFilter, setSenderFilter] = useState<SenderFilter | null>(null)
+  const [urlReady, setUrlReady] = useState(false)
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [detail, setDetail] = useState<InboundEmailDetail | null>(null)
@@ -141,6 +172,7 @@ export default function MailboxView({ className = '' }: { className?: string }) 
       const params = new URLSearchParams()
       if (statusFilter !== 'all') params.set('status', statusFilter)
       if (search) params.set('search', search)
+      if (senderFilter) params.set(senderFilter.kind, senderFilter.value)
       params.set('limit', String(LIMIT))
       params.set('offset', String(offset))
 
@@ -155,11 +187,22 @@ export default function MailboxView({ className = '' }: { className?: string }) 
     } finally {
       setLoading(false)
     }
-  }, [statusFilter, search, offset])
+  }, [statusFilter, search, offset, senderFilter])
 
   useEffect(() => {
-    fetchEmails()
-  }, [fetchEmails])
+    if (urlReady) fetchEmails()
+  }, [fetchEmails, urlReady])
+
+  useEffect(() => {
+    const sync = () => {
+      setSenderFilter(readSenderFilterFromUrl())
+      setOffset(0)
+    }
+    sync()
+    setUrlReady(true)
+    window.addEventListener('popstate', sync)
+    return () => window.removeEventListener('popstate', sync)
+  }, [])
 
   // `onMeta`가 SentMailbox의 effect 의존성이라 참조가 안정적이어야 한다 — 아니면 매 렌더마다 다시 읽는다.
   const handleSentMeta = useCallback(({ total }: { total: number }) => setSentTotal(total), [])
@@ -222,6 +265,19 @@ export default function MailboxView({ className = '' }: { className?: string }) 
     setAttachments([])
     setReplies([])
     setShowRemoteImages(false)
+  }
+
+  /** 발신자 필터를 걸거나(`next`) 푼다(null). 기록을 쌓아 뒤로 가기가 이전 목록으로 돌아가게 한다. */
+  const applySenderFilter = (next: SenderFilter | null) => {
+    const url = new URL(window.location.href)
+    url.searchParams.delete('from')
+    url.searchParams.delete('domain')
+    if (next) url.searchParams.set(next.kind, next.value)
+    window.history.pushState(null, '', url)
+    setSenderFilter(next)
+    setOffset(0)
+    // 좁은 화면에서는 상세가 목록을 가리므로 닫아야 걸린 목록이 보인다.
+    closeDetail()
   }
 
   const updateStatus = async (
@@ -433,7 +489,7 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                   onKeyDown={e => {
                     if (e.key === 'Enter') runSearch()
                   }}
-                  placeholder="제목 또는 보낸 주소 검색"
+                  placeholder="제목 또는 보낸 사람 검색"
                   className={inputClass}
                 />
                 <button
@@ -443,6 +499,29 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                   <FiSearch className="w-4 h-4" />
                 </button>
               </div>
+              {senderFilter && (
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="inline-flex items-center gap-1.5 min-w-0 max-w-full pl-2.5 pr-1 py-1 text-xs rounded-full bg-primary-50 text-primary-800 border border-primary-200">
+                    <FiUser className="w-3 h-3 shrink-0" />
+                    <span className="shrink-0">
+                      {senderFilter.kind === 'from' ? '보낸 사람' : '보낸 기관'}
+                    </span>
+                    <span className="font-medium truncate" title={senderFilter.value}>
+                      {senderFilter.kind === 'domain'
+                        ? `@${senderFilter.value}`
+                        : senderFilter.value}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => applySenderFilter(null)}
+                      aria-label="보낸 사람 필터 해제"
+                      className="p-0.5 rounded-full hover:bg-primary-100 shrink-0"
+                    >
+                      <FiX className="w-3 h-3" />
+                    </button>
+                  </span>
+                </div>
+              )}
               <div className="flex gap-1.5 flex-wrap">
                 {filterButtons.map(({ key, label }) => (
                   <button
@@ -516,8 +595,19 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                             </span>
                           )}
                         </div>
-                        <div className="text-xs text-gray-500 mt-0.5 truncate">
-                          {email.from_address}
+                        <div className="mt-0.5 min-w-0">
+                          <button
+                            type="button"
+                            onClick={e => {
+                              // 행 클릭(메일 열기)으로 번지지 않게 한다.
+                              e.stopPropagation()
+                              applySenderFilter({ kind: 'from', value: senderAddress(email) })
+                            }}
+                            title={`${senderAddress(email)} 님이 보낸 메일만 보기`}
+                            className="max-w-full truncate text-left text-xs text-gray-500 hover:text-primary-700 hover:underline"
+                          >
+                            {email.from_name || senderAddress(email)}
+                          </button>
                         </div>
                         <div className="text-xs text-gray-400 mt-0.5">
                           {formatDate(email.received_at)}
@@ -587,7 +677,42 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                       {STATUS_LABELS[selectedEmail.status].label}
                     </span>
                   </div>
-                  <div className="text-sm text-gray-500 mt-1">{selectedEmail.from_address}</div>
+                  <div className="text-sm text-gray-500 mt-1 flex flex-wrap items-baseline gap-x-1 min-w-0">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        applySenderFilter({ kind: 'from', value: senderAddress(selectedEmail) })
+                      }
+                      title="이 사람이 보낸 메일만 보기"
+                      className="text-left break-all hover:text-primary-700 hover:underline"
+                    >
+                      {selectedEmail.from_name ? (
+                        <>
+                          <span className="font-medium text-gray-700">
+                            {selectedEmail.from_name}
+                          </span>{' '}
+                          &lt;{senderAddress(selectedEmail)}&gt;
+                        </>
+                      ) : (
+                        senderAddress(selectedEmail)
+                      )}
+                    </button>
+                    {senderDomain(selectedEmail) && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          applySenderFilter({
+                            kind: 'domain',
+                            value: senderDomain(selectedEmail) as string,
+                          })
+                        }
+                        title="같은 기관(도메인)에서 온 메일 보기"
+                        className="text-xs text-gray-400 hover:text-primary-700 hover:underline"
+                      >
+                        @{senderDomain(selectedEmail)} 전체
+                      </button>
+                    )}
+                  </div>
                   <div className="text-xs text-gray-400 mt-0.5">
                     {formatDate(selectedEmail.received_at)}
                   </div>

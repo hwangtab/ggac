@@ -264,9 +264,10 @@ export default defineConfig({
         // 시험용 저장소 토큰(`BOARD_WORK_TEST_BLOB_TOKEN`)을 셸에 주면 그것으로 실제 업로드 E2E
         // (e2e/board-work-files.spec.ts)가 돌고, 그때는 다른 비공개 저장소 소비자(서류함·메일함)도 같은 시험 저장소를 본다.
         BOARD_WORK_BLOB_READ_WRITE_TOKEN: process.env.BOARD_WORK_TEST_BLOB_TOKEN ?? '',
-        ...(process.env.BOARD_WORK_TEST_BLOB_TOKEN
-          ? { PRIVATE_BLOB_READ_WRITE_TOKEN: process.env.BOARD_WORK_TEST_BLOB_TOKEN }
-          : {}),
+        // **빈 값이어도 반드시 넣는다.** 안 넣으면 Next가 `.env.local`의 운영 `PRIVATE_BLOB_READ_WRITE_TOKEN`을 읽어
+        // E2E 서버가 로컬 DB를 보면서 운영 비공개 저장소(보낸 메일 첨부·이사회 서류·DB 백업)를 만지게 된다 —
+        // 메일함 크론 E2E가 그 경로로 운영 `mailbox-sent/`를 로컬 DB와 대조해 지울 수 있었다(2차 점검 A1).
+        PRIVATE_BLOB_READ_WRITE_TOKEN: process.env.BOARD_WORK_TEST_BLOB_TOKEN ?? '',
         // BETTER_AUTH_URL — Better Auth는 요청의 Origin 헤더를 이 값과 정확히
         // 비교해 다르면 403 INVALID_ORIGIN을 던진다(실측:
         // `[Better Auth]: Invalid origin: http://127.0.0.1:3101`).

@@ -219,7 +219,19 @@ export default function ComposeModal({ quota, onClose, onDone }: Props) {
 
   const close = () => {
     if (sending) return
-    if (!outcome && dirty && !window.confirm('작성 중인 내용이 사라집니다. 닫을까요?')) return
+    if (!outcome && locked) {
+      // 결과를 모르는 요청이 있는 채로 닫으면 다시 열 때 새 요청 키가 만들어진다 — 그 메일이 이미 나갔다면
+      // 같은 메일이 두 번 나간다. 일반 "내용이 사라진다" 경고보다 이쪽이 더 중요하다.
+      if (
+        !window.confirm(
+          '결과를 확인하지 못한 메일이 있습니다. 닫은 뒤 다시 쓰면 같은 메일이 두 번 나갈 수 있습니다. 먼저 보낸 편지함에서 이미 나갔는지 확인하셨나요? 그래도 닫을까요?'
+        )
+      ) {
+        return
+      }
+    } else if (!outcome && dirty && !window.confirm('작성 중인 내용이 사라집니다. 닫을까요?')) {
+      return
+    }
     onClose()
   }
 

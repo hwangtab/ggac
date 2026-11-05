@@ -5,6 +5,7 @@ import type { BoardAuthSuccess } from '@/lib/server/boardRoomAuth'
 import { logSecurityEvent } from '@/utils/security'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { listInboundEmails } from '@/db/queries/mailbox'
+import { normalizeSenderDomain, parseMailbox } from '@/lib/mail/senderAddress'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -36,7 +37,26 @@ export const GET = defineApiRoute<undefined, BoardAuthSuccess>({
       throw ApiError.badRequest('알 수 없는 상태입니다.')
     }
 
-    const result = await listInboundEmails({ status: status ?? undefined, search, limit, offset })
+    // 발신자 필터. `홍길동 <a@b>`를 붙여 넣어도 주소만 본다. 254자는 주소 길이 상한(RFC 5321).
+    const fromParam = params.get('from')?.trim()
+    const fromEmail = fromParam ? parseMailbox(fromParam.slice(0, 320)).email : ''
+    if (fromParam && (!fromEmail || fromEmail.length > 254)) {
+      throw ApiError.badRequest('보낸 사람 주소가 올바르지 않습니다.')
+    }
+    const domainParam = params.get('domain')?.trim()
+    const fromDomain = domainParam ? normalizeSenderDomain(domainParam) : null
+    if (domainParam && !fromDomain) {
+      throw ApiError.badRequest('도메인이 올바르지 않습니다.')
+    }
+
+    const result = await listInboundEmails({
+      status: status ?? undefined,
+      search,
+      limit,
+      offset,
+      fromEmail: fromEmail || undefined,
+      fromDomain: fromDomain ?? undefined,
+    })
     return ApiSuccess.ok({
       emails: result.emails,
       pagination: { total_count: result.total_count, limit, offset },

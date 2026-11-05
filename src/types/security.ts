@@ -169,6 +169,8 @@ export type SecurityEventType =
   | 'MAILBOX_COMPOSE_DAILY_LIMIT_REACHED'
   | 'MAILBOX_OUTBOUND_QUOTA_PRESSURE'
   | 'MAILBOX_COMPOSE_AUDIT_FAILED'
+  | 'MAILBOX_OUTBOUND_SWEEP_ABORTED'
+  | 'AUTH_EMAIL_BUDGET_EXCEEDED'
   // 답장 발송은 됐는데(되돌릴 수 없음) 기록(회신 원장·스레드 참조·상태 전이)
   // 중 하나가 실패한 경우 — Task 11. 던지면 관리자가 "실패"로 보고 재시도해
   // 같은 메일이 두 번 나간다. 그래서 던지지 않고 감사만 하고 200을 준다.

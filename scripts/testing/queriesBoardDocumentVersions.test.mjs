@@ -9,7 +9,7 @@ import { registerAliasResolveHook } from './aliasResolveHook.mjs'
 registerAliasResolveHook(import.meta.url)
 
 /**
- * 이사회 서류 버전 기록(마이그레이션 0037 `board_document_versions`)을 실제 SQLite 파일 DB로 본다 —
+ * 이사회 서류 버전 기록(마이그레이션 0038 `board_document_versions`)을 실제 SQLite 파일 DB로 본다 —
  * docs/board-work/05-이사회-서류-앱-편집.md §2.
  *
  * - backfill 없음: 고치지 않은 서류에는 행이 없고, 처음 저장할 때 지금 file_* 칸이 v1 행(올린 사람·올린 때·본문)이 된다.
@@ -366,7 +366,7 @@ test('저장한 회원을 지워도 버전 기록은 남는다(created_by SET NU
   assert.equal(v2.createdByName, null)
 })
 
-test('마이그레이션 0037 이 만든 표·색인·FK 가 스키마 선언과 같다', async () => {
+test('마이그레이션 0038 이 만든 표·색인·FK 가 스키마 선언과 같다', async () => {
   const idx = await setupClient.execute(
     "select name from sqlite_master where type = 'index' and tbl_name = 'board_document_versions' and name not like 'sqlite_%' order by name"
   )
