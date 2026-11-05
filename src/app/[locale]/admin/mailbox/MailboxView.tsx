@@ -14,9 +14,14 @@ import {
   FiSliders,
 } from 'react-icons/fi'
 
-import { replyRecipients, replySubject } from '@/lib/mail/replyCompose'
+import {
+  buildForwardText,
+  forwardSubject,
+  replyRecipients,
+  replySubject,
+} from '@/lib/mail/replyCompose'
 
-import ComposeModal from './ComposeModal'
+import ComposeModal, { type ForwardSource } from './ComposeModal'
 import SentMailbox from './SentMailbox'
 import {
   buildBodySrcDoc,
@@ -196,6 +201,7 @@ export default function MailboxView({ className = '' }: { className?: string }) 
   const [afterDate, setAfterDate] = useState('')
   const [beforeDate, setBeforeDate] = useState('')
   const [composeTo, setComposeTo] = useState<string[] | undefined>(undefined)
+  const [composeForward, setComposeForward] = useState<ForwardSource | undefined>(undefined)
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [detail, setDetail] = useState<InboundEmailDetail | null>(null)
@@ -579,6 +585,7 @@ export default function MailboxView({ className = '' }: { className?: string }) 
             <button
               onClick={() => {
                 setComposeTo(undefined)
+                setComposeForward(undefined)
                 setComposeOpen(true)
               }}
               className="flex items-center gap-2 whitespace-nowrap px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors"
@@ -750,6 +757,7 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                         type="button"
                         onClick={() => {
                           setComposeTo([senderCard.sender.email])
+                          setComposeForward(undefined)
                           setComposeOpen(true)
                         }}
                         className="flex items-center gap-1 shrink-0 px-2 py-1 rounded border border-gray-300 bg-white hover:bg-gray-50"
@@ -1169,6 +1177,32 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                       <FiSend className="w-3 h-3" />
                       답장
                     </button>
+                    {composeEnabled && detail && detail.id === selectedEmail.id && (
+                      <button
+                        onClick={() => {
+                          setComposeTo(undefined)
+                          setComposeForward({
+                            emailId: detail.id,
+                            subject: forwardSubject(detail.subject),
+                            body: buildForwardText(detail),
+                            attachments: attachments.map(att => ({
+                              id: att.id,
+                              filename: att.filename,
+                              size_bytes: att.size_bytes,
+                              // 목록의 첨부 개수와 같은 규칙 — cid로 박힌 이미지는 본문 이미지다.
+                              inline:
+                                att.content_id !== null &&
+                                (att.content_type ?? '').startsWith('image/'),
+                            })),
+                          })
+                          setComposeOpen(true)
+                        }}
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+                      >
+                        <FiSend className="w-3 h-3" />
+                        전달
+                      </button>
+                    )}
                     {selectedReplyAllCount > 0 && (
                       <button
                         onClick={() => openReply(selectedEmail, true)}
@@ -1191,9 +1225,11 @@ export default function MailboxView({ className = '' }: { className?: string }) 
         <ComposeModal
           quota={composeQuota}
           initialTo={composeTo}
+          forward={composeForward}
           onClose={() => {
             setComposeOpen(false)
             setComposeTo(undefined)
+            setComposeForward(undefined)
           }}
           onDone={() => {
             setSentRefresh(n => n + 1)

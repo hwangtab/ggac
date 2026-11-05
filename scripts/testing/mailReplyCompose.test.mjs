@@ -5,9 +5,11 @@ import {
   replyRecipients,
   replySubject,
   buildReplyQuote,
+  buildForwardText,
+  forwardSubject,
   QUOTE_MAX_CHARS,
 } from '../../src/lib/mail/replyCompose.ts'
-import { COMPOSE_LIMITS } from '../../src/lib/mail/composeValidation.ts'
+import { COMPOSE_LIMITS, validateForwardAttachments } from '../../src/lib/mail/composeValidation.ts'
 
 const base = {
   from_address: '홍길동 <Hong@A.org>',
@@ -138,4 +140,81 @@ test(`긴 원문은 ${QUOTE_MAX_CHARS}자에서 자르고 생략 표시를 단�
   })
   assert.ok(quote.includes('…(이하 생략)'))
   assert.ok(!quote.includes('x'.repeat(QUOTE_MAX_CHARS + 1)))
+})
+
+test('전달 제목에는 Fwd:를 한 번만 붙인다', () => {
+  assert.equal(forwardSubject('문의'), 'Fwd: 문의')
+  assert.equal(forwardSubject('Fwd: 문의'), 'Fwd: 문의')
+  assert.equal(forwardSubject('FW: 문의'), 'FW: 문의')
+  assert.equal(forwardSubject('전달: 문의'), '전달: 문의')
+  // 답장 제목은 전달할 때 그대로 둔 채 앞에 붙인다
+  assert.equal(forwardSubject('Re: 문의'), 'Fwd: Re: 문의')
+  assert.equal(forwardSubject(null), 'Fwd: (제목 없음)')
+})
+
+test('전달 본문은 머리말과 원문 평문을 싣고 비어 있는 줄은 빼지 않는다', () => {
+  const text = buildForwardText({
+    from_address: '홍길동 <hong@a.org>',
+    to_addresses: JSON.stringify(['contact@ggac.kr']),
+    cc_addresses: JSON.stringify(['peer@a.org']),
+    received_at: '2026-11-05T06:00:00Z',
+    subject: '대관 문의',
+    body_text: '안녕하세요\n<b>그대로</b>',
+  })
+  assert.equal(
+    text,
+    [
+      '',
+      '',
+      '---------- 전달된 메일 ----------',
+      '보낸 사람: 홍길동 <hong@a.org>',
+      '날짜: 2026년 11월 5일 오후 03:00',
+      '제목: 대관 문의',
+      '받는 사람: contact@ggac.kr',
+      '참조: peer@a.org',
+      '',
+      '안녕하세요\n<b>그대로</b>',
+    ].join('\n')
+  )
+})
+
+test('전달 본문: 참조·날짜가 없으면 그 줄을 빼고, 평문이 없으면 그 사실을 적는다', () => {
+  const text = buildForwardText({
+    from_address: 'a@b.org',
+    to_addresses: '[]',
+    cc_addresses: null,
+    received_at: null,
+    subject: '',
+    body_text: null,
+  })
+  assert.ok(!text.includes('참조:'))
+  assert.ok(!text.includes('날짜:'))
+  assert.ok(text.includes('제목: (제목 없음)'))
+  assert.ok(text.endsWith('(이 메일은 글자 본문이 없습니다.)'))
+})
+
+test(`전달 첨부: 올린 첨부와 합쳐 ${COMPOSE_LIMITS.maxAttachments}개, 전달분 ${COMPOSE_LIMITS.maxForwardTotalBytes / 1_000_000}MB까지`, () => {
+  const ok = validateForwardAttachments(
+    [
+      { id: 'a', name: 'a.pdf', size: 6_000_000 },
+      { id: 'b', name: 'b.pdf', size: 4_000_000 },
+    ],
+    3
+  )
+  assert.equal(ok.ok, true)
+  const tooMany = validateForwardAttachments([{ id: 'a', name: 'a.pdf', size: 1 }], 5)
+  assert.equal(tooMany.ok, false)
+  const tooBig = validateForwardAttachments(
+    [{ id: 'a', name: 'a.pdf', size: COMPOSE_LIMITS.maxForwardTotalBytes + 1 }],
+    0
+  )
+  assert.equal(tooBig.ok, false)
+  assert.match(tooBig.error, /내려받아 따로 공유/)
+})
+
+test('전달 첨부: 실행 파일은 막고, 크기를 모르는 첨부는 통과시킨다(라우트가 읽은 뒤 다시 잰다)', () => {
+  assert.equal(validateForwardAttachments([{ id: 'x', name: 'setup.EXE', size: 10 }], 0).ok, false)
+  const unknown = validateForwardAttachments([{ id: 'u', name: 'a.pdf', size: null }], 0)
+  assert.equal(unknown.ok, true)
+  assert.deepEqual(unknown.value, [{ id: 'u', name: 'a.pdf', size: null }])
 })
