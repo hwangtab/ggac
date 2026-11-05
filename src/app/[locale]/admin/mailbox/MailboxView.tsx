@@ -21,6 +21,7 @@ import {
   replySubject,
 } from '@/lib/mail/replyCompose'
 import { labelColorClass } from '@/lib/mail/labels'
+import { snoozePresets } from '@/lib/mail/snooze'
 
 import ComposeModal, { type ForwardSource } from './ComposeModal'
 import LabelManager, { LabelChip, type MailLabel } from './LabelManager'
@@ -65,6 +66,13 @@ interface InboundEmail {
   assignee_name?: string | null
   /** 붙은 라벨(0042). 목록과 상세 둘 다 싣는다. */
   labels?: { id: string; name: string; color: string }[]
+  /** 다시 알림 시각(0044). 지나면 크론이 비운다. */
+  snoozed_until?: string | null
+}
+
+/** 다시 알림 중인가 — 시각이 아직 안 지났다(크론이 비우기 전 잠깐은 지난 값이 남아 있을 수 있다). */
+function isSnoozed(email: Pick<InboundEmail, 'snoozed_until'>): boolean {
+  return Boolean(email.snoozed_until && Date.parse(email.snoozed_until) > Date.now())
 }
 
 type AssigneeOption = { id: string; display_name: string; role: 'admin' | 'director' | 'auditor' }
@@ -221,6 +229,11 @@ export default function MailboxView({ className = '' }: { className?: string }) 
   const [checkedIds, setCheckedIds] = useState<string[]>([])
   // "내 담당" — 지금 로그인한 사람이 담당자인 메일만. 이사·감사도 쓴다.
   const [mineOnly, setMineOnly] = useState(false)
+  // "다시 알림" 보기 — 다시 알림을 건 메일만. 기본 목록에서는 숨긴다(검색·거르기 중에는 서버가 함께 준다).
+  const [snoozedOnly, setSnoozedOnly] = useState(false)
+  const [snoozing, setSnoozing] = useState(false)
+  const [customSnoozeOpen, setCustomSnoozeOpen] = useState(false)
+  const [customSnooze, setCustomSnooze] = useState('')
   // 담당자 후보(관리자만 받는다 — 지정은 관리자만 한다).
   const [assigneeOptions, setAssigneeOptions] = useState<AssigneeOption[]>([])
   const [assigning, setAssigning] = useState(false)
@@ -292,6 +305,7 @@ export default function MailboxView({ className = '' }: { className?: string }) 
       if (beforeDate) params.set('before', beforeDate)
       if (mineOnly) params.set('assignee', 'me')
       if (labelFilter) params.set('label', labelFilter)
+      if (snoozedOnly) params.set('snoozed', 'only')
       params.set('limit', String(LIMIT))
       params.set('offset', String(offset))
 
@@ -320,6 +334,7 @@ export default function MailboxView({ className = '' }: { className?: string }) 
     beforeDate,
     mineOnly,
     labelFilter,
+    snoozedOnly,
   ])
 
   const fetchLabels = useCallback(async () => {
@@ -439,6 +454,7 @@ export default function MailboxView({ className = '' }: { className?: string }) 
     setNotes([])
     setNoteDraft('')
     setEditingNote(null)
+    setCustomSnoozeOpen(false)
     setShowRemoteImages(false)
     fetchDetail(email.id)
 
@@ -558,6 +574,31 @@ export default function MailboxView({ className = '' }: { className?: string }) 
       return false
     } finally {
       setLabelBusy(false)
+    }
+  }
+
+  /** 다시 알림 걸기(`until`)·풀기(null) — 관리자만. 걸면 기본 목록에서 빠지므로 목록을 다시 읽는다. */
+  const changeSnooze = async (email: InboundEmail, until: Date | null) => {
+    if (snoozing) return
+    setSnoozing(true)
+    try {
+      const res = await fetch(`/api/admin/mailbox/${email.id}/snooze`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ until: until ? until.toISOString() : null }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || '다시 알림을 바꾸지 못했습니다.')
+      const snoozed_until = (json?.data?.snoozed_until as string | null) ?? null
+      setEmails(prev => prev.map(e => (e.id === email.id ? { ...e, snoozed_until } : e)))
+      setDetail(prev => (prev && prev.id === email.id ? { ...prev, snoozed_until } : prev))
+      setCustomSnooze('')
+      setCustomSnoozeOpen(false)
+      await fetchEmails()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '다시 알림을 바꾸지 못했습니다.')
+    } finally {
+      setSnoozing(false)
     }
   }
 
@@ -1135,6 +1176,21 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                 >
                   내 담당
                 </button>
+                <button
+                  type="button"
+                  aria-pressed={snoozedOnly}
+                  onClick={() => {
+                    setSnoozedOnly(v => !v)
+                    setOffset(0)
+                  }}
+                  className={`px-2.5 py-1 text-xs rounded-lg border transition-colors ${
+                    snoozedOnly
+                      ? 'bg-sky-600 text-white border-sky-600'
+                      : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  다시 알림
+                </button>
               </div>
               {(labels.length > 0 || canManage) && (
                 <div className="flex gap-1.5 flex-wrap items-center" data-testid="label-filters">
@@ -1280,6 +1336,14 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                           <span className="font-medium text-gray-900 truncate min-w-0 text-sm">
                             {email.subject || '(제목 없음)'}
                           </span>
+                          {isSnoozed(email) && (
+                            <span
+                              className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-sky-50 text-sky-700 shrink-0"
+                              title="다시 알림"
+                            >
+                              다시 알림 {formatDate(email.snoozed_until as string)}
+                            </span>
+                          )}
                           {(email.labels ?? []).map(label => (
                             <LabelChip key={label.id} name={label.name} color={label.color} />
                           ))}
@@ -1496,6 +1560,76 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                       </select>
                     )}
                   </div>
+                  {(isSnoozed(selectedEmail) || canManage) && (
+                    <div
+                      className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-600"
+                      data-testid="mail-snooze"
+                    >
+                      <span>
+                        다시 알림:{' '}
+                        <span className="font-medium text-gray-800">
+                          {isSnoozed(selectedEmail)
+                            ? formatDate(selectedEmail.snoozed_until as string)
+                            : '없음'}
+                        </span>
+                      </span>
+                      {canManage && isSnoozed(selectedEmail) && (
+                        <button
+                          type="button"
+                          disabled={snoozing}
+                          onClick={() => changeSnooze(selectedEmail, null)}
+                          className="text-gray-500 hover:text-gray-800 hover:underline"
+                        >
+                          풀기
+                        </button>
+                      )}
+                      {canManage && (
+                        <select
+                          aria-label="다시 알림 걸기"
+                          disabled={snoozing}
+                          value=""
+                          onChange={e => {
+                            const value = e.target.value
+                            if (!value) return
+                            if (value === 'custom') {
+                              setCustomSnoozeOpen(true)
+                              return
+                            }
+                            changeSnooze(selectedEmail, new Date(value))
+                          }}
+                          className="rounded border border-gray-300 px-1.5 py-0.5 text-xs"
+                        >
+                          <option value="">다시 알림 걸기…</option>
+                          {snoozePresets().map(preset => (
+                            <option key={preset.key} value={preset.at.toISOString()}>
+                              {preset.label}
+                            </option>
+                          ))}
+                          <option value="custom">직접 고르기…</option>
+                        </select>
+                      )}
+                      {canManage && customSnoozeOpen && (
+                        <span className="flex items-center gap-1">
+                          <input
+                            type="datetime-local"
+                            aria-label="다시 알림 시각"
+                            value={customSnooze}
+                            onChange={e => setCustomSnooze(e.target.value)}
+                            className="rounded border border-gray-300 px-1.5 py-0.5 text-xs"
+                          />
+                          <button
+                            type="button"
+                            disabled={snoozing || !customSnooze}
+                            onClick={() => changeSnooze(selectedEmail, new Date(customSnooze))}
+                            className="px-2 py-0.5 rounded bg-sky-600 text-white disabled:opacity-50"
+                          >
+                            걸기
+                          </button>
+                          <span className="text-gray-400">(매시 15분에 깨웁니다)</span>
+                        </span>
+                      )}
+                    </div>
+                  )}
                   {((selectedEmail.labels ?? []).length > 0 ||
                     (canManage && labels.length > 0)) && (
                     <div

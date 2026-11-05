@@ -78,6 +78,12 @@ export const GET = defineApiRoute<undefined, BoardAuthSuccess>({
     const labelCheck = labelParam ? validateUUID(labelParam, '라벨 ID') : null
     if (labelCheck && !labelCheck.isValid) throw ApiError.badRequest('라벨 id가 올바르지 않습니다.')
 
+    // 다시 알림 — "다시 알림" 보기(`snoozed=only`)가 아니면 숨기되, 검색·거르기 중에는 함께 보인다(찾는 메일이
+    // 다시 알림 중이라고 안 나오면 없는 줄 안다).
+    const snoozedParam = params.get('snoozed')
+    if (snoozedParam && snoozedParam !== 'only') throw ApiError.badRequest('알 수 없는 조건입니다.')
+    const narrowing = Boolean(search || fromEmail || fromDomain || labelParam || assignee)
+
     const has = params.get('has')
     if (has && has !== 'attachment') {
       throw ApiError.badRequest('알 수 없는 조건입니다.')
@@ -95,6 +101,7 @@ export const GET = defineApiRoute<undefined, BoardAuthSuccess>({
       receivedUntil: receivedUntil ?? undefined,
       assignedTo: assignee === 'me' ? auth.user.id : undefined,
       labelId: labelCheck?.sanitized,
+      snoozed: snoozedParam === 'only' ? 'only' : narrowing ? 'include' : 'hide',
     })
     return ApiSuccess.ok({
       emails: result.emails,

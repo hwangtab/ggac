@@ -2,6 +2,7 @@ import { test, expect, request as apiRequest, type APIRequestContext } from '@pl
 import { createClient } from '@libsql/client'
 
 import { assertLocalTurso, readFixtures, storageStatePath } from './helpers/authState'
+import { cronHeaders } from './helpers/cron'
 import { expectReachedStorage } from './helpers/storageRoute'
 
 assertLocalTurso()
@@ -1781,6 +1782,139 @@ test.describe('메일함 발신자 규칙', () => {
       await expect(page.getByRole('button', { name: '발신자 규칙' })).toHaveCount(0)
     } finally {
       await directorCtx.close()
+    }
+  })
+})
+
+/**
+ * 다시 알림 — 걸기·풀기는 관리자만. 걸면 기본 목록에서 빠지고 "다시 알림" 보기·검색에는 나온다. 시각이 지나면
+ * 메일함 크론이 안 읽음으로 되돌린다(푸시는 VAPID 키가 없어 no-op). 직렬로 돈다.
+ */
+test.describe('메일함 다시 알림', () => {
+  test.describe.configure({ mode: 'serial' })
+  const SNOOZE_ID = '00000000-0000-4000-8000-00000000c060'
+  const SNOOZE_SUBJECT = 'MAILBOX-E2E-SNOOZE'
+  const snoozeUrl = `/api/admin/mailbox/${SNOOZE_ID}/snooze`
+  const inTwoDays = () => new Date(Date.now() + 2 * 86400e3).toISOString()
+
+  async function exec(sql: string, args: (string | number | null)[] = []) {
+    const client = createClient({ url: process.env.TURSO_DATABASE_URL! })
+    try {
+      return await client.execute({ sql, args })
+    } finally {
+      client.close()
+    }
+  }
+  async function row() {
+    return (
+      await exec('SELECT status, snoozed_until FROM inbound_emails WHERE id = ?', [SNOOZE_ID])
+    ).rows[0]
+  }
+  async function ctxFor(baseURL: string | undefined, role: string) {
+    return apiRequest.newContext({ baseURL, storageState: storageStatePath(role) })
+  }
+  async function listedIds(ctx: APIRequestContext, query: string) {
+    const json = await (await ctx.get(`/api/admin/mailbox?limit=100&${query}`)).json()
+    return (json.data.emails as { id: string }[]).map(e => e.id)
+  }
+
+  test.beforeAll(async () => {
+    await exec('DELETE FROM inbound_emails WHERE id = ?', [SNOOZE_ID])
+    await exec(
+      `INSERT INTO inbound_emails
+        (id, thread_id, resend_email_id, from_address, from_email, to_addresses, subject, status,
+         body_fetch_status, received_at)
+       VALUES (?, ?, 'authz-mailbox-snooze', 'snooze@example.com', 'snooze@example.com',
+               '["mailbox@ggac.kr"]', ?, 'read', 'done', ?)`,
+      [SNOOZE_ID, SNOOZE_ID, SNOOZE_SUBJECT, Date.now()]
+    )
+  })
+  test.afterAll(async () => {
+    await exec('DELETE FROM inbound_emails WHERE id = ?', [SNOOZE_ID])
+  })
+
+  test('걸기는 관리자만 — 비로그인 401, 이사 403이고 값이 그대로다', async ({
+    baseURL,
+    request,
+  }) => {
+    expect((await request.patch(snoozeUrl, { data: { until: inTwoDays() } })).status()).toBe(401)
+    const director = await ctxFor(baseURL, 'director')
+    try {
+      expect((await director.patch(snoozeUrl, { data: { until: inTwoDays() } })).status()).toBe(403)
+    } finally {
+      await director.dispose()
+    }
+    expect((await row()).snoozed_until).toBeNull()
+  })
+
+  test('시각은 30분 뒤 ~ 1년 안 — 지난 시각·너무 이른 시각·형식 오류는 400', async ({
+    baseURL,
+  }) => {
+    const admin = await ctxFor(baseURL, 'admin')
+    try {
+      for (const until of [
+        new Date(Date.now() - 60e3).toISOString(),
+        new Date(Date.now() + 5 * 60e3).toISOString(),
+        new Date(Date.now() + 400 * 86400e3).toISOString(),
+        'tomorrow',
+      ]) {
+        expect((await admin.patch(snoozeUrl, { data: { until } })).status(), until).toBe(400)
+      }
+      expect((await row()).snoozed_until).toBeNull()
+    } finally {
+      await admin.dispose()
+    }
+  })
+
+  test('걸면 기본 목록에서 빠지고 "다시 알림" 보기·검색에는 나온다, 크론이 시각이 지난 것을 깨운다', async ({
+    baseURL,
+    request,
+  }) => {
+    const admin = await ctxFor(baseURL, 'admin')
+    const director = await ctxFor(baseURL, 'director')
+    try {
+      expect((await admin.patch(snoozeUrl, { data: { until: inTwoDays() } })).status()).toBe(200)
+      expect(await listedIds(director, '')).not.toContain(SNOOZE_ID)
+      expect(await listedIds(director, 'snoozed=only')).toContain(SNOOZE_ID)
+      expect(await listedIds(director, `search=${SNOOZE_SUBJECT}`)).toContain(SNOOZE_ID)
+      expect((await director.get('/api/admin/mailbox?snoozed=all')).status()).toBe(400)
+
+      // 시각이 지난 것으로 당겨 놓고 크론을 돌린다
+      await exec('UPDATE inbound_emails SET snoozed_until = ? WHERE id = ?', [
+        Date.now() - 60e3,
+        SNOOZE_ID,
+      ])
+      const cron = await request.post('/api/internal/mailbox/backfill', { headers: cronHeaders() })
+      expect(cron.status()).toBe(200)
+      expect((await cron.json()).data.snooze_woken).toBeGreaterThanOrEqual(1)
+      const woken = await row()
+      expect(woken.status).toBe('unread')
+      expect(woken.snoozed_until).toBeNull()
+      expect(await listedIds(director, '')).toContain(SNOOZE_ID)
+    } finally {
+      await Promise.all([admin.dispose(), director.dispose()])
+    }
+  })
+
+  test('화면: 관리자가 "내일 아침 9시"로 걸면 목록에서 빠지고, "다시 알림" 보기에서 풀 수 있다', async ({
+    browser,
+  }) => {
+    const ctx = await browser.newContext({ storageState: storageStatePath('admin') })
+    try {
+      const page = await ctx.newPage()
+      await page.goto('/admin/mailbox', { waitUntil: 'domcontentloaded' })
+      await page.getByText(SNOOZE_SUBJECT, { exact: true }).first().click({ timeout: 15000 })
+      await page.getByLabel('다시 알림 걸기').selectOption({ label: '내일 아침 9시' })
+      await expect.poll(async () => (await row()).snoozed_until).not.toBeNull()
+      // 목록 행(관리자 화면은 행마다 "제목 선택" 체크박스가 있다)에서 빠진다. 상세는 열린 채로 남는다.
+      await expect(page.getByLabel(`${SNOOZE_SUBJECT} 선택`)).toHaveCount(0)
+
+      await page.getByRole('button', { name: '다시 알림', exact: true }).click()
+      await page.getByText(SNOOZE_SUBJECT, { exact: true }).first().click({ timeout: 15000 })
+      await page.getByTestId('mail-snooze').getByRole('button', { name: '풀기' }).click()
+      await expect.poll(async () => (await row()).snoozed_until).toBeNull()
+    } finally {
+      await ctx.close()
     }
   })
 })
