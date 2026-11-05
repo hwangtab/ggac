@@ -150,6 +150,14 @@ test.describe('내 문서함 — 실제 저장소·편집기', () => {
         DOCX_MIME,
         readFileSync('public/doc-templates/blank.docx')
       )
+      // 같은 업로드로 새 문서를 다시 만들면(응답이 끊겨 화면이 다시 보낸 경우) 이미 만든 문서를 돌려준다 — 둘째 문서가 생기지
+      // 않는다(2026-11-05 점검)
+      const [first] = await versionsOf(id)
+      const again = await context.request.post('/api/mypage/documents', {
+        data: { uploadId: first.id, source: 'upload' },
+      })
+      expect(again.ok(), await again.text()).toBe(true)
+      expect((await again.json()).data?.documentId).toBe(id)
       await expect(page.getByRole('link', { name: '내 문서함' })).toBeVisible()
       await expect(page.getByTestId('member-documents-usage')).toContainText('/ 200.0 MB')
       await page.screenshot({ path: 'test-results/member-documents-list-1280.png', fullPage: true })

@@ -66,9 +66,11 @@ export default function DocumentsList({
     setDone(null)
     const list = Array.from(files)
     let created = 0
+    // 실패를 모두 모아 한 번에 보인다 — 파일마다 덮어써 마지막 실패만 남던 것(2026-11-05 점검)
+    const failures: string[] = []
     for (const file of list) {
       if (file.size > MEMBER_DOCUMENT_MAX_FILE_BYTES) {
-        setError(`‘${file.name}’ — 파일 한 개는 50MB까지 올릴 수 있습니다.`)
+        failures.push(`‘${file.name}’ — 파일 한 개는 50MB까지 올릴 수 있습니다.`)
         continue
       }
       try {
@@ -80,10 +82,17 @@ export default function DocumentsList({
         await createMemberDocument(uploadId, 'upload')
         created++
       } catch (e) {
-        setError(`‘${file.name}’ — ${e instanceof Error ? e.message : '올리지 못했습니다.'}`)
+        failures.push(`‘${file.name}’ — ${e instanceof Error ? e.message : '올리지 못했습니다.'}`)
       }
     }
     setBusy(null)
+    if (failures.length > 0) {
+      setError(
+        failures.length === 1
+          ? failures[0]
+          : `${failures.length}개를 올리지 못했습니다: ${failures.join(' · ')}`
+      )
+    }
     if (input.current) input.current.value = ''
     if (created > 0) {
       setDone(created === 1 ? '문서를 올렸습니다.' : `문서 ${created}개를 올렸습니다.`)

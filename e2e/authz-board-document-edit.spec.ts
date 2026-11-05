@@ -560,3 +560,288 @@ test.describe('이사회 서류 앱 편집 권한 경계', () => {
     }
   })
 })
+
+/**
+ * 이사회 서류 **브라우저 직접 업로드**(`/api/board-room/documents/uploads` 준비·토큰 → `/api/board-room/documents` JSON 등록).
+ * 예전 multipart 업로드는 Vercel 함수 본문 4.5MB 한도에 걸려 큰 스캔본이 플랫폼 413 으로 실패했다.
+ *
+ * - 업로드 라우트·JSON 등록 모두 비로그인 401, 조합원·미승인 403(`requireBoardMember()`).
+ * - 토큰은 **내 폴더**(`board-documents/<내 id>/<파일>`)에만 — 다른 사람 폴더·seed·버전·다른 영역은 403.
+ * - JSON 등록은 내 폴더 경로만(남의 경로 400), 저장소에 없는 객체는 409, 같은 경로 두 번은 409.
+ * - 시험 저장소 토큰이 있으면 6MB PDF 를 서류함 화면으로 실제로 올리고(4.5MB 초과), 서명이 틀린 객체는 등록을 거절하고 지운다.
+ */
+test.describe('이사회 서류 직접 업로드 권한 경계', () => {
+  test.describe.configure({ mode: 'serial' })
+
+  const UPLOADS = '/api/board-room/documents/uploads'
+  const DOCUMENTS = '/api/board-room/documents'
+  const prepare = {
+    type: 'prepare',
+    name: '회의록.pdf',
+    size: 6 * 1024 * 1024,
+    mime: 'application/pdf',
+  }
+  const token = (pathname: string) => ({
+    type: 'blob.generate-client-token',
+    payload: { pathname, multipart: false, clientPayload: null },
+  })
+  const register = (filePath: string) => ({
+    filePath,
+    fileName: '회의록.pdf',
+    title: `authz 직접 업로드 ${stamp}`,
+    category: '기타',
+    visibility: 'board',
+  })
+
+  test('비로그인 401 · 조합원·미승인 403 — 준비·토큰·JSON 등록 모두', async ({
+    playwright,
+    baseURL,
+  }) => {
+    const f = readFixtures()
+    const own = (id: string) => `board-documents/${id}/1_abcdef012345_a.pdf`
+    const anon = await asRole(playwright, baseURL, null)
+    const member = await asRole(playwright, baseURL, 'owner')
+    const pending = await asRole(playwright, baseURL, 'pending')
+    try {
+      for (const [ctx, status, id] of [
+        [anon, 401, f.users.owner],
+        [member, 403, f.users.owner],
+        [pending, 403, f.users.pending],
+      ] as const) {
+        expect((await ctx.post(UPLOADS, { data: prepare })).status()).toBe(status)
+        expect((await ctx.post(UPLOADS, { data: token(own(id)) })).status()).toBe(status)
+        expect(
+          (await ctx.post(DOCUMENTS, { data: register(`${id}/1_abcdef012345_a.pdf`) })).status()
+        ).toBe(status)
+      }
+    } finally {
+      await anon.dispose()
+      await member.dispose()
+      await pending.dispose()
+    }
+  })
+
+  test('이사: 준비는 내 폴더 키를 주고, 토큰은 내 폴더에만 — 다른 사람 폴더·다른 영역·허용 밖 형식은 403', async ({
+    playwright,
+    baseURL,
+  }) => {
+    const f = readFixtures()
+    const me = f.users.director
+    const director = await asRole(playwright, baseURL, 'director')
+    try {
+      const prepared = await director.post(UPLOADS, { data: prepare })
+      expect(PASSED_GATE(prepared.status()), `준비 → ${prepared.status()}`).toBe(true)
+      // 50MB 를 넘으면 413, 허용 밖 형식은 415 — 권한을 지난 뒤의 판정이다
+      expect(
+        (
+          await director.post(UPLOADS, { data: { ...prepare, size: 50 * 1024 * 1024 + 1 } })
+        ).status()
+      ).toBe(413)
+      expect(
+        (
+          await director.post(UPLOADS, { data: { ...prepare, name: 'a.html', mime: 'text/html' } })
+        ).status()
+      ).toBe(415)
+      if (testToken) {
+        expect(prepared.status()).toBe(200)
+        const target = (await prepared.json()).data.target
+        expect(target.pathname).toMatch(
+          new RegExp(`^board-documents/${me}/\\d+_[A-Za-z0-9]+_회의록\\.pdf$`)
+        )
+        expect(target.filePath).toBe(target.pathname.slice('board-documents/'.length))
+        expect(target.multipart).toBe(false)
+      }
+
+      for (const pathname of [
+        `board-documents/${f.users.admin}/1_abcdef012345_a.pdf`,
+        `board-documents/${f.users.auditor}/1_abcdef012345_a.pdf`,
+        'board-documents/seed/a.pdf',
+        `board-documents/versions/${DOC_BOARD}/${VERSIONED_V1}/a.docx`,
+        `backups/${me}/a.pdf`,
+        `board-work/files/${me}/a.pdf`,
+        `board-documents/${me}/1_abcdef012345_a.html`,
+      ]) {
+        expect((await director.post(UPLOADS, { data: token(pathname) })).status(), pathname).toBe(
+          403
+        )
+      }
+      // 짝: 내 폴더면 토큰 단계를 지난다(시험 토큰이 없으면 저장소 503)
+      const ok = await director.post(UPLOADS, {
+        data: token(`board-documents/${me}/1_abcdef012345_a.pdf`),
+      })
+      expect(PASSED_GATE(ok.status()), `내 폴더 토큰 → ${ok.status()}`).toBe(true)
+      if (testToken) expect(ok.status()).toBe(200)
+    } finally {
+      await director.dispose()
+    }
+  })
+
+  test('JSON 등록: 남의 경로는 400, 저장소에 없는 객체는 409 — 서류가 생기지 않는다', async ({
+    playwright,
+    baseURL,
+  }) => {
+    const f = readFixtures()
+    const director = await asRole(playwright, baseURL, 'director')
+    const admin = await asRole(playwright, baseURL, 'admin')
+    try {
+      for (const [ctx, filePath] of [
+        [director, `${f.users.admin}/1_abcdef012345_a.pdf`],
+        [director, 'seed/doc_0.pdf'],
+        [director, legacyPath('board.docx')],
+        [director, v2Path],
+        // 관리자도 남의 업로드를 자기 서류로 등록하지 못한다
+        [admin, `${f.users.director}/1_abcdef012345_a.pdf`],
+      ] as const) {
+        const res = await ctx.post(DOCUMENTS, { data: register(filePath) })
+        expect(res.status(), filePath).toBe(400)
+      }
+      // 조합원 공개는 관리자만(이사 403) — multipart 분기와 같다
+      expect(
+        (
+          await director.post(DOCUMENTS, {
+            data: {
+              ...register(`${f.users.director}/1_abcdef012345_a.pdf`),
+              visibility: 'members',
+            },
+          })
+        ).status()
+      ).toBe(403)
+
+      const missing = `${f.users.director}/${stamp}_missing0000_없는파일.pdf`
+      const res = await director.post(DOCUMENTS, { data: register(missing) })
+      // 시험 저장소가 있으면 409(올린 파일이 없다), 없으면 저장소 503 — 어느 쪽도 서류가 생기지 않는다
+      if (testToken) expect(res.status()).toBe(409)
+      else expect(PASSED_GATE(res.status())).toBe(true)
+      const client = db()
+      try {
+        const rs = await client.execute({
+          sql: 'SELECT count(*) n FROM board_documents WHERE file_path = ?',
+          args: [missing],
+        })
+        expect(Number(rs.rows[0].n)).toBe(0)
+      } finally {
+        client.close()
+      }
+    } finally {
+      await director.dispose()
+      await admin.dispose()
+    }
+  })
+
+  test('서명이 틀린 객체는 등록을 거절하고(400) 저장소에서 지운다', async ({
+    playwright,
+    baseURL,
+  }) => {
+    test.skip(!testToken, 'BOARD_WORK_TEST_BLOB_TOKEN(시험용 Blob 저장소)이 없다')
+    const { head } = await import('@vercel/blob')
+    const f = readFixtures()
+    const filePath = `${f.users.director}/${stamp}_badsig000000_가짜.pdf`
+    await put(`board-documents/${filePath}`, Buffer.from('이것은 PDF 가 아니다'), {
+      access: 'private',
+      token: testToken,
+      contentType: 'application/pdf',
+      addRandomSuffix: false,
+      allowOverwrite: true,
+    })
+    const director = await asRole(playwright, baseURL, 'director')
+    try {
+      const res = await director.post(DOCUMENTS, { data: register(filePath) })
+      expect(res.status()).toBe(400)
+      expect((await res.json()).error).toContain('형식')
+      await expect
+        .poll(
+          async () =>
+            head(`board-documents/${filePath}`, { token: testToken }).then(
+              () => 'exists',
+              () => 'gone'
+            ),
+          { timeout: 15_000 }
+        )
+        .toBe('gone')
+    } finally {
+      await director.dispose()
+      await del(`board-documents/${filePath}`, { token: testToken }).catch(() => undefined)
+    }
+  })
+
+  test('서류함 화면에서 4.5MB 넘는 PDF(6MB)를 올리면 등록되고 내려받아지며, 같은 경로는 두 번 등록되지 않는다', async ({
+    browser,
+  }) => {
+    test.skip(!testToken, 'BOARD_WORK_TEST_BLOB_TOKEN(시험용 Blob 저장소)이 없다')
+    test.setTimeout(180_000)
+    const title = `authz 6MB 스캔 회의록 ${stamp}`
+    const size = 6 * 1024 * 1024
+    const pdf = Buffer.concat([
+      Buffer.from('%PDF-1.4\n'),
+      Buffer.alloc(size - 16, 0x20),
+      Buffer.from('\n%%EOF\n'),
+    ])
+    const context = await browser.newContext({
+      storageState: storageStatePath('director'),
+      viewport: { width: 1280, height: 900 },
+    })
+    let documentId: string | null = null
+    try {
+      await context.request.get('/api/auth/get-session')
+      const page = await context.newPage()
+      await page.goto('/board-room/documents', { waitUntil: 'domcontentloaded' })
+      await page.locator('#doc-file').setInputFiles({
+        name: '6MB 스캔 회의록.pdf',
+        mimeType: 'application/pdf',
+        buffer: pdf,
+      })
+      await page.locator('#doc-title').fill(title)
+      await page.locator('#doc-category').selectOption('기타')
+      // 함수로 가는 요청은 작은 JSON 뿐이다 — 파일 바이트는 저장소로 직접 간다
+      const registered = page.waitForResponse(
+        r => r.url().endsWith('/api/board-room/documents') && r.request().method() === 'POST',
+        { timeout: 120_000 }
+      )
+      await page.getByRole('button', { name: '업로드', exact: true }).click()
+      const res = await registered
+      expect(res.status()).toBe(201)
+      expect(res.request().headers()['content-type']).toContain('application/json')
+      expect((res.request().postData() ?? '').length).toBeLessThan(4096)
+      documentId = (await res.json()).data.id as string
+      await expect(page.getByText(title)).toBeVisible({ timeout: 20_000 })
+
+      const client = db()
+      let filePath: string
+      try {
+        const rs = await client.execute({
+          sql: 'SELECT file_path, file_size, mime_type, file_name FROM board_documents WHERE id = ?',
+          args: [documentId],
+        })
+        expect(rs.rows[0]).toMatchObject({
+          file_size: size,
+          mime_type: 'application/pdf',
+          file_name: '6MB 스캔 회의록.pdf',
+        })
+        filePath = String(rs.rows[0].file_path)
+      } finally {
+        client.close()
+      }
+      expect(filePath.startsWith(`${readFixtures().users.director}/`)).toBe(true)
+
+      const dl = await context.request.get(`/api/board-room/documents/${documentId}/download`)
+      expect(dl.status()).toBe(200)
+      const bytes = await dl.body()
+      expect(bytes.length).toBe(size)
+      expect(bytes.subarray(0, 5).toString()).toBe('%PDF-')
+
+      // 같은 경로를 다시 등록하면 409 — 지우지 않는다(이미 등록된 서류의 파일이다)
+      const again = await context.request.post(DOCUMENTS, {
+        data: { ...register(filePath), title: `${title} 중복` },
+      })
+      expect(again.status()).toBe(409)
+      expect(
+        (await context.request.get(`/api/board-room/documents/${documentId}/download`)).status()
+      ).toBe(200)
+    } finally {
+      if (documentId) {
+        await context.request.delete(`/api/board-room/documents/${documentId}`).catch(() => {})
+      }
+      await context.close()
+    }
+  })
+})

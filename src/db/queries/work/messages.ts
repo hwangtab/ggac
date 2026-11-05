@@ -711,6 +711,7 @@ export async function editMessageBody(input: {
       .update(workMessages)
       .set({ body: input.body, editedAt: new Date(), rev })
       .where(eq(workMessages.id, m.id))
+    await bumpReferencingMessages(tx, m.id)
     await syncLinks(tx, {
       id: m.id,
       channelId: m.channelId,
@@ -757,6 +758,7 @@ export async function softDeleteMessage(input: {
       .update(workMessages)
       .set({ deletedAt: new Date(), body: '', rev })
       .where(eq(workMessages.id, m.id))
+    await bumpReferencingMessages(tx, m.id)
     if (m.parentId) await recountThread(tx, m.parentId, rev)
     await syncLinks(tx, {
       id: m.id,
@@ -770,6 +772,33 @@ export async function softDeleteMessage(input: {
     await recomputeLatestForMessage(tx, m.id)
     return { status: 'deleted', channelId: m.channelId, authorId: m.authorId } as const
   })
+}
+
+/**
+ * 이 메시지를 **인용하거나 전달한** 메시지의 rev 를 올린다(그 메시지들이 든 채널마다). 그 메시지들은 원문 미리보기(인용 카드·
+ * 전달 원문)를 함께 싣는데, 원문을 고치거나 지워도 그 메시지의 rev 는 그대로라 열린 화면이 다시 받지 않아 지운 본문이 남았다
+ * (2026-11-05 점검). 전달은 다른 채널일 수 있다.
+ */
+async function bumpReferencingMessages(tx: WorkExecutor, messageId: string): Promise<void> {
+  const refs = await tx
+    .select({ id: workMessages.id, channelId: workMessages.channelId })
+    .from(workMessages)
+    .where(
+      and(
+        or(
+          eq(workMessages.quotedMessageId, messageId),
+          eq(workMessages.forwardedFromId, messageId)
+        ),
+        isNull(workMessages.deletedAt)
+      )
+    )
+  if (refs.length === 0) return
+  const byChannel = new Map<string, string[]>()
+  for (const r of refs) byChannel.set(r.channelId, [...(byChannel.get(r.channelId) ?? []), r.id])
+  for (const [channelId, ids] of byChannel) {
+    const rev = await bumpChannelRev(tx, channelId)
+    await tx.update(workMessages).set({ rev }).where(inArray(workMessages.id, ids))
+  }
 }
 
 /**

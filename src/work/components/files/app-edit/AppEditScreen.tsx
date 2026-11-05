@@ -15,6 +15,7 @@ import { useDesktopEditorKnown } from '@work/components/files/office-edit/use-de
 import { useLeaveGuard } from '@work/components/files/office-edit/use-edit-checkout'
 import { objectsDroppedMessage, type ObjectsDropped } from '@work/lib/files/doc-edit-types'
 import type { AppEditorKind } from '@work/lib/files/app-edit'
+import { officeExtensionWillChange, officeSaveExtension } from '@work/lib/files/office-edit'
 
 export type AppEditSaveOutcome = {
   versionNo: number
@@ -49,6 +50,7 @@ export default function AppEditScreen({
   save,
   testId,
   onMount,
+  mobileNote = '휴대전화에서는 미리 보고 내려받을 수 있습니다.',
 }: {
   editor: AppEditorKind
   fileName: string
@@ -60,6 +62,8 @@ export default function AppEditScreen({
   save: AppEditSave
   testId: string
   onMount?: () => void
+  /** 휴대전화 안내의 뒷문장 — 돌아가는 화면에서 실제로 할 수 있는 일(이사회 서류 상세는 미리보기가 없다) */
+  mobileNote?: string
 }) {
   const desktop = useDesktopEditorKnown()
   const router = useRouter()
@@ -120,6 +124,17 @@ export default function AppEditScreen({
   }
 
   function onSaveClick() {
+    // 옛 형식(doc·xls·ppt)은 편집기가 OOXML(docx 등)로 저장한다 — 저장한 뒤에야 이름이 바뀐 것을 보지 않게 먼저 묻는다
+    // (업무툴 오피스 편집 화면과 같은 규칙, 2026-11-05 점검)
+    if (editor.kind === 'office' && savedNo === null && officeExtensionWillChange(shownName)) {
+      const to = officeSaveExtension(shownName)
+      if (
+        !window.confirm(
+          `저장하면 파일 형식이 .${to} 로 바뀝니다(이 편집기는 옛 형식으로 저장하지 못합니다). 이전 형식의 원본은 버전 기록에 남습니다. 저장할까요?`
+        )
+      )
+        return
+    }
     setError(null)
     setSaving(editor.kind === 'hwp' ? '저장본을 검사하는 중…' : '편집기에서 내보내는 중…')
     if (editor.kind === 'hwp') hwp.current?.requestSave()
@@ -132,6 +147,10 @@ export default function AppEditScreen({
     router.push(exitHref)
   }
 
+  // 편집기가 준비되기 전에 오류가 났다(원본을 못 받음·불러오기 시간 초과) — "불러오는 중"에 영영 머물지 않게 실패 화면으로
+  // 바꾼다(업무툴 OfficeEditScreen 과 같은 처리, 2026-11-05 점검)
+  const loadFailed = error !== null && phase !== 'ready' && saving === null && savedNo === null
+
   const versionLabel = savedNo ? `v${savedNo}` : !isNew ? `v${initialVersionNo}` : '새 문서'
   const status = saving
     ? saving
@@ -143,7 +162,9 @@ export default function AppEditScreen({
           : `저장됨 v${savedNo}`
         : phase === 'ready'
           ? '변경 없음'
-          : '편집기를 불러오는 중…'
+          : loadFailed
+            ? '편집기를 열지 못했습니다'
+            : '편집기를 불러오는 중…'
 
   if (desktop === null) return <div className="h-full" aria-hidden="true" />
   if (!desktop) {
@@ -155,8 +176,7 @@ export default function AppEditScreen({
         <FiMonitor aria-hidden="true" className="h-8 w-8 text-muted-foreground" />
         <h1 className="text-lg font-semibold">PC에서 열어 주세요</h1>
         <p className="max-w-sm text-sm text-muted-foreground">
-          문서 편집은 넓은 화면과 마우스가 있는 PC에서만 쓸 수 있습니다. 휴대전화에서는 미리 보고
-          내려받을 수 있습니다.
+          문서 편집은 넓은 화면과 마우스가 있는 PC에서만 쓸 수 있습니다. {mobileNote}
         </p>
         <Link href={exitHref} className="tw-btn-secondary mt-2">
           돌아가기
@@ -228,6 +248,19 @@ export default function AppEditScreen({
       )}
 
       <div className="relative min-h-0 flex-1">
+        {loadFailed && (
+          <div
+            role="alert"
+            className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-background p-8 text-center"
+          >
+            <p className="text-sm">
+              편집기를 열지 못했습니다 — 내려받아 PC 프로그램으로 고친 뒤 새 버전으로 올려 주세요.
+            </p>
+            <Link href={exitHref} className="tw-btn-secondary">
+              돌아가기
+            </Link>
+          </div>
+        )}
         {editor.kind === 'office' ? (
           <OfficeEditorFrame
             ref={office}

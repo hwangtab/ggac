@@ -26,7 +26,7 @@ import {
 } from '@/lib/memberDocuments/client'
 import FilePreviewBody from '@work/components/files/FilePreviewBody'
 import { FileApiBaseContext } from '@work/components/files/file-api-base'
-import { useDesktopEditor } from '@work/components/files/office-edit/use-desktop-editor'
+import { useDesktopEditorKnown } from '@work/components/files/office-edit/use-desktop-editor'
 
 export type DetailVersion = {
   id: string
@@ -58,7 +58,9 @@ export default function DocumentDetail({
   canEdit: boolean
 }) {
   const router = useRouter()
-  const desktop = useDesktopEditor()
+  // null = 아직 모른다(서버 렌더·하이드레이션 전) — 그동안은 PC 안내도 편집 단추도 그리지 않는다. 예전에는 PC 에서도
+  // "문서 편집은 PC에서 할 수 있습니다"가 잠깐 보였다가 사라졌다(2026-11-05 점검).
+  const desktop = useDesktopEditorKnown()
   const latest = versions.find(v => v.versionNo === document.latestVersionNo) ?? versions[0]
   const [selectedId, setSelectedId] = useState(latest?.id)
   const selected = versions.find(v => v.id === selectedId) ?? latest
@@ -185,7 +187,7 @@ export default function DocumentDetail({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {canEdit && desktop && (
+          {canEdit && desktop === true && (
             <Link
               href={`/mypage/documents/${document.id}/edit`}
               className="tw-btn-primary inline-flex items-center gap-2"
@@ -205,7 +207,7 @@ export default function DocumentDetail({
         </div>
       </div>
 
-      {canEdit && !desktop && (
+      {canEdit && desktop === false && (
         <p className="flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-3 text-sm text-gray-600">
           <FiMonitor aria-hidden="true" className="h-4 w-4 shrink-0" />
           문서 편집은 PC에서 할 수 있습니다. 여기서는 미리 보고 내려받을 수 있습니다.
@@ -348,7 +350,16 @@ export default function DocumentDetail({
           <FiUpload aria-hidden="true" className="h-4 w-4" />새 버전 올리기
         </label>
         {!renaming && (
-          <button type="button" className="tw-btn-secondary" onClick={() => setRenaming(true)}>
+          <button
+            type="button"
+            className="tw-btn-secondary"
+            onClick={() => {
+              // 지금 이름으로 연다 — 새 버전·되돌리기로 확장자가 바뀐 뒤에도 옛 이름이 남아 `보고서.doc.docx`가 되던 것
+              // (2026-11-05 점검)
+              setNameInput(document.name)
+              setRenaming(true)
+            }}
+          >
             이름 바꾸기
           </button>
         )}

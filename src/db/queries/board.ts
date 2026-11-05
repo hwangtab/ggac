@@ -26,6 +26,7 @@ import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm'
 import { db } from '../client.ts'
 import {
   boardAgendas,
+  boardDocumentVersions,
   boardDocuments,
   boardMeetingAttendees,
   boardMeetingDateOptions,
@@ -743,6 +744,27 @@ export async function createDocument(input: CreateDocumentInput): Promise<{ id: 
     })
     .returning({ id: boardDocuments.id })
   return row
+}
+
+/**
+ * 이 `file_path`를 이미 쓰는 서류·버전이 있는가 — `/api/board-room/documents` POST(JSON 등록)가 같은 업로드를 두 번
+ * 등록하지 못하게 본다(`file_path`에는 유일 제약이 없다). 버전 기록도 본다: 앱에서 고친 서류는 지금 파일이
+ * `versions/…`로 바뀌고 처음 올린 파일(`<올린 사람>/<파일>`)은 v1 행에만 남는다 — 그 경로로 새 서류를 만들면 한쪽을
+ * 지울 때 다른 쪽의 파일이 사라진다.
+ */
+export async function documentFilePathExists(filePath: string): Promise<boolean> {
+  const [doc] = await db
+    .select({ id: boardDocuments.id })
+    .from(boardDocuments)
+    .where(eq(boardDocuments.filePath, filePath))
+    .limit(1)
+  if (doc) return true
+  const [version] = await db
+    .select({ id: boardDocumentVersions.id })
+    .from(boardDocumentVersions)
+    .where(eq(boardDocumentVersions.filePath, filePath))
+    .limit(1)
+  return Boolean(version)
 }
 
 /** `/api/board-room/documents/[id]` DELETE의 소유권/경로 확인. */

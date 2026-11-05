@@ -57,3 +57,38 @@ test('여러 페이지를 이어 훑는다', async () => {
   })
   assert.deepEqual(removed, [path(V(10)), path(V(11))])
 })
+
+test('고아로 보이는 것이 너무 많으면(DB 와 저장소가 다른 환경) 하나도 지우지 않고 멈춘다', async () => {
+  const objects = Array.from({ length: 30 }, (_, i) => ({
+    pathname: path(V(100 + i)),
+    uploadedAt: hoursAgo(80),
+  }))
+  const removed = []
+  await assert.rejects(
+    R.sweepMemberDocumentOrphans(NOW, {
+      listPage: async () => ({ objects, cursor: null, hasMore: false }),
+      findReferenced: async () => new Set(), // 빈 DB — 아무것도 안 가리킨다
+      remove: async paths => {
+        removed.push(...paths)
+      },
+    }),
+    e => e.name === 'OrphanSweepAbortedError'
+  )
+  assert.deepEqual(removed, [], '하나도 지우면 안 된다')
+})
+
+test('시간 예산을 넘기면 새 페이지를 시작하지 않는다', async () => {
+  let t = 0
+  let calls = 0
+  await R.sweepMemberDocumentOrphans(NOW, {
+    clock: () => t,
+    listPage: async () => {
+      calls++
+      t += 40_000
+      return { objects: [], cursor: 'next', hasMore: true }
+    },
+    findReferenced: async () => new Set(),
+    remove: async () => {},
+  })
+  assert.equal(calls, 1)
+})

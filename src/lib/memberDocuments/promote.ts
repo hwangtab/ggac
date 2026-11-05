@@ -1,4 +1,5 @@
 import {
+  getOwnedMemberDocumentVersion,
   addMemberDocumentVersion,
   createMemberDocumentFromUpload,
   deleteOwnedMemberDocumentUpload,
@@ -64,8 +65,25 @@ export async function createMemberDocument(
   input: { uploadId: string; source: MemberDocumentSource }
 ): Promise<ServiceResult<PromoteResult>> {
   const pending = await getOwnedMemberDocumentUpload(ownerId, input.uploadId)
-  if (!pending || pending.documentId !== null)
+  if (!pending || pending.documentId !== null) {
+    // 같은 업로드로 이미 만든 문서면 그 결과를 돌려준다 — 첫 요청이 커밋된 뒤 응답만 끊겨 화면이 다시 보낸 경우다(새 문서 v1 의
+    // 버전 id 가 업로드 id 다). 예전에는 404 였고, 화면은 실패로 알고 다시 저장해 문서가 둘 생겼다(2026-11-05 점검).
+    const made = !pending
+      ? await getOwnedMemberDocumentVersion(ownerId, input.uploadId).catch(() => null)
+      : null
+    if (made && made.version.versionNo === 1) {
+      return {
+        ok: true,
+        data: {
+          documentId: made.document.id,
+          versionId: made.version.id,
+          versionNo: 1,
+          name: made.version.name,
+        },
+      }
+    }
     return fail(404, '올린 파일을 찾을 수 없습니다. 다시 올려 주세요.')
+  }
   const confirmed = await confirmUploaded(ownerId, pending)
   if (!confirmed.ok) return fail(confirmed.status, confirmed.error)
 

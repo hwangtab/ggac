@@ -656,12 +656,13 @@ export const DISTRIBUTED_RATE_LIMIT_CONFIGS = {
     message: '관리자 API 요청이 너무 많습니다.',
   },
 
-  // 이사회 업무툴 폴링(`POST /api/board-room/work/sync`, 분당 60회 — 사용자 단위).
-  // 채널을 보는 동안 3초마다 한 번(분당 20회)이라 탭 세 개까지 여유가 있다(docs/board-work/01-설계.md §6-3).
+  // 이사회 업무툴 폴링(`POST /api/board-room/work/sync`, 분당 180회 — 사용자 단위).
+  // 채널을 보는 동안 3초마다 한 번(분당 20회)이다. 60 이면 보이는 탭 셋에 전송 직후 즉시 폴·휴대폰이 더해지면 429 → 물러남 →
+  // "연결 끊김"이 떴다(2026-11-05 점검). 사용자 단위라 기기·탭을 모두 나눠 쓴다 — 아홉 개까지 여유를 둔다.
   WORK_SYNC: {
     name: 'work_sync',
     windowMs: 60 * 1000,
-    maxRequests: 60,
+    maxRequests: 180,
     message: '동기화 요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요.',
   },
 

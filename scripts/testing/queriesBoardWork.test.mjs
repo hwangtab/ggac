@@ -378,6 +378,39 @@ test('고정된 메시지를 지우면 pins_rev도 오른다(고정 목록에서
   )
 })
 
+test('원문을 고치거나 지우면 그 글을 인용·전달한 메시지의 rev 도 오른다 — 열린 화면의 인용 카드가 따라 바뀐다(2026-11-05 점검)', async () => {
+  const author = await seedPerson()
+  const ch = await seedChannel({ creatorId: author })
+  const other = await seedChannel({ creatorId: author })
+  const original = await send(ch, author, '원문')
+  const quoting = await send(ch, author, '인용한 글')
+  const forwarded = await send(other, author, '전달한 글')
+  await setupClient.execute({
+    sql: 'update work_messages set quoted_message_id = ? where id = ?',
+    args: [original, quoting],
+  })
+  await setupClient.execute({
+    sql: 'update work_messages set forwarded_from_id = ? where id = ?',
+    args: [original, forwarded],
+  })
+  const q0 = Number((await messageRow(quoting)).rev)
+  const f0 = Number((await messageRow(forwarded)).rev)
+  await Q.messages.editMessageBody({
+    messageId: original,
+    actorId: author,
+    body: '고친 원문',
+    actorIsAdmin: false,
+  })
+  const q1 = Number((await messageRow(quoting)).rev)
+  const f1 = Number((await messageRow(forwarded)).rev)
+  assert.ok(q1 > q0, '같은 채널의 인용 글 rev')
+  assert.ok(f1 > f0, '다른 채널의 전달 글 rev')
+  assert.ok(f1 <= Number((await channelRev(other)).rev), '전달 글 채널의 rev 도 올랐다')
+  await Q.messages.softDeleteMessage({ messageId: original, actorId: author, actorIsAdmin: false })
+  assert.ok(Number((await messageRow(quoting)).rev) > q1)
+  assert.ok(Number((await messageRow(forwarded)).rev) > f1)
+})
+
 // ── 반응 ────────────────────────────────────────────────────────────────────
 
 test('반응 추가·제거 모두 메시지 rev를 올린다. canAdd가 아니면 새로 달 수 없다(떼기는 된다)', async () => {
