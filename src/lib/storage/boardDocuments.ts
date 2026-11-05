@@ -71,16 +71,104 @@ export function isSafeBoardDocumentFilePath(filePath: unknown): boolean {
   }
 
   const segments = filePath.split('/')
-  if (segments.length !== 2) return false
   for (const segment of segments) {
     if (!segment) return false
     if (segment === '.' || segment === '..') return false
   }
 
+  // 앱 편집이 만든 버전 파일(docs/board-work/05-이사회-서류-앱-편집.md §3) — 모양이 다르므로 따로 본다.
+  if (segments[0] === BOARD_DOCUMENT_VERSIONS_SEGMENT) return isVersionShape(segments)
+
+  if (segments.length !== 2) return false
   const [owner] = segments
   if (owner !== 'seed' && !UUID_SEGMENT_REGEX.test(owner)) return false
 
   return true
+}
+
+/**
+ * 앱 편집 버전 파일의 첫 구간. 업로더 UUID·`seed`와 겹치지 않는 리터럴이다 — 예전 2구간 모양
+ * (`<owner>/<file>`)으로는 이 접두가 통과하지 못한다(`versions`는 UUID도 `seed`도 아니다).
+ */
+export const BOARD_DOCUMENT_VERSIONS_SEGMENT = 'versions'
+
+/**
+ * 버전 파일 이름 구간: 서버가 만든 ASCII 안전 이름(`sanitizeFileName` — src/work/lib/files/paths.ts)만.
+ * 내 문서함 판정(`isSafeMemberDocumentPath`)과 같은 모양이다. 선행 점·`..`은 따로 막는다.
+ */
+const SAFE_VERSION_FILE_SEGMENT = /^[A-Za-z0-9_()-][A-Za-z0-9._()-]{0,199}$/
+
+function isVersionShape(segments: string[]): boolean {
+  if (segments.length !== 4) return false
+  const [, documentId, versionId, file] = segments
+  return (
+    UUID_SEGMENT_REGEX.test(documentId) &&
+    UUID_SEGMENT_REGEX.test(versionId) &&
+    SAFE_VERSION_FILE_SEGMENT.test(file) &&
+    !file.includes('..') &&
+    // 퍼센트·공백은 위 정규식이 이미 막지만, 판정이 느슨해질 때를 대비해 한 번 더 못박는다
+    !/[%\s]/.test(file)
+  )
+}
+
+/**
+ * 앱 편집이 만든 버전 파일 경로인가: `versions/<서류 uuid>/<버전 uuid>/<ASCII 안전 이름>`.
+ * `isSafeBoardDocumentFilePath`의 앞 단계(제어문자·인코딩·`?#`·절대 경로 거부)를 모두 지난 뒤에만 참이다.
+ */
+export function isSafeBoardDocumentVersionPath(filePath: unknown): filePath is string {
+  if (!isSafeBoardDocumentFilePath(filePath)) return false
+  return (filePath as string).split('/')[0] === BOARD_DOCUMENT_VERSIONS_SEGMENT
+}
+
+/**
+ * 이 서류(`documentId`)의 버전 파일 경로인가(대소문자 무시) — 남의 서류 id 구간을 가진 경로로 승격·되돌리기를
+ * 하지 못하게 한 번 더 본다. 업로드 토큰 발급·승격·삭제가 이 판정을 지난 경로만 다룬다.
+ */
+export function isBoardDocumentVersionPathOf(
+  filePath: unknown,
+  documentId: unknown
+): filePath is string {
+  if (!isSafeBoardDocumentVersionPath(filePath)) return false
+  if (typeof documentId !== 'string' || !UUID_SEGMENT_REGEX.test(documentId)) return false
+  return filePath.split('/')[1].toLowerCase() === documentId.toLowerCase()
+}
+
+/**
+ * 버전 파일 경로(`file_path` 칸에 들어가는 값 — 저장소 접두 `board-documents/`는 붙이지 않는다). 규약 밖 입력이면 null.
+ * `safeName`은 `sanitizeFileName`의 결과여야 한다.
+ */
+export function boardDocumentVersionFilePath(
+  documentId: string,
+  versionId: string,
+  safeName: string
+): string | null {
+  const path = `${BOARD_DOCUMENT_VERSIONS_SEGMENT}/${documentId}/${versionId}/${safeName}`
+  return isBoardDocumentVersionPathOf(path, documentId) ? path : null
+}
+
+/** 저장소 전체 pathname(`board-documents/…`)이 이 서류의 버전 파일인가 — 브라우저 직접 업로드 토큰의 경로 판정 */
+export function isBoardDocumentVersionBlobPathOf(pathname: unknown, documentId: unknown): boolean {
+  if (typeof pathname !== 'string') return false
+  const prefix = `${BOARD_DOCUMENT_PREFIX}/`
+  if (!pathname.startsWith(prefix)) return false
+  return isBoardDocumentVersionPathOf(pathname.slice(prefix.length), documentId)
+}
+
+/**
+ * 저장소 전체 pathname이 서류 영역(`board-documents/<안전한 file_path>`)인가 — 서류 저장소 계층
+ * (`createGuardedPrivateStore`)의 판정. 같은 저장소의 `backups/`·`mailbox/`·`board-work/`·`member-documents/`는 거짓이다.
+ */
+export function isSafeBoardDocumentBlobPath(pathname: unknown): boolean {
+  if (typeof pathname !== 'string') return false
+  const prefix = `${BOARD_DOCUMENT_PREFIX}/`
+  if (!pathname.startsWith(prefix)) return false
+  return isSafeBoardDocumentFilePath(pathname.slice(prefix.length))
+}
+
+/** 이 서류의 버전 파일이 사는 저장소 접두(`board-documents/versions/<서류 id>/`) — 삭제 때 남은 객체를 나열한다 */
+export function boardDocumentVersionsBlobPrefix(documentId: string): string | null {
+  if (typeof documentId !== 'string' || !UUID_SEGMENT_REGEX.test(documentId)) return null
+  return `${BOARD_DOCUMENT_PREFIX}/${BOARD_DOCUMENT_VERSIONS_SEGMENT}/${documentId.toLowerCase()}/`
 }
 
 function assertSafe(filePath: unknown): string {

@@ -135,6 +135,48 @@ export const boardDocuments = sqliteTable(
   ]
 )
 
+/**
+ * 이사회 서류의 버전 기록 — 앱 편집(docs/board-work/05-이사회-서류-앱-편집.md §2). 마이그레이션 0037.
+ *
+ * - **채우지 않고 시작한다(backfill 없음).** 한 번도 고치지 않은 서류에는 행이 없고, `board_documents`의 file_* 칸이
+ *   곧 v1 이다. 처음 저장할 때 같은 트랜잭션에서 그 칸을 그대로 v1 행으로 옮기고 v2 를 넣는다. 그 뒤로
+ *   `board_documents`의 file_* 칸은 늘 최신 버전을 가리킨다(목록·다운로드·미리보기·검색이 그 칸만 본다).
+ * - 되돌리기는 고른 버전을 **복사해 새 버전**을 만든다 — 지나간 행을 고치지 않는다. 버전 행은 서류를 지울 때만
+ *   CASCADE 로 사라지고, 객체는 서류 삭제 라우트가 행을 지운 뒤 지운다.
+ * - `body_markdown` 은 그 버전이 최신이던 때의 웹 본문이다(없던 서류는 NULL). 되돌리면 그 본문이 돌아온다.
+ * - CHECK 없음(업무툴·문서함 관례). `source` 허용값('upload'·'office-editor'·'hwp-editor'·'revert')은
+ *   `src/lib/boardDocuments/editRules.ts`와 쿼리 계층이 지킨다. 권한(올린 사람·관리자만 고친다)도 DB 에 없다 —
+ *   라우트가 판정한다.
+ */
+export const boardDocumentVersions = sqliteTable(
+  'board_document_versions',
+  {
+    /** 새 버전은 객체 키의 버전 uuid 구간과 같다(`versions/<서류>/<이 id>/<이름>`). v1 은 새로 만든 uuid */
+    id: text('id').primaryKey(),
+    documentId: text('document_id')
+      .notNull()
+      .references(() => boardDocuments.id, { onDelete: 'cascade' }),
+    versionNo: integer('version_no').notNull(),
+    /** `board_documents.file_path`와 같은 규약 — `isSafeBoardDocumentFilePath`를 지나야 한다 */
+    filePath: text('file_path').notNull(),
+    fileName: text('file_name').notNull(),
+    fileSize: integer('file_size').notNull(),
+    mimeType: text('mime_type').notNull().default('application/octet-stream'),
+    /** 'upload' | 'office-editor' | 'hwp-editor' | 'revert' */
+    source: text('source').notNull().default('upload'),
+    /** 저장한 사람. v1 은 서류를 올린 사람(`uploaded_by` — 시드 서류는 NULL). 회원을 지워도 기록은 남긴다 */
+    createdBy: text('created_by').references(() => memberProfiles.id, { onDelete: 'set null' }),
+    /** 그 버전의 웹 본문(마크다운) — 되돌리면 돌아온다. 본문이 없던 서류는 NULL */
+    bodyMarkdown: text('body_markdown'),
+    createdAt: createdAt(),
+  },
+  table => [
+    // 경로에는 UNIQUE 를 두지 않는다 — v1 은 서류의 옛 경로를 그대로 옮기는데, 시드 서류는 경로를 함께 쓸 수 있다.
+    // 같은 업로드를 두 번 승격하는 것은 PK(버전 id = 객체 키의 버전 구간)가 막는다.
+    uniqueIndex('board_document_versions_doc_no_key').on(table.documentId, table.versionNo),
+  ]
+)
+
 export const boardMeetingAttendees = sqliteTable(
   'board_meeting_attendees',
   {

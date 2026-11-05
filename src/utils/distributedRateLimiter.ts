@@ -726,6 +726,24 @@ export const DISTRIBUTED_RATE_LIMIT_CONFIGS = {
     message: '너무 자주 저장했습니다. 잠시 뒤 다시 시도해 주세요.',
   },
 
+  // 이사회 서류 앱 편집 쓰기(저장본 업로드 준비·토큰·새 버전·되돌리기, 사용자 단위 분당 30회).
+  // docs/board-work/05-이사회-서류-앱-편집.md §4. 내 문서함 쓰기(MEMBER_DOCUMENT_WRITE)와 같은 한도를 이름만 따로 센다.
+  BOARD_DOCUMENT_EDIT_WRITE: {
+    name: 'board_document_edit_write',
+    windowMs: 60 * 1000,
+    maxRequests: 30,
+    message: '너무 자주 요청했습니다. 잠시 뒤 다시 시도해 주세요.',
+  },
+
+  // 같은 영역의 편집기 저장본 검사(HWP·HWPX kordoc 두 번 읽기 + 쪽 수 비교, 웹 본문 다시 만들기 — 사용자 단위
+  // 분당 10회. MEMBER_DOCUMENT_VERIFY·WORK_DOC_EDIT_DRAFT 와 같은 한도).
+  BOARD_DOCUMENT_EDIT_VERIFY: {
+    name: 'board_document_edit_verify',
+    windowMs: 60 * 1000,
+    maxRequests: 10,
+    message: '너무 자주 저장했습니다. 잠시 뒤 다시 시도해 주세요.',
+  },
+
   // 대량 작업 (시간당 5회)
   BULK_OPERATIONS: {
     name: 'bulk_operations',

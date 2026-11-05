@@ -40,6 +40,8 @@ const KORDOC_ROUTES = [
   '/api/mypage/documents/files/\\[versionId\\]/render',
   '/api/mypage/documents',
   '/api/mypage/documents/\\[id\\]/versions',
+  // 이사회 서류 앱 편집(docs/board-work/05-이사회-서류-앱-편집.md) — HWP·HWPX 저장본 검사와 웹 본문 다시 만들기
+  '/api/board-room/documents/\\[id\\]/versions',
 ]
 /**
  * 이사회 업무툴 본문 추출 크론(설계 §8-2). PDF 를 읽으므로 pdfjs-dist(+ DOMMatrix 폴리필 @napi-rs/canvas)는 남기고

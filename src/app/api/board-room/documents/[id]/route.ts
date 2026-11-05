@@ -10,6 +10,8 @@ import { isSafeBoardDocumentFilePath } from '@/lib/storage/boardDocuments'
 import { deleteBoardDocument } from '@/lib/storage/privateProvider'
 import { validateUUID } from '@/utils/validation'
 import { deleteDocument, getDocumentDetail, getDocumentForDelete } from '@/db/queries/board'
+import { listBoardDocumentVersionPaths } from '@/db/queries/boardDocumentVersions'
+import { removeBoardDocumentVersionFiles } from '@/lib/boardDocuments/cleanup'
 import { removeBoardDocumentRenderCache } from '@work/lib/files/render-cache-cleanup'
 
 const log = createLogger('boardRoom/documents')
@@ -70,6 +72,15 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       // Authorization: uploader or admin only
       if (doc.uploaded_by !== user.id && !isAdmin) throw ApiError.forbidden('삭제 권한이 없습니다.')
 
+      // 앱 편집 버전 기록(05 §6)의 객체 경로는 행이 CASCADE 로 지워지기 **전에** 읽어 둔다. 지우는 순서는 아래 주석과
+      // 같다 — 행 먼저, 객체는 그 뒤(실패해도 고아 객체로만 남는다).
+      let versionPaths: string[] = []
+      try {
+        versionPaths = await listBoardDocumentVersionPaths(id)
+      } catch {
+        throw ApiError.internalServerError('서류 삭제에 실패했습니다.')
+      }
+
       // **DB 행을 먼저 지우고, 그 다음 Storage 파일을 지운다.** 순서가 중요하다
       // — 첨부 라우트(`src/app/api/posts/[id]/attachments/[attachmentId]/route.ts`)와
       // 같은 근거로 통일한다. 반대로 하면(예전 이 라우트의 순서) Storage 삭제
@@ -101,6 +112,15 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
           path: doc.file_path,
         })
       }
+
+      // 앱 편집 버전 파일(`board-documents/versions/<id>/…` + v1 의 옛 경로)도 같은 이유·같은 순서로 지운다 — 행은 이미
+      // 없다. 승격 전에 끊긴 저장본(행 없는 객체)도 접두로 찾아 함께 지운다. 실패해도 삭제는 성공이다(로그만 남긴다).
+      await removeBoardDocumentVersionFiles(id, versionPaths, doc.file_path, storageErr => {
+        log.error('버전 파일 삭제 실패', {
+          id,
+          error: storageErr instanceof Error ? storageErr.message : String(storageErr),
+        })
+      })
 
       // 자료실 미리보기 캐시(`board-work/renders/<id>-…`, 03 §10)도 지운다. 업무툴 저장소 계층을 거쳐
       // 이 서류 id 로 시작하는 캐시 키만 지우고(경로 가드 `isSafeBoardWorkPath`), 실패해도 삭제는 성공이다 —

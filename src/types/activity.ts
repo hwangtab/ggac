@@ -43,6 +43,8 @@ export type ActivityActionType =
   | 'timebank_settings_changed' // 타임뱅크 설정 변경(이사회 의결 근거)
   | 'timebank_coop_task_created' // 관리자의 조합 업무 글 등록
   | 'timebank_transfer_admin_canceled' // 관리자의 pending 취소(분쟁 정리)
+  | 'board_document_version_saved' // 이사회 서류 앱 편집 저장(새 버전)
+  | 'board_document_version_reverted' // 이사회 서류 버전 되돌리기
 
 export type ActivityTargetType =
   | 'post'
@@ -61,6 +63,7 @@ export type ActivityTargetType =
   | 'ticket_reservation'
   | 'timebank_transfer'
   | 'timebank_listing'
+  | 'board_document'
 
 export interface UserActivity {
   id: string

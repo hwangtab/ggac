@@ -7845,6 +7845,115 @@ if (trackedFiles === null) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// 이사회 서류 앱 편집(docs/board-work/05-이사회-서류-앱-편집.md §4) — `/api/board-room/documents/[id]/{edit-uploads,versions}/**`.
+//
+// 계약(문자열 검사 — 보조다. 안전망은 e2e/authz-board-document-edit.spec.ts):
+// - 모든 핸들러 첫 단계가 `requireBoardMember()`다(조합원은 403 — 열람 게이트 `requireBoardRecordReader()`를 쓰지 않는다).
+// - 쓰기(POST)는 사용자 단위 레이트 리밋(`limitBoardDocumentEdit(auth.user.id`)을 지난 **뒤에** 서류 행·편집 판정
+//   (`editableBoardDocumentOr(id, auth.user.id, auth.isAdmin)` — 없음 404·올린 사람/관리자 아니면 403)을 부른다.
+// - 읽기(GET)는 서류 등급을 다시 본다(`visibilityScopeFor(true)`).
+// - 저장소 계층은 서류 영역 판정(`isSafeBoardDocumentBlobPath`)으로만 만든다. 쿼리 계층은 인가·Next 모듈을 모른다.
+// - 서류 삭제는 버전 경로를 행보다 먼저 읽고(`listBoardDocumentVersionPaths`), 행을 지운 뒤 버전 파일을 지운다.
+// **증명하지 않는 것**: 판정의 순서·도달 가능성·데이터 흐름.
+{
+  const editFailures = []
+  const editRoutes = globSync(
+    'src/app/api/board-room/documents/[[]id[]]/@(edit-uploads|versions)/**/route.@(ts|tsx)',
+    { cwd: root, exclude: ['**/node_modules/**', '**/.next/**'] }
+  ).sort()
+  // 글롭이 비면 아래 검사가 통째로 꺼진다. 현재 3개다(edit-uploads·versions·versions/[versionId]/download).
+  if (editRoutes.length < 3) {
+    editFailures.push(
+      `서류 앱 편집 라우트 글롭이 비었거나 줄었습니다(${editRoutes.length}개) — 경로가 바뀌었다면 이 계약도 고쳐야 합니다`
+    )
+  }
+  for (const file of editRoutes) {
+    const code = stripStringLiterals(stripCommentsAndImports(readSourceAt(join(root, file))))
+    let handlers = 0
+    for (const method of HTTP_METHODS) {
+      if (new RegExp(`export const ${method}\\s*=`).test(code)) {
+        editFailures.push(`${file}: export const ${method} — 맨몸 함수로만 둡니다`)
+        continue
+      }
+      const body = extractExportedFunctionBody(code, method)
+      if (body === null) continue
+      handlers += 1
+      const gate = body.indexOf('requireBoardMember()')
+      if (gate === -1) {
+        editFailures.push(`${file} ${method}: requireBoardMember() 게이트가 없습니다`)
+        continue
+      }
+      if (/requireBoardRecordReader\(\)/.test(body)) {
+        editFailures.push(`${file} ${method}: 열람 게이트(requireBoardRecordReader)를 씁니다`)
+      }
+      if (!/isUuid\(/.test(body)) {
+        editFailures.push(`${file} ${method}: 경로 id 모양(isUuid)을 보지 않습니다`)
+      }
+      if (method === 'GET') {
+        if (!/visibilityScopeFor\(true\)/.test(body)) {
+          editFailures.push(`${file} GET: 서류 등급(visibilityScopeFor(true))을 다시 보지 않습니다`)
+        }
+        continue
+      }
+      const limit = body.indexOf('limitBoardDocumentEdit(auth.user.id')
+      const access = body.indexOf('editableBoardDocumentOr(id, auth.user.id, auth.isAdmin)')
+      if (limit === -1 || limit < gate) {
+        editFailures.push(
+          `${file} ${method}: 게이트 뒤 쓰기 레이트 리밋(limitBoardDocumentEdit)이 없습니다`
+        )
+      }
+      if (access === -1 || access < gate) {
+        editFailures.push(
+          `${file} ${method}: 편집 판정(editableBoardDocumentOr(id, auth.user.id, auth.isAdmin))이 없습니다`
+        )
+      }
+    }
+    if (handlers === 0)
+      editFailures.push(`${file}: 핸들러를 찾지 못했습니다(가드 고장으로 취급합니다)`)
+  }
+
+  const editStorePath = 'src/lib/boardDocuments/storage.ts'
+  const editStore = stripCommentsAndImports(readSourceAt(join(root, editStorePath)))
+  if (!/createGuardedPrivateStore\(isSafeBoardDocumentBlobPath\)/.test(editStore)) {
+    editFailures.push(
+      `${editStorePath}: 저장소 계층을 isSafeBoardDocumentBlobPath 판정으로 만들지 않습니다`
+    )
+  }
+  const editQueryPath = 'src/db/queries/boardDocumentVersions.ts'
+  const editQuery = readSourceAt(join(root, editQueryPath))
+  if (/next\/server|next\/headers|requireBoardMember|boardRoomAuth|authz/.test(editQuery)) {
+    editFailures.push(`${editQueryPath}: 쿼리 계층이 인가·Next 모듈을 임포트합니다`)
+  }
+  const deleteCode = stripCommentsAndImports(
+    readSourceAt(join(root, 'src/app/api/board-room/documents/[id]/route.ts'))
+  )
+  const listedAt = deleteCode.indexOf('listBoardDocumentVersionPaths(id)')
+  const rowGoneAt = deleteCode.indexOf('deleteDocument(id)')
+  const filesGoneAt = deleteCode.indexOf('removeBoardDocumentVersionFiles(')
+  if (
+    !(
+      listedAt !== -1 &&
+      rowGoneAt !== -1 &&
+      filesGoneAt !== -1 &&
+      listedAt < rowGoneAt &&
+      rowGoneAt < filesGoneAt
+    )
+  ) {
+    editFailures.push(
+      'src/app/api/board-room/documents/[id]/route.ts DELETE: 버전 경로 읽기 → 행 삭제 → 버전 파일 삭제 순서가 아닙니다'
+    )
+  }
+
+  if (editFailures.length > 0) {
+    failures.push(
+      `Board document app-edit API contracts (docs/board-work/05-이사회-서류-앱-편집.md §4). These pin strings only; the real net is e2e/authz-board-document-edit.spec.ts. Offending contract(s):\n${editFailures
+        .map(hit => `- ${hit}`)
+        .join('\n')}`
+    )
+  }
+}
+
 if (failures.length > 0) {
   console.error(failures.join('\n\n'))
   process.exit(1)
