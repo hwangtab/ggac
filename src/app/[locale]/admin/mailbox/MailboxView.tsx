@@ -14,6 +14,8 @@ import {
   FiSliders,
 } from 'react-icons/fi'
 
+import { replyRecipients, replySubject } from '@/lib/mail/replyCompose'
+
 import ComposeModal from './ComposeModal'
 import SentMailbox from './SentMailbox'
 import {
@@ -218,6 +220,8 @@ export default function MailboxView({ className = '' }: { className?: string }) 
   const [replyTarget, setReplyTarget] = useState<InboundEmail | null>(null)
   const [replyBody, setReplyBody] = useState('')
   const [replySending, setReplySending] = useState(false)
+  const [replyAll, setReplyAll] = useState(false)
+  const [includeQuote, setIncludeQuote] = useState(true)
 
   const fetchEmails = useCallback(async () => {
     setLoading(true)
@@ -397,9 +401,11 @@ export default function MailboxView({ className = '' }: { className?: string }) 
     }
   }
 
-  const openReply = (email: InboundEmail) => {
+  const openReply = (email: InboundEmail, all = false) => {
     setReplyTarget(email)
     setReplyBody('')
+    setReplyAll(all)
+    setIncludeQuote(true)
   }
 
   const closeReply = () => {
@@ -417,10 +423,15 @@ export default function MailboxView({ className = '' }: { className?: string }) 
       // 바꿔주지 않는다). 여기서 이스케이프하고 개행을 <br>로 바꿔 보내지
       // 않으면 수신자는 문단이 통째로 붙은 메일을 받는다.
       const replyHtml = escapeHtml(replyBody).replace(/\n/g, '<br>')
+      // 받는 사람은 보내지 않는다 — 서버가 같은 규칙(`replyRecipients`)으로 정한다. 화면은 미리 보여 줄 뿐이다.
       const res = await fetch(`/api/admin/mailbox/${replyTarget.id}/reply`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ body_html: replyHtml }),
+        body: JSON.stringify({
+          body_html: replyHtml,
+          reply_all: replyAll,
+          include_quote: includeQuote && replySource?.body_text ? true : false,
+        }),
       })
       const json = await res.json().catch(() => null)
       if (!res.ok) {
@@ -482,6 +493,36 @@ export default function MailboxView({ className = '' }: { className?: string }) 
   const selectedEmail =
     emails.find(e => e.id === selectedId) ?? (detail && detail.id === selectedId ? detail : null)
   const threadInboundCount = thread.filter(item => item.kind === 'inbound').length
+
+  // 답장 미리보기의 원본 — 헤더(`Reply-To`)·본문 평문은 상세 응답에만 있다. 답장은 상세에서 여므로 대개 있다.
+  const replySource: InboundEmailDetail | null =
+    replyTarget && detail && detail.id === replyTarget.id ? detail : null
+  const replyPreview = replyTarget
+    ? replyRecipients(
+        {
+          from_address: replyTarget.from_address,
+          headers: replySource?.headers,
+          to_addresses: replyTarget.to_addresses,
+          cc_addresses: replyTarget.cc_addresses,
+          received_for: replyTarget.received_for,
+        },
+        { all: replyAll }
+      )
+    : null
+  // "전체 답장"이 의미 있을 때만 버튼을 그린다 — 원본이 우리에게만 왔으면 답장과 같다.
+  const selectedReplyAllCount =
+    selectedEmail && detail && detail.id === selectedEmail.id
+      ? (replyRecipients(
+          {
+            from_address: detail.from_address,
+            headers: detail.headers,
+            to_addresses: detail.to_addresses,
+            cc_addresses: detail.cc_addresses,
+            received_for: detail.received_for,
+          },
+          { all: true }
+        )?.cc.length ?? 0)
+      : 0
 
   return (
     <div className={`flex flex-col ${className}`}>
@@ -1128,6 +1169,15 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                       <FiSend className="w-3 h-3" />
                       답장
                     </button>
+                    {selectedReplyAllCount > 0 && (
+                      <button
+                        onClick={() => openReply(selectedEmail, true)}
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-primary-50 text-primary-700 hover:bg-primary-100 transition-colors"
+                      >
+                        <FiSend className="w-3 h-3" />
+                        전체 답장
+                      </button>
+                    )}
                   </div>
                 )}
               </>
@@ -1173,16 +1223,44 @@ export default function MailboxView({ className = '' }: { className?: string }) 
             </div>
 
             <div className="p-5 space-y-4">
-              <div className="text-sm text-gray-500">
-                받는 사람: <span className="text-gray-900">{replyTarget.from_address}</span>
+              <div className="text-sm text-gray-500 space-y-1" data-testid="reply-recipients">
+                <div>
+                  받는 사람:{' '}
+                  <span className="text-gray-900 break-all">
+                    {replyPreview?.to ?? '(주소를 알 수 없음)'}
+                  </span>
+                  {replyPreview && replyPreview.to !== replyTarget.from_email && (
+                    <span className="ml-1 text-xs text-gray-400">(회신 주소)</span>
+                  )}
+                </div>
+                {replyAll && (
+                  <div>
+                    참조:{' '}
+                    <span className="text-gray-900 break-all">
+                      {replyPreview && replyPreview.cc.length > 0
+                        ? replyPreview.cc.join(', ')
+                        : '(없음)'}
+                    </span>
+                  </div>
+                )}
+                {replyAll && replyPreview && replyPreview.dropped.length > 0 && (
+                  <div className="text-xs text-amber-700">
+                    참조에서 뺀 주소(형식이 틀렸거나 참조 상한을 넘었습니다):{' '}
+                    {replyPreview.dropped.join(', ')}
+                  </div>
+                )}
+                <label className="flex items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={replyAll}
+                    onChange={e => setReplyAll(e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  전체 답장 (원본의 받는 사람·참조에게도 보내기, 우리 주소 제외)
+                </label>
               </div>
               <div className="text-sm text-gray-500">
-                제목:{' '}
-                <span className="text-gray-900">
-                  {(replyTarget.subject || '(제목 없음)').startsWith('Re: ')
-                    ? replyTarget.subject
-                    : `Re: ${replyTarget.subject || '(제목 없음)'}`}
-                </span>
+                제목: <span className="text-gray-900">{replySubject(replyTarget.subject)}</span>
               </div>
               <div className="space-y-1">
                 <label className="block text-xs font-medium text-gray-600">
@@ -1196,6 +1274,21 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                   className={`${inputClass} resize-none`}
                 />
               </div>
+              {replySource?.body_text ? (
+                <label className="flex items-center gap-2 text-xs text-gray-600">
+                  <input
+                    type="checkbox"
+                    checked={includeQuote}
+                    onChange={e => setIncludeQuote(e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  원문 인용 (받은 메일의 글자만 붙입니다)
+                </label>
+              ) : (
+                <p className="text-xs text-gray-400">
+                  이 메일은 글자 본문이 없어 원문을 인용하지 않습니다.
+                </p>
+              )}
             </div>
 
             <div className="flex justify-end gap-2 p-5 border-t border-gray-200">

@@ -10,6 +10,8 @@ import {
   updateInboundStatus,
 } from '@/db/queries/mailbox'
 import { MailSendError, sendEmail } from '@/lib/mail/send'
+import { parseAllowedRecipients } from '@/lib/mail/inboundRecipients'
+import { buildReplyQuote, replyRecipients, replySubject } from '@/lib/mail/replyCompose'
 import { dailyOutboundLimit, dailyTotalGuard, evaluateQuota } from '@/lib/mail/composeQuota'
 import { sanitizePostHtml } from '@/utils/sanitizePostHtml'
 import { logSecurityEvent } from '@/utils/security'
@@ -18,8 +20,15 @@ import { validateUUID } from '@/utils/validation'
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
-// POST: 받은 메일에 답장을 보내고 스레드를 잇는다
-export const POST = defineApiRoute<{ body_html?: string }>({
+// POST: 받은 메일에 답장을 보내고 스레드를 잇는다.
+// - 받는 사람은 `Reply-To`(없으면 보낸 사람), `reply_all`이면 원본의 받는 사람·참조를 참조로 넣는다(우리 주소는 뺀다).
+//   **서버가 정한다** — 화면은 같은 함수(`replyRecipients`)로 미리 보여 줄 뿐 받는 사람을 보내지 않는다.
+// - `include_quote`(기본 켬)면 원문 평문을 인용으로 붙인다. 받은 HTML은 다시 내보내지 않는다(`buildReplyQuote`).
+export const POST = defineApiRoute<{
+  body_html?: string
+  reply_all?: boolean
+  include_quote?: boolean
+}>({
   method: 'POST',
   name: 'api/admin/mailbox/[id]/reply',
   rateLimit: {
@@ -49,15 +58,32 @@ export const POST = defineApiRoute<{ body_html?: string }>({
       throw ApiError.notFound('메일을 찾을 수 없습니다.')
     }
 
+    const recipients = replyRecipients(
+      {
+        from_address: String(email.from_address ?? ''),
+        headers: email.headers,
+        to_addresses: email.to_addresses,
+        cc_addresses: email.cc_addresses,
+        received_for: email.received_for,
+      },
+      {
+        all: body?.reply_all === true,
+        ownAddresses: parseAllowedRecipients(process.env.MAILBOX_ALLOWED_RECIPIENTS),
+      }
+    )
+    if (!recipients) {
+      throw ApiError.badRequest('답장을 받을 주소를 알 수 없습니다.')
+    }
+
     // 일일 상한 — 새 메일 작성과 **같은 쿼터**다. 답장은 한도에 세어지기만 하고 스스로는 막히지 않던 것을
     // 바로잡는다(Resend 하루 쿼터는 인증·다이제스트 메일과 공유한다). 답장은 발송 전에 행을 쓰지 않으므로
-    // 이번 답장 한 통을 더해서 판정한다.
+    // 이번 답장의 받는 사람 수(전체 답장이면 참조까지)를 더해서 판정한다.
     const sinceMs = Date.now() - 24 * 60 * 60 * 1000
     const [outboundCount, inboundCount] = await Promise.all([
       countOutboundRecipientsSince(sinceMs),
       countInboundSince(sinceMs),
     ])
-    const verdict = evaluateQuota(outboundCount + 1, inboundCount, {
+    const verdict = evaluateQuota(outboundCount + recipients.recipientCount, inboundCount, {
       outbound: dailyOutboundLimit(),
       total: dailyTotalGuard(),
     })
@@ -72,14 +98,23 @@ export const POST = defineApiRoute<{ body_html?: string }>({
       )
     }
 
-    const originalSubject = String(email.subject ?? '(제목 없음)')
-    const subject = originalSubject.startsWith('Re: ') ? originalSubject : `Re: ${originalSubject}`
+    const subject = replySubject(email.subject as string | null)
 
     // 관리자가 쓴 HTML이지만 그대로 내보내지 않는다 — 편집기에서 붙여 넣은
     // 외부 마크업이 그대로 나가면 수신자 쪽에서 문제가 된다.
     // 저장소에 이미 있는 정화기를 쓴다(`src/utils/sanitizePostHtml.ts`) —
     // 메일 전용 옵션을 새로 만들 이유가 없다.
-    const html = sanitizePostHtml(rawHtml)
+    // 인용은 정화 **뒤에** 붙인다 — 전부 이스케이프한 우리 HTML이라 정화할 것이 없고, 정화기가 인용 테두리
+    // 스타일을 지우지 않게 한다.
+    const quote =
+      body?.include_quote === false
+        ? null
+        : buildReplyQuote({
+            from_address: String(email.from_address ?? ''),
+            received_at: (email.received_at as string | null) ?? null,
+            body_text: (email.body_text as string | null) ?? null,
+          })
+    const html = sanitizePostHtml(rawHtml) + (quote ?? '')
 
     const messageId = email.message_id ? String(email.message_id) : null
     const references = String(email.thread_references ?? '')
@@ -100,7 +135,8 @@ export const POST = defineApiRoute<{ body_html?: string }>({
     let resendMessageId: string | null
     try {
       resendMessageId = await sendEmail({
-        to: String(email.from_address),
+        to: recipients.to,
+        ...(recipients.cc.length > 0 ? { cc: recipients.cc } : {}),
         subject,
         html,
         headers: Object.keys(headers).length > 0 ? headers : undefined,
@@ -117,7 +153,14 @@ export const POST = defineApiRoute<{ body_html?: string }>({
           { emailId: id, error: error.message },
           'high'
         )
-        return ApiSuccess.ok({ id, subject, recorded: false, status: 'unknown' })
+        return ApiSuccess.ok({
+          id,
+          subject,
+          to: recipients.to,
+          cc: recipients.cc,
+          recorded: false,
+          status: 'unknown',
+        })
       }
       throw error
     }
@@ -139,6 +182,9 @@ export const POST = defineApiRoute<{ body_html?: string }>({
         // Resend가 매긴 식별자. 지금까지 null로 박아 넣고 있어서, 발송한
         // 답장을 Resend 쪽 기록과 맞춰 볼 수단이 없었다.
         resend_message_id: resendMessageId,
+        to_address: recipients.to,
+        cc_addresses: recipients.cc,
+        recipient_count: recipients.recipientCount,
       })
       if (messageId) {
         await appendThreadReference(id, messageId)
@@ -157,6 +203,13 @@ export const POST = defineApiRoute<{ body_html?: string }>({
       )
     }
 
-    return ApiSuccess.ok({ id, subject, recorded, status: 'sent' })
+    return ApiSuccess.ok({
+      id,
+      subject,
+      to: recipients.to,
+      cc: recipients.cc,
+      recorded,
+      status: 'sent',
+    })
   },
 })

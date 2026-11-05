@@ -827,3 +827,172 @@ test.describe('화면', () => {
     }
   })
 })
+
+/**
+ * 답장 품질(PR4) — 받는 사람은 `Reply-To`를, 전체 답장은 원본의 받는 사람·참조를 따르되 우리 주소는 빼고, 원문은
+ * 평문만 인용한다. 주소를 전부 `@test.local`로 둬 실제로는 아무것도 나가지 않고(`sendEmail`이 키 확인 전에
+ * 건너뛴다), 한도에도 세지 않는다(`recipient_count` 0). 그래서 키 없이 발송 뒤 기록까지 끝까지 탄다.
+ */
+test.describe('답장 받는 사람·전체 답장·인용', () => {
+  const PARENT_ID = '00000000-0000-4000-8000-00000000d0e2'
+  const QUOTE_MARKER = 'MAILBOX-E2E-QUOTE <b>원문</b>'
+  const OUR_ADDRESS = 'mailbox@ggac.kr'
+  let admin: APIRequestContext
+
+  async function exec(sql: string, args: (string | number | null)[] = []) {
+    const client = db()
+    try {
+      return await client.execute({ sql, args })
+    } finally {
+      client.close()
+    }
+  }
+
+  test.beforeAll(async ({ playwright, baseURL }) => {
+    admin = await playwright.request.newContext({
+      baseURL,
+      storageState: storageStatePath('admin'),
+    })
+    await exec('DELETE FROM inbound_emails WHERE id = ?', [PARENT_ID])
+    await exec(
+      `INSERT INTO inbound_emails
+        (id, thread_id, resend_email_id, message_id, from_address, from_email, to_addresses, cc_addresses,
+         received_for, subject, body_text, headers, status, body_fetch_status, received_at)
+       VALUES (?, ?, 'authz-reply-quality-parent', '<authz-reply-quality@fixture.local>',
+               '문의자 <asker@authz-reply.test.local>', 'asker@authz-reply.test.local', ?, ?, ?,
+               'RE: 대관 문의', ?, ?, 'read', 'done', ?)`,
+      [
+        PARENT_ID,
+        PARENT_ID,
+        JSON.stringify([OUR_ADDRESS, '동료 <colleague@authz-reply.test.local>']),
+        JSON.stringify(['other@authz-reply.test.local', 'asker@authz-reply.test.local']),
+        JSON.stringify([OUR_ADDRESS]),
+        QUOTE_MARKER,
+        JSON.stringify({ 'reply-to': '창구 <helpdesk@authz-reply.test.local>' }),
+        Date.now() - 60_000,
+      ]
+    )
+  })
+
+  test.afterAll(async () => {
+    await exec('DELETE FROM inbound_emails WHERE id = ?', [PARENT_ID])
+    await admin.dispose()
+  })
+
+  test('답장은 Reply-To로 가고 원문 평문을 이스케이프해 인용한다', async () => {
+    const res = await admin.post(`/api/admin/mailbox/${PARENT_ID}/reply`, {
+      data: { body_html: '<p>답장 본문</p>' },
+    })
+    expect(res.status()).toBe(200)
+    const data = (await res.json()).data
+    expect(data.to).toBe('helpdesk@authz-reply.test.local')
+    expect(data.cc).toEqual([])
+    // 이미 RE:로 시작하면 Re:를 또 붙이지 않는다
+    expect(data.subject).toBe('RE: 대관 문의')
+
+    const row = (
+      await exec(
+        `SELECT to_address, cc_addresses, recipient_count, body_html FROM inbound_email_replies
+         WHERE email_id = ? ORDER BY created_at DESC LIMIT 1`,
+        [PARENT_ID]
+      )
+    ).rows[0]
+    expect(row.to_address).toBe('helpdesk@authz-reply.test.local')
+    expect(row.cc_addresses).toBeNull()
+    expect(Number(row.recipient_count)).toBe(0)
+    const html = String(row.body_html)
+    expect(html).toContain('<blockquote')
+    expect(html).toContain('MAILBOX-E2E-QUOTE &lt;b&gt;원문&lt;/b&gt;')
+    expect(html).not.toContain('<b>원문</b>')
+  })
+
+  test('전체 답장은 원본의 받는 사람·참조를 참조로 넣고 우리 주소·받는 사람은 뺀다', async () => {
+    const res = await admin.post(`/api/admin/mailbox/${PARENT_ID}/reply`, {
+      data: { body_html: '<p>전체 답장</p>', reply_all: true, include_quote: false },
+    })
+    expect(res.status()).toBe(200)
+    const data = (await res.json()).data
+    expect(data.to).toBe('helpdesk@authz-reply.test.local')
+    expect(data.cc).toEqual([
+      'colleague@authz-reply.test.local',
+      'other@authz-reply.test.local',
+      'asker@authz-reply.test.local',
+    ])
+    expect(data.cc).not.toContain(OUR_ADDRESS)
+
+    const row = (
+      await exec(
+        `SELECT cc_addresses, body_html FROM inbound_email_replies
+         WHERE email_id = ? ORDER BY created_at DESC LIMIT 1`,
+        [PARENT_ID]
+      )
+    ).rows[0]
+    expect(JSON.parse(String(row.cc_addresses))).toEqual(data.cc)
+    expect(String(row.body_html)).not.toContain('<blockquote')
+
+    // 보낸 편지함은 기록한 받는 사람을 보여 주고 참조로도 찾힌다.
+    const sent = await admin.get(
+      `/api/admin/mailbox/outbound?kind=reply&search=${encodeURIComponent('other@authz-reply')}`
+    )
+    expect(sent.status()).toBe(200)
+    const items = (await sent.json()).data?.items ?? []
+    expect(items.some((i: { related_email_id: string }) => i.related_email_id === PARENT_ID)).toBe(
+      true
+    )
+  })
+
+  test('화면의 전체 답장 미리보기는 서버가 보낼 받는 사람과 같다', async ({ browser }) => {
+    const ctx = await browser.newContext({ storageState: storageStatePath('admin') })
+    try {
+      const page = await ctx.newPage()
+      await page.goto('/admin/mailbox', { waitUntil: 'domcontentloaded' })
+      await page.getByText('RE: 대관 문의').first().click()
+      await page.getByRole('button', { name: '전체 답장', exact: true }).click()
+
+      const recipients = page.getByTestId('reply-recipients')
+      await expect(recipients).toContainText('helpdesk@authz-reply.test.local')
+      await expect(recipients).toContainText('(회신 주소)')
+      await expect(recipients).toContainText(
+        'colleague@authz-reply.test.local, other@authz-reply.test.local, asker@authz-reply.test.local'
+      )
+      await expect(recipients).not.toContainText(OUR_ADDRESS)
+      await expect(page.getByText('원문 인용', { exact: false })).toBeVisible()
+
+      // 전체 답장을 끄면 참조 줄이 사라진다.
+      await page.getByLabel(/전체 답장 \(원본의/).uncheck()
+      await expect(recipients).not.toContainText('참조:')
+    } finally {
+      await ctx.close()
+    }
+  })
+
+  test('이사는 답장·전체 답장을 보낼 수 없다', async ({ playwright, baseURL }) => {
+    const director = await playwright.request.newContext({
+      baseURL,
+      storageState: storageStatePath('director'),
+    })
+    try {
+      const before = Number(
+        (
+          await exec('SELECT count(*) AS n FROM inbound_email_replies WHERE email_id = ?', [
+            PARENT_ID,
+          ])
+        ).rows[0].n
+      )
+      const res = await director.post(`/api/admin/mailbox/${PARENT_ID}/reply`, {
+        data: { body_html: '<p>x</p>', reply_all: true },
+      })
+      expect(res.status()).toBe(403)
+      const after = Number(
+        (
+          await exec('SELECT count(*) AS n FROM inbound_email_replies WHERE email_id = ?', [
+            PARENT_ID,
+          ])
+        ).rows[0].n
+      )
+      expect(after).toBe(before)
+    } finally {
+      await director.dispose()
+    }
+  })
+})
