@@ -59,6 +59,8 @@ const BODY_MARKER = 'MAILBOX-E2E-BODY-MARKER-9f3c1a'
 const LONG_SUBJECT_PREFIX = 'MAILBOX-E2E-LONG-TITLE-'
 const LONG_SUBJECT = LONG_SUBJECT_PREFIX + 'A'.repeat(220)
 const PENDING_SUBJECT = 'MAILBOX-E2E-PENDING-BADGE-FIXTURE'
+const SENDER_DONE_EMAIL = 'sender-done@example.com'
+const SENDER_DONE_NAME = '발신자 필터 픽스처'
 
 /**
  * 마이그레이션 0020(`src/db/migrations/0020_mailbox.sql`)이 로컬 Turso에
@@ -78,6 +80,13 @@ async function assertMailboxSchemaApplied(client: ReturnType<typeof createClient
         '(`src/db/migrations/0020_mailbox.sql`, 절차는 scripts/turso/README.md).'
     )
   }
+  const columns = await client.execute({ sql: `PRAGMA table_info(inbound_emails)` })
+  if (!columns.rows.some(row => row.name === 'from_email')) {
+    throw new Error(
+      '`inbound_emails.from_email`이 없다. 로컬 Turso에 마이그레이션 0037을 먼저 적용할 것 ' +
+        '(`src/db/migrations/0037_mailbox_sender.sql`, 절차는 scripts/turso/README.md).'
+    )
+  }
 }
 
 async function seedMailboxFixtures(): Promise<void> {
@@ -91,6 +100,8 @@ async function seedMailboxFixtures(): Promise<void> {
       resend_email_id: 'authz-mailbox-pending-fixture',
       message_id: '<authz-mailbox-pending@fixture.local>',
       from_address: 'sender-pending@example.com',
+      from_email: 'sender-pending@example.com',
+      from_name: null,
       to_addresses: JSON.stringify(['mailbox@ggac.kr']),
       subject: PENDING_SUBJECT,
       body_html: null,
@@ -102,7 +113,10 @@ async function seedMailboxFixtures(): Promise<void> {
       id: EMAIL_DONE_ID,
       resend_email_id: 'authz-mailbox-done-fixture',
       message_id: '<authz-mailbox-done@fixture.local>',
-      from_address: 'sender-done@example.com',
+      // 표시 이름이 붙은 원문 — 발신자 필터가 원문이 아니라 정규화한 주소(from_email)로 거르는지 본다.
+      from_address: `"${SENDER_DONE_NAME}" <${SENDER_DONE_EMAIL.toUpperCase()}>`,
+      from_email: SENDER_DONE_EMAIL,
+      from_name: SENDER_DONE_NAME,
       to_addresses: JSON.stringify(['mailbox@ggac.kr']),
       subject: LONG_SUBJECT,
       body_html: `<p>${BODY_MARKER}</p>`,
@@ -116,6 +130,8 @@ async function seedMailboxFixtures(): Promise<void> {
       resend_email_id: 'authz-mailbox-scope-other-fixture',
       message_id: '<authz-mailbox-scope-other@fixture.local>',
       from_address: 'sender-scope-other@example.com',
+      from_email: 'sender-scope-other@example.com',
+      from_name: null,
       to_addresses: JSON.stringify(['mailbox@ggac.kr']),
       subject: 'MAILBOX-E2E-SCOPE-OTHER-FIXTURE',
       body_html: null,
@@ -127,13 +143,15 @@ async function seedMailboxFixtures(): Promise<void> {
     for (const email of [pendingEmail, doneEmail, scopeOtherEmail]) {
       await client.execute({
         sql: `INSERT INTO inbound_emails
-                (id, resend_email_id, message_id, from_address, to_addresses,
-                 subject, body_html, status, body_fetch_status, received_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (id, resend_email_id, message_id, from_address, from_email, from_name,
+                 to_addresses, subject, body_html, status, body_fetch_status, received_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               ON CONFLICT(id) DO UPDATE SET
                 resend_email_id = excluded.resend_email_id,
                 message_id = excluded.message_id,
                 from_address = excluded.from_address,
+                from_email = excluded.from_email,
+                from_name = excluded.from_name,
                 to_addresses = excluded.to_addresses,
                 subject = excluded.subject,
                 body_html = excluded.body_html,
@@ -145,6 +163,8 @@ async function seedMailboxFixtures(): Promise<void> {
           email.resend_email_id,
           email.message_id,
           email.from_address,
+          email.from_email,
+          email.from_name,
           email.to_addresses,
           email.subject,
           email.body_html,
@@ -373,6 +393,42 @@ test.describe('관리자 메일함 API 경계', () => {
         data: { body_html: '<p>이사는 답장을 보낼 수 없어야 한다</p>' },
       })
       expect(reply.status()).toBe(403)
+    } finally {
+      await directorCtx.dispose()
+    }
+  })
+
+  /**
+   * 발신자 필터(0037). 이사도 쓰는 읽기 기능이라 director로 본다. 원문은 대문자·표시 이름이 붙어 있지만
+   * 필터는 정규화한 주소로 완전 일치해야 하고, 앞쪽이 같은 다른 주소(`er-done@…`)는 걸리지 않아야 한다.
+   */
+  test('발신자·도메인 필터는 정규화한 주소로 거르고 잘못된 값은 400이다', async ({ baseURL }) => {
+    const directorCtx = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('director'),
+    })
+    try {
+      const idsOf = async (query: string) => {
+        const res = await directorCtx.get(`/api/admin/mailbox?limit=100&${query}`)
+        expect(res.status()).toBe(200)
+        const body = await res.json()
+        return (body.data?.emails ?? []).map((e: { id: string }) => e.id) as string[]
+      }
+
+      const byName = await idsOf(
+        `from=${encodeURIComponent(`${SENDER_DONE_NAME} <${SENDER_DONE_EMAIL.toUpperCase()}>`)}`
+      )
+      expect(byName).toEqual([EMAIL_DONE_ID])
+      expect(await idsOf(`from=${encodeURIComponent('er-done@example.com')}`)).toEqual([])
+
+      const byDomain = await idsOf('domain=%40EXAMPLE.com')
+      for (const id of [EMAIL_PENDING_ID, EMAIL_DONE_ID, EMAIL_SCOPE_OTHER_ID]) {
+        expect(byDomain).toContain(id)
+      }
+      expect(await idsOf('domain=ample.com')).not.toContain(EMAIL_DONE_ID)
+
+      expect((await directorCtx.get('/api/admin/mailbox?domain=a%25.org')).status()).toBe(400)
+      expect((await directorCtx.get('/api/admin/mailbox?from=%3C%3E')).status()).toBe(400)
     } finally {
       await directorCtx.dispose()
     }
@@ -626,6 +682,28 @@ test.describe('관리자 메일함 페이지 인가', () => {
       await doneRow.click()
       await expect(page.getByRole('button', { name: '답장', exact: true })).toHaveCount(0)
       await expect(page.getByText('상태 변경:')).toHaveCount(0)
+    } finally {
+      await ctx.close()
+    }
+  })
+
+  test('목록에서 보낸 사람을 누르면 그 사람 메일만 남고 칩을 지우면 풀린다', async ({
+    browser,
+  }) => {
+    const ctx = await browser.newContext({ storageState: storageStatePath('director') })
+    try {
+      const page = await ctx.newPage()
+      await page.goto('/board-room/mailbox', { waitUntil: 'domcontentloaded' })
+
+      await page.getByRole('button', { name: SENDER_DONE_NAME, exact: true }).first().click()
+      await expect(page).toHaveURL(/[?&]from=sender-done%40example\.com/, { timeout: 15000 })
+      await expect(page.getByLabel('보낸 사람 필터 해제')).toBeVisible()
+      await expect(page.getByText(LONG_SUBJECT_PREFIX, { exact: false }).first()).toBeVisible()
+      await expect(page.getByText(PENDING_SUBJECT)).toHaveCount(0)
+
+      await page.getByLabel('보낸 사람 필터 해제').click()
+      await expect(page).not.toHaveURL(/[?&]from=/)
+      await expect(page.getByText(PENDING_SUBJECT).first()).toBeVisible({ timeout: 15000 })
     } finally {
       await ctx.close()
     }

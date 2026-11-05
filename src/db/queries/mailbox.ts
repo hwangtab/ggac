@@ -24,6 +24,7 @@ import {
   escapeLikePattern,
   LIKE_ESCAPE_CHAR,
 } from './_helpers.ts'
+import { parseMailbox } from '../../lib/mail/senderAddress.ts'
 
 export type InsertInboundEmailInput = {
   resend_email_id: string
@@ -49,6 +50,10 @@ export type ListInboundOptions = {
   offset: number
   status?: string
   search?: string
+  /** 정규화된 발신 주소. `from_email`과 완전 일치. */
+  fromEmail?: string
+  /** 정규화된 도메인(`a.org`). `from_email`이 `@a.org`로 끝나는 행. */
+  fromDomain?: string
 }
 
 function rowToEmail(row: Record<string, unknown>): Record<string, unknown> {
@@ -71,12 +76,15 @@ function rowToAttachment(row: Record<string, unknown>): Record<string, unknown> 
  * 않는다.
  */
 export async function insertInboundEmail(input: InsertInboundEmailInput) {
+  const sender = parseMailbox(input.from_address)
   const [row] = await db
     .insert(inboundEmails)
     .values({
       resendEmailId: input.resend_email_id,
       messageId: input.message_id ?? null,
       fromAddress: input.from_address,
+      fromEmail: sender.email || null,
+      fromName: sender.name,
       toAddresses: JSON.stringify(Array.isArray(input.to_addresses) ? input.to_addresses : []),
       ccAddresses: JSON.stringify(Array.isArray(input.cc_addresses) ? input.cc_addresses : []),
       // received_for는 허용 주소 판정의 입력이다 — 배열이 아닌 값이 섞여
@@ -177,6 +185,17 @@ export async function listInboundEmails(
     conditions.push(eq(inboundEmails.status, options.status))
   }
 
+  if (options.fromEmail) {
+    conditions.push(eq(inboundEmails.fromEmail, options.fromEmail))
+  }
+
+  if (options.fromDomain) {
+    // 뒤쪽 일치라 `likeContains`(양쪽 %)를 못 쓴다. `@`를 붙여 `xa.org`가 `a.org`에 걸리지 않게 한다.
+    conditions.push(
+      sql`${inboundEmails.fromEmail} LIKE ${'%@' + escapeLikePattern(options.fromDomain)} ESCAPE ${LIKE_ESCAPE_CHAR}`
+    )
+  }
+
   if (options.search) {
     conditions.push(
       or(
@@ -193,6 +212,8 @@ export async function listInboundEmails(
     resendEmailId: inboundEmails.resendEmailId,
     messageId: inboundEmails.messageId,
     fromAddress: inboundEmails.fromAddress,
+    fromEmail: inboundEmails.fromEmail,
+    fromName: inboundEmails.fromName,
     toAddresses: inboundEmails.toAddresses,
     ccAddresses: inboundEmails.ccAddresses,
     receivedFor: inboundEmails.receivedFor,
