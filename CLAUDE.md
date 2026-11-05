@@ -399,13 +399,14 @@ noreply@ggac.kr로 가서 유실된다), `MAILBOX_BACKFILL_CRON_TOKEN`(메일함
 - **보관·정리(`lib/mail/outboundSweep.ts`, 메일함 백필 크론이 매시 호출).**
   `failed`·`blocked`는 기본 30일 뒤 행·첨부를
   지운다(`MAILBOX_OUTBOUND_FAILED_RETENTION_DAYS`, 최소 7). **나간
-  메일(`sent`)은 기본으로 지우지 않는다** — 누구에게 무엇을 보냈는지는 감사
-  기록이라 보관 기간은 조직이 정할 일이다. 정하면
-  `MAILBOX_OUTBOUND_RETENTION_DAYS`(최소 7)로 켠다. **`unknown`·`sending`은 어떤
-  기한으로도 지우지 않는다**(사람이 확정하는 행). `mailbox-sent/` 아래에서 DB에
-  참조되지 않고 올라온 지 24시간이 지난 Blob(고아)도 치운다 — 접두어 밖은 절대
-  건드리지 않는다. 한 번에 행 100개·고아 100개까지, Blob 목록은 1000개까지만
-  본다(커서 페이지네이션 없음).
+  메일(`sent`)은 영구 보관한다 — 조직 결정(2026-11-05).** 누구에게 무엇을
+  보냈는지는 감사 기록이다. 운영에 `MAILBOX_OUTBOUND_RETENTION_DAYS`를
+  **설정하지 마라** — 설정하면 그 기간 뒤 나간 메일의 본문·수신자·첨부가
+  지워진다(코드는 선택 기능으로 남겨 뒀다). 이 정책을 바꾸려면 조직 결정을 먼저
+  받아라. **`unknown`·`sending`은 어떤 기한으로도 지우지 않는다**(사람이
+  확정하는 행). `mailbox-sent/` 아래에서 DB에 참조되지 않고 올라온 지 24시간이
+  지난 Blob(고아)도 치운다 — 접두어 밖은 절대 건드리지 않는다. 한 번에 행
+  100개·고아 100개까지, Blob 목록은 1000개까지만 본다(커서 페이지네이션 없음).
 - 멈춘 `unknown`/오래된 `sending`은 관리자가 보낸 편지함에서 Resend 대시보드로
   확인한 뒤 `PATCH /api/admin/mailbox/outbound/[id]`(화면 버튼)로 확정한다.
   크론이 10분 지난 `sending`을 `unknown`으로 옮긴다.
