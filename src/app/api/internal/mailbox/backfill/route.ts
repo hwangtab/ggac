@@ -160,6 +160,15 @@ async function handleBackfill(request: NextRequest) {
       attempted += 1
     }
 
+    // 정상 실행은 아무 로그도 남기지 않아 크론이 돌았는지·무엇을 했는지 볼 길이 없었다. 매 실행 한 줄을 남긴다.
+    log.info('메일함 크론 요약', {
+      pendingBefore: pending.length,
+      refetched: attempted,
+      abandoned,
+      staleSendingMarkedUnknown: staleSending,
+      sweep,
+    })
+
     return ApiSuccess.ok({
       pending_before: pending.length,
       stale_sending_marked_unknown: staleSending,
