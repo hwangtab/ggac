@@ -346,8 +346,14 @@ webServer에 `{...process.env, ...webServer.env}`를 넘긴다. e2e 전용 변�
   11개 스펙
 - `authz-public`: `authz-boundaries` 21건
 
-**실측 기준선(2026-11-04, 조합원 내 문서함(0036)·메일함 새 메일(0035) 뒤, 운영 빌드 서버):**
-총 308건 중 **305 passed, 1 failed, 2 skipped**(5.6분). 실패 1건은 정책 36(`PUBLIC_BLOB_READ_WRITE_TOKEN` 없이 돌림),
+**실측 기준선(2026-11-05, 새 한글 문서(HWPX) 켜기 — 플래그를 준 실행, 운영 빌드 서버):**
+총 315건 중 **313 passed, 1 failed, 1 skipped**(6.8분). 실패 1건은 정책 36, 스킵 1건은 메일함 첨부 다운로드 기록이다.
+305에서 늘어난 7건은 `authz-mailbox-compose.spec.ts` 5건(main의 PR #68·#69)과 `board-work-editors.spec.ts`의 HWPX 2건
+(업무툴 새 한글 문서 v1→v2·기존 HWPX 편집 v2)이고, 내 문서함 새 HWPX가 스킵에서 통과로 바뀌었다.
+편집기 env는 `NEXT_PUBLIC_OFFICE_EDITOR_ORIGIN`·`NEXT_PUBLIC_HWP_EDITOR_ENABLED=1`·`NEXT_PUBLIC_HWPX_EDITOR_ENABLED=1`이다.
+
+직전 기준선(2026-11-04, 조합원 내 문서함(0036)·메일함 새 메일(0035) 뒤, 운영 빌드 서버):
+총 308건 중 305 passed, 1 failed, 2 skipped(5.6분). 실패 1건은 정책 36(`PUBLIC_BLOB_READ_WRITE_TOKEN` 없이 돌림),
 스킵 2건은 메일함 첨부 다운로드 기록과 내 문서함 새 HWPX 문서(`NEXT_PUBLIC_HWPX_EDITOR_ENABLED`가 없을 때)다. 직전 275에서
 늘어난 30건은 `authz-mailbox-compose.spec.ts` 18건(main이 넣고 기준선은 재지 않았다 — PR #66 보강 포함)과 내 문서함 12건 —
 `authz-member-documents.spec.ts` 7건(목록·남의 id 404 짝·화면 404·비로그인/미승인/정지·스위치·용량·크론 인증)과
@@ -1143,7 +1149,7 @@ EXPLAIN QUERY PLAN SELECT count(*) FROM notifications WHERE user_id = '<아무 �
 가드도 타입 검사도 통과한다. 가드는 **"이 문자열이 이 파일에 있는가"**만 보고
 도달 가능성·실행 순서·데이터 흐름을 보지 않는다.
 
-**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 305 passed, 실행 절차는
+**인가를 바꿨으면 `npm run test:e2e:authz`를 돌려라**(기준선 313 passed, 실행 절차는
 위 "권한 E2E" 절). 같은 감사에서 **E2E는 관리자 게이트 무력화를 실제로 잡았다.**
 
 `assert-runtime-risks.mjs`가 여전히 값을 하는 자리는 **지워진 것**(게이트를 통째로
