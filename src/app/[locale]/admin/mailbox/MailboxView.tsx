@@ -24,6 +24,7 @@ import { labelColorClass } from '@/lib/mail/labels'
 
 import ComposeModal, { type ForwardSource } from './ComposeModal'
 import LabelManager, { LabelChip, type MailLabel } from './LabelManager'
+import RuleManager from './RuleManager'
 import SentMailbox from './SentMailbox'
 import {
   buildBodySrcDoc,
@@ -227,6 +228,10 @@ export default function MailboxView({ className = '' }: { className?: string }) 
   const [labels, setLabels] = useState<MailLabel[]>([])
   const [labelFilter, setLabelFilter] = useState<string | null>(null)
   const [labelManagerOpen, setLabelManagerOpen] = useState(false)
+  // 발신자 규칙 창(관리자만). 발신자 카드에서 열면 그 주소로 채운다.
+  const [ruleManager, setRuleManager] = useState<{
+    initial?: { matchType: 'address' | 'domain'; matchValue: string }
+  } | null>(null)
   const [labelBusy, setLabelBusy] = useState(false)
   const [bulkUpdating, setBulkUpdating] = useState(false)
   const [canManage, setCanManage] = useState(false)
@@ -1044,6 +1049,19 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                       )}
                       <div className="truncate">{senderCard.sender.email}</div>
                     </div>
+                    {canManage && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setRuleManager({
+                            initial: { matchType: 'address', matchValue: senderCard.sender.email },
+                          })
+                        }
+                        className="shrink-0 px-2 py-1 rounded border border-gray-300 bg-white hover:bg-gray-50"
+                      >
+                        규칙 만들기
+                      </button>
+                    )}
                     {canManage && composeEnabled && (
                       <button
                         type="button"
@@ -1148,6 +1166,15 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                       className="px-2 py-0.5 text-xs text-gray-500 hover:text-gray-800 hover:underline"
                     >
                       라벨 관리
+                    </button>
+                  )}
+                  {canManage && (
+                    <button
+                      type="button"
+                      onClick={() => setRuleManager({})}
+                      className="px-2 py-0.5 text-xs text-gray-500 hover:text-gray-800 hover:underline"
+                    >
+                      발신자 규칙
                     </button>
                   )}
                 </div>
@@ -1851,6 +1878,17 @@ export default function MailboxView({ className = '' }: { className?: string }) 
       )}
 
       {/* 새 메일 작성 모달 — 관리자 + 서버 스위치가 켜졌을 때만 그린다. */}
+      {canManage && ruleManager && (
+        <RuleManager
+          labels={labels}
+          initial={ruleManager.initial}
+          onClose={() => setRuleManager(null)}
+          onChanged={async () => {
+            // 기존 메일에 적용했으면 상태·라벨이 바뀐다.
+            await Promise.all([fetchEmails(), fetchLabels()])
+          }}
+        />
+      )}
       {canManage && labelManagerOpen && (
         <LabelManager
           labels={labels}

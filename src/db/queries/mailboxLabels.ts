@@ -117,7 +117,8 @@ export async function setLabelOnEmails(input: {
   labelId: string
   emailIds: string[]
   action: 'add' | 'remove'
-  by: string
+  /** 붙인 사람. 발신자 규칙이 자동으로 붙이면 null. */
+  by: string | null
 }): Promise<{ changed: string[]; missing: string[] }> {
   const ids = [...new Set(input.emailIds)]
   if (ids.length === 0) return { changed: [], missing: [] }

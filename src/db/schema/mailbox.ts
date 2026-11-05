@@ -240,3 +240,34 @@ export const inboundEmailLabels = sqliteTable(
     index('inbound_email_labels_label_idx').on(table.labelId),
   ]
 )
+
+/**
+ * 발신자 규칙 — 특정 주소·도메인에서 온 메일을 받는 즉시 스팸·보관 처리하거나 라벨을 붙인다. 관리자만 만든다
+ * (라우트가 판정). 수신 웹훅이 메일을 저장한 뒤 응답 뒤에(`after`) 적용한다 — 실패해도 메일은 잃지 않는다.
+ *
+ * - `match_type`: `address`(정규화한 `from_email`과 완전 일치) | `domain`(`@` 뒤가 정확히 그 도메인 — 하위 도메인 제외)
+ * - `action`: `spam` | `archive` | `label`(이때만 `label_id`가 있다. 라벨이 지워지면 규칙도 지운다)
+ * - 같은 조건·동작·라벨의 규칙은 하나만 — 부분 유일 인덱스 둘
+ */
+export const mailSenderRules = sqliteTable(
+  'mail_sender_rules',
+  {
+    id: uuidPk(),
+    matchType: text('match_type').notNull(),
+    matchValue: text('match_value').notNull(),
+    action: text('action').notNull(),
+    labelId: text('label_id').references(() => mailLabels.id, { onDelete: 'cascade' }),
+    createdBy: text('created_by').references(() => memberProfiles.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+  },
+  // 같은 규칙은 하나만. 라벨 없는 규칙과 라벨 규칙을 부분 인덱스 둘로 나눈다 — NULL은 유일 인덱스에서 서로 다른
+  // 값으로 쳐서 한 인덱스로는 라벨 없는 규칙의 중복을 못 막는다(drizzle-kit은 `ifnull(…, '')` 같은 식을 쪼갠다).
+  table => [
+    uniqueIndex('mail_sender_rules_plain_idx')
+      .on(table.matchType, table.matchValue, table.action)
+      .where(sql`${table.labelId} is null`),
+    uniqueIndex('mail_sender_rules_label_idx')
+      .on(table.matchType, table.matchValue, table.action, table.labelId)
+      .where(sql`${table.labelId} is not null`),
+  ]
+)
