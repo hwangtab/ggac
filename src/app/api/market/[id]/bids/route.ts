@@ -19,9 +19,10 @@ import { parseJsonObjectBody } from '@/utils/requestBody'
 import { validateUUID } from '@/utils/validation'
 import { parseBidAmount } from '@/lib/market/validate'
 import { getAuction, listBids, placeBid } from '@/db/queries/marketAuction'
+import { toPublicAuction, toPublicBids } from '@/lib/market/auctionView'
 import { getMarketListingOwner } from '@/db/queries/market'
 import { closeAuctionAndNotify } from '@/lib/server/marketAuctionClose'
-import { notifyOutbid } from '@/lib/server/marketAuctionNotify'
+import { notifyFirstBid, notifyOutbid } from '@/lib/server/marketAuctionNotify'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -54,7 +55,10 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       const auction = await getAuction(listingId)
       if (!auction) throw ApiError.notFound('경매를 찾을 수 없습니다.')
       const bids = await listBids(listingId)
-      return ApiSuccess.ok({ auction, bids })
+      return ApiSuccess.ok({
+        auction: toPublicAuction(auction, user.id),
+        bids: toPublicBids(bids, user.id),
+      })
     },
     `/api/market/${listingId}/bids`,
     { userId: user.id }
@@ -111,8 +115,18 @@ export async function POST(request: NextRequest, context: RouteContext) {
           )
       }
 
+      const owner =
+        result.outbid_bidder_id || result.first_bid ? await getMarketListingOwner(listingId) : null
+      if (result.first_bid && owner) {
+        await notifyFirstBid({
+          listingId,
+          listingTitle: owner.title,
+          sellerId: owner.seller_id,
+          amount,
+          actorId: user.id,
+        })
+      }
       if (result.outbid_bidder_id) {
-        const owner = await getMarketListingOwner(listingId)
         await notifyOutbid({
           listingId,
           listingTitle: owner?.title ?? '경매',

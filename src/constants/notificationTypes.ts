@@ -46,6 +46,8 @@ export const NOTIFICATION_TYPE_COLOR: Record<NotificationType, string> = {
   market_outbid: 'bg-orange-100 text-orange-800',
   market_auction_won: 'bg-emerald-100 text-emerald-800',
   market_auction_ended: 'bg-teal-100 text-teal-800',
+  market_bid_received: 'bg-orange-100 text-orange-800',
+  market_auction_canceled: 'bg-gray-100 text-gray-800',
   // 타임뱅크. 확인·거절은 승인 계열과 같은 색으로 "됐다 / 안 됐다"를 맞춘다.
   timebank_pending: 'bg-amber-100 text-amber-800',
   timebank_confirmed: 'bg-green-100 text-green-800',
@@ -85,6 +87,8 @@ export const NOTIFICATION_TYPE_LABEL: Record<NotificationType, string> = {
   market_outbid: '경매 입찰',
   market_auction_won: '경매 낙찰',
   market_auction_ended: '경매 종료',
+  market_bid_received: '경매 첫 입찰',
+  market_auction_canceled: '경매 취소',
   timebank_pending: '타임 확인 요청',
   timebank_confirmed: '타임 확인',
   timebank_rejected: '타임 거절',

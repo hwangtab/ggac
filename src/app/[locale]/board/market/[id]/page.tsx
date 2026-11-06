@@ -11,6 +11,7 @@ import { resolveMarketViewer } from '@/lib/server/marketPage'
 import { getMarketListing, listMarketComments } from '@/db/queries/market'
 import { getAuction, listBids } from '@/db/queries/marketAuction'
 import AuctionPanel from '@/components/market/AuctionPanel'
+import { toPublicAuction, toPublicBids } from '@/lib/market/auctionView'
 import { closeAuctionAndNotify } from '@/lib/server/marketAuctionClose'
 import { blockEdit, blockSellerDelete, blockStatusChange } from '@/lib/market/auctionRules'
 import { MARKET_STATUS_STYLES } from '@/constants/market'
@@ -137,8 +138,8 @@ export default async function MarketDetailPage({
           {auction && (
             <AuctionPanel
               listingId={listing.id}
-              auction={auction}
-              bids={bids}
+              auction={toPublicAuction(auction, viewer.userId)}
+              bids={toPublicBids(bids, viewer.userId)}
               isSeller={isSeller}
               isAdmin={viewer.isAdmin}
             />

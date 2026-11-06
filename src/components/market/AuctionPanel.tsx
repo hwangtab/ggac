@@ -5,7 +5,8 @@ import { useLocale, useTranslations } from 'next-intl'
 import { useRouter } from '@/i18n/navigation'
 import { intlLocale } from '@/utils/intlLocale'
 import { SEOUL_TIME_ZONE } from '@/utils/date'
-import type { AuctionRow, BidRow } from '@/db/queries/marketAuction'
+import type { PublicAuction, PublicBid } from '@/lib/market/auctionView'
+import { MARKET_AUCTION_DURATIONS } from '@/constants/market'
 
 /**
  * 경매 상세의 입찰 칸. 첫 상태는 서버가 렌더해 내려주고, 입찰·무효 처리 뒤에는
@@ -22,8 +23,8 @@ export default function AuctionPanel({
   isAdmin,
 }: {
   listingId: string
-  auction: AuctionRow
-  bids: BidRow[]
+  auction: PublicAuction
+  bids: PublicBid[]
   isSeller: boolean
   isAdmin: boolean
 }) {
@@ -88,6 +89,36 @@ export default function AuctionPanel({
     }
   }
 
+  // 유찰된 경매 다시 열기(판매자). 입찰이 하나도 없었으니 같은 매물에서 새로 시작한다.
+  const [relistStart, setRelistStart] = useState(String(auction.start_price))
+  const [relistIncrement, setRelistIncrement] = useState(String(auction.min_increment))
+  const [relistDays, setRelistDays] = useState('3')
+  const relist = async (event: React.FormEvent) => {
+    event.preventDefault()
+    setBusy(true)
+    setError(null)
+    try {
+      const response = await fetch(`/api/market/${listingId}/relist`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          start_price: relistStart,
+          min_increment: relistIncrement,
+          duration_days: relistDays,
+        }),
+      })
+      if (!response.ok) {
+        const json = await response.json().catch(() => null)
+        setError(json?.error || t('auction.bidError'))
+      }
+      router.refresh()
+    } catch {
+      setError(t('auction.bidError'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const voidBid = async (bidId: string) => {
     if (!window.confirm(t('auction.voidConfirm'))) return
     setBusy(true)
@@ -125,7 +156,7 @@ export default function AuctionPanel({
             ].join(' · ')}
           </p>
         </div>
-        <div className="text-right">
+        <div className="sm:text-right">
           {live ? (
             <>
               <p className="text-sm text-orange-800">{t('auction.remaining')}</p>
@@ -155,9 +186,67 @@ export default function AuctionPanel({
       </div>
 
       {auction.state === 'ended' && auction.winner_name && (
-        <p className="mt-4 rounded-lg bg-white p-3 text-sm text-gray-800">
-          {t('auction.winnerLine', { name: auction.winner_name })}
+        <div className="mt-4 rounded-lg bg-white p-3 text-sm text-gray-800">
+          <p>
+            {auction.i_won
+              ? t('auction.youWon')
+              : t('auction.winnerLine', { name: auction.winner_name })}
+          </p>
+          {isSeller && <p className="mt-2 text-xs text-gray-600">{t('auction.noShowHint')}</p>}
+        </div>
+      )}
+
+      {live && auction.i_am_leading && (
+        <p className="mt-4 rounded-lg bg-white p-3 text-sm font-medium text-emerald-700">
+          {t('auction.youAreLeading')}
         </p>
+      )}
+
+      {auction.state === 'no_bids' && isSeller && (
+        <form onSubmit={relist} className="mt-4 rounded-lg bg-white p-3 text-sm">
+          <p className="mb-2 font-medium text-gray-800">{t('auction.relistTitle')}</p>
+          <div className="flex flex-wrap gap-2">
+            <label className="flex flex-col text-xs text-gray-600">
+              {t('form.startPrice')}
+              <input
+                inputMode="numeric"
+                value={relistStart}
+                onChange={e => setRelistStart(e.target.value.replace(/[^\d]/g, ''))}
+                className="mt-1 w-32 rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+              />
+            </label>
+            <label className="flex flex-col text-xs text-gray-600">
+              {t('form.minIncrement')}
+              <input
+                inputMode="numeric"
+                value={relistIncrement}
+                onChange={e => setRelistIncrement(e.target.value.replace(/[^\d]/g, ''))}
+                className="mt-1 w-28 rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+              />
+            </label>
+            <label className="flex flex-col text-xs text-gray-600">
+              {t('form.duration')}
+              <select
+                value={relistDays}
+                onChange={e => setRelistDays(e.target.value)}
+                className="mt-1 rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+              >
+                {MARKET_AUCTION_DURATIONS.map(days => (
+                  <option key={days} value={days}>
+                    {t('form.durationDays', { count: days })}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="submit"
+              disabled={busy}
+              className="self-end rounded-lg bg-orange-600 px-4 py-1.5 text-white hover:bg-orange-700 disabled:opacity-50"
+            >
+              {t('auction.relistButton')}
+            </button>
+          </div>
+        </form>
       )}
 
       {live && !isSeller && (
@@ -200,11 +289,18 @@ export default function AuctionPanel({
           {bids.map(bid => (
             <li
               key={bid.id}
-              className={`flex items-center gap-3 px-3 py-2 ${bid.voided ? 'text-gray-400 line-through' : ''}`}
+              className={`flex items-center gap-2 px-3 py-2 sm:gap-3 ${bid.voided ? 'text-gray-400 line-through' : ''}`}
             >
-              <span className="font-medium">{bid.bidder_name}</span>
-              <span className="ml-auto font-semibold">{won(bid.amount)}</span>
-              <span className="w-28 text-right text-xs text-gray-500">
+              <span className="min-w-0 truncate font-medium">{bid.bidder_name}</span>
+              {bid.is_mine && (
+                <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-xs text-emerald-700">
+                  {t('auction.mine')}
+                </span>
+              )}
+              <span className="ml-auto shrink-0 whitespace-nowrap font-semibold">
+                {won(bid.amount)}
+              </span>
+              <span className="shrink-0 whitespace-nowrap text-right text-xs text-gray-500 sm:w-28">
                 {new Date(bid.created_at).toLocaleString(dateLocale, {
                   ...SEOUL_TIME_ZONE,
                   month: 'numeric',

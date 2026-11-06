@@ -1,5 +1,5 @@
 // 상대경로 + 명시적 확장자로 임포트한다(`commentNotify.ts`와 같은 이유).
-import { createNotification } from '../../db/queries/notifications.ts'
+import { createBulkNotifications, createNotification } from '../../db/queries/notifications.ts'
 import type { ClosedAuction } from '../../db/queries/marketAuction.ts'
 import { createLogger } from '../../utils/logger.ts'
 
@@ -96,6 +96,58 @@ export async function notifyOutbid(input: {
     })
   } catch (e) {
     log.error('입찰 추월 알림 발송 실패', {
+      listingId: input.listingId,
+      error: (e as Error).message,
+    })
+  }
+}
+
+/** 판매자에게 첫 입찰을 알린다. 입찰마다 보내지 않는다 — 막판 경쟁이면 수십 통이다. */
+export async function notifyFirstBid(input: {
+  listingId: string
+  listingTitle: string
+  sellerId: string
+  amount: number
+  actorId: string
+}): Promise<void> {
+  try {
+    await createNotification({
+      user_id: input.sellerId,
+      type: 'market_bid_received',
+      title: '경매에 첫 입찰이 들어왔습니다',
+      message: `${input.listingTitle}에 ${won(input.amount)} 입찰이 들어왔습니다. 이제 경매를 고치거나 내릴 수 없습니다.`,
+      data: { listing_id: input.listingId },
+      related_post_id: input.listingId,
+      related_user_id: input.actorId,
+      expires_at: new Date(Date.now() + THIRTY_DAYS_MS).toISOString(),
+    })
+  } catch (e) {
+    log.error('첫 입찰 알림 발송 실패', { listingId: input.listingId, error: (e as Error).message })
+  }
+}
+
+/**
+ * 사무국이 입찰이 있는 진행 중 경매를 내렸을 때 입찰자에게 알린다. 알리지 않으면
+ * 입찰자에게는 경매가 조용히 사라진다(상세가 404가 된다).
+ */
+export async function notifyAuctionCanceled(input: {
+  listingId: string
+  listingTitle: string
+  bidderIds: string[]
+}): Promise<void> {
+  if (input.bidderIds.length === 0) return
+  try {
+    await createBulkNotifications({
+      user_ids: input.bidderIds,
+      type: 'market_auction_canceled',
+      title: '입찰한 경매가 취소되었습니다',
+      message: `${input.listingTitle} 경매를 사무국이 내렸습니다. 입찰은 효력이 없습니다.`,
+      data: { listing_id: input.listingId },
+      related_post_id: input.listingId,
+      expires_at: new Date(Date.now() + THIRTY_DAYS_MS).toISOString(),
+    })
+  } catch (e) {
+    log.error('경매 취소 알림 발송 실패', {
       listingId: input.listingId,
       error: (e as Error).message,
     })

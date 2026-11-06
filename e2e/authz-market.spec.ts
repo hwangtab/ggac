@@ -256,8 +256,20 @@ test.describe.serial('장터 경매', () => {
       expect(data.auction.current_price).toBe(10000)
       expect(data.auction.current_bidder_name).toBe('authz-other')
       expect(data.bids.map((b: { bidder_name: string }) => b.bidder_name)).toEqual(['authz-other'])
-      // 실명·이메일 같은 칸은 응답에 실리지 않는다.
+      // 실명·이메일 같은 칸은 응답에 실리지 않는다. 회원 id(UUID)도 싣지 않고,
+      // "나인가"만 불리언으로 준다.
       expect(JSON.stringify(data)).not.toContain('@test.local')
+      expect(JSON.stringify(data)).not.toContain(fixtures.users.other)
+      expect(data.auction.i_am_leading).toBe(true)
+      expect(data.bids[0].is_mine).toBe(true)
+    })
+
+    test('남의 경매는 다시 열 수 없다', async ({ request }) => {
+      const res = await request.post(`${auction()}/relist`, {
+        data: { start_price: 5000, min_increment: 500, duration_days: 1 },
+      })
+      expect(res.status()).toBe(403)
+      expect((await res.json()).error).toBe('수정 권한이 없습니다.')
     })
 
     test('입찰자는 자기 입찰도 무효로 하지 못한다', async ({ request }) => {
@@ -286,6 +298,14 @@ test.describe.serial('장터 경매', () => {
       const del = await request.delete(auction())
       expect(del.status()).toBe(400)
       expect((await del.json()).error).toContain('입찰이 들어온 경매는 내릴 수 없습니다')
+    })
+
+    test('진행 중인 경매는 판매자도 다시 열 수 없다(유찰만)', async ({ request }) => {
+      const res = await request.post(`${auction()}/relist`, {
+        data: { start_price: 5000, min_increment: 500, duration_days: 1 },
+      })
+      expect(res.status()).toBe(400)
+      expect((await res.json()).error).toBe('입찰 없이 끝난 경매만 다시 열 수 있습니다.')
     })
 
     test('판매자도 입찰을 무효로 하지 못한다', async ({ request }) => {
