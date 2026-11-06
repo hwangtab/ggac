@@ -152,10 +152,86 @@ jobs:
             test-results/
           retention-days: 14
 
+  authz-e2e:
+    runs-on: ubuntu-latest
+    name: Authorization E2E
+    needs: quality
+    # 권한 경계는 이 앱에서 가장 중요한 계약이다(조합원 문서·회비·이사회 서류·메일함). 그런데
+    # 2026-11-06까지 이 스위트는 **로컬 수동 실행에만** 기대고 있었다 — CI는 smoke.spec.ts 하나만
+    # 돌렸으므로, 권한이 느슨해지는 회귀가 병합돼도 아무 검사도 빨간불이 되지 않았다.
+    #
+    # 로컬과 같은 조건을 CI에 만든다.
+    #  - DB: `turso dev`(파일 DB). 미들웨어가 Edge 런타임에서 `file:` URL을 거부하므로
+    #    (`URL_SCHEME_NOT_SUPPORTED`) 파일 경로를 직접 줄 수 없다.
+    #  - 서버: 운영 빌드(`E2E_PROD_SERVER=1`) — dev 서버는 첫 컴파일 대기 때문에 30초 타임아웃과
+    #    로그인 튕김이 섞인다(playwright.config.ts 주석).
+    #  - 브라우저: 워크플로가 받는 번들 크로미움(로컬은 설치된 Chrome).
+    #  - Blob 토큰은 주지 않는다 — 정책 36은 토큰이 없으면 스스로 건너뛴다. 운영 공개 스토어
+    #    토큰을 CI에 넣을 이유가 없다.
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Start local Turso
+        run: |
+          curl -sSfL https://get.tur.so/install.sh | bash
+          # install.sh는 turso CLI와 sqld(러너)를 모두 ~/.turso/에 받고 PATH 수정은
+          # update_profile(~/.profile)로만 남긴다 — 현재 셸엔 반영되지 않아, 이 단계와
+          # 다음 단계에 sqld가 없다. 명시적으로 PATH에 넣는다.
+          echo "$HOME/.turso" >> "$GITHUB_PATH"
+          PATH="$HOME/.turso:$PATH" "$HOME/.turso/turso" dev --db-file /tmp/authz.db --port 8901 > /tmp/turso-dev.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:8901/health > /dev/null; then
+              echo "turso dev 준비됨"
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/turso-dev.log
+          exit 1
+
+      - name: Apply schema and seed fixtures
+        env:
+          TURSO_DATABASE_URL: http://127.0.0.1:8901
+          BETTER_AUTH_SECRET: ci-authz-placeholder-not-a-real-secret
+        run: |
+          npx drizzle-kit push --force
+          node --experimental-strip-types scripts/testing/seed-authz-fixtures.mjs
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run authorization E2E
+        env:
+          E2E_TURSO_DATABASE_URL: http://127.0.0.1:8901
+          E2E_PROD_SERVER: "1"
+          BETTER_AUTH_SECRET: ci-authz-placeholder-not-a-real-secret
+          TIMEBANK_REJOIN_SECRET: ci-authz-timebank-rejoin-placeholder-32
+          NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL: https://ci-placeholder.public.blob.vercel-storage.com
+        run: npm run test:e2e:authz
+
+      - name: Upload Playwright artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-authz-artifacts
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+
   security:
     runs-on: ubuntu-latest
     name: Security Audit
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v7

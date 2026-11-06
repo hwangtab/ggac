@@ -232,7 +232,29 @@ async function reconcileBeforeFreezing(
     log.warn('결제 모드가 토스가 아니어서 정산 전 토스 대사를 건너뜀', { campaignId })
     return { ok: true, skipped: RECONCILE_SKIPPED_NOTICE }
   }
-  const { secretKey } = getServerPaymentConfig()
+
+  // 결제 모드는 토스인데 **대조에 쓸 키가 없다**(미설정·프리뷰/CI·키 한쪽만).
+  // 키가 있는 환경처럼 정상 동작을 기대할 수 없으므로 대조를 건너뛴다 —
+  // 다만 그 대조를 "했다"고 속이지 않고, 아래 `RECONCILE_SKIPPED_NOTICE`가
+  // 이 정산서가 토스와 대조되지 않은 숫자임을 응답에 싣는다.
+  //
+  // **왜 `getServerPaymentConfig()`가 던지는 걸 잡나**: 키는 짝(클라이언트/시크릿)이
+  // 있어야 의미가 있는데, 한쪽만 설정된 환경(예: E2E 로컬이 운영 클라이언트키만
+  // 물려받은 채 시크릿은 비운 경우)에서는 `KeyMismatchError`로 500이 됐다. 시크릿
+  // 키 없이는 토스 조회 자체가 불가능하므로, 그런 환경에서는 대조를 건너뛰는 쪽이
+  // "키를 심어 다시 시도"라는 조치 가능한 답이다 — 없는 키로 재시도를 반복해 500을
+  // 맞히게 설계하면 사무국의 정산이 멈춘다.
+  let secretKey = ''
+  try {
+    secretKey = getServerPaymentConfig().secretKey
+  } catch {
+    log.warn('토스 키가 없어 정산 전 토스 대사를 건너뜀', { campaignId })
+    return { ok: true, skipped: RECONCILE_SKIPPED_NOTICE }
+  }
+  if (!secretKey) {
+    log.warn('토스 대조용 시크릿 키가 없어 정산 전 토스 대사를 건너뜀', { campaignId })
+    return { ok: true, skipped: RECONCILE_SKIPPED_NOTICE }
+  }
   const reconciled = await reconcileCampaignWithToss({ campaignId, secretKey, actorId })
   if (reconciled.ok === false) {
     log.error('정산 전 토스 대사 실패 — 저장하지 않음', {
