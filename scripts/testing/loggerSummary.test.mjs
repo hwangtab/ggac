@@ -21,13 +21,14 @@ process.env.NODE_ENV = 'production'
 const { createLogger } = await import('../../src/utils/logger.ts')
 
 function capture(fn) {
-  const original = console.info
+  // `summary`는 stderr(console.warn)로 낸다 — 이 프로젝트의 런타임 로그에는 stdout이 실리지 않는다(2026-11-06 실측).
+  const originalWarn = console.warn
   const lines = []
-  console.info = (...args) => lines.push(args)
+  console.warn = (...args) => lines.push(args)
   try {
     fn()
   } finally {
-    console.info = original
+    console.warn = originalWarn
   }
   return lines
 }
