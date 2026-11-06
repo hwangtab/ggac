@@ -24,11 +24,16 @@ class Logger {
    * 운영에서도 **항상** 남기는 정보 줄 — 크론의 실행 요약처럼 "돌았다는 사실" 자체가 증거인 기록용. `info`는 운영에서
    * 지워지므로(위) 그것으로 남긴 요약은 Vercel 로그에 한 줄도 남지 않았다. 개인정보·비밀값을 싣지 말 것.
    *
-   * 실행 여부는 이제 `work_cron_runs` 장부(`runTrackedCron`)가 따로 남긴다. 이 줄은 장부에 없는 **무엇을 했는지**를
+   * 실행 여부는 `work_cron_runs` 장부(`runTrackedCron`)가 따로 남긴다. 이 줄은 장부에 없는 **무엇을 했는지**를
    * 한 줄로 보이게 하는 용도다 — 장부를 보려면 DB를 열어야 한다.
+   *
+   * **`console.warn`(stderr)으로 낸다.** 2026-11-06 실측: 이 프로젝트의 런타임 로그에는 stderr만 실린다 —
+   * `vercel logs -q "stream: stdout" --since 6h`가 0건이었고, 성공한 크론(`work_cron_runs.last_status='ok'`)도
+   * `console.info` 줄은 조회되지 않았다(오류 줄은 보인다). 표준출력으로 내면 대시보드·CLI 어디에서도 볼 수 없다.
+   * 경보가 이 줄에 걸리지는 않는다(경보는 `alertOpsAdmins`·`logSecurityEvent`가 따로 낸다).
    */
   summary(message: string, ...args: any[]) {
-    console.info(message, ...args)
+    console.warn(message, ...args)
   }
 
   warn(message: string, ...args: any[]) {

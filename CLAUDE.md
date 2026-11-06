@@ -479,10 +479,16 @@ noreply@ggac.kr로 가서 유실된다), `MAILBOX_BACKFILL_CRON_TOKEN`(메일함
   `scripts/testing/loggerSummary.test.mjs`가 런타임(운영에서 `summary`는 남고
   `info`는 지워진다)과 소스 계약(요약 줄에 `log.summary`를 쓴다)을 함께
   못박는다. 개인정보·비밀값은 싣지 않는다.
-- 요약 줄이 Vercel 대시보드 로그 화면에 보이는지는 **대시보드에서 확인**해야
-  한다. 2026-11-05에 로그 조회 API로는 이 경로의 정상 실행 줄이 0건이었다(오류
-  줄은 보였다) — 조회 경로의 문제인지 적재 문제인지 아직 가리지 못했다. 실행
-  여부의 1차 증거는 장부다.
+- **`log.summary`는 stderr(`console.warn`)로 낸다.** 2026-11-06 실측: 이
+  프로젝트의 런타임 로그에는 **stderr만 실린다** —
+  `vercel logs -q "stream: stdout"` 가 6시간 0건이었고, 성공한
+  크론(`work_cron_runs.last_status='ok'`)의 `console.info` 줄도 조회되지
+  않았다(같은 실행의 오류 줄은 보인다). 표준출력으로 내면 대시보드·CLI
+  어디에서도 볼 수 없으므로 `summary`가 경고 수준으로 나간다. 경보가 이 줄에
+  걸리지는 않는다(경보는 `alertOpsAdmins`·`logSecurityEvent`가 낸다).
+- 운영 확인은 이렇게 한다: `npx vercel crons run /api/internal/mailbox/backfill`
+  로 즉시 실행하고, `npx vercel logs --since 10m -q "메일함 크론 요약"` 로 줄을
+  찾는다. 실행 장부는 `work_cron_runs`(job `mailbox-backfill`)에서 본다.
 
 ### 메일함 키보드 단축키
 
