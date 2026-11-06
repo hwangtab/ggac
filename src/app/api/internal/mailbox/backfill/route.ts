@@ -191,7 +191,8 @@ async function runBackfill(request: NextRequest) {
     }
 
     // 정상 실행은 아무 로그도 남기지 않아 크론이 돌았는지·무엇을 했는지 볼 길이 없었다. 매 실행 한 줄을 남긴다.
-    log.info('메일함 크론 요약', {
+    // `summary`여야 한다 — `info`는 운영에서 지워져 이 줄이 한 번도 남지 않았다(2026-11-05 확인, 2026-11-06 복원).
+    log.summary('메일함 크론 요약', {
       pendingBefore: pending.length,
       refetched: attempted,
       abandoned,

@@ -347,7 +347,7 @@ async function run(request: NextRequest) {
     )
   }
 
-  log.info('후원 만료 정리', result)
+  log.summary('후원 만료 정리', result)
   return ApiSuccess.ok(result).toNextResponse()
 }
 

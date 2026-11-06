@@ -146,7 +146,7 @@ async function run(request: NextRequest) {
     )
   }
 
-  log.info('조합비 결제 대사', result)
+  log.summary('조합비 결제 대사', result)
   return ApiSuccess.ok(result).toNextResponse()
 }
 
