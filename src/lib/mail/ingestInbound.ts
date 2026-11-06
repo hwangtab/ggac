@@ -23,6 +23,7 @@ import { referencedMessageIds } from './threading.ts'
 import {
   markBodyFetched,
   assignThread,
+  linkSentReply,
   insertAttachment,
   listAttachmentsForEmail,
   markAttachmentsIncomplete,
@@ -53,8 +54,14 @@ export async function ingestInboundEmail(
     })
     // 대화 묶기는 부가 기능이다 — 실패해도 본문 저장과 첨부 복사는 계속한다. 본문이 이미 done이라 백필이 다시
     // 집지 않으므로, 실패한 메일은 자기 대화로 남는다(기록만 남긴다).
+    //
+    // 받은 메일끼리의 대화(`assignThread`)가 먼저다. 앞 메일이 없으면 **우리가 새로 작성해 보낸 메일**에 온
+    // 답장인지 본다(`linkSentReply`) — 보낸 메일의 `Message-ID`는 SES가 정해 우리가 만든 적이 없으므로, 발송
+    // 뒤에 Resend에 물어 저장해 둔 값과 대조한다. 둘 다 부가 기능이라 실패해도 본문은 남긴다.
     try {
-      await assignThread(rowId, referencedMessageIds(email.headers))
+      const referenced = referencedMessageIds(email.headers)
+      const threadId = await assignThread(rowId, referenced)
+      if (!threadId) await linkSentReply(rowId, referenced)
     } catch (error) {
       logSecurityEvent(
         'MAILBOX_THREAD_ASSIGN_FAILED',

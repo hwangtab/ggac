@@ -8,6 +8,7 @@ import {
   listAttachmentsForEmail,
   listRepliesForEmail,
   listThread,
+  getSentMailSummary,
   updateInboundStatus,
 } from '@/db/queries/mailbox'
 import { listNotesForEmail } from '@/db/queries/mailboxNotes'
@@ -49,19 +50,24 @@ export const GET = defineApiRoute<undefined, BoardAuthSuccess>({
 
     const threadId = email.thread_id ? String(email.thread_id) : null
     const assignedTo = email.assigned_to ? String(email.assigned_to) : null
-    const [attachments, replies, thread, notes, names, labels] = await Promise.all([
+    // 우리가 새로 작성해 보낸 메일에 온 답장이면 그 보낸 메일의 머리글 — 화면이 "보낸 편지함의 …"으로 보여 준다.
+    // 보낸 메일이 지워졌으면 null(그 칸은 ON DELETE SET NULL이라 보통은 이미 비어 있다).
+    const replyToOutboundId = email.reply_to_outbound_id ? String(email.reply_to_outbound_id) : null
+    const [attachments, replies, thread, notes, names, labels, sentReplyTo] = await Promise.all([
       listAttachmentsForEmail(id),
       listRepliesForEmail(id),
       threadId ? listThread(threadId) : Promise.resolve([]),
       listNotesForEmail(id),
       assignedTo ? getDisplayNames([assignedTo]) : Promise.resolve(new Map<string, string>()),
       listLabelsForEmail(id),
+      replyToOutboundId ? getSentMailSummary(replyToOutboundId) : Promise.resolve(null),
     ])
     return ApiSuccess.ok({
       email: {
         ...email,
         assignee_name: assignedTo ? (names.get(assignedTo) ?? null) : null,
         labels,
+        sent_reply_to: sentReplyTo,
       },
       attachments,
       replies,

@@ -70,6 +70,18 @@ interface InboundEmail {
   labels?: { id: string; name: string; color: string }[]
   /** 다시 알림 시각(0044). 지나면 크론이 비운다. */
   snoozed_until?: string | null
+  /** 이 메일이 우리가 새로 작성해 보낸 메일에 온 답장이면 그 보낸 메일의 id(0047). */
+  reply_to_outbound_id?: string | null
+  /** 상세 응답에만 있다 — 답장이 가리키는 보낸 메일의 머리글. */
+  sent_reply_to?: SentReplySource | null
+}
+
+/** 상세 응답의 `sent_reply_to` — 답장이 가리키는 보낸 메일의 머리글. */
+interface SentReplySource {
+  id: string
+  subject: string
+  sent_at: string | null
+  sent_by_email: string | null
 }
 
 /** 다시 알림 중인가 — 시각이 아직 안 지났다(크론이 비우기 전 잠깐은 지난 값이 남아 있을 수 있다). */
@@ -289,6 +301,8 @@ export default function MailboxView({ className = '' }: { className?: string }) 
   const [view, setView] = useState<'inbox' | 'sent'>('inbox')
   const [sentTotal, setSentTotal] = useState(0)
   const [sentRefresh, setSentRefresh] = useState(0)
+  // 받은 메일 상세의 "보낸 편지함에서 보기"가 심는 검색어 — 그 보낸 메일이 목록에 바로 보이게 한다.
+  const [sentSearchSeed, setSentSearchSeed] = useState<{ value: string; at: number } | null>(null)
   // 새 메일 작성은 관리자 + 서버 스위치(MAILBOX_COMPOSE_ENABLED)가 모두 켜졌을 때만 그린다.
   const [composeEnabled, setComposeEnabled] = useState(false)
   const [composeQuota, setComposeQuota] = useState<{ used: number; limit: number } | null>(null)
@@ -1065,7 +1079,7 @@ export default function MailboxView({ className = '' }: { className?: string }) 
       )}
 
       {view === 'sent' ? (
-        <SentMailbox refreshKey={sentRefresh} onMeta={handleSentMeta} />
+        <SentMailbox refreshKey={sentRefresh} onMeta={handleSentMeta} searchSeed={sentSearchSeed} />
       ) : (
         /* 2단 본체 */
         <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4 lg:gap-6">
@@ -1814,6 +1828,36 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                           )}
                         </a>
                       ))}
+                    </div>
+                  )}
+                  {detail?.sent_reply_to && (
+                    /* 우리가 새로 작성해 보낸 메일에 온 답장 — 대화(받은 메일끼리)에 넣을 수 없어 머리글에 한 줄로 잇는다. */
+                    <div
+                      data-testid="sent-reply-to"
+                      className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-600"
+                    >
+                      <FiSend className="w-3 h-3 shrink-0 text-gray-400" />
+                      <span>
+                        보낸 편지함의 「{detail.sent_reply_to.subject}」
+                        {detail.sent_reply_to.sent_at
+                          ? ` (${formatDate(detail.sent_reply_to.sent_at)})`
+                          : ''}{' '}
+                        메일에 온 답장으로 보입니다.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setView('sent')
+                          closeDetail()
+                          setSentSearchSeed({
+                            value: detail.sent_reply_to?.subject ?? '',
+                            at: Date.now(),
+                          })
+                        }}
+                        className="shrink-0 px-2 py-0.5 rounded-md font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+                      >
+                        보낸 편지함에서 보기
+                      </button>
                     </div>
                   )}
                   {threadInboundCount > 1 && (

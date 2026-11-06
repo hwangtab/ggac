@@ -6,7 +6,7 @@
  * 응답 조립이나 인가 판정에 쓰는 것은 아무것도 이 파일에 들여오지 않는다.
  */
 
-import { and, asc, desc, eq, gte, inArray, lt, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, or, sql } from 'drizzle-orm'
 
 import { db } from '../client.ts'
 import {
@@ -465,6 +465,84 @@ export async function assignThread(id: string, messageIds: string[]): Promise<st
   const threadId = parent.threadId ?? parent.id
   await db.update(inboundEmails).set({ threadId }).where(eq(inboundEmails.id, id))
   return threadId
+}
+
+/**
+ * 받은 메일이 **우리가 새로 작성해 보낸** 메일에 온 답장인지 잇는다 — 헤더의 id와 `outbound_emails.message_id`를
+ * 정확히 대조한다(제목·수신자 추측이 아니다). 잇지 못하면 아무것도 바꾸지 않는다.
+ *
+ * 헤더 기반 대화 묶기(`assignThread`)가 부모를 못 찾았을 때만 부른다 — 받은 메일에 대한 답장이면 거기서 이미
+ * 대화가 정해진다. 같은 메일이 두 번 불려도 결과가 같다(멱등) — 이미 이어져 있으면 그 id를 돌려준다.
+ */
+export async function linkSentReply(id: string, messageIds: string[]): Promise<string | null> {
+  if (messageIds.length === 0) return null
+  const [sent] = await db
+    .select({ id: outboundEmails.id })
+    .from(outboundEmails)
+    .where(and(inArray(outboundEmails.messageId, messageIds), eq(outboundEmails.status, 'sent')))
+    .limit(1)
+  if (!sent) return null
+  await db.update(inboundEmails).set({ replyToOutboundId: sent.id }).where(eq(inboundEmails.id, id))
+  return sent.id
+}
+
+/**
+ * 보낸 메일에 실제로 붙은 `Message-ID`를 기록한다 — 발송 직후 Resend에 물어본 값(`src/lib/mail/sentMessageId.ts`).
+ * 이미 있으면 건드리지 않는다(늦게 도착한 조회가 최신 값을 덮지 않게).
+ */
+export async function setOutboundMessageId(id: string, messageId: string): Promise<void> {
+  await db
+    .update(outboundEmails)
+    .set({ messageId })
+    .where(and(eq(outboundEmails.id, id), isNull(outboundEmails.messageId)))
+}
+
+/** `Message-ID`가 아직 없는 `sent` 행 — 백필 크론이 Resend에 다시 물어본다(조회 실패는 다음 실행이 이어받는다). */
+export async function listSentWithoutMessageId(
+  limit: number
+): Promise<{ id: string; resend_message_id: string }[]> {
+  const rows = await db
+    .select({ id: outboundEmails.id, resendMessageId: outboundEmails.resendMessageId })
+    .from(outboundEmails)
+    .where(
+      and(
+        eq(outboundEmails.status, 'sent'),
+        isNull(outboundEmails.messageId),
+        isNotNull(outboundEmails.resendMessageId)
+      )
+    )
+    .orderBy(desc(outboundEmails.sentAt))
+    .limit(limit)
+  return rows.map(row => ({
+    id: String(row.id),
+    resend_message_id: String(row.resendMessageId),
+  }))
+}
+
+/** 상세 화면이 "보낸 편지함의 …에 온 답장"으로 보여 줄 머리글. 지워졌으면 null. */
+export async function getSentMailSummary(id: string): Promise<{
+  id: string
+  subject: string
+  sent_at: string | null
+  sent_by_email: string | null
+} | null> {
+  const [row] = await db
+    .select({
+      id: outboundEmails.id,
+      subject: outboundEmails.subject,
+      sentAt: outboundEmails.sentAt,
+      sentByEmail: outboundEmails.sentByEmail,
+    })
+    .from(outboundEmails)
+    .where(eq(outboundEmails.id, id))
+    .limit(1)
+  if (!row) return null
+  return {
+    id: String(row.id),
+    subject: String(row.subject ?? ''),
+    sent_at: toIso((row.sentAt as Date | null) ?? null),
+    sent_by_email: (row.sentByEmail as string | null) ?? null,
+  }
 }
 
 export type ThreadItem =

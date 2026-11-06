@@ -69,6 +69,15 @@ export const inboundEmails = sqliteTable(
     snoozedBy: text('snoozed_by').references(() => memberProfiles.id, { onDelete: 'set null' }),
     /** 답장 스레드용 References 누적. 공백으로 이은 message_id 목록. */
     threadReferences: text('thread_references'),
+    /**
+     * 이 메일이 **우리가 새로 작성해 보낸** 메일에 온 답장이면 그 보낸 메일의 id(0047). 대화(`thread_id`)와는 별개다 —
+     * 보낸 메일은 받은 메일 표에 없으므로 대화에 넣을 수 없어, 화면이 "보낸 편지함의 …에 온 답장"으로 보여 준다.
+     * 판정은 `linkSentReply`가 `In-Reply-To`/`References`와 `outbound_emails.message_id`를 정확히 대조해 한다.
+     * 보낸 메일 행이 지워지면(정리 크론은 나간 메일을 지우지 않는다) 비운다.
+     */
+    replyToOutboundId: text('reply_to_outbound_id').references(() => outboundEmails.id, {
+      onDelete: 'set null',
+    }),
     receivedAt: integer('received_at', { mode: 'timestamp_ms' }).notNull(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -82,6 +91,7 @@ export const inboundEmails = sqliteTable(
     index('inbound_emails_assigned_idx').on(table.assignedTo, table.receivedAt),
     index('inbound_emails_snoozed_idx').on(table.snoozedUntil),
     index('inbound_emails_fetch_status_idx').on(table.bodyFetchStatus),
+    index('inbound_emails_sent_reply_idx').on(table.replyToOutboundId),
   ]
 )
 
@@ -158,6 +168,13 @@ export const outboundEmails = sqliteTable(
     status: text('status').notNull().default('sending'),
     /** @test.local 건너뛰기·응답 파싱 실패면 null. */
     resendMessageId: text('resend_message_id'),
+    /**
+     * 실제로 나간 메일의 `Message-ID` 헤더(`<...@...>`) — Resend `GET /emails/:id`가 알려 준다(0047). 상대가 답장하면
+     * 그 답장의 `In-Reply-To`/`References`에 이 값이 들어오므로, 받은 메일을 이 보낸 메일에 정확히 잇는다
+     * (`linkSentReply`). SES가 커스텀 `Message-ID`를 덮어쓰므로 우리가 정할 수 없고, 발송 뒤에 물어봐야 한다.
+     * `@test.local` 건너뛰기·조회 실패·아직 백필 전이면 null이다.
+     */
+    messageId: text('message_id'),
     /** 200자로 자른 실패 사유. API 키는 들어가지 않는다. */
     error: text('error'),
     sentAt: integer('sent_at', { mode: 'timestamp_ms' }),
@@ -168,6 +185,7 @@ export const outboundEmails = sqliteTable(
     index('outbound_emails_created_idx').on(table.createdAt),
     index('outbound_emails_status_idx').on(table.status),
     index('outbound_emails_sent_by_idx').on(table.sentBy),
+    index('outbound_emails_message_id_idx').on(table.messageId),
   ]
 )
 
