@@ -42,6 +42,14 @@ jobs:
       - name: Check Prettier formatting
         run: npx prettier --check .
 
+      # public/llms.txt는 `data/`에서 생성한다. 콘텐츠만 커밋하고 생성기를 돌리지
+      # 않으면 "최종 업데이트" 월 같은 값이 조용히 뒤처진다(2026-11에 실제로 8월로
+      # 남아 있었다). 빌드도 이 파일을 다시 쓰지만 결과가 커밋되지 않아 매번
+      # 되돌아가므로, 여기서 어긋남을 막는다.
+      - name: Check llms.txt is up to date
+        if: matrix.node-version == '24.x'
+        run: npm run llms:check
+
       # 스키마 계약 검사는 node:fs globSync(Node 22+)를 쓴다. 게이트는 24.x에서만 돈다.
       # 스냅샷 JSON을 대조하므로 DB 접속은 불필요.
       - name: Check schema contract
