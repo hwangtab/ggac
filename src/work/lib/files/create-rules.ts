@@ -137,6 +137,12 @@ export type CreateActor = {
 }
 
 /**
+ * 자료실 첫 화면(채널 미선택)에서 고를 수 있는 채널 한 줄. 서버가 `loadCreatableChannels`로
+ * **지금 새 문서를 만들 수 있는 채널만** 골라 내려 준다(권한 판정은 채널마다 `canOfferCreateDocument`).
+ */
+export type CreateChannelOption = { id: string; name: string }
+
+/**
  * 새 문서 만들기 노출 조건(env·PC 판정은 호출부). 서버(createDocument)도 같은 기준으로 거절한다.
  * 내부 staff(게스트 아님) · 채널 멤버 · 보관 채널 아님 · 최상위 생성이면 공지 채널은 owner·관리자만(스레드 안은 누구나).
  */
