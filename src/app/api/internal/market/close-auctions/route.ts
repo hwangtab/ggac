@@ -13,6 +13,7 @@ import { timingSafeEqual } from 'node:crypto'
 import { sweepDueAuctions } from '@/lib/server/marketAuctionClose'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
+import { runTrackedCron } from '@work/lib/ops/cron-alert'
 
 const log = createLogger('api/internal/market/close-auctions')
 
@@ -35,11 +36,18 @@ function isAuthorized(request: NextRequest): boolean {
   )
 }
 
-async function handle(request: NextRequest) {
-  if (!isAuthorized(request)) return ApiError.unauthorized('권한이 없습니다.').toNextResponse()
+async function run(request: NextRequest) {
   const closed = await sweepDueAuctions(BATCH)
   if (closed > 0) log.info('마감 경매 닫기', { closed })
   return ApiSuccess.ok({ closed }).toNextResponse()
+}
+
+/**
+ * 인증을 통과한 호출만 실행 장부에 남긴다(Vercel 크론은 GET). 401은 장부를 오염시키지 않는다.
+ */
+async function handle(request: NextRequest) {
+  if (!isAuthorized(request)) return ApiError.unauthorized('권한이 없습니다.').toNextResponse()
+  return runTrackedCron('market-close-auctions', request, () => run(request))
 }
 
 export const GET = handle

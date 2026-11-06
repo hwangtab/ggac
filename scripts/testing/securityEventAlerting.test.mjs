@@ -84,6 +84,36 @@ test('프로덕션이 아니면 외부 채널로 보내지 않는다', () => {
   assert.equal(f.calls.length, 0)
 })
 
+test("'high' 경보 페이로드는 Slack·Discord 공통 모양이다(text+content, Slack 전용 attachments 없음)", async () => {
+  // 전에는 Slack 전용 attachments(color/fields)였다. Discord 는 그 모양을 400 으로 거절하므로
+  // 웹훅을 Discord 로 잡는 순간 경보가 한 건도 닿지 않는다(2026-11-05 사각지대 점검).
+  const prev = process.env.NODE_ENV
+  process.env.NODE_ENV = 'production'
+  process.env.SECURITY_ALERT_WEBHOOK_URL = 'https://hooks.example.com/alert'
+  const c = captureConsoleError()
+  const f = captureFetch()
+  try {
+    logSecurityEvent('BOARD_WORK_CRON_FAILED', { job: 'mention-digest', status: 500 }, 'high')
+    await new Promise(resolve => setTimeout(resolve, 0))
+  } finally {
+    f.restore()
+    c.restore()
+    delete process.env.SECURITY_ALERT_WEBHOOK_URL
+    process.env.NODE_ENV = prev
+  }
+  assert.equal(f.calls.length, 1)
+  const payload = JSON.parse(f.calls[0].init.body)
+  assert.equal(typeof payload.text, 'string')
+  assert.equal(
+    payload.content,
+    payload.text,
+    'Discord 는 content, Slack 은 text 만 읽는다 — 둘 다 같아야 한다'
+  )
+  assert.equal(payload.attachments, undefined, 'Slack 전용 attachments 는 Discord 에서 400 이 된다')
+  assert.match(payload.text, /BOARD_WORK_CRON_FAILED/)
+  assert.match(payload.text, /mention-digest/)
+})
+
 test('logSecurityEvent는 던지지 않는다 — 호출부 흐름을 끊지 않는다', () => {
   // 알림 실패가 요청을 죽이면 "보안 로그를 남겼더니 서비스가 멈췄다"가 된다.
   const prev = process.env.NODE_ENV

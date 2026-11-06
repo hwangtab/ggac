@@ -25,6 +25,7 @@ import {
 import { deletePublicObject, logicalPathFromUrl } from '@/lib/storage/provider'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
+import { runTrackedCron } from '@work/lib/ops/cron-alert'
 
 const log = createLogger('api/internal/uploads/cleanup')
 
@@ -59,12 +60,16 @@ function isAuthorized(request: NextRequest): boolean {
   )
 }
 
+/** 인증을 통과한 호출만 장부에 남긴다(Vercel 크론은 GET). 401은 장부를 오염시키지 않는다. */
 export async function GET(request: NextRequest) {
-  try {
-    if (!isAuthorized(request)) {
-      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
-    }
+  if (!isAuthorized(request)) {
+    return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
+  }
+  return runTrackedCron('uploads-cleanup', request, () => runCleanup(request))
+}
 
+async function runCleanup(request: NextRequest) {
+  try {
     const candidates = await listCleanupCandidates({
       ageMs: CLEANUP_AGE_MS,
       limit: CLEANUP_BATCH_LIMIT,

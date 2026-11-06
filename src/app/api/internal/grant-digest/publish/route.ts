@@ -42,6 +42,7 @@ import { MEMBER_FETCH_LIMIT, publishClaimedDigest } from '@/lib/server/grantPubl
 import { filterByDefaultInterests } from '@/lib/server/interestMatch'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
+import { runTrackedCron } from '@work/lib/ops/cron-alert'
 
 const log = createLogger('api/internal/grant-digest/publish')
 
@@ -98,7 +99,9 @@ export async function GET(request: NextRequest) {
   if (!bearerMatches(request, process.env.CRON_SECRET)) {
     return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
   }
-  return run(process.env.GRANT_AUTO_PUBLISH !== 'true')
+  return runTrackedCron('grant-digest-publish', request, () =>
+    run(process.env.GRANT_AUTO_PUBLISH !== 'true')
+  )
 }
 
 /** 손으로 부를 때. `?dry=1`이면 드라이런. */

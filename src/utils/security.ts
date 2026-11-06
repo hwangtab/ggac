@@ -422,26 +422,36 @@ export const logSecurityEvent = (
   // 알림 채널은 모니터링 전송과 **따로** 보낸다. 전에는 둘이 한 try 안에서
   // 순차 await라, 모니터링 URL이 죽어 있으면 정작 사람을 부르는 알림이 한 번도
   // 나가지 않았다.
+  //
+  // 페이로드는 **채널을 가리지 않는 모양**으로 보낸다. 전에는 Slack 전용
+  // `attachments`(color/fields)였다. 그 모양은 Discord 에서 400 으로 거절되고
+  // (`attachments` 는 파일 첨부 배열이라 다른 스키마다), 그러면 웹훅을 Discord 로
+  // 잡는 순간 **경보가 한 건도 닿지 않는다**. Slack·Discord·Google Chat 모두
+  // 본문 글은 `text` 또는 `content` 하나로 읽으므로 둘 다 같은 글을 담아 보낸다
+  // (모르는 키는 각 서비스가 무시한다).
   if (severity === 'high' && process.env.SECURITY_ALERT_WEBHOOK_URL) {
+    const message = formatOpsAlertMessage(event, severity, immutableDetails)
     void postSecurityPayload(process.env.SECURITY_ALERT_WEBHOOK_URL, {
-      text: `🚨 Critical Security Event: ${event}`,
-      attachments: [
-        {
-          color: 'danger',
-          fields: [
-            { title: 'Event', value: event, short: true },
-            { title: 'Severity', value: severity.toUpperCase(), short: true },
-            {
-              title: 'Details',
-              value: JSON.stringify(immutableDetails, null, 2),
-              short: false,
-            },
-          ],
-          timestamp: immutableDetails.timestamp,
-        },
-      ],
+      text: message,
+      content: message,
     })
   }
+}
+
+/** 경보 한 건을 사람이 읽는 글 한 덩이로 — 웹훅 채널(Slack·Discord·Google Chat) 공통 */
+function formatOpsAlertMessage(
+  event: string,
+  severity: string,
+  details: Record<string, unknown>
+): string {
+  const { timestamp, severity: _s, eventType: _e, ...rest } = details
+  const body = JSON.stringify(rest)
+  const clipped = body.length > 1200 ? `${body.slice(0, 1200)}…` : body
+  return [
+    `🚨 ${event} (${severity.toUpperCase()})`,
+    `시각: ${String(timestamp ?? new Date().toISOString())}`,
+    `내용: ${clipped}`,
+  ].join('\n')
 }
 
 /**

@@ -15,6 +15,8 @@ const { isCronAuthorized, isCronSecretConfigured } = await import(
 )
 const {
   CRON_EXPECTED_MINUTES,
+  OPS_CRON_EXPECTED_MINUTES,
+  OPS_CRON_PATHS,
   BOARD_WORK_CRON_PREFIX,
   WATCHDOG_JOB,
   findCronProblems,
@@ -77,7 +79,46 @@ test('vercel.json 업무툴 크론과 기대 주기 표가 같다', () => {
   assert.equal(mine.length, Object.keys(CRON_EXPECTED_MINUTES).length)
 })
 
-test('크론 감시: 멈춤(running 방치)·지연(주기 2배)·정상 — 감시 크론 자신과 기록 없는 크론은 판정하지 않는다', () => {
+test('vercel.json 업무툴 밖 크론도 기대 주기 표와 같고, 표에 없는 크론이 없다', () => {
+  const vercel = JSON.parse(readFileSync('vercel.json', 'utf8'))
+  const others = vercel.crons.filter(c => !c.path.startsWith(BOARD_WORK_CRON_PREFIX))
+  const byPath = new Map()
+  for (const c of others) {
+    // 같은 경로가 두 번 등록될 수 있다(지원사업 발행은 08:17·11:17 두 번) — 주기가 다르면 그 자체가 잘못이다
+    const minutes = intervalMinutesOf(c.schedule)
+    assert.notEqual(minutes, null, `${c.path} 의 cron 식을 해석하지 못했다: ${c.schedule}`)
+    if (byPath.has(c.path)) assert.equal(byPath.get(c.path), minutes, c.path)
+    byPath.set(c.path, minutes)
+  }
+  // ① 표의 모든 작업이 vercel.json 에 있고 주기가 같다
+  for (const [job, minutes] of Object.entries(OPS_CRON_EXPECTED_MINUTES)) {
+    const path = OPS_CRON_PATHS[job]
+    assert.ok(path, `${job} 의 경로가 표에 없다`)
+    assert.equal(byPath.get(path), minutes, `${job} (${path})`)
+  }
+  // ② 표에 없는 크론이 vercel.json 에 남아 있으면 감시 사각지대다
+  for (const path of byPath.keys()) {
+    assert.ok(Object.values(OPS_CRON_PATHS).includes(path), `${path} 가 감시 표에 없다`)
+  }
+  assert.equal(byPath.size, Object.keys(OPS_CRON_EXPECTED_MINUTES).length)
+})
+
+test('업무툴 밖 크론 라우트가 자기 이름으로 장부에 남는다(이름이 어긋나면 감시가 빈다)', () => {
+  for (const [job, path] of Object.entries(OPS_CRON_PATHS)) {
+    if (job === WATCHDOG_JOB) continue // 감시자 자신은 runTrackedCron(JOB, …) — 아래에서 따로 본다
+    const src = readFileSync(`src/app${path}/route.ts`, 'utf8')
+    assert.match(
+      src,
+      new RegExp(`runTrackedCron\\('${job}'`),
+      `${path} 가 '${job}' 이름으로 장부를 남기지 않는다`
+    )
+  }
+  const watchdog = readFileSync('src/app/api/internal/ops/cron-watchdog/route.ts', 'utf8')
+  assert.match(watchdog, /const JOB = 'cron-watchdog'/)
+  assert.match(watchdog, /runTrackedCron\(JOB,/)
+})
+
+test('크론 감시: 멈춤(running 방치)·지연(주기 2배)·마지막 실패 — 기록 없는 크론은 판정하지 않는다', () => {
   const now = new Date('2026-11-04T03:00:00Z')
   const ago = m => new Date(now.getTime() - m * 60_000).toISOString()
   const problems = findCronProblems(
@@ -100,11 +141,19 @@ test('크론 감시: 멈춤(running 방치)·지연(주기 2배)·정상 — 감
         last_succeeded_at: ago(60),
         last_status: 'ok',
       },
+      // 마지막 실행이 실패한 크론 — 다음 성공이 덮을 때까지 '지금 깨져 있다'
+      {
+        job: 'member-documents-retention',
+        last_started_at: ago(120),
+        last_succeeded_at: ago(1560),
+        last_status: 'failed',
+      },
+      // 감시자 자신도 표에 있다(자기가 오래 못 돌았으면 다시 살아난 첫 실행에서 자기를 알린다)
       {
         job: WATCHDOG_JOB,
-        last_started_at: ago(9999),
+        last_started_at: ago(1),
         last_succeeded_at: ago(9999),
-        last_status: 'failed',
+        last_status: 'running',
       },
     ],
     now
@@ -114,6 +163,46 @@ test('크론 감시: 멈춤(running 방치)·지연(주기 2배)·정상 — 감
     [
       ['purge-deleted', 'stuck'],
       ['push-cleanup', 'stale'],
+      ['member-documents-retention', 'failed'],
+      [WATCHDOG_JOB, 'stale'],
+    ]
+  )
+})
+
+test('크론 감시: 업무툴 밖 크론(문서함 보존·지원사업 발행·회비)도 같은 표로 본다', () => {
+  const now = new Date('2026-11-04T03:00:00Z')
+  const ago = m => new Date(now.getTime() - m * 60_000).toISOString()
+  const problems = findCronProblems(
+    [
+      // 주 1회 발행이 3주째 안 돌았다 → 조합원이 메일을 못 받고 있다
+      {
+        job: 'grant-digest-publish',
+        last_started_at: ago(30_000),
+        last_succeeded_at: ago(30_000),
+        last_status: 'ok',
+      },
+      // 회비 만료가 40분째(기대 10분 × 2) 성공하지 않았다
+      {
+        job: 'dues-expire',
+        last_started_at: ago(40),
+        last_succeeded_at: ago(40),
+        last_status: 'ok',
+      },
+      // 로컬/E2E 에서 손으로 돌린 문서함 보존이 방금 성공 — 문제 없음
+      {
+        job: 'member-documents-retention',
+        last_started_at: ago(2),
+        last_succeeded_at: ago(2),
+        last_status: 'ok',
+      },
+    ],
+    now
+  )
+  assert.deepEqual(
+    problems.map(p => [p.job, p.kind]),
+    [
+      ['dues-expire', 'stale'],
+      ['grant-digest-publish', 'stale'],
     ]
   )
 })

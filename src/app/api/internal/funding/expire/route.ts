@@ -32,6 +32,7 @@ import { sendNoticesPaced } from '@/lib/funding/pacedNotices'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
 import { logSecurityEvent } from '@/utils/security'
+import { runTrackedCron } from '@work/lib/ops/cron-alert'
 
 const log = createLogger('api/internal/funding/expire')
 
@@ -79,8 +80,7 @@ function reportBroken(
   }
 }
 
-async function handle(request: NextRequest) {
-  if (!isAuthorized(request)) return ApiError.unauthorized('권한이 없습니다.').toNextResponse()
+async function run(request: NextRequest) {
   if (!isPaymentEnabled()) {
     // 스위치를 내린 것 자체는 사고가 아니다. 그런데 스위치가 내려간 동안에도
     // 결제 대기 선점은 남아 있을 수 있고, 그 건들은 아무도 보지 않는다.
@@ -364,6 +364,14 @@ async function handleWithReport(request: NextRequest) {
     })
     return ApiError.internalServerError('만료 정리를 실행하지 못했습니다.').toNextResponse()
   }
+}
+
+/**
+ * 인증을 통과한 호출만 실행 장부에 남긴다(Vercel 크론은 GET). 401은 장부를 오염시키지 않는다.
+ */
+async function handle(request: NextRequest) {
+  if (!isAuthorized(request)) return ApiError.unauthorized('권한이 없습니다.').toNextResponse()
+  return runTrackedCron('funding-expire', request, () => run(request))
 }
 
 export const GET = handleWithReport

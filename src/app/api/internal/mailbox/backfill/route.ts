@@ -47,6 +47,7 @@ import {
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
 import { logSecurityEvent } from '@/utils/security'
+import { runTrackedCron } from '@work/lib/ops/cron-alert'
 
 const log = createLogger('api/internal/mailbox/backfill')
 
@@ -88,12 +89,16 @@ function isAuthorized(request: NextRequest): boolean {
   )
 }
 
+/** 인증을 통과한 호출만 장부에 남긴다(401은 장부를 오염시키지 않는다 — 스캐너가 두드린 것과 크론 실패는 다르다). */
 async function handleBackfill(request: NextRequest) {
-  try {
-    if (!isAuthorized(request)) {
-      return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
-    }
+  if (!isAuthorized(request)) {
+    return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
+  }
+  return runTrackedCron('mailbox-backfill', request, () => runBackfill(request))
+}
 
+async function runBackfill(request: NextRequest) {
+  try {
     // 보낸 메일 원장 정리는 본문 백필보다 **먼저** 돈다 — 아래 백필의 조회가 실패해 바깥 catch로 빠져도
     // 이 정리가 건너뛰어지지 않게 하고, 정리 실패가 백필을 막지도 않게 각각 try로 감싼다.
     const housekeepingNow = Date.now()
