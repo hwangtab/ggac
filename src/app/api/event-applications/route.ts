@@ -9,6 +9,8 @@ import {
 } from '@/utils/eventApplicationValidation'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { createEventApplication, hasEventApplicationForContact } from '@/db/queries/misc'
+import { moveEventPhotoToPrivate } from '@/lib/eventApplications/photo'
+import { logSecurityEvent } from '@/utils/security'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -95,6 +97,33 @@ export async function POST(request: NextRequest) {
       photo_url: d.photo_url?.trim() || null,
       privacy_consent: true,
       privacy_consent_at: new Date().toISOString(),
+    }
+
+    // 신청 사진은 **제출 시점에 비공개 저장소로 옮긴다**(2026-11-06 사각지대 점검).
+    // 폼은 작성 중 미리보기를 위해 공개 저장소에 임시로 올리지만, 접수된 신청의 사진을
+    // 공개 URL 로 영구 보관하면 신청자의 개인정보가 주소를 아는 누구에게나 열린다.
+    // 옮기지 못하면(저장소 장애) 공개 URL 을 그대로 두고 'high'로 알린다 — 신청 자체를
+    // 막지는 않는다(사진이 없어도 접수는 유효하고, 사무국이 사진을 다시 받을 수 있다).
+    if (cleanedData.photo_url) {
+      try {
+        const moved = await moveEventPhotoToPrivate(cleanedData.photo_url)
+        if (moved) {
+          cleanedData.photo_url = moved
+        } else {
+          logSecurityEvent(
+            'EVENT_PHOTO_PRIVATE_MOVE_FAILED',
+            { eventSlug: cleanedData.event_slug },
+            'high'
+          )
+        }
+      } catch (error) {
+        console.error('[event-applications] photo move error:', error)
+        logSecurityEvent(
+          'EVENT_PHOTO_PRIVATE_MOVE_FAILED',
+          { eventSlug: cleanedData.event_slug },
+          'high'
+        )
+      }
     }
 
     // 애플리케이션 단계의 중복 검사. insert 전 SELECT라 원자적이지 않다 —
