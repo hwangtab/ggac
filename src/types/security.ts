@@ -293,6 +293,9 @@ export type SecurityEventType =
   // 2026-11-05부터 감시자는 독립 크론(`/api/internal/ops/cron-watchdog`)이고, 업무툴 밖 크론(문서함 보존·지원사업
   // 발행·회비·티켓·경매 만료·메일함 백필·업로드 정리)까지 같은 이벤트로 본다.
   | 'BOARD_WORK_CRON_STALLED'
+  // 행사·워크숍 신청 사진을 제출 시점에 비공개 저장소로 옮기지 못한 경우(저장소 장애·원본 소실).
+  // 그대로 두면 신청자 사진이 공개 URL 로 영구 보관되므로 사무국이 곧바로 봐야 한다.
+  | 'EVENT_PHOTO_PRIVATE_MOVE_FAILED'
   // 크론 감시자 자신이 멈춘 경우(외부 상시 점검 `/api/internal/ops/cron-health`가 감시자 행까지 보고 판정).
   // 감시자가 죽으면 다른 크론의 정지도 함께 보이지 않으므로 별도로 남긴다.
   | 'CRON_WATCHDOG_DOWN'

@@ -292,6 +292,19 @@ export async function deleteEventApplication(id: string): Promise<void> {
   await db.delete(eventApplications).where(eq(eventApplications.id, id))
 }
 
+/**
+ * 신청 사진의 저장 참조값만 읽는다 — 관리자 사진 스트리밍 라우트가 쓴다.
+ * 새 행은 비공개 경로(`event-applications/…`), 옛 행은 공개 URL 이다(둘 다 그대로 돌려준다).
+ */
+export async function getEventApplicationPhotoRef(id: string): Promise<string | null> {
+  const [row] = await db
+    .select({ photoUrl: eventApplications.photoUrl })
+    .from(eventApplications)
+    .where(eq(eventApplications.id, id))
+    .limit(1)
+  return row?.photoUrl ?? null
+}
+
 // -------------------------------------------------------------------------
 // member_bulk_operations — 대량 작업 감사 로그
 // -------------------------------------------------------------------------

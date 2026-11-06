@@ -13,6 +13,8 @@ import { eq } from 'drizzle-orm'
 import { db } from '@/db/client'
 import { eventApplications } from '@/db/schema'
 import { logicalPathFromUrl, deletePublicObject } from '@/lib/storage/provider'
+import { isPrivateEventPhotoRef } from '@/lib/eventApplications/photo'
+import { getSiteUrl } from '@/utils/site'
 import { createLogger } from '@/utils/logger'
 import {
   deleteEventApplication,
@@ -67,6 +69,15 @@ export const GET = defineApiRoute({
     const events = allProjects
       .filter(p => p.applicationForm?.internal === true)
       .map(p => ({ slug: p.slug, title: p.title }))
+
+    // 비공개로 옮긴 신청 사진(2026-11-06)은 인증된 스트리밍 라우트 주소로 바꿔 내려준다.
+    // 화면(클라이언트)은 예전처럼 `photo_url`을 <img src>로 쓰고, 옛 행(절대 URL)은 그대로다.
+    const siteUrl = getSiteUrl().replace(/\/$/, '')
+    data = data.map(app =>
+      isPrivateEventPhotoRef(app.photo_url)
+        ? { ...app, photo_url: `${siteUrl}/api/admin/event-applications/${app.id}/photo` }
+        : app
+    )
 
     return ApiSuccess.ok(
       {
