@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   FiMail,
   FiEdit,
@@ -27,6 +27,7 @@ import ComposeModal, { type ForwardSource } from './ComposeModal'
 import LabelManager, { LabelChip, type MailLabel } from './LabelManager'
 import RuleManager from './RuleManager'
 import TemplateManager, { TemplatePicker, type ReplyTemplate } from './TemplateManager'
+import { SHORTCUT_HELP, mailboxShortcut } from './shortcuts'
 import SentMailbox from './SentMailbox'
 import {
   buildBodySrcDoc,
@@ -230,6 +231,9 @@ export default function MailboxView({ className = '' }: { className?: string }) 
   const [checkedIds, setCheckedIds] = useState<string[]>([])
   // "내 담당" — 지금 로그인한 사람이 담당자인 메일만. 이사·감사도 쓴다.
   const [mineOnly, setMineOnly] = useState(false)
+  // 키보드 단축키 도움말(`?`)과 검색창(`/`이 초점을 옮긴다).
+  const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
   // "다시 알림" 보기 — 다시 알림을 건 메일만. 기본 목록에서는 숨긴다(검색·거르기 중에는 서버가 함께 준다).
   const [snoozedOnly, setSnoozedOnly] = useState(false)
   const [snoozing, setSnoozing] = useState(false)
@@ -762,6 +766,25 @@ export default function MailboxView({ className = '' }: { className?: string }) 
     }
   }
 
+  /** 지금 상세의 메일을 전달 창으로 연다(버튼과 `f` 키가 같이 쓴다). 상세가 다 읽힌 뒤에만 연다. */
+  const openForward = () => {
+    if (!composeEnabled || !detail || detail.id !== selectedId) return
+    setComposeTo(undefined)
+    setComposeForward({
+      emailId: detail.id,
+      subject: forwardSubject(detail.subject),
+      body: buildForwardText(detail),
+      attachments: attachments.map(att => ({
+        id: att.id,
+        filename: att.filename,
+        size_bytes: att.size_bytes,
+        // 목록의 첨부 개수와 같은 규칙 — cid로 박힌 이미지는 본문 이미지다.
+        inline: att.content_id !== null && (att.content_type ?? '').startsWith('image/'),
+      })),
+    })
+    setComposeOpen(true)
+  }
+
   const openReply = (email: InboundEmail, all = false) => {
     setReplyTarget(email)
     setReplyBody('')
@@ -885,6 +908,83 @@ export default function MailboxView({ className = '' }: { className?: string }) 
         )?.cc.length ?? 0)
       : 0
 
+  // 키보드 단축키 — 판정은 순수 함수(`shortcuts.ts`)가 하고, 여기서는 동작만 잇는다. 리스너는 한 번만 달고 최신
+  // 상태는 ref로 읽는다(렌더마다 다시 달지 않게).
+  const shortcutHandler = useRef<(event: KeyboardEvent) => void>(() => undefined)
+  shortcutHandler.current = (event: KeyboardEvent) => {
+    if (shortcutHelpOpen) {
+      if (event.key === 'Escape' || event.key === '?') {
+        event.preventDefault()
+        setShortcutHelpOpen(false)
+      }
+      return
+    }
+    const modalOpen = Boolean(
+      replyTarget || composeOpen || labelManagerOpen || ruleManager || templateManagerOpen
+    )
+    const action = mailboxShortcut(
+      {
+        key: event.key,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        altKey: event.altKey,
+        target: event.target instanceof HTMLElement ? event.target : null,
+      },
+      { canManage, modalOpen }
+    )
+    if (!action) return
+    // 보낸 편지함에는 목록 단축키가 없다 — 도움말(`?`)만 어디서나 연다.
+    if (action !== 'help' && view !== 'inbox') return
+    event.preventDefault()
+    const index = emails.findIndex(e => e.id === selectedId)
+    const current = selectedEmail
+    const go = (target: InboundEmail | undefined) => {
+      if (!target) return
+      selectEmail(target)
+      document.querySelector(`[data-mail-id="${target.id}"]`)?.scrollIntoView({ block: 'nearest' })
+    }
+    switch (action) {
+      case 'next':
+        go(emails[index < 0 ? 0 : index + 1])
+        break
+      case 'prev':
+        go(emails[index < 0 ? 0 : index - 1])
+        break
+      case 'close':
+        closeDetail()
+        break
+      case 'search':
+        searchInputRef.current?.focus()
+        break
+      case 'help':
+        setShortcutHelpOpen(true)
+        break
+      case 'toggle-select':
+        if (selectedId) toggleChecked(selectedId)
+        break
+      case 'archive':
+        if (current) updateStatus(current, 'archived')
+        break
+      case 'spam':
+        if (current) updateStatus(current, 'spam')
+        break
+      case 'reply':
+        if (current) openReply(current)
+        break
+      case 'reply-all':
+        if (current && selectedReplyAllCount > 0) openReply(current, true)
+        break
+      case 'forward':
+        openForward()
+        break
+    }
+  }
+  useEffect(() => {
+    const listener = (event: KeyboardEvent) => shortcutHandler.current(event)
+    window.addEventListener('keydown', listener)
+    return () => window.removeEventListener('keydown', listener)
+  }, [])
+
   return (
     <div className={`flex flex-col ${className}`}>
       {/* 헤더 — 좁은 화면에서 상세를 보고 있을 때는 접어 세로를 상세 칸에
@@ -979,6 +1079,7 @@ export default function MailboxView({ className = '' }: { className?: string }) 
             <div className="p-3 border-b border-gray-100 space-y-3 shrink-0">
               <div className="flex items-center gap-2">
                 <input
+                  ref={searchInputRef}
                   type="text"
                   value={searchInput}
                   onChange={e => setSearchInput(e.target.value)}
@@ -1342,6 +1443,7 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                     return (
                       <div
                         key={email.id}
+                        data-mail-id={email.id}
                         onClick={() => selectEmail(email)}
                         className={`p-3 cursor-pointer transition-colors ${
                           isSelected ? 'bg-primary-50' : 'hover:bg-gray-50'
@@ -1996,24 +2098,7 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                     </button>
                     {composeEnabled && detail && detail.id === selectedEmail.id && (
                       <button
-                        onClick={() => {
-                          setComposeTo(undefined)
-                          setComposeForward({
-                            emailId: detail.id,
-                            subject: forwardSubject(detail.subject),
-                            body: buildForwardText(detail),
-                            attachments: attachments.map(att => ({
-                              id: att.id,
-                              filename: att.filename,
-                              size_bytes: att.size_bytes,
-                              // 목록의 첨부 개수와 같은 규칙 — cid로 박힌 이미지는 본문 이미지다.
-                              inline:
-                                att.content_id !== null &&
-                                (att.content_type ?? '').startsWith('image/'),
-                            })),
-                          })
-                          setComposeOpen(true)
-                        }}
+                        onClick={openForward}
                         className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
                       >
                         <FiSend className="w-3 h-3" />
@@ -2038,6 +2123,46 @@ export default function MailboxView({ className = '' }: { className?: string }) 
       )}
 
       {/* 새 메일 작성 모달 — 관리자 + 서버 스위치가 켜졌을 때만 그린다. */}
+      {shortcutHelpOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={e => {
+            if (e.target === e.currentTarget) setShortcutHelpOpen(false)
+          }}
+        >
+          <div
+            role="dialog"
+            aria-label="키보드 단축키"
+            className="bg-white rounded-xl shadow-xl w-full max-w-sm p-5 space-y-3 text-sm"
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold text-gray-900">키보드 단축키</h2>
+              <button
+                onClick={() => setShortcutHelpOpen(false)}
+                aria-label="닫기"
+                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+              >
+                <FiX className="w-5 h-5" />
+              </button>
+            </div>
+            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
+              {SHORTCUT_HELP.filter(item => canManage || !item.manageOnly).map(item => (
+                <div key={item.keys} className="contents">
+                  <dt>
+                    <kbd className="rounded border border-gray-300 bg-gray-50 px-1.5 py-0.5 font-mono text-xs">
+                      {item.keys}
+                    </kbd>
+                  </dt>
+                  <dd className="text-gray-700">{item.label}</dd>
+                </div>
+              ))}
+            </dl>
+            <p className="text-xs text-gray-400">
+              받은 메일함에서 동작합니다. 글을 쓰는 중에는 동작하지 않습니다.
+            </p>
+          </div>
+        </div>
+      )}
       {canManage && templateManagerOpen && (
         <TemplateManager
           templates={templates}
