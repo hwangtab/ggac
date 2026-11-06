@@ -60,15 +60,26 @@ assertNoRemoteTursoTarget()
 //  - **`E2E_TURSO_DATABASE_URL`이 있을 때만.** `next build`는 프리렌더하면서 DB를 읽는다
 //    (아티스트 등). 그 값이 없으면 빌드가 `.env.local`의 운영 Turso를 읽게 되므로, 빌드
 //    경로는 로컬 E2E DB가 지정된 경우에만 탄다. 없으면 예전처럼 dev 서버다.
-//  - **CI가 아닐 때만.** CI의 smoke 잡(`--project=chromium`)은 예전 그대로 dev 서버다.
+//  - **CI에서는 `E2E_PROD_SERVER=1`을 준 경우에만.** CI의 smoke 잡(`--project=chromium`)은 DB가
+//    없으므로 예전 그대로 dev 서버다. 권한 E2E 잡(`authz-e2e`)은 운영 빌드를 명시적으로 켠다 —
+//    dev 서버로 돌리면 처음 닿는 라우트의 컴파일 대기로 30초 타임아웃이 나고 로그인이 튕기는 등
+//    앱과 무관한 실패가 섞인다(위 문단). CI 기본값이 dev 서버인 이유는 기존 smoke 잡을 건드리지
+//    않기 위해서지, CI에서 운영 빌드가 불가능해서가 아니다.
 //  - **`PLAYWRIGHT_DEV_SERVER=1`이면 dev 서버로 돌아간다**(탈출구 — 화면을 고치며 HMR로
 //    돌려 볼 때).
 const useProductionServer =
-  !isCI && !!process.env.E2E_TURSO_DATABASE_URL && process.env.PLAYWRIGHT_DEV_SERVER !== '1'
+  !!process.env.E2E_TURSO_DATABASE_URL &&
+  (!isCI || process.env.E2E_PROD_SERVER === '1') &&
+  process.env.PLAYWRIGHT_DEV_SERVER !== '1'
 
 // 운영 빌드 출력은 `.next`가 아니라 `.next-e2e`에 둔다(`next.config.js`의 `distDir`). 같은
 // 워크트리에서 `next dev`가 돌고 있어도 서로의 청크를 덮지 않는다.
 const E2E_DIST_DIR = '.next-e2e'
+
+// 로컬은 이미 설치된 Chrome(channel)을, CI는 워크플로가 받는 번들 크로미움을 쓴다.
+// authz 프로젝트만 channel: 'chrome' 을 박아 두었더니 CI 러너(Chrome 없음)에서 그 스펙들이
+// 통째로 실행되지 못했다 — 2026-11-06에 권한 E2E를 CI로 옮기며 번들 브라우저를 허용한다.
+const browserChannel = isCI ? {} : { channel: 'chrome' as const }
 
 // 운영 모드의 레이트리밋은 Upstash가 없으면 쓰기를 503으로 닫는다 — 로컬 가짜 Upstash를
 // 함께 띄워 앱이 운영과 같은 Redis 경로를 타게 한다(`e2e/helpers/fakeUpstash.mjs` 주석).
@@ -117,7 +128,8 @@ export default defineConfig({
       // 이 프로젝트만 번들 브라우저를 고집하는 바람에, 개발자 머신에서
       // `authz`가 아닌 스펙 5개(약 30건 — 게시판 SSR·이사회·홈 모션·비밀번호
       // 재설정·API 회귀)가 **아예 실행되지 못했다.** CI는 `smoke.spec.ts`만
-      // 돌리므로 그 30건은 어디에서도 돌지 않는 상태였다(2026-09-01 확인).
+      // 돌리므로 그 30건은 어디에서도 돌지 않는 상태였다(2026-09-01 확인). 2026-11-06부터
+      // CI의 `authz-e2e` 잡이 authz 프로젝트들을 함께 돌린다.
       //
       // 번들 브라우저를 받아 해결하려 들지 마라. 저장소 정책은 **받지 않는
       // 것**이다 — `npx playwright install`은 프로젝트 버전이 아닌 최신본을
@@ -138,33 +150,35 @@ export default defineConfig({
       testIgnore:
         /authz[.-]|board-work-(chat|tabs|files|editors|search|cron|layout|library)\.spec\.ts|member-documents\.spec\.ts|board-document-edit\.spec\.ts/,
     },
-    // authz 계열은 로컬 Turso(`turso dev`)와 픽스처 시드가 있어야 도는 로컬 전용
-    // 프로젝트다(CI는 돌리지 않는다). 단계 4 Task 5로 앱에서 Supabase가 사라진 뒤로
-    // 로컬 Supabase 스택은 더 이상 필요하지 않다 — 실행 절차는 scripts/turso/README.md.
+    // authz 계열은 로컬 Turso(`turso dev`)와 픽스처 시드가 있어야 도는 프로젝트다.
+    // **CI에서도 돈다**(`.github/workflows/ci.yml`의 `authz-e2e` 잡 — 2026-11-06부터).
+    // 그 잡은 turso dev를 띄우고 시드를 넣은 뒤 `E2E_PROD_SERVER=1`로 이 설정을 운영 빌드
+    // 경로로 태운다. 단계 4 Task 5로 앱에서 Supabase가 사라진 뒤로 로컬 Supabase 스택은
+    // 더 이상 필요하지 않다 — 실행 절차는 scripts/turso/README.md.
     // channel: 'chrome'으로 개발자 머신에 이미 설치된 Chrome을 쓴다 — Playwright 번들
     // 브라우저(약 150MB)를 따로 받지 않아도 권한 경계 증명을 재현할 수 있게 하려는 것이다.
     // CI가 실행하는 위 `chromium` 프로젝트는 번들 브라우저를 그대로 쓴다.
     {
       name: 'authz-setup',
       testMatch: /authz\.setup\.ts/,
-      use: { ...devices['Desktop Chrome'], channel: 'chrome' },
+      use: { ...devices['Desktop Chrome'], ...browserChannel },
     },
     {
       name: 'authz',
       testMatch:
         /(authz-(ownership|personal|remaining|maintenance|roles|mailbox|mailbox-compose|funding|features|email-verification|market|timebank|board-work|member-documents|board-document-edit)|board-work-(chat|tabs|files|editors|search|cron|layout|library)|member-documents|board-document-edit)\.spec\.ts/,
       dependencies: ['authz-setup'],
-      use: { ...devices['Desktop Chrome'], channel: 'chrome' },
+      use: { ...devices['Desktop Chrome'], ...browserChannel },
     },
     // authz-boundaries는 로그인 상태(storageState)를 쓰지 않는 비인증 경계 스펙이라
     // authz-setup 의존이 없다. authz 프로젝트가 만들어지기 전에 추가된 파일이라
     // testMatch에서 누락돼 번들 브라우저를 쓰는 chromium 프로젝트로 떨어져 있었고,
     // 그 결과 번들 브라우저가 없는 머신에서 7개 테스트가 통째로 실행되지 못했다.
-    // 형제들과 같이 시스템 Chrome을 쓴다(다운로드 0). CI는 smoke.spec.ts만 돌린다.
+    // 형제들과 같이 시스템 Chrome을 쓴다(다운로드 0). CI에서는 번들 크로미움이다.
     {
       name: 'authz-public',
       testMatch: /authz-boundaries\.spec\.ts/,
-      use: { ...devices['Desktop Chrome'], channel: 'chrome' },
+      use: { ...devices['Desktop Chrome'], ...browserChannel },
     },
   ],
 
