@@ -76,10 +76,7 @@ const useProductionServer =
 // 워크트리에서 `next dev`가 돌고 있어도 서로의 청크를 덮지 않는다.
 const E2E_DIST_DIR = '.next-e2e'
 
-// 로컬은 이미 설치된 Chrome(channel)을, CI는 워크플로가 받는 번들 크로미움을 쓴다.
-// authz 프로젝트만 channel: 'chrome' 을 박아 두었더니 CI 러너(Chrome 없음)에서 그 스펙들이
-// 통째로 실행되지 못했다 — 2026-11-06에 권한 E2E를 CI로 옮기며 번들 브라우저를 허용한다.
-const browserChannel = isCI ? {} : { channel: 'chrome' as const }
+// 로컬은 이미 깔린 시스템 Chrome(channel)을, CI는 워크플로가 받는 번들 크로미움을 쓴다.
 
 // 운영 모드의 레이트리밋은 Upstash가 없으면 쓰기를 503으로 닫는다 — 로컬 가짜 Upstash를
 // 함께 띄워 앱이 운영과 같은 Redis 경로를 타게 한다(`e2e/helpers/fakeUpstash.mjs` 주석).
@@ -161,14 +158,20 @@ export default defineConfig({
     {
       name: 'authz-setup',
       testMatch: /authz\.setup\.ts/,
-      use: { ...devices['Desktop Chrome'], ...browserChannel },
+      use: {
+        ...devices['Desktop Chrome'],
+        ...(process.env.CI ? {} : { channel: 'chrome' as const }),
+      },
     },
     {
       name: 'authz',
       testMatch:
         /(authz-(ownership|personal|remaining|maintenance|roles|mailbox|mailbox-compose|funding|features|email-verification|market|timebank|board-work|member-documents|board-document-edit)|board-work-(chat|tabs|files|editors|search|cron|layout|library)|member-documents|board-document-edit)\.spec\.ts/,
       dependencies: ['authz-setup'],
-      use: { ...devices['Desktop Chrome'], ...browserChannel },
+      use: {
+        ...devices['Desktop Chrome'],
+        ...(process.env.CI ? {} : { channel: 'chrome' as const }),
+      },
     },
     // authz-boundaries는 로그인 상태(storageState)를 쓰지 않는 비인증 경계 스펙이라
     // authz-setup 의존이 없다. authz 프로젝트가 만들어지기 전에 추가된 파일이라
@@ -178,7 +181,10 @@ export default defineConfig({
     {
       name: 'authz-public',
       testMatch: /authz-boundaries\.spec\.ts/,
-      use: { ...devices['Desktop Chrome'], ...browserChannel },
+      use: {
+        ...devices['Desktop Chrome'],
+        ...(process.env.CI ? {} : { channel: 'chrome' as const }),
+      },
     },
   ],
 
