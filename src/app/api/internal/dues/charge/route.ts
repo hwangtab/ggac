@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
       log,
     })
 
-    log.info('자동결제 실행 완료', { billingMonth, ...result })
+    log.summary('자동결제 실행 완료', { billingMonth, ...result })
     return ApiSuccess.ok({ billingMonth, ...result }).toNextResponse()
   } catch (error) {
     // Vercel 크론은 실패를 알리지 않는다. 한 달치 청구가 통째로 빠지는 고장을

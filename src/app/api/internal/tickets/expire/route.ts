@@ -156,7 +156,7 @@ async function run(request: NextRequest) {
     )
   }
 
-  log.info('예매 선점 정리', { ...result, reclaimed })
+  log.summary('예매 선점 정리', { ...result, reclaimed })
   return ApiSuccess.ok({ ...result, reclaimed }).toNextResponse()
 }
 

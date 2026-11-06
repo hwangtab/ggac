@@ -38,7 +38,7 @@ function isAuthorized(request: NextRequest): boolean {
 
 async function run(request: NextRequest) {
   const closed = await sweepDueAuctions(BATCH)
-  if (closed > 0) log.info('마감 경매 닫기', { closed })
+  if (closed > 0) log.summary('마감 경매 닫기', { closed })
   return ApiSuccess.ok({ closed }).toNextResponse()
 }
 
