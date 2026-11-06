@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from '@work/components/ui/dialog'
 import { Input } from '@work/components/ui/input'
+import { NativeSelect } from '@work/components/ui/native-select'
 import {
   CREATE_DOCUMENT_TYPES,
   CREATE_NAME_MAX,
@@ -21,6 +22,7 @@ import {
   defaultDocumentName,
   hwpxTemplateInfo,
   normalizeCreateFileName,
+  type CreateChannelOption,
   type CreateDocumentType,
   type HwpxTemplateId,
 } from '@work/lib/files/create-rules'
@@ -37,6 +39,7 @@ export default function CreateDocumentDialog({
   open,
   onOpenChange,
   channelId,
+  channels,
   type: presetType,
   folderPath,
   parentId,
@@ -45,7 +48,10 @@ export default function CreateDocumentDialog({
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  channelId: string
+  /** 채널이 정해진 화면이면 그 id. 비어 있으면 아래 `channels`에서 고른다 */
+  channelId?: string | null
+  /** 자료실 첫 화면처럼 채널을 나중에 고르는 경우의 후보(서버가 권한까지 걸러 준 목록) */
+  channels?: CreateChannelOption[]
   /** 정해져 있으면 형식 선택을 숨긴다 */
   type: Kind | null
   folderPath?: string | null
@@ -64,6 +70,10 @@ export default function CreateDocumentDialog({
   const [name, setName] = useState('')
   const [touched, setTouched] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // 채널을 나중에 고르는 화면이면 첫 후보를 미리 골라 둔다(대개 하나뿐이다).
+  const [channel, setChannel] = useState<string>('')
+  const needsChannelPick = !channelId && Boolean(channels && channels.length > 0)
+  const pickedChannel = channelId || channel || channels?.[0]?.id || ''
 
   function defaultNameOf(k: Kind, tid: HwpxTemplateId): string {
     return k === 'hwpx' ? hwpxTemplateInfo(tid).defaultName : defaultDocumentName(k)
@@ -78,7 +88,8 @@ export default function CreateDocumentDialog({
     setName(defaultNameOf(k, 'blank'))
     setTouched(false)
     setError(null)
-  }, [open, presetType, officeEnabled])
+    setChannel(channelId ?? '')
+  }, [open, presetType, officeEnabled, channelId])
 
   function pickKind(next: Kind) {
     setKind(next)
@@ -97,10 +108,14 @@ export default function CreateDocumentDialog({
       setError('파일 이름을 입력해 주세요.')
       return
     }
+    if (!pickedChannel) {
+      setError('문서를 만들 채널을 골라 주세요.')
+      return
+    }
     onOpenChange(false)
     router.push(
       createDocumentHref({
-        channelId,
+        channelId: pickedChannel,
         type: kind,
         template: kind === 'hwpx' ? templateId : undefined,
         name: fileName,
@@ -128,6 +143,29 @@ export default function CreateDocumentDialog({
                 아무것도 남지 않습니다.
               </DialogDescription>
             </DialogHeader>
+
+            {needsChannelPick && (
+              <Field>
+                <FieldLabel htmlFor={`${uid}-channel`}>채널</FieldLabel>
+                <NativeSelect
+                  id={`${uid}-channel`}
+                  value={pickedChannel}
+                  onChange={e => {
+                    setChannel(e.target.value)
+                    setError(null)
+                  }}
+                >
+                  {(channels ?? []).map(c => (
+                    <option key={c.id} value={c.id}>
+                      # {c.name}
+                    </option>
+                  ))}
+                </NativeSelect>
+                <p className="text-xs text-muted-foreground">
+                  문서는 고른 채널의 자료(파일 탭)에 올라갑니다.
+                </p>
+              </Field>
+            )}
 
             {presetType === null && kindChoices > 1 && (
               <FieldSet>

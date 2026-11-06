@@ -8,7 +8,7 @@ import FolderSearchNotice from '@work/components/files/FolderSearchNotice'
 import FilesFilters, { filesHref } from '@work/components/files/FilesFilters'
 import VersionsToggle from '@work/components/files/versions/VersionsToggle'
 import NewDocumentMenu from '@work/components/files/create-document/NewDocumentMenu'
-import { loadCreateDocActor } from '@work/lib/files/create-access'
+import { loadCreateDocActor, loadCreatableChannels } from '@work/lib/files/create-access'
 import { buttonVariants } from '@work/components/ui/button'
 import {
   filesFolderHref,
@@ -34,7 +34,9 @@ export const dynamic = 'force-dynamic'
  * 폴더 행 + 그 폴더 직속 파일, `?path=`). 필터나 검색어가 있으면 폴더(path)를 무시한 평면 목록이다.
  *
  * ggac 이식: 게스트(서브관리자)는 1단계부터 쓰지 않아 원본의 게스트 분기(채널 지정 링크만·올린 사람 후보 한정)를 뺐다.
- * 폴더 탐색일 때 새 문서 만들기(NewDocumentMenu — 편집기 출처 env·PC 일 때만 보인다, 3단계).
+ * 폴더 탐색일 때와 **채널을 고르지 않은 첫 화면**에 새 문서 만들기(NewDocumentMenu — 편집기 출처 env·PC 일 때만 보인다).
+ * 첫 화면은 채널 목록을 미리 모아 대화상자 안에서 고르게 한다(2026-11-06 — 예전엔 채널을 골라야만 버튼이 보여서,
+ * "#전체"·"기타"만 보이는 사이드바에서 만들기 진입점을 찾지 못했다).
  * `data-testid="board-work-files"`는 권한 E2E 표식이다.
  *
  * `?board=<분류>`면 '이사회 서류' 폴더다(03 §10 — 서류함 통합): `board_documents`를 분류별로 보인다(BoardDocumentsFolder).
@@ -60,12 +62,15 @@ export default async function FilesPage({
       : null
   const folderSearch = parseChannelFilesSearch(raw)
 
-  const [list, allOptions, createDocActor] = await Promise.all([
+  const [list, allOptions, createDocActor, creatableChannels] = await Promise.all([
     folderChannel
       ? loadChannelFiles(supabase, folderChannel, folderSearch)
       : listFiles(supabase, search).then((l): ChannelFilesData => ({ ...l, folders: [] })),
     getFilterOptions(supabase),
     folderChannel ? loadCreateDocActor(supabase, folderChannel) : null,
+    // 채널을 고르지 않은 첫 화면: 만들 수 있는 채널을 미리 모아 대화상자에서 고르게 한다
+    // (2026-11-06 — 채널을 골라야만 버튼이 보이던 것을 고친다).
+    folderChannel || search.channel ? null : loadCreatableChannels(supabase),
   ])
   const { items, total, hasMore, folders } = list
   const channelName = allOptions.channels.find(c => c.id === folderChannel)?.name ?? '채널'
@@ -102,6 +107,9 @@ export default async function FilesPage({
               folderPath={folderSearch.path || null}
               actor={createDocActor}
             />
+          )}
+          {!folderChannel && creatableChannels && creatableChannels.length > 0 && (
+            <NewDocumentMenu channels={creatableChannels} />
           )}
           <VersionsToggle
             active={search.versions === 'all'}
