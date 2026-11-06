@@ -37,6 +37,7 @@ import {
 } from '@/lib/server/interestMatch'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
+import { runTrackedCron } from '@work/lib/ops/cron-alert'
 
 const log = createLogger('api/internal/grant-digest/draft')
 
@@ -79,7 +80,7 @@ export async function GET(request: NextRequest) {
   if (!bearerMatches(request, process.env.CRON_SECRET)) {
     return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
   }
-  return run()
+  return runTrackedCron('grant-digest-draft', request, () => run())
 }
 
 /** GitHub Actions(`grant-digest-draft.yml`)와 손으로 부를 때. */

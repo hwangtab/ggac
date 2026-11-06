@@ -40,6 +40,7 @@ import { notifyStuckPayments } from '@/lib/payments/notifyStuck'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
 import { logSecurityEvent } from '@/utils/security'
+import { runTrackedCron } from '@work/lib/ops/cron-alert'
 
 const log = createLogger('api/internal/tickets/expire')
 
@@ -60,8 +61,7 @@ function isAuthorized(request: NextRequest): boolean {
   )
 }
 
-async function handle(request: NextRequest) {
-  if (!isAuthorized(request)) return ApiError.unauthorized('권한이 없습니다.').toNextResponse()
+async function run(request: NextRequest) {
   if (!isPaymentEnabled()) return ApiSuccess.ok({ skipped: 'payment_disabled' }).toNextResponse()
 
   const { secretKey } = getServerPaymentConfig()
@@ -158,6 +158,14 @@ async function handle(request: NextRequest) {
 
   log.info('예매 선점 정리', { ...result, reclaimed })
   return ApiSuccess.ok({ ...result, reclaimed }).toNextResponse()
+}
+
+/**
+ * 인증을 통과한 호출만 실행 장부에 남긴다(Vercel 크론은 GET). 401은 장부를 오염시키지 않는다.
+ */
+async function handle(request: NextRequest) {
+  if (!isAuthorized(request)) return ApiError.unauthorized('권한이 없습니다.').toNextResponse()
+  return runTrackedCron('tickets-expire', request, () => run(request))
 }
 
 export const GET = handle

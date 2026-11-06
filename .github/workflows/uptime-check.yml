@@ -1,0 +1,40 @@
+name: Uptime & Cron Check
+
+# 배포와 무관하게 도는 상시 점검. 배포 직후 스모크(`post-deploy-smoke.yml`)는 **배포 때 한 번**뿐이라
+# 용량·Turso 장애·환경변수 소실 같은 "배포와 상관없는" 장애를 아무도 보지 않았다(2026-11-05 사각지대 점검).
+#
+# 30분마다 두 가지를 본다.
+#   1. /api/health — 상태 코드가 아니라 본문 `data.status === 'ok'` (DB가 죽어도 200을 돌려주는 계약이라
+#      코드만 보면 다운을 정상으로 읽는다).
+#   2. /api/internal/ops/cron-health — 크론 감시자 자신이 살아 있는지. 감시자가 죽으면 감시가 통째로 멈추므로,
+#      외부에서 감시자 행까지 포함해 판정한다.
+#
+# 실패하면 이 예약 실행이 실패로 남아 소유자에게 GitHub 알림이 간다. 웹훅 경보는 크론 감시자가 맡고
+# (살아 있을 때의 이야기다), 이 워크플로는 "감시자까지 죽은" 경우의 마지막 그물이다.
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: uptime-check
+  cancel-in-progress: false
+
+jobs:
+  uptime:
+    runs-on: ubuntu-latest
+    name: Uptime & Cron Check (production)
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+
+      - name: Run uptime check
+        env:
+          # Vercel 크론과 같은 값. 없으면 cron-health 검사만 건너뛰고 health 검사는 그대로 돈다.
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: node scripts/ops/uptime-check.mjs https://ggac.kr
