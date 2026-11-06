@@ -451,6 +451,18 @@ noreply@ggac.kr로 가서 유실된다), `MAILBOX_BACKFILL_CRON_TOKEN`(메일함
 - 메일함 백필 크론은 매 실행 `메일함 크론 요약` 한 줄을 남긴다(Vercel이 정상
   응답 로그를 안 남기므로 이 줄이 유일한 실행 증거다).
 
+### 메일함 키보드 단축키
+
+- 목록 단축키는 Gmail과 같다: `j`/`k` 다음·이전, `Esc`/`u` 닫기, `/` 검색, `?`
+  도움말. 상태를 바꾸는 키(`x` 고르기·`e` 보관·`!` 스팸·`r`/`a`/`f` 답장·전체
+  답장·전달)는 **관리자만**이다 — 서버 판정(`requireAdmin`)과 같다.
+- **판정은 순수 함수(`app/[locale]/admin/mailbox/shortcuts.ts`)가 하고 화면은
+  동작만 잇는다**(`MailboxView`). 입력창·글상자·고르기·contenteditable에 쓰는
+  중이거나 Ctrl·Cmd·Alt를 누른 상태, 다른 창(답장·작성·관리)이 열려 있으면
+  `null`이다. 키 표를 고치면 `SHORTCUT_HELP`도 같이 고쳐라 — 단위 테스트가 두
+  표가 어긋나면 실패한다(`scripts/testing/mailboxShortcuts.test.mjs`).
+- 보낸 편지함에는 목록 단축키가 없다(도움말 `?`만 연다).
+
 ### Database Migration Issues
 
 - 마이그레이션 정본은 **`src/db/migrations/`**(Drizzle)다.

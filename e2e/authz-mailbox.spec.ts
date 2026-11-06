@@ -1918,3 +1918,116 @@ test.describe('메일함 다시 알림', () => {
     }
   })
 })
+
+/**
+ * 키보드 단축키 — 판정은 단위 테스트(mailboxShortcuts.test.mjs)가 보고, 여기서는 화면에 실제로 이어지는지 본다.
+ * 다른 묶음의 메일이 목록 순서를 흔들지 않게 이 묶음의 메일만 검색해 놓고 누른다. 직렬로 돈다.
+ */
+test.describe('메일함 키보드 단축키', () => {
+  test.describe.configure({ mode: 'serial' })
+  const KEY_IDS = ['00000000-0000-4000-8000-00000000c070', '00000000-0000-4000-8000-00000000c071']
+  const KEY_SUBJECT = 'MAILBOX-E2E-KEYS'
+
+  async function exec(sql: string, args: (string | number)[] = []) {
+    const client = createClient({ url: process.env.TURSO_DATABASE_URL! })
+    try {
+      return await client.execute({ sql, args })
+    } finally {
+      client.close()
+    }
+  }
+  async function statusOf(id: string) {
+    return String(
+      (await exec('SELECT status FROM inbound_emails WHERE id = ?', [id])).rows[0]?.status
+    )
+  }
+
+  test.beforeAll(async () => {
+    await exec('DELETE FROM inbound_emails WHERE id IN (?, ?)', KEY_IDS)
+    for (const [i, id] of KEY_IDS.entries()) {
+      await exec(
+        `INSERT INTO inbound_emails
+          (id, thread_id, resend_email_id, from_address, from_email, to_addresses, subject, status,
+           body_fetch_status, received_at)
+         VALUES (?, ?, ?, 'keys@example.com', 'keys@example.com', '["mailbox@ggac.kr"]', ?, 'read', 'done', ?)`,
+        [id, id, `authz-mailbox-keys-${i}`, `${KEY_SUBJECT}-${i}`, Date.now() - i * 1000]
+      )
+    }
+  })
+  test.afterAll(async () => {
+    await exec('DELETE FROM inbound_emails WHERE id IN (?, ?)', KEY_IDS)
+  })
+
+  async function openFiltered(page: import('@playwright/test').Page, path: string) {
+    await page.goto(path, { waitUntil: 'domcontentloaded' })
+    const search = page.getByPlaceholder('제목 또는 보낸 사람 검색')
+    await search.fill(KEY_SUBJECT)
+    await search.press('Enter')
+    await expect(page.getByText(`${KEY_SUBJECT}-1`).first()).toBeVisible({ timeout: 15000 })
+    // 검색창에서 초점을 빼야 단축키가 먹는다(글을 쓰는 중에는 동작하지 않는다).
+    await search.blur()
+  }
+
+  test('이사: j/k로 오가고 Esc로 닫고 /로 검색창, ?로 도움말 — 관리자 키는 먹지 않는다', async ({
+    browser,
+  }) => {
+    const ctx = await browser.newContext({ storageState: storageStatePath('director') })
+    try {
+      const page = await ctx.newPage()
+      await openFiltered(page, '/board-room/mailbox')
+
+      await page.keyboard.press('j')
+      await expect(page.getByRole('heading', { name: `${KEY_SUBJECT}-0` })).toBeVisible()
+      await page.keyboard.press('j')
+      await expect(page.getByRole('heading', { name: `${KEY_SUBJECT}-1` })).toBeVisible()
+      await page.keyboard.press('k')
+      await expect(page.getByRole('heading', { name: `${KEY_SUBJECT}-0` })).toBeVisible()
+
+      await page.keyboard.press('e')
+      expect(await statusOf(KEY_IDS[0])).toBe('read')
+
+      await page.keyboard.press('Escape')
+      await expect(page.getByRole('heading', { name: `${KEY_SUBJECT}-0` })).toHaveCount(0)
+
+      await page.keyboard.press('?')
+      const help = page.getByRole('dialog', { name: '키보드 단축키' })
+      await expect(help).toContainText('다음 · 이전 메일')
+      await expect(help).not.toContainText('보관')
+      await page.keyboard.press('Escape')
+      await expect(help).toHaveCount(0)
+
+      await page.keyboard.press('/')
+      await expect(page.getByPlaceholder('제목 또는 보낸 사람 검색')).toBeFocused()
+      // 검색창에 쓰는 중이면 j가 글자로 들어가고 메일을 열지 않는다.
+      await page.keyboard.type('j')
+      await expect(page.getByRole('heading', { name: `${KEY_SUBJECT}-0` })).toHaveCount(0)
+
+      // 보낸 편지함에는 목록 단축키가 없지만 도움말은 열린다.
+      await page.getByRole('tab', { name: '보낸 편지함' }).click()
+      await expect(page.getByPlaceholder('제목 또는 보낸 사람 검색')).toHaveCount(0)
+      await page.keyboard.press('?')
+      await expect(page.getByRole('dialog', { name: '키보드 단축키' })).toBeVisible()
+      await page.keyboard.press('Escape')
+      await expect(page.getByRole('dialog', { name: '키보드 단축키' })).toHaveCount(0)
+    } finally {
+      await ctx.close()
+    }
+  })
+
+  test('관리자: x로 고르고 e로 보관한다', async ({ browser }) => {
+    const ctx = await browser.newContext({ storageState: storageStatePath('admin') })
+    try {
+      const page = await ctx.newPage()
+      await openFiltered(page, '/admin/mailbox')
+      await page.keyboard.press('j')
+      await expect(page.getByRole('heading', { name: `${KEY_SUBJECT}-0` })).toBeVisible()
+      await page.keyboard.press('x')
+      await expect(page.getByLabel(`${KEY_SUBJECT}-0 선택`)).toBeChecked()
+      await page.keyboard.press('e')
+      await expect.poll(() => statusOf(KEY_IDS[0])).toBe('archived')
+      expect(await statusOf(KEY_IDS[1])).toBe('read')
+    } finally {
+      await ctx.close()
+    }
+  })
+})
