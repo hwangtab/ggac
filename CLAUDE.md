@@ -430,6 +430,27 @@ noreply@ggac.kr로 가서 유실된다), `MAILBOX_BACKFILL_CRON_TOKEN`(메일함
   그리지 않는다. E2E 서버(`playwright.config.ts`)만 켠다 — 그 서버는
   `RESEND_API_KEY`가 비어 있다.
 
+### 보낸 메일에 온 답장 잇기 (마이그레이션 0047)
+
+- **받은 메일**에 우리가 답장한 것은 `References`로 대화가 이어진다(reply
+  라우트). 반대로 **우리가 새로 작성해 보낸 메일**에 상대가 답장하면, 그 답장의
+  `In-Reply-To`/`References`에는 우리 보낸 메일의 `Message-ID`가 들어온다 — 그
+  값으로 답장을 원래 메일에 잇는다(`outbound_emails.message_id` ↔
+  `inbound_emails.reply_to_outbound_id`).
+- **그 `Message-ID`는 우리가 정할 수 없다.** Resend는 SES로 보내고 SES가 커스텀
+  `Message-ID` 헤더를 덮어쓴다. 그래서 발송 직후 `GET /emails/:id`로 실제 값을
+  받아 저장한다(`src/lib/mail/sentMessageId.ts`). 실패분은 메일함 백필 크론이
+  매시 최대 5건 다시 물어본다(`listSentWithoutMessageId`).
+- 잇는 순서: 수신 웹훅이 본문을 당길 때 `assignThread`(받은 메일끼리)가 먼저, 못
+  찾으면 `linkSentReply`가 `Message-ID`를 **정확히** 대조한다. **제목·수신자
+  휴리스틱으로 잇지 마라** — 오탐이면 직원에게 틀린 원본을 가리키고, 그 화면은
+  "사실"처럼 보인다. 둘 다 부가 기능이라 실패해도 본문 저장은 계속한다.
+- 화면은 받은 메일 상세에 "보낸 편지함의 「…」(날짜) 메일에 온 답장으로
+  보입니다" 한 줄과 **보낸 편지함에서 보기** 단추를 그린다(검색어를 심어 그 보낸
+  메일이 목록에 바로 보이게 한다 — `SentMailbox`의 `searchSeed`).
+- `@test.local` 수신자는 실제로 발송되지 않으므로 E2E에는 이 값이 생기지 않는다.
+  화면·API 확인은 행을 직접 심어 본다(`e2e/authz-mailbox.spec.ts`).
+
 ### 인증 메일 발송 예산 (Resend 쿼터 보호)
 
 - Resend 무료 한도는 **하루 100통**이고 가입 인증·비밀번호 재설정·주간

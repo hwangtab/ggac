@@ -16,11 +16,13 @@ import {
   listSentMail,
   markOutboundSent,
   markOutboundStatus,
+  setOutboundMessageId,
   type SentMailKind,
 } from '@/db/queries/mailbox'
 import { logUserActivity } from '@/db/queries/activities'
 import { readSessionUser } from '@/lib/server/session'
 import { MailSendError, sendEmail } from '@/lib/mail/send'
+import { fetchSentMessageId } from '@/lib/mail/sentMessageId'
 import {
   COMPOSE_LIMITS,
   forwardTooLargeMessage,
@@ -380,6 +382,20 @@ export const POST = defineApiRoute<undefined, AdminAuthSuccess>({
         { id, error: error instanceof Error ? error.message : String(error) },
         'high'
       )
+    }
+    // 상대가 답장하면 그 헤더로 이 메일을 찾을 수 있게, 실제 `Message-ID`를 물어 둔다. SES가 정하는 값이라 우리가
+    // 만들 수 없다. 실패해도 응답을 바꾸지 않는다 — 백필 크론이 다시 물어본다(`listSentWithoutMessageId`).
+    if (resendMessageId) {
+      try {
+        const messageId = await fetchSentMessageId(resendMessageId)
+        if (messageId) await setOutboundMessageId(id, messageId)
+      } catch (error) {
+        logSecurityEvent(
+          'MAILBOX_COMPOSE_MESSAGE_ID_FAILED',
+          { id, error: error instanceof Error ? error.message : String(error) },
+          'low'
+        )
+      }
     }
     try {
       await logUserActivity({

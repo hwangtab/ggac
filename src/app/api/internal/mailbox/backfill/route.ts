@@ -32,12 +32,15 @@ import {
   markAttachmentsExpired,
   markStaleSendingAsUnknown,
   wakeSnoozedEmails,
+  listSentWithoutMessageId,
+  setOutboundMessageId,
 } from '@/db/queries/mailbox'
 import { getWorkPeople } from '@/db/queries/work/directory'
 import { canAccessBoardRoom } from '@/lib/server/authz'
 import { buildSnoozePush } from '@/lib/mail/assigneePush'
 import { sendPushToUsers } from '@work/lib/push/send'
 import { ingestInboundEmail } from '@/lib/mail/ingestInbound'
+import { fetchSentMessageId } from '@/lib/mail/sentMessageId'
 import {
   defaultBlobOps,
   sweepAllowedHere,
@@ -57,6 +60,8 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
 const BATCH_SIZE = 25
+/** 한 실행에서 Resend에 물어볼 보낸 메일 수 — 발송 실패분이 쌓여도 크론 시간을 잡아먹지 않게. */
+const SENT_MESSAGE_ID_BATCH = 5
 
 /** 이보다 오래 `sending`이면 발송 도중 함수가 죽은 것으로 본다(Resend 30초 + Blob 업로드보다 훨씬 길다). */
 const STALE_SENDING_MS = 10 * 60 * 1000
@@ -109,6 +114,20 @@ async function runBackfill(request: NextRequest) {
       staleSending = await markStaleSendingAsUnknown(housekeepingNow - STALE_SENDING_MS)
     } catch (error) {
       log.error('멈춘 보낸 메일 정리 실패', error)
+    }
+
+    // 보낸 메일의 `Message-ID` 채우기 — 발송 직후 Resend에 물어봤지만 실패했거나(네트워크·레이트리밋·그 전 배포)
+    // 아직 없는 행. 이 값이 있어야 상대의 답장을 그 메일에 정확히 잇는다(`linkSentReply`). 한 번에 몇 건만 본다.
+    let sentMessageIdsFilled = 0
+    try {
+      for (const row of await listSentWithoutMessageId(SENT_MESSAGE_ID_BATCH)) {
+        const messageId = await fetchSentMessageId(row.resend_message_id)
+        if (!messageId) continue
+        await setOutboundMessageId(row.id, messageId)
+        sentMessageIdsFilled += 1
+      }
+    } catch (error) {
+      log.error('보낸 메일 Message-ID 채우기 실패', error)
     }
 
     // 다시 알림 깨우기 — 시각이 지난 메일을 안 읽음으로 되돌리고 담당자(없으면 건 사람)에게 푸시한다. 받을 사람은
@@ -197,6 +216,7 @@ async function runBackfill(request: NextRequest) {
       refetched: attempted,
       abandoned,
       staleSendingMarkedUnknown: staleSending,
+      sentMessageIdsFilled,
       snoozeWoken,
       sweep,
     })

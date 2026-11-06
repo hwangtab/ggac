@@ -90,10 +90,16 @@ function recipientSummary(raw: string): string {
 export default function SentMailbox({
   refreshKey,
   onMeta,
+  searchSeed,
 }: {
   /** 값이 바뀌면 목록을 다시 읽는다(작성 직후). */
   refreshKey: number
   onMeta: (meta: { total: number }) => void
+  /**
+   * 받은 메일 상세의 "보낸 편지함에서 보기"가 심는 검색어. `at`이 바뀔 때마다 적용한다 — 같은 검색어를 두 번
+   * 눌러도 다시 걸리게 하려면 값만으로는 부족하다.
+   */
+  searchSeed?: { value: string; at: number } | null
 }) {
   const [kind, setKind] = useState<Kind>('all')
   const [offset, setOffset] = useState(0)
@@ -228,6 +234,16 @@ export default function SentMailbox({
       setResolving(false)
     }
   }
+
+  // 받은 메일 상세에서 넘어온 검색어 — 그 보낸 메일이 목록에 바로 보이게 한다.
+  useEffect(() => {
+    if (!searchSeed) return
+    setSearchInput(searchSeed.value)
+    setSearch(searchSeed.value)
+    setOffset(0)
+    setSelected(null)
+    setDetail(null)
+  }, [searchSeed])
 
   const runSearch = () => {
     setOffset(0)

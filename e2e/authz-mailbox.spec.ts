@@ -2031,3 +2031,115 @@ test.describe('메일함 키보드 단축키', () => {
     }
   })
 })
+
+/**
+ * 보낸 메일에 온 답장 잇기(0047) — 받은 메일이 "보낸 편지함의 …에 온 답장"으로 보이고, 누르면 그 보낸 메일이
+ * 검색된 보낸 편지함으로 넘어간다. 잇는 판정 자체(헤더 대조)는 단위 테스트가 본다(`queriesMailboxSentReply`).
+ */
+test.describe('메일함 보낸 메일의 답장', () => {
+  test.describe.configure({ mode: 'serial' })
+  const OUTBOUND_ID = '00000000-0000-4000-8000-00000000c080'
+  const INBOUND_ID = '00000000-0000-4000-8000-00000000c081'
+  const SUBJECT = 'MAILBOX-E2E-SENT-REPLY 보낸 메일 제목'
+  const REPLY_SUBJECT = `Re: ${SUBJECT}`
+
+  async function exec(sql: string, args: (string | number | null)[] = []) {
+    const client = createClient({ url: process.env.TURSO_DATABASE_URL! })
+    try {
+      return await client.execute({ sql, args })
+    } finally {
+      client.close()
+    }
+  }
+
+  test.beforeAll(async () => {
+    await exec('DELETE FROM inbound_emails WHERE id = ?', [INBOUND_ID])
+    await exec('DELETE FROM outbound_emails WHERE id = ?', [OUTBOUND_ID])
+    await exec(
+      `INSERT INTO outbound_emails
+        (id, idempotency_key, to_addresses, recipient_count, subject, body_html, status,
+         resend_message_id, message_id, sent_by_email, sent_at)
+       VALUES (?, ?, ?, 1, ?, '<p>보낸 본문</p>', 'sent', 'authz-mailbox-sent-reply', ?, 'admin@ggac.kr', ?)`,
+      [
+        OUTBOUND_ID,
+        'authz-mailbox-sent-reply-key',
+        JSON.stringify(['상대@example.com']),
+        SUBJECT,
+        '<authz-mailbox-sent-reply@ggac.kr>',
+        Date.now() - 60_000,
+      ]
+    )
+    await exec(
+      `INSERT INTO inbound_emails
+        (id, thread_id, resend_email_id, from_address, from_email, to_addresses, subject, status,
+         body_fetch_status, reply_to_outbound_id, received_at)
+       VALUES (?, ?, ?, '상대 <상대@example.com>', '상대@example.com', '["mailbox@ggac.kr"]', ?, 'read',
+               'done', ?, ?)`,
+      [
+        INBOUND_ID,
+        INBOUND_ID,
+        'authz-mailbox-sent-reply-in',
+        REPLY_SUBJECT,
+        OUTBOUND_ID,
+        Date.now(),
+      ]
+    )
+  })
+
+  test.afterAll(async () => {
+    await exec('DELETE FROM inbound_emails WHERE id = ?', [INBOUND_ID])
+    await exec('DELETE FROM outbound_emails WHERE id = ?', [OUTBOUND_ID])
+  })
+
+  test('상세 API가 보낸 메일의 머리글을 함께 준다', async ({ baseURL }) => {
+    const ctx = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('director'),
+    })
+    try {
+      const res = await ctx.get(`/api/admin/mailbox/${INBOUND_ID}`)
+      expect(res.status()).toBe(200)
+      const json = await res.json()
+      expect(json.data.email.sent_reply_to).toEqual({
+        id: OUTBOUND_ID,
+        subject: SUBJECT,
+        sent_at: expect.any(String),
+        sent_by_email: 'admin@ggac.kr',
+      })
+    } finally {
+      await ctx.dispose()
+    }
+  })
+
+  test('화면: 답장이라는 안내가 보이고, 누르면 그 보낸 메일이 검색된 보낸 편지함으로 넘어간다', async ({
+    browser,
+  }) => {
+    const ctx = await browser.newContext({ storageState: storageStatePath('admin') })
+    try {
+      const page = await ctx.newPage()
+      await page.goto('/admin/mailbox', { waitUntil: 'domcontentloaded' })
+      const search = page.getByPlaceholder('제목 또는 보낸 사람 검색')
+      await search.fill(REPLY_SUBJECT)
+      await search.press('Enter')
+      await expect(page.getByText(REPLY_SUBJECT).first()).toBeVisible({ timeout: 15000 })
+      await page.getByText(REPLY_SUBJECT).first().click()
+
+      const note = page.getByTestId('sent-reply-to')
+      await expect(note).toContainText(SUBJECT)
+      await expect(note).toContainText('메일에 온 답장으로 보입니다')
+
+      await note.getByRole('button', { name: '보낸 편지함에서 보기' }).click()
+
+      // 보낸 편지함으로 넘어가고, 그 보낸 메일이 검색어로 걸려 목록에 보인다.
+      await expect(page.getByRole('tab', { name: '보낸 편지함' })).toHaveAttribute(
+        'aria-selected',
+        'true'
+      )
+      const sentSearch = page.getByPlaceholder('제목 또는 받는 주소 검색')
+      await expect(sentSearch).toHaveValue(SUBJECT)
+      await expect(page.getByText(SUBJECT).first()).toBeVisible({ timeout: 15000 })
+    } finally {
+      await ctx.close()
+    }
+  })
+})
