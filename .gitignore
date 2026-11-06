@@ -125,3 +125,6 @@ e2e/.auth/
 # 원문은 gitignore된 docs/superpowers/audits/ 아래에 보관한다.
 /*-REPORT.md
 /FIX-*.md
+
+# Paseo(에이전트 하네스) 워크스페이스 설정 — 사람마다 다르고 앱과 무관하다.
+/paseo.json
