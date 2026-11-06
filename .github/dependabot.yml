@@ -20,16 +20,41 @@ updates:
       - "dependencies"
       - "automated"
 
-    # Ignore major version updates for core dependencies
+    # react 계열은 한 프레임워크와 어긋나면 빌드가 죽는다(#49에서 react/react-dom이
+    # 갈라져 `Incompatible React versions`로 실패). 메이저뿐 아니라 마이너·패치까지
+    # 막아 dependabot가 react 계열을 건드리지 않게 한다. react·react-dom은
+    # Next/코드가 함께 올릴 때만 올린다.
     ignore:
       - dependency-name: "react"
-        update-types: ["version-update:semver-major"]
+        update-types:
+          [
+            "version-update:semver-major",
+            "version-update:semver-minor",
+            "version-update:semver-patch",
+          ]
+      - dependency-name: "react-dom"
+        update-types:
+          [
+            "version-update:semver-major",
+            "version-update:semver-minor",
+            "version-update:semver-patch",
+          ]
       - dependency-name: "next"
         update-types: ["version-update:semver-major"]
       - dependency-name: "@types/react"
-        update-types: ["version-update:semver-major"]
+        update-types:
+          [
+            "version-update:semver-major",
+            "version-update:semver-minor",
+            "version-update:semver-patch",
+          ]
       - dependency-name: "@types/react-dom"
-        update-types: ["version-update:semver-major"]
+        update-types:
+          [
+            "version-update:semver-major",
+            "version-update:semver-minor",
+            "version-update:semver-patch",
+          ]
 
   # Enable version updates for GitHub Actions
   - package-ecosystem: "github-actions"
