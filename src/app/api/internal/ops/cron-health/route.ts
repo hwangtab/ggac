@@ -15,6 +15,7 @@ import { NextResponse } from 'next/server'
 import { isCronAuthorized } from '@work/lib/ops/cron-auth'
 import { listCronRuns } from '@/db/queries/work/cron'
 import { findCronProblems, WATCHDOG_JOB } from '@work/lib/ops/cron-schedule'
+import { alertOpsAdmins } from '@/lib/server/opsAlert'
 import { ApiError, ApiSuccess } from '@/utils/apiWrapper'
 import { logSecurityEvent } from '@/utils/security'
 
@@ -38,7 +39,7 @@ async function handle(request: Request) {
   }
 
   // 감시자 자신이 멈춘 경우는 **여기서만** 알 수 있다(자기는 자기를 못 본다). 이 라우트는 외부 스케줄이 부르므로,
-  // 그때만 웹훅으로 알린다. 나머지 문제는 감시자가 이미 알렸으니 두 번 알리지 않는다.
+  // 그때만 관리자에게 알린다. 나머지 문제는 감시자가 이미 알렸으니 두 번 알리지 않는다.
   const watchdogDown = problems.filter(p => p.job === WATCHDOG_JOB)
   if (watchdogDown.length > 0) {
     logSecurityEvent(
@@ -46,6 +47,17 @@ async function handle(request: Request) {
       { kind: watchdogDown[0].kind, minutes: watchdogDown[0].minutes },
       'high'
     )
+    await alertOpsAdmins({
+      kind: 'ops_cron_watchdog_down',
+      title: '크론 감시자가 멈췄습니다',
+      message:
+        `${watchdogDown[0].minutes}분째 크론 감시자(cron-watchdog)가 성공하지 않았습니다. ` +
+        '감시자가 멈추면 다른 크론이 멈춰도 아무도 알 수 없습니다. Vercel 대시보드의 Cron 로그에서 ' +
+        '/api/internal/ops/cron-watchdog 실행 기록을 확인해 주세요.',
+      url: '/ko/admin',
+      data: { minutes: watchdogDown[0].minutes, kind: watchdogDown[0].kind },
+      dedupe: true,
+    })
   }
 
   if (problems.length === 0) return ApiSuccess.ok(data).toNextResponse()

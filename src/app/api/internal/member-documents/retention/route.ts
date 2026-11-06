@@ -16,6 +16,7 @@
 import { isCronAuthorized } from '@work/lib/ops/cron-auth'
 import { runTrackedCron } from '@work/lib/ops/cron-alert'
 import { runMemberDocumentRetention } from '@/lib/memberDocuments/retention'
+import { alertOpsAdmins } from '@/lib/server/opsAlert'
 import { ApiError, ApiSuccess } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
 import { logSecurityEvent } from '@/utils/security'
@@ -54,6 +55,17 @@ async function run() {
         },
         'high'
       )
+      // 되돌릴 수 없는 작업이라 dedupe 없이 바로 알린다 — 조건 판정이 어긋나 대량 삭제가 시작되면 그날 알아야 한다.
+      await alertOpsAdmins({
+        kind: 'member_documents_mass_delete',
+        title: `문서함에서 ${result.deletedDocuments}건이 한 번에 삭제됐습니다`,
+        message:
+          `오늘 보존 정리에서 조합원 문서 ${result.deletedDocuments}건이 지워졌습니다. ` +
+          '1년 미열람 → 30일 전 고지 → 삭제 조건이 계속 참인 문서만 지우는 것이 정상 동작입니다. ' +
+          '이 숫자가 예상보다 크면 관리자 > 내 문서함에서 보존 조건과 알림 발송 이력을 확인해 주세요.',
+        url: '/ko/admin',
+        data: { deleted: result.deletedDocuments, purgedUploads: result.purgedUploads },
+      })
     }
     return ApiSuccess.ok(result).toNextResponse()
   } catch (e) {

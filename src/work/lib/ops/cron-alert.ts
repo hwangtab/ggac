@@ -1,9 +1,10 @@
 import { ApiError } from '@/utils/apiWrapper'
 import { listCronRuns, markCronFinished, markCronStarted } from '@/db/queries/work/cron'
+import { alertOpsAdmins, type OpsAlertInput } from '@/lib/server/opsAlert'
 import { createLogger } from '@/utils/logger'
 import { logSecurityEvent } from '@/utils/security'
 import { isCronAuthorized, isCronSecretConfigured } from './cron-auth'
-import { findCronProblems } from './cron-schedule'
+import { findCronProblems, type CronProblem } from './cron-schedule'
 
 const log = createLogger('board-work/cron')
 
@@ -119,9 +120,38 @@ export async function runCronWatchdog(now: Date = new Date()): Promise<number> {
         'high'
       )
     }
+    if (problems.length > 0) await alertOpsAdmins(buildCronAlert(problems))
     return problems.length
   } catch (err) {
     log.error('크론 감시 실패', err)
     return 0
+  }
+}
+
+/**
+ * 크론 문제 묶음을 관리자 경보 한 건으로 — 문제마다 메일을 보내면 하루에 스무 통이 온다.
+ * 감시자는 매시 돌므로 같은 사실을 6시간에 한 번까지만 다시 알린다(dedupe).
+ */
+function buildCronAlert(problems: CronProblem[]): OpsAlertInput {
+  const lines = problems
+    .slice(0, 8)
+    .map(p =>
+      p.kind === 'stuck'
+        ? `· ${p.job} — ${p.minutes}분째 끝나지 않음(강제 종료 추정)`
+        : p.kind === 'failed'
+          ? `· ${p.job} — 마지막 실행 실패`
+          : `· ${p.job} — ${p.minutes}분째 성공 없음(기대 ${p.expected}분)`
+    )
+  const more = problems.length > lines.length ? `\n· 외 ${problems.length - lines.length}건` : ''
+  return {
+    kind: 'ops_cron_problems',
+    title: `크론 ${problems.length}건이 멈췄거나 실패했습니다`,
+    message:
+      `${lines.join('\n')}${more}\n\n` +
+      '크론이 멈추면 그 크론이 하던 일이 조용히 사라집니다(문서 보존 삭제·지원사업 메일 발행·회비 만료·경매 마감 등). ' +
+      'Vercel 대시보드의 Cron 로그와 이 목록의 이름으로 원인을 확인해 주세요.',
+    url: '/ko/admin',
+    data: { count: problems.length, jobs: problems.map(p => p.job) },
+    dedupe: true,
   }
 }
