@@ -176,7 +176,11 @@ jobs:
       - name: Start local Turso
         run: |
           curl -sSfL https://get.tur.so/install.sh | bash
-          "$HOME/.turso/turso" dev --db-file /tmp/authz.db --port 8901 > /tmp/turso-dev.log 2>&1 &
+          # install.sh는 turso CLI와 sqld(러너)를 모두 ~/.turso/에 받고 PATH 수정은
+          # update_profile(~/.profile)로만 남긴다 — 현재 셸엔 반영되지 않아, 이 단계와
+          # 다음 단계에 sqld가 없다. 명시적으로 PATH에 넣는다.
+          echo "$HOME/.turso" >> "$GITHUB_PATH"
+          PATH="$HOME/.turso:$PATH" "$HOME/.turso/turso" dev --db-file /tmp/authz.db --port 8901 > /tmp/turso-dev.log 2>&1 &
           for i in $(seq 1 60); do
             if curl -sf http://127.0.0.1:8901/health > /dev/null; then
               echo "turso dev 준비됨"
