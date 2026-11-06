@@ -498,6 +498,13 @@ noreply@ggac.kr로 가서 유실된다), `MAILBOX_BACKFILL_CRON_TOKEN`(메일함
 
 ### Database Migration Issues
 
+- **코드보다 마이그레이션을 먼저 적용하라.** 새 컬럼을 읽는 코드가 먼저 배포되면
+  그 표를 건드리는 경로가 전부 500이 된다 — 2026-11-06 실측:
+  0047(`outbound_emails.message_id`)을 쓰는 코드가 먼저 나가 메일함 백필 크론이
+  두 시간 연속 500이었고, 마이그레이션을 적용하자 다음 실행부터 정상이었다. 머지
+  직후 `scripts/turso/README.md` 절차로 운영 DB에 적용하고, 배포 전에
+  `turso db shell ggac-prod "select name from pragma_table_info('표')"`로 칸이
+  있는지 확인해도 된다.
 - 마이그레이션 정본은 **`src/db/migrations/`**(Drizzle)다.
   `supabase/migrations/`는 **역사 기록**이며 더 이상 적용하지 않는다
 - **`drizzle-kit migrate`를 쓰지 마라.** `0002`~`0004`는 파일 안에
