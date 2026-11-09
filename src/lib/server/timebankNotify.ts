@@ -14,7 +14,8 @@ import { pickMarketCommentRecipients } from './marketNotify.ts'
  * **계약(`marketNotify.ts`와 같다):** 어느 함수도 throw하지 않는다. 실패는
  * `log.error`만 남긴다. 원장 트랜잭션이 **커밋된 뒤에** 부른다 — 알림이 실패해도
  * 시간 이동은 이미 확정됐고, 알림이 이동을 되돌리거나 막아서는 안 된다.
- * 알림은 30일 뒤 만료된다. 알림 받기 설정·이메일은 1단계에 없다(항상 보낸다).
+ * 알림은 30일 뒤 만료된다. 알림 받기 설정은 없다(항상 보낸다). 확인 요청만 메일로도
+ * 나간다(`timebankEmail.ts` — 사이트에 들어오지 않는 상대가 기록을 놓치지 않게).
  *
  * 테스트가 DB 없이 받는 사람·종류를 확인할 수 있게 마지막 인자로 의존성을
  * 바꿔 끼울 수 있다(`src/lib/funding/notify.ts`와 같은 방식).
@@ -95,6 +96,40 @@ export function pickRecipientsForDecision(row: TransferRow, actorId: string): st
   return parties
 }
 
+/** 원장 행에서 이 회원 쪽 표시명 스냅숏. */
+function nameOf(row: TransferRow, memberId: string | null | undefined): string {
+  const name =
+    memberId === row.from_account ? row.from_name : memberId === row.to_account ? row.to_name : null
+  return name?.trim() || '조합원'
+}
+
+/**
+ * 확인할 상대에게 보이는 기록 요약. **도움의 방향과 시간의 방향을 함께** 적는다 —
+ * "1시간 기록"만으로는 받는 사람이 자기가 도운 건지 도움받은 건지 알 수 없고,
+ * "받았다"를 고른 기록자 화면에 "줌"이 보이는 것과 같은 혼동이 생긴다.
+ *
+ * 시간은 도움을 받은 사람(`from`)에게서 도운 사람(`to`)에게로 간다.
+ */
+export function pendingNoticeCopy(row: TransferRow): { title: string; message: string } {
+  const recorder = recorderName(row)
+  const time = formatMinutes(row.minutes)
+  const counterpartyGetsTime = row.counterparty_id === row.to_account
+  let what: string
+  if (row.kind === 'reversal') {
+    what = counterpartyGetsTime
+      ? `${recorder}님이 지난 기록을 되돌리자고 요청했습니다. 확인하면 회원님에게 ${time}이 돌아옵니다.`
+      : `${recorder}님이 지난 기록을 되돌리자고 요청했습니다. 확인하면 회원님의 ${time}이 ${recorder}님에게 돌아갑니다.`
+  } else {
+    what = counterpartyGetsTime
+      ? `${recorder}님이 회원님에게 도움을 받았다고 기록했습니다. 확인하면 회원님에게 ${time}이 들어옵니다.`
+      : `${recorder}님이 회원님을 도왔다고 기록했습니다. 확인하면 회원님의 ${time}이 ${recorder}님에게 갑니다.`
+  }
+  return {
+    title: '타임 기록을 확인해 주세요',
+    message: `${what} 맞으면 확인, 아니면 거절해 주세요.`,
+  }
+}
+
 /** 기록이 생겼다 → 확인할 상대(`counterparty_id`)에게. */
 export async function notifyTransferPending(
   row: TransferRow,
@@ -103,13 +138,14 @@ export async function notifyTransferPending(
   const d = resolveDeps(overrides)
   try {
     if (!row?.counterparty_id) return
+    const copy = pendingNoticeCopy(row)
     await send(
       d,
       {
         user_ids: [row.counterparty_id],
         type: 'timebank_pending',
-        title: '타임 기록을 확인해 주세요',
-        message: `${recorderName(row)}님이 ${formatMinutes(row.minutes)} 기록을 남겼습니다. 확인하거나 거절해 주세요.`,
+        title: copy.title,
+        message: copy.message,
         data: { transfer_id: row.id, kind: row.kind, minutes: row.minutes },
         related_user_id: row.created_by ?? undefined,
       },
@@ -125,6 +161,14 @@ const DECISION_COPY = {
   rejected: { type: 'timebank_rejected', title: '타임 기록이 거절됐습니다', verb: '거절' },
   canceled: { type: 'timebank_canceled', title: '타임 기록이 취소됐습니다', verb: '취소' },
 } as const
+
+/** 결정 알림 본문 — 누가 어느 기록을 처리했는지까지 적는다. */
+function decisionMessage(row: TransferRow, actorId: string, verb: string): string {
+  const time = formatMinutes(row.minutes)
+  const parties = [row.created_by, row.counterparty_id]
+  if (!parties.includes(actorId)) return `${time} 기록이 ${verb}됐습니다.`
+  return `${nameOf(row, actorId)}님이 ${time} 기록을 ${verb}했습니다.`
+}
 
 /** 기록이 확인·거절·취소됐다 → 다른 당사자에게(`pickRecipientsForDecision`). */
 export async function notifyTransferDecided(
@@ -143,7 +187,7 @@ export async function notifyTransferDecided(
         user_ids: pickRecipientsForDecision(row, actorId),
         type: copy.type,
         title: copy.title,
-        message: `${formatMinutes(row.minutes)} 기록이 ${copy.verb}됐습니다.`,
+        message: decisionMessage(row, actorId, copy.verb),
         data: { transfer_id: row.id, kind: row.kind, minutes: row.minutes, status: row.status },
         related_user_id: actorId,
       },

@@ -87,7 +87,12 @@ export default function PendingPanel({
   )
 
   return (
-    <section aria-labelledby="tb-pending-heading" data-testid="timebank-pending">
+    <section
+      id="pending"
+      aria-labelledby="tb-pending-heading"
+      data-testid="timebank-pending"
+      className="scroll-mt-24"
+    >
       <h2 id="tb-pending-heading" className="mb-3 text-lg font-semibold text-gray-900">
         {t('my.pending.heading')}
       </h2>

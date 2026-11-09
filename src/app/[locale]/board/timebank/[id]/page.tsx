@@ -181,6 +181,24 @@ export default async function TimebankDetailPage({
             </div>
           )}
 
+          {!isCoopTask && canWrite && !isAuthor && (
+            <div className="mt-6 rounded-lg border border-primary-200 bg-primary-50 p-4">
+              <p className="mb-3 text-sm text-gray-700">{t('detail.recordWithHelp')}</p>
+              {/* 제공 글이면 글쓴이가 도와준 것이고(나는 받았다), 요청 글이면 내가 도운 것이다. */}
+              <Link
+                href={`/mypage/timebank?${new URLSearchParams({
+                  with: listing.author_id,
+                  listing: listing.id,
+                  category: listing.category,
+                  role: listing.kind === 'offer' ? 'received' : 'gave',
+                }).toString()}#record`}
+                data-testid="timebank-record-with"
+                className="inline-block rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700"
+              >
+                {t('detail.recordWith', { name: listing.author_name })}
+              </Link>
+            </div>
+          )}
           {!isCoopTask && <p className="mt-6 text-xs text-gray-500">{t('notice')}</p>}
         </article>
 
