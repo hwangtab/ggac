@@ -886,5 +886,29 @@
         "url": "/en/projects/home-recording-mixing-workshop"
       }
     ]
+  },
+  {
+    "id": "project-031",
+    "slug": "2026-extraordinary-general-meeting",
+    "title": "Gyeonggi Art Collective 2026 Extraordinary General Meeting",
+    "lead": "The Gyeonggi Art Collective 2026 Extraordinary General Meeting will be held for all members on November 22, 2026 at DOT in Suwon, to vote on amendments to the articles needed to run our online services and for preliminary social enterprise designation.",
+    "category": "Event",
+    "publishedDate": "2026-11-22",
+    "eventDate": "2026-11-22",
+    "venue": {
+      "name": "DOT",
+      "address": "34-1 Hwaseomun-ro, Paldal-gu, Suwon, Gyeonggi-do, B1"
+    },
+    "coverImage": "/images/projects/2026-extraordinary-general-meeting.webp",
+    "description": "The 2026 Extraordinary General Meeting of the Gyeonggi Art Collective Cooperative will be held. The board resolved to submit proposed amendments to the articles of incorporation and to convene an extraordinary general meeting (8th Board Meeting, 2026-10-02), and the date and agenda were confirmed at the 9th Board Meeting (2026-10-25).\n\nIt is convened by the chair, with the board having deemed it necessary, under the Framework Act on Cooperatives and Article 30 (Extraordinary General Meeting) of the articles of incorporation, and is open to all members.\n\n### Meeting Information\n\n- **Date**: Sunday, November 22, 2026, 3:00 PM\n- **Venue**: DOT (34-1 Hwaseomun-ro, Paldal-gu, Suwon, Gyeonggi-do, B1)\n- **Participants**: All members\n- **Organized by**: Gyeonggi Art Collective Cooperative\n- **Authority**: Amendments proposed and meeting convened at the 8th Board Meeting (2026-10-02); date and agenda confirmed at the 9th Board Meeting (2026-10-25)\n\n### Why We Are Meeting\n\nThe cooperative runs concert ticketing, reward-based crowdfunding and a members' marketplace on its website, and plans to open sales of records and merchandise and members' music sales and distribution. All of these sell goods and services online and require filings such as a mail-order business report, but the business purposes in the current articles do not cover them. We therefore amend the articles first. The provisions required for designation as a preliminary social enterprise are amended at the same meeting.\n\n### Quorum Requirements\n\n- **Quorum**: Attendance of a majority of enrolled members\n- **Voting threshold**: Amendments to the articles require two-thirds of members present; other items require a majority of members present\n- **Voting rights**: One member, one vote (regardless of shares held)\n- **Proxy attendance**: By written proxy, another member or a cohabiting family member may attend on a member's behalf; one person may act as proxy for only one member. Proxy forms must be submitted on the cooperative's form before voting.\n\n### Reports\n\n- Report No. 1 | Status of the cooperative's online services\n- Report No. 2 | Introduction of the members' Time Bank\n\n### Resolutions\n\n- Item No. 1 | Approval of partial amendment of the articles — types of business and use of business\n- Item No. 2 | Approval of partial amendment of the articles — use of profits for social purposes and disposal of residual assets\n- Item No. 3 | Delegation of filing, registration and business registration updates following the amendment\n\n### Meeting Materials\n\nThe meeting booklet, the old/new provision comparison table and the proxy form are available to members in the members-only \"General Assembly\" menu of the Board Room.",
+    "gallery": null,
+    "videoUrl": null,
+    "artistIds": [],
+    "relatedArticles": [
+      {
+        "title": "Gyeonggi Art Collective 2026 Annual General Meeting",
+        "url": "/projects/2026-general-meeting"
+      }
+    ]
   }
 ]
