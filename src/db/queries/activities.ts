@@ -64,7 +64,7 @@ import { kstDateString } from '../../lib/time/kst.ts'
 export type ActivityActionTypeValue = (typeof ACTIVITY_ACTION_TYPE)[number]
 export type ActivityTargetTypeValue = (typeof ACTIVITY_TARGET_TYPE)[number]
 
-/** 오늘 날짜를 `daily_activity_stats.activity_date`(text, 'YYYY-MM-DD') 형식으로. KST 기준(기존 UTC 행은 이행하지 않는다). */
+/** 오늘 날짜를 `daily_activity_stats.activity_date`(text, 'YYYY-MM-DD') 형식으로. KST 기준. 기존 UTC 행은 2026-11-09에 `scripts/ops/rebuild-daily-activity-stats.mjs`로 재계산했다. */
 function todayDateString(): string {
   return kstDateString()
 }

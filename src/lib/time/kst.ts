@@ -2,7 +2,7 @@
  * KST(Asia/Seoul, UTC+9, DST 없음) 날짜 헬퍼. Next 임포트 없음 — 쿼리 계층이 써도 된다.
  *
  * 주의: `daily_activity_stats.activity_date`는 예전에 UTC 날짜로 쌓였다. 이 헬퍼로
- * 바꾼 뒤로는 KST 날짜로 쌓이며, 기존 행은 이행하지 않는다(경계 일자는 KST 00:00~09:00
+ * 바꾼 뒤로는 KST 날짜로 쌓인다. 기존 UTC 행은 2026-11-09에 scripts/ops/rebuild-daily-activity-stats.mjs로 재계산했다(경계 일자는 KST 00:00~09:00
  * 활동이 전날로 잡힌 채 남는다).
  */
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000
