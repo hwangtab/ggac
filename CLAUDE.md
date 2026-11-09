@@ -89,6 +89,10 @@ vercel logs <deployment-url>    # View runtime logs
 vercel inspect <deployment-url> # Inspect a deployment
 ```
 
+**PR 머지는 Claude가 직접 한다**(2026-11-09 사용자 결정). 검증(lint·type-check·build·해당
+E2E)이 끝났으면 사용자 확인을 기다리지 않고 `gh pr merge <번호> --squash --delete-branch`로
+머지한다. 머지가 곧 운영 배포다.
+
 Use it directly for env sync and deployment inspection rather than spinning up
 one-off scripts. For destructive operations (e.g., `env rm`), confirm with the
 user first.
