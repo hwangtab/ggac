@@ -1579,3 +1579,65 @@ TURSO_DATABASE_URL=... TURSO_AUTH_TOKEN=... node scripts/turso/seed-funding-sett
 - 로컬 권한 E2E는 이 행을 별도로 심는다(`scripts/testing/seed-authz-fixtures.mjs`,
   `enabled: true`) — 두 스크립트는 서로 다른 DB(로컬 테스트 Turso와 운영
   Turso)를 향하고 값도 의도적으로 다르다. 하나가 다른 하나를 대신하지 않는다.
+
+## 타임뱅크 기록 보존·폐기 절차 (이용규칙 제19조)
+
+규칙이 약속한 것은 둘이다. **거래 기록(`timebank_transfers`) 5년 보존**, **재가입 키
+(`timebank_withdrawn_keys`) 탈퇴일부터 3년 보관 뒤 삭제.** 자동화하지 않는다 —
+`timebank_transfers_no_delete` 트리거가 원장 DELETE를 막고 있고, 그 보호를 크론에
+풀어 두는 것이 폐기를 미루는 것보다 위험하다. 둘 다 **연 1회, 감사 보고와 함께**
+손으로 한다. 첫 폐기 시점은 2029-11(키)·2031-11(원장)이다.
+
+### A. 재가입 키 — 3년 지난 행 삭제 (트리거 없음, 단순)
+
+키는 원문이 아니라 HMAC이라 지워도 잃는 것은 "그 사람이 재가입하면 가입 크레딧을 막고
+음수 잔액을 잇는" 능력뿐이다. 3년이 지나면 규칙상 그 능력을 포기한다.
+
+```bash
+# 1) 대상 확인 — withdrawn_at은 ms 단위 epoch
+turso db shell <운영DB> "SELECT count(*) FROM timebank_withdrawn_keys WHERE withdrawn_at < (unixepoch('now','-3 years') * 1000);"
+# 2) 백업 확인 — 야간 백업(위 '백업' 절)이 그날 떠 있는지 본 뒤
+# 3) 삭제
+turso db shell <운영DB> "DELETE FROM timebank_withdrawn_keys WHERE withdrawn_at < (unixepoch('now','-3 years') * 1000);"
+```
+
+### B. 원장 — 5년 지난 행 폐기 (트리거를 잠깐 내리고, 잔액 불변을 증명한 뒤 커밋)
+
+원장은 잔액을 저장하지 않고 **행의 합**이 잔액이다. 그래서 오래된 행을 아무거나
+지우면 살아 있는 회원의 잔액이 바뀐다. 지워도 되는 행은 **당사자가 전부 탈퇴
+회원(묘비)인 행**뿐이고, 그것도 "그 탈퇴 회원들 사이의 모든 행"을 **한 묶음으로**
+지워야 조합 계좌 잔액이 그대로다(탈퇴 정산으로 각자 잔액이 0이므로 묶음 전체의
+조합 계좌 순액은 0이다). 한 회원이라도 5년이 안 된 행이 섞여 있으면 그 회원의 행은
+전부 다음 해로 미룬다.
+
+절차는 전부 **한 트랜잭션**에서 하고, 마지막 단언이 어긋나면 ROLLBACK한다:
+
+1. 이사회 보고용 내보내기 — 지울 범위의 월별 `monthlyOversight` 수치는 폐기 뒤
+   다시 계산되지 않으므로, 해당 연도 이사회 보고서(회의록 첨부)가 남아 있는지
+   확인하고 없으면 지금 CSV로 떠서 비공개 Blob `backups/timebank-ledger-YYYY.csv`에
+   둔다.
+2. 야간 백업이 그날 떠 있는지 확인한다.
+3. 후보 계좌: `member_profiles.withdrawn_at IS NOT NULL`이고, 그 계좌가 from/to인
+   **모든** 원장 행의 `coalesce(decided_at, created_at)`이 5년 전보다 앞선 회원.
+4. 후보 계좌끼리 또는 후보 계좌↔`coop`인 행만 지운다. 후보가 아닌 회원이 한쪽에
+   있는 행은 건드리지 않는다(그 행이 묶음을 깨므로 그 후보도 이번엔 빼는 것이 맞다
+   — 3번 조건을 "상대도 후보"로 좁혀 다시 뽑는다).
+5. 단언: 삭제 **전후**로 `balancesByAccount()`와 같은 쿼리(README 위 `src/db/queries/timebankLedger.ts`의
+   SUM)를 떠서, 남아 있는 모든 계좌(`coop` 포함)의 잔액이 한 분도 다르지 않아야
+   한다. 다르면 ROLLBACK — 묶음이 닫혀 있지 않다는 뜻이다.
+
+```sql
+BEGIN;
+DROP TRIGGER timebank_transfers_no_delete;
+-- (3·4로 뽑은 id 목록으로)
+DELETE FROM timebank_transfers WHERE id IN (...);
+-- 트리거를 마이그레이션 원문 그대로 되살린다(0026_timebank.sql의 CREATE TRIGGER 문)
+CREATE TRIGGER `timebank_transfers_no_delete` BEFORE DELETE ON `timebank_transfers`
+BEGIN SELECT RAISE(ABORT, 'timebank_transfers: rows are never deleted'); END;
+-- 5번 단언을 여기서 비교한 뒤
+COMMIT; -- 또는 ROLLBACK
+```
+
+끝나면 `npm run db:check-invariants`(원장 불변식)와 `check-schema-parity`(트리거가
+돌아왔는지)를 돌리고, 지운 행 수·기간·단언 결과를 그해 감사 보고에 한 줄 적는다.
+폐기 뒤 `/board-room/timebank`의 그 기간 수치는 비게 되며, 그것이 정상이다.

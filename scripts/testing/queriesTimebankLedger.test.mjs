@@ -308,6 +308,34 @@ test('거절·취소는 조건부 UPDATE로 상태만 바꾼다', async () => {
   assert.equal(canceled.status, 'canceled')
   assert.equal(canceled.decided_by, a)
   assert.equal(await ledger.balanceOf(a), 0)
+  // 사유 없는 결정은 memo를 건드리지 않는다.
+  assert.equal(rejected.memo, r1.memo)
+  assert.equal(canceled.memo, r2.memo)
+})
+
+test('거절·취소 사유는 memo 끝에 머리말을 붙여 남고, 원 memo를 지우지 않는다', async () => {
+  const a = await newMember('rm')
+  const b = await newMember('rm')
+  const r1 = await record(a, b)
+  const rejected = await ledger.rejectTransfer({
+    id: r1.id,
+    actorId: b,
+    memo: '  그날 안 만났어요 ',
+  })
+  assert.equal(rejected.status, 'rejected')
+  assert.equal(
+    rejected.memo,
+    r1.memo ? `${r1.memo} / 거절 사유: 그날 안 만났어요` : '거절 사유: 그날 안 만났어요'
+  )
+
+  const r2 = await record(a, b)
+  const canceled = await ledger.cancelTransfer({ id: r2.id, actorId: a, memo: '잘못 눌렀어요' })
+  assert.match(canceled.memo, /취소 사유: 잘못 눌렀어요$/)
+
+  // 공백뿐인 사유는 사유 없음이다.
+  const r3 = await record(a, b)
+  const plain = await ledger.rejectTransfer({ id: r3.id, actorId: b, memo: '   ' })
+  assert.equal(plain.memo, r3.memo)
 })
 
 test('1-A에서 market 기록은 kind_not_allowed, 그 밖의 kind는 거부', async () => {

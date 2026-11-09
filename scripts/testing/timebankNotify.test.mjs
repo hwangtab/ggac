@@ -257,6 +257,21 @@ test('결정 알림은 상태에 맞는 종류로 다른 당사자에게 간다'
   }
 })
 
+test('결정 알림: 거절·취소 사유가 있으면 문구 끝에 싣고, 없으면 그대로다', async () => {
+  const withReason = spy()
+  await notify.notifyTransferDecided(
+    row({ status: 'rejected' }),
+    'payer',
+    withReason.deps,
+    ' 그날 안 만났어요 '
+  )
+  assert.match(withReason.calls.bulk[0].message, /거절됐습니다\. 사유: 그날 안 만났어요$/)
+
+  const noReason = spy()
+  await notify.notifyTransferDecided(row({ status: 'rejected' }), 'payer', noReason.deps, '   ')
+  assert.match(noReason.calls.bulk[0].message, /거절됐습니다\.$/)
+})
+
 test('결정 알림: 아직 pending인 행이면 아무것도 보내지 않는다', async () => {
   const { deps, calls } = spy()
   await notify.notifyTransferDecided(row({ status: 'pending' }), 'payer', deps)

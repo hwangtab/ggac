@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
+import { TIMEBANK_MEMO_MAX } from '@/constants/timebank'
 import { timebankFetch } from '@/components/timebank/timebankFormat'
 import TransferSummary, { type MyTransferView } from './TransferSummary'
 
@@ -12,8 +13,9 @@ type PendingResponse = { to_confirm: MyTransferView[]; awaiting_other: MyTransfe
  * 건은 표시한다.
  *
  * 확인은 참여 자격이 있을 때만 단추를 보인다(`canConfirm`). 거절·취소는 꺼짐·구판
- * 동의·탈퇴 신청 중에도 된다(§7.2 — 대기를 줄이는 동작). 실패 사유는 서버 문구
- * (`describeLedgerError`)를 그대로 보인다.
+ * 동의·탈퇴 신청 중에도 된다(§7.2 — 대기를 줄이는 동작). 거절·취소는 선택 사유를
+ * 받아 상대 알림과 기록 memo에 남긴다. 실패 사유는 서버 문구(`describeLedgerError`)를
+ * 그대로 보인다.
  */
 export default function PendingPanel({
   refreshKey,
@@ -47,12 +49,18 @@ export default function PendingPanel({
   }, [refreshKey, t])
 
   const act = async (row: MyTransferView, action: 'confirm' | 'reject' | 'cancel') => {
-    if (action !== 'confirm' && !window.confirm(t(`my.pending.${action}Confirm`))) return
+    // 거절·취소는 사유를 선택으로 받는다 — 빈 채로 확인하면 사유 없이 진행, 취소(null)면 중단.
+    let memo: string | null = null
+    if (action !== 'confirm') {
+      const answer = window.prompt(t(`my.pending.${action}Prompt`), '')
+      if (answer === null) return
+      memo = answer.trim().slice(0, TIMEBANK_MEMO_MAX) || null
+    }
     setBusyId(row.id)
     setNotice(null)
     const result = await timebankFetch<{ transfer: MyTransferView }>(
       `/api/timebank/transfers/${row.id}/${action}`,
-      { method: 'POST' },
+      { method: 'POST', ...(memo ? { json: { memo } } : {}) },
       t('my.actionError')
     )
     setBusyId(null)

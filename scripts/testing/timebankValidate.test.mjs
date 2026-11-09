@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  parseDecisionInput,
   parseListingInput,
   parseListingQuery,
   parseListingStatus,
@@ -147,4 +148,18 @@ test('parseProfileInput: 길이·분류·타입 오류', () => {
   assert.equal(parseProfileInput({ categories: ['music'] }).value, null)
   assert.equal(parseProfileInput({ categories: 'lesson' }).value, null)
   assert.equal(parseProfileInput({ visible: 'true' }).value, null)
+})
+
+test('parseDecisionInput: 본문 없음·빈 사유는 사유 없음, 글자·상한을 본다', () => {
+  assert.deepEqual(parseDecisionInput(null).value, { memo: null })
+  assert.deepEqual(parseDecisionInput(undefined).value, { memo: null })
+  assert.deepEqual(parseDecisionInput({}).value, { memo: null })
+  assert.deepEqual(parseDecisionInput({ memo: '   ' }).value, { memo: null })
+  assert.deepEqual(parseDecisionInput({ memo: ' 사실과 달라요 ' }).value, { memo: '사실과 달라요' })
+  // 다른 칸은 버린다.
+  assert.deepEqual(parseDecisionInput({ memo: 'x', status: 'confirmed' }).value, { memo: 'x' })
+  assert.equal(parseDecisionInput({ memo: 5 }).value, null)
+  assert.equal(parseDecisionInput({ memo: 'a'.repeat(501) }).value, null)
+  assert.equal(parseDecisionInput([]).value, null)
+  assert.equal(typeof parseDecisionInput('x').error, 'string')
 })

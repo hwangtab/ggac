@@ -2,6 +2,7 @@
 // `./settings.ts`가 `@/utils/systemSettings`를 정적 import하므로 `node --test`는
 // 별칭 훅을 등록한 뒤 이 파일을 동적 import한다(`timebankAdminRules.test.mjs`).
 import { COOP_ACCOUNT, TIMEBANK_MEMO_MAX, type TimebankCategory } from '../../constants/timebank.ts'
+import { getTimebankTerms } from '../../constants/timebankTerms.ts'
 import { normalizeTimebankSettings, TIMEBANK_DEFAULTS, type TimebankSettings } from './settings.ts'
 import { parseListingInput, type ParseResult } from './validate.ts'
 
@@ -208,6 +209,8 @@ const SETTINGS_KEYS = Object.keys(TIMEBANK_DEFAULTS) as SettingsKey[]
 const NUMERIC_KEYS = SETTINGS_KEYS.filter(k => typeof TIMEBANK_DEFAULTS[k] === 'number')
 
 export const TERMS_BUMP_REQUIRED_MESSAGE = '수치를 바꾸면 이용규칙 판도 올려야 합니다.'
+export const TERMS_MISSING_MESSAGE =
+  '그 판의 이용규칙 본문이 아직 배포되지 않았습니다. 본문을 먼저 올린 뒤 판을 바꿔 주세요.'
 
 export type SettingsChangePlan =
   | {
@@ -231,10 +234,15 @@ const bad = (message: string): SettingsChangePlan => ({ ok: false, status: 400, 
  *    떨어뜨리는데, 의결된 값이 몰래 다른 값으로 저장되면 안 되므로 거부한다.
  * 4. 바뀐 칸이 없으면 거부한다(의결 근거만 남는 빈 이력을 만들지 않는다).
  * 5. 수치가 바뀌었는데 `terms_version`이 같으면 거부한다(§9.2·§9.4).
+ * 6. `terms_version`을 바꾸는데 그 판의 본문(`TIMEBANK_TERMS`)이 없으면 거부한다.
+ *    판이 바뀌는 순간 모든 참여자가 "구판 동의"가 되어 쓰기가 막히는데, 본문이
+ *    없으면 동의 화면이 단추를 숨겨 아무도 다시 동의할 수 없다(전원 잠금).
+ *    `termsExists`는 테스트가 바꿔 끼운다.
  */
 export function planTimebankSettingsChange(input: {
   current: unknown
   body: unknown
+  termsExists?: (version: string) => boolean
 }): SettingsChangePlan {
   const body = isPlainObject(input.body) ? input.body : {}
   const ref = typeof body.resolution_ref === 'string' ? body.resolution_ref.trim() : ''
@@ -264,6 +272,10 @@ export function planTimebankSettingsChange(input: {
   const numbersChanged = changed.some(k => NUMERIC_KEYS.includes(k))
   if (numbersChanged && next.terms_version === current.terms_version) {
     return bad(TERMS_BUMP_REQUIRED_MESSAGE)
+  }
+  const termsExists = input.termsExists ?? (v => getTimebankTerms(v) !== null)
+  if (changed.includes('terms_version') && !termsExists(next.terms_version)) {
+    return bad(TERMS_MISSING_MESSAGE)
   }
 
   return { ok: true, next, changed, resolution_ref: ref }

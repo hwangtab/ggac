@@ -278,6 +278,25 @@ export function parseTransferAction(value: unknown): TransferAction | null {
   return oneOf(TRANSFER_ACTIONS, value)
 }
 
+/**
+ * 거절·취소 본문 `{ memo? }` — 선택 사유. 본문이 없거나(`null`) 비어 있으면 사유 없음.
+ * 글자가 아니거나 상한을 넘으면 실패. 그 밖의 칸은 버린다.
+ */
+export function parseDecisionInput(body: unknown): ParseResult<{ memo: string | null }> {
+  if (body === null || body === undefined) return { error: null, value: { memo: null } }
+  if (typeof body !== 'object' || Array.isArray(body)) {
+    return fail('요청 형식이 올바르지 않습니다.')
+  }
+  const raw = (body as Record<string, unknown>).memo
+  if (raw === undefined || raw === null) return { error: null, value: { memo: null } }
+  if (typeof raw !== 'string') return fail('사유는 글자로 입력해 주세요.')
+  const trimmed = raw.trim()
+  if (trimmed.length > TIMEBANK_MEMO_MAX) {
+    return fail(`사유는 ${TIMEBANK_MEMO_MAX}자를 넘을 수 없습니다.`)
+  }
+  return { error: null, value: { memo: trimmed || null } }
+}
+
 const MONTH_PARAM = /^\d{4}-(0[1-9]|1[0-2])$/
 
 /** `'YYYY-MM'`만. 그 밖은 null. */
