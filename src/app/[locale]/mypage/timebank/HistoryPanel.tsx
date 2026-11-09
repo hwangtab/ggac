@@ -249,6 +249,13 @@ export default function HistoryPanel({
           )}
         </div>
       )}
+
+      <p className="mt-4 text-xs text-gray-500" data-testid="timebank-dispute-note">
+        {t('my.history.disputeNote')}{' '}
+        <a href="mailto:contact@ggac.kr" className="text-primary-600 hover:underline">
+          contact@ggac.kr
+        </a>
+      </p>
     </section>
   )
 }

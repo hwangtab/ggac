@@ -228,6 +228,18 @@ test.describe('타임뱅크 — 미승인 회원', () => {
     ).toBeVisible()
     await expect(page.getByText(LISTING_TITLE)).toHaveCount(0)
   })
+
+  test('재능 찾기·참여 현황 화면도 게이트만 그린다', async ({ page }) => {
+    for (const path of ['/board/timebank/directory', '/board/timebank/stats']) {
+      await page.goto(path)
+      await expect(
+        page.locator('[data-testid="timebank-gate"][data-state="unapproved"]'),
+        path
+      ).toBeVisible()
+      await expect(page.getByTestId('timebank-directory'), path).toHaveCount(0)
+      await expect(page.getByTestId('timebank-stats'), path).toHaveCount(0)
+    }
+  })
 })
 
 // ── 미동의(director) ─────────────────────────────────────────────────────────
@@ -258,6 +270,18 @@ test.describe('타임뱅크 — 미동의 조합원(director)', () => {
     }
   })
 
+  test('재능 찾기 화면은 동의 안내만 그리고 명단을 그리지 않는다', async ({ page }) => {
+    await page.goto('/board/timebank/directory')
+    await expect(page.getByTestId('timebank-gate')).toBeVisible()
+    await expect(page.getByTestId('timebank-directory')).toHaveCount(0)
+    await expect(page.getByTestId('timebank-directory-empty')).toHaveCount(0)
+  })
+
+  test('참여 현황 화면은 미동의 조합원에게도 열린다(집계만)', async ({ page }) => {
+    await page.goto('/board/timebank/stats')
+    await expect(page.getByTestId('timebank-stats')).toBeVisible()
+  })
+
   test('글쓰기·기록·확인은 403 + 동의 안내다', async ({ request }) => {
     const sends = [
       request.post('/api/timebank/listings', { data: listingBody }),
@@ -269,6 +293,18 @@ test.describe('타임뱅크 — 미동의 조합원(director)', () => {
       expect(res.status(), res.url()).toBe(403)
       expect(await errorOf(res), res.url()).toBe(MSG.notAgreed)
     }
+  })
+})
+
+test.describe('타임뱅크 — 재능 찾기(동의자 owner)', () => {
+  test.use({ storageState: storageStatePath('owner') })
+
+  test('동의자는 게이트 없이 명단(또는 빈 안내)을 본다', async ({ page }) => {
+    await page.goto('/board/timebank/directory')
+    await expect(page.getByTestId('timebank-gate')).toHaveCount(0)
+    await expect(
+      page.getByTestId('timebank-directory').or(page.getByTestId('timebank-directory-empty'))
+    ).toBeVisible()
   })
 })
 
