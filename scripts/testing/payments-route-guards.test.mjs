@@ -167,7 +167,7 @@ test('해지는 우리 쪽을 먼저 내리고 토스 삭제는 실패해도 넘
 })
 
 test('자동 청구 크론은 토큰을 타이밍 안전 비교로 검증한다', () => {
-  assert.match(CHARGE, /timingSafeEqual/)
+  assert.match(CHARGE, /isCronAuthorized/)
   assert.match(CHARGE, /PAYMENTS_CRON_TOKEN/)
 })
 
@@ -414,8 +414,7 @@ test('대사 크론 둘 다 CRON_SECRET으로 닫혀 있다', () => {
     ['조합비', DUES_EXPIRE],
   ]) {
     assert.match(source, /process\.env\.CRON_SECRET/, `${name} 크론에 인증이 없다`)
-    assert.match(source, /timingSafeEqual/, `${name} 크론이 토큰을 타이밍 안전 비교하지 않는다`)
-    assert.match(source, /expected\.length === 0\) return false/, `${name} 크론이 fail-open이다`)
+    assert.match(source, /isCronAuthorized\(/, `${name} 크론이 토큰을 타이밍 안전 비교하지 않는다`)
   }
 })
 

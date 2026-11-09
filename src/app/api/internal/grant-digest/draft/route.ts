@@ -10,7 +10,6 @@
  * `/admin/grants`에서 누른다.
  */
 import { NextRequest } from 'next/server'
-import { timingSafeEqual } from 'node:crypto'
 
 import {
   createGrantDigest,
@@ -38,6 +37,7 @@ import {
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
 import { runTrackedCron } from '@work/lib/ops/cron-alert'
+import { isCronAuthorized } from '@work/lib/ops/cron-auth'
 
 const log = createLogger('api/internal/grant-digest/draft')
 
@@ -57,11 +57,7 @@ export const maxDuration = 300
 const MEMBER_FETCH_LIMIT = 1000
 
 function bearerMatches(request: NextRequest, expected: string | undefined): boolean {
-  if (!expected) return false
-  const header = request.headers.get('authorization') ?? ''
-  const provided = header.startsWith('Bearer ') ? header.slice(7) : ''
-  if (provided.length !== expected.length) return false
-  return timingSafeEqual(Buffer.from(provided), Buffer.from(expected))
+  return isCronAuthorized(request.headers.get('authorization'), expected)
 }
 
 /**

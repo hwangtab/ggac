@@ -13,15 +13,27 @@ export function isCronSecretConfigured(secret: string | undefined | null): boole
   return typeof secret === 'string' && secret.length > 0
 }
 
+/**
+ * Bearer 토큰을 하나 이상의 시크릿과 대조한다. 시크릿이 여럿이면 하나라도 맞으면 통과.
+ * 비교는 **바이트 길이**로 선검사한다 — 글자 수가 같아도 멀티바이트면 바이트 수가 달라
+ * `timingSafeEqual`이 던지고 인증 전 500이 되기 때문이다. 어떤 입력에도 던지지 않는다.
+ */
 export function isCronAuthorized(
   authorization: string | null | undefined,
-  secret: string | undefined | null
+  ...secrets: Array<string | undefined | null | Array<string | undefined | null>>
 ): boolean {
-  if (!isCronSecretConfigured(secret)) return false
-  const header = authorization ?? ''
-  const provided = header.startsWith('Bearer ') ? header.slice(7) : ''
-  const a = Buffer.from(provided)
-  const b = Buffer.from(secret as string)
-  // 길이 선검사 — timingSafeEqual은 길이가 다르면 던진다
-  return a.length === b.length && timingSafeEqual(a, b)
+  const configured = secrets.flat().filter((v): v is string => isCronSecretConfigured(v))
+  if (configured.length === 0) return false
+  try {
+    const header = typeof authorization === 'string' ? authorization : ''
+    const provided = Buffer.from(header.startsWith('Bearer ') ? header.slice(7) : '')
+    let ok = false
+    for (const secret of configured) {
+      const b = Buffer.from(secret)
+      if (provided.length === b.length && timingSafeEqual(provided, b)) ok = true
+    }
+    return ok
+  } catch {
+    return false
+  }
 }

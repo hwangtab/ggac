@@ -478,3 +478,20 @@ test('고아 정리: 행 조회가 실패하면 아무것도 지우지 않고 �
   )
   assert.equal(store.removed.length, 0)
 })
+
+test('isCronAuthorized: 멀티바이트 헤더는 던지지 않고 false, 시크릿 여럿 지원', () => {
+  // 글자 수는 같고 바이트 수가 다른 입력 — 예전 구현은 timingSafeEqual이 던져 500이 됐다
+  assert.equal('가나다라'.length, 'abcd'.length)
+  assert.doesNotThrow(() => isCronAuthorized('Bearer 가나다라', 'abcd'))
+  assert.equal(isCronAuthorized('Bearer 가나다라', 'abcd'), false)
+  assert.equal(isCronAuthorized('Bearer abcd', 'abcd'), true)
+  assert.equal(isCronAuthorized('Bearer abce', 'abcd'), false)
+  assert.equal(isCronAuthorized('Bearer abcd', undefined), false)
+  assert.equal(isCronAuthorized('Bearer abcd', undefined, ''), false)
+  assert.equal(isCronAuthorized(null, 'abcd'), false)
+  assert.equal(isCronAuthorized('Bearer abcd'), false)
+  assert.equal(isCronAuthorized('Bearer second', undefined, 'first', 'second'), true)
+  assert.equal(isCronAuthorized('Bearer first', 'first', 'second'), true)
+  assert.equal(isCronAuthorized('Bearer third', 'first', 'second'), false)
+  assert.equal(isCronAuthorized('Bearer second', ['first', 'second']), true)
+})

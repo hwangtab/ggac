@@ -236,7 +236,8 @@ test('청구 뒤 납부 표시 직전에 죽어도 다음 실행이 다시 청�
     },
   })
 
-  await assert.rejects(() => runBillingCharges(deps))
+  const first = await runBillingCharges(deps)
+  assert.equal(first.undecided, 1, '승인 뒤 DB 오류는 판단 불가로 센다')
   assert.equal(calls.charged.length, 1, '첫 실행은 실제로 청구했다')
   assert.equal(claims.size, 1, '선점이 남아 있어야 한다')
 
@@ -343,4 +344,57 @@ test('보고가 실패해도 청구 결과는 그대로 돌려준다', async () 
 
   const result = await runBillingCharges(deps)
   assert.equal(result.undecided, 1)
+})
+
+const twoTargets = [
+  { user_id: 'u1', billing_key: 'bk1', customer_key: 'ck1', monthly_fee: 30000 },
+  { user_id: 'u2', billing_key: 'bk2', customer_key: 'ck2', monthly_fee: 30000 },
+]
+
+test('승인 뒤 DB가 던지면 판단 불가로 세고 보고하며 다음 사람을 계속 청구한다', async () => {
+  const reported = []
+  const { deps, calls } = makeDeps({
+    listTargets: async () => twoTargets,
+    markPaymentDone: async orderId => {
+      if (calls.charged.length === 1) throw new Error('DB 끊김')
+      return { id: `p_${orderId}` }
+    },
+    reportUndecided: async input => {
+      reported.push(input)
+    },
+  })
+
+  const result = await runBillingCharges(deps)
+
+  assert.equal(calls.charged.length, 2, '다음 사람도 청구했다')
+  assert.equal(result.undecided, 1)
+  assert.equal(result.charged, 1)
+  assert.equal(result.failed, 0)
+  assert.equal(reported.length, 1)
+  assert.equal(reported[0].orderIds.length, 1)
+  assert.equal(calls.released.length, 0, '선점은 남긴다')
+  assert.equal(calls.duesPaid[0].paymentId, `p_${calls.charged[1].orderId}`)
+})
+
+test('승인 전에 DB가 던지면 실패로 세고 다음 사람을 계속 청구한다', async () => {
+  const reported = []
+  const { deps, calls } = makeDeps({
+    listTargets: async () => twoTargets,
+    ensureDues: async input => {
+      if (input.userId === 'u1') throw new Error('DB 끊김')
+      return { status: 'unpaid', amount: input.amount }
+    },
+    reportUndecided: async input => {
+      reported.push(input)
+    },
+  })
+
+  const result = await runBillingCharges(deps)
+
+  assert.equal(result.failed, 1)
+  assert.equal(result.charged, 1)
+  assert.equal(result.undecided, 0)
+  assert.equal(calls.charged.length, 1)
+  assert.equal(calls.charged[0].customerKey, 'ck2')
+  assert.equal(reported.length, 0)
 })
