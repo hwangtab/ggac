@@ -110,7 +110,17 @@ export default async function TimebankPage({ params, searchParams }: TimebankPag
           <Link href="/board" className="text-sm text-gray-600 hover:text-primary-600">
             {t('backToBoard')}
           </Link>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/board/timebank/directory"
+              data-testid="timebank-directory-link"
+              className={chip(false)}
+            >
+              {t('directory.link')}
+            </Link>
+            <Link href="/board/timebank/stats" className={chip(false)}>
+              {t('stats.link')}
+            </Link>
             <Link href={hrefWith({ mine: query.mine ? null : '1' })} className={chip(query.mine)}>
               {t('mine')}
             </Link>

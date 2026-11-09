@@ -1433,7 +1433,8 @@
         "relatedPost": "Related post",
         "reverse": "Request reversal",
         "reverseConfirm": "Record a reversal of this exchange? It is confirmed when the other person confirms.",
-        "reverseDone": "Reversal requested. It is confirmed when the other person confirms."
+        "reverseDone": "Reversal requested. It is confirmed when the other person confirms.",
+        "disputeNote": "If a record is wrong, use 'Request reversal' to ask the other party to correct it. If you cannot agree, you may object to the board within 30 days of confirmation (Terms, Article 12). Send objections to:"
       },
       "posts": {
         "heading": "My posts",
@@ -1454,8 +1455,8 @@
         },
         "offers": "What I can offer",
         "needs": "What I need",
-        "visible": "Show in the participant directory",
-        "visibleHelp": "Other participants will see what you offer, what you need and your categories.",
+        "visible": "Show in Find talents",
+        "visibleHelp": "If shown, other participants can see what you offer, what you need and your categories under 'Find talents' on the timebank board.",
         "save": "Save profile",
         "saving": "Saving…",
         "saved": "Profile saved.",
@@ -1470,6 +1471,30 @@
         "needsAgreement": "You need to agree to the current version. Read and agree to the terms in the notice above.",
         "unavailable": "You need to agree to the current version, but agreement is not available right now. See the notice above."
       }
+    },
+    "directory": {
+      "link": "Find talents",
+      "heading": "Find talents",
+      "subtitle": "Participants who chose to share their talent profile. Find someone to exchange help with.",
+      "back": "← Timebank board",
+      "editMine": "Edit my talent profile",
+      "empty": "No participant has shared a talent profile yet.",
+      "offers": "Can offer",
+      "needs": "Looking for"
+    },
+    "stats": {
+      "link": "Participation",
+      "heading": "Participation",
+      "subtitle": "Aggregated timebank activity for completed months. Nothing that identifies an individual is shown.",
+      "month": "Month",
+      "exchangeCount": "Exchanges",
+      "exchangeMinutes": "Time exchanged",
+      "participants": "People who exchanged",
+      "bidirectional": "People who both gave and received",
+      "peopleValue": "{count} people",
+      "fewPeople": "Fewer than 3",
+      "fewCount": "Fewer than 3",
+      "privacyNote": "Under Article 17 of the terms, figures below 3 people (or 3 records) are hidden. The current month is published after it ends."
     }
   },
   "boardRoom": {
