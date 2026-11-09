@@ -30,7 +30,7 @@
     "prepare": "husky",
     "vercel:build": "npm run images:optimize && npm run images:verify && npm run llms:generate && next build",
     "vercel:dev": "vercel dev",
-    "vercel:deploy": "vercel --prod",
+    "vercel:deploy": "echo '⛔ vercel --prod 금지 — 로컬 체크아웃을 그대로 올린다. 프로덕션 배포는 main 푸시로.' && exit 1",
     "vercel:preview": "vercel",
     "deploy:notify": "node scripts/utils/deployment/deploy-notify.js",
     "deploy:smoke": "node scripts/utils/deployment/smoke-check.mjs",

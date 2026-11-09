@@ -62,7 +62,7 @@ npm run db:push:local            # local.db에 스키마를 깐다 (한 번만)
 ### Deployment
 
 ```bash
-npm run vercel:deploy           # Vercel production deployment
+npm run vercel:deploy           # ⛔ 막혀 있다(exit 1) — 프로덕션 배포는 main 푸시로
 npm run vercel:preview          # Vercel preview deployment
 npm run deploy                  # Deploy webhook trigger
 npm run deploy:notify           # Deploy notification script
