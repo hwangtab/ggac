@@ -712,6 +712,42 @@ export default function MailboxView({ className = '' }: { className?: string }) 
     }
   }
 
+  /**
+   * 선택한 메일을 **완전히** 지운다(관리자 전용, 2026-11-09). 되돌릴 수 없으므로 확인을 받는다.
+   * 첨부 파일도 함께 지워지고, 지운 사실은 활동 기록에 남는다.
+   */
+  const bulkDelete = async () => {
+    const targets = emails.filter(e => checkedIds.includes(e.id))
+    if (targets.length === 0 || bulkUpdating) return
+    if (
+      !window.confirm(
+        `선택한 메일 ${targets.length}건을 완전히 지웁니다. 첨부 파일도 함께 지워지며 되돌릴 수 없습니다. 계속할까요?`
+      )
+    ) {
+      return
+    }
+    setBulkUpdating(true)
+    const deleted = new Set<string>()
+    const failed: string[] = []
+    try {
+      for (const target of targets) {
+        const res = await fetch(`/api/admin/mailbox/${target.id}`, { method: 'DELETE' })
+        if (res.ok) deleted.add(target.id)
+        else failed.push(target.id)
+      }
+      setEmails(prev => prev.filter(e => !deleted.has(e.id)))
+      setDetail(prev => (prev && deleted.has(prev.id) ? null : prev))
+      setCheckedIds(prev => prev.filter(id => !deleted.has(id)))
+      if (failed.length > 0) {
+        alert(`${failed.length}건은 지우지 못했습니다(권한 또는 상태를 확인해 주세요).`)
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '메일 삭제에 실패했습니다.')
+    } finally {
+      setBulkUpdating(false)
+    }
+  }
+
   // 메모 수는 목록 배지에도 보인다 — 바꾼 뒤 목록 행의 수도 맞춘다.
   const syncNoteCount = (emailId: string, count: number) =>
     setEmails(prev => prev.map(e => (e.id === emailId ? { ...e, note_count: count } : e)))
@@ -1436,6 +1472,17 @@ export default function MailboxView({ className = '' }: { className?: string }) 
                       {STATUS_LABELS[s].label}
                     </button>
                   ))}
+                {checkedIds.length > 0 && (
+                  <button
+                    type="button"
+                    disabled={bulkUpdating}
+                    onClick={bulkDelete}
+                    className="px-2 py-1 rounded-md font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-50"
+                    title="선택한 메일을 완전히 지웁니다(첨부 포함, 되돌릴 수 없음)"
+                  >
+                    삭제
+                  </button>
+                )}
               </div>
             )}
 

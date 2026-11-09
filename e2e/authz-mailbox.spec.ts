@@ -2143,3 +2143,102 @@ test.describe('메일함 보낸 메일의 답장', () => {
     }
   })
 })
+
+/**
+ * 받은 메일 **삭제**는 관리자만 (2026-11-09).
+ *
+ * 메일함 보관 정책은 "계속 보관"이지만, 정보주체가 삭제를 요구했을 때 응답할 수단이 없었다.
+ * 그 최소 장치(`DELETE /api/admin/mailbox/[id]`)의 경계를 본다 — 되돌릴 수 없는 동작이라
+ * "막았다"만이 아니라 **"거부됐을 때 실제로 지워지지 않았다"**를 DB로 확인하고, 관리자 쪽은
+ * 실제로 지워지는지(짝)까지 본다.
+ *
+ * 픽스처는 이 테스트가 직접 심는다(재시도에 안전하도록 매번 upsert). 공유 픽스처를 지우면
+ * 같은 실행의 다른 스펙이 404로 깨진다.
+ */
+const EMAIL_DELETE_ID = '00000000-0000-4000-8000-00000000c006'
+
+async function seedDeleteFixture(): Promise<void> {
+  const client = createClient({ url: process.env.TURSO_DATABASE_URL! })
+  try {
+    await client.execute({
+      sql: `INSERT INTO inbound_emails
+              (id, resend_email_id, from_address, from_email, to_addresses, subject, status, body_fetch_status, received_at)
+            VALUES (?, ?, ?, ?, ?, ?, 'unread', 'done', ?)
+            ON CONFLICT(id) DO UPDATE SET status = 'unread'`,
+      args: [
+        EMAIL_DELETE_ID,
+        'authz-mailbox-delete-fixture',
+        'sender-delete@example.com',
+        'sender-delete@example.com',
+        JSON.stringify(['mailbox@ggac.kr']),
+        'MAILBOX-E2E-DELETE-FIXTURE',
+        Date.now(),
+      ],
+    })
+  } finally {
+    client.close()
+  }
+}
+
+async function inboundExists(id: string): Promise<boolean> {
+  const client = createClient({ url: process.env.TURSO_DATABASE_URL! })
+  try {
+    const res = await client.execute({
+      sql: 'SELECT COUNT(*) AS n FROM inbound_emails WHERE id = ?',
+      args: [id],
+    })
+    return Number(res.rows[0]?.n ?? 0) > 0
+  } finally {
+    client.close()
+  }
+}
+
+test.describe('받은 메일 삭제는 관리자만 — 되돌릴 수 없는 경계', () => {
+  const path = `/api/admin/mailbox/${EMAIL_DELETE_ID}`
+
+  test('비로그인 401 · 이사 403(지워지지 않음) · 관리자 200(실제로 지워짐)', async ({
+    request,
+    baseURL,
+  }) => {
+    await seedDeleteFixture()
+
+    expect((await request.delete(path)).status(), '비로그인').toBe(401)
+    expect(await inboundExists(EMAIL_DELETE_ID), '비로그인이 지웠다').toBe(true)
+
+    const director = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('director'),
+    })
+    try {
+      expect((await director.delete(path)).status(), '이사(비관리자)').toBe(403)
+    } finally {
+      await director.dispose()
+    }
+    // 403을 돌려주면서 실제로는 지웠을 수 있다 — 코드만으로는 구분되지 않는다.
+    expect(await inboundExists(EMAIL_DELETE_ID), '이사 요청이 실제로 지웠다').toBe(true)
+
+    const admin = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('admin'),
+    })
+    try {
+      const ok = await admin.delete(path)
+      expect(ok.status(), '관리자').toBe(200)
+      expect((await ok.json()).data?.deleted).toBe(true)
+    } finally {
+      await admin.dispose()
+    }
+    expect(await inboundExists(EMAIL_DELETE_ID), '관리자가 지웠는데 남아 있다').toBe(false)
+
+    // 두 번째 삭제는 404 — 없는 메일을 지웠다고 답하지 않는다.
+    const again = await apiRequest.newContext({
+      baseURL,
+      storageState: storageStatePath('admin'),
+    })
+    try {
+      expect((await again.delete(path)).status(), '이미 지운 메일').toBe(404)
+    } finally {
+      await again.dispose()
+    }
+  })
+})

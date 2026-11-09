@@ -111,6 +111,7 @@ export const ACTIVITY_TARGET_TYPES = [
   'notification',
   'system',
   'inbound_email_attachment',
+  'inbound_email',
   'outbound_email',
   'outbound_email_attachment',
   'funding_campaign',
