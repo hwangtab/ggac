@@ -15,7 +15,7 @@
  * 응답 형태는 snake_case다(CLAUDE.md).
  */
 
-import { and, count, desc, eq, type SQL } from 'drizzle-orm'
+import { and, count, desc, eq, like, type SQL } from 'drizzle-orm'
 
 import { db, rawClient } from '../client.ts'
 import { eventApplications, linkPreviews, memberBulkOperations } from '../schema/index.ts'
@@ -303,6 +303,22 @@ export async function getEventApplicationPhotoRef(id: string): Promise<string | 
     .where(eq(eventApplications.id, id))
     .limit(1)
   return row?.photoUrl ?? null
+}
+
+/**
+ * 신청 사진으로 **공개 URL** 을 가리키는 값들 — 제출되지 않은 업로드 정리 스윕이 쓴다.
+ *
+ * 새 행은 비공개 경로(`event-applications/…`)를 갖고 공개 저장소와 무관하므로 여기 들어오지 않는다.
+ * URL→저장소 경로 변환은 호출부(`abandonedUploads.ts`)가 한다 — 이 계층은 URL 규약을 모른다.
+ */
+export async function listEventPhotoPublicUrls(): Promise<string[]> {
+  const rows = await db
+    .select({ photoUrl: eventApplications.photoUrl })
+    .from(eventApplications)
+    .where(like(eventApplications.photoUrl, 'http%'))
+  return rows
+    .map(row => row.photoUrl)
+    .filter((url): url is string => typeof url === 'string' && url.length > 0)
 }
 
 // -------------------------------------------------------------------------

@@ -23,6 +23,7 @@ import {
   CLEANUP_AGE_MS,
 } from '@/db/queries/uploads'
 import { deletePublicObject, logicalPathFromUrl } from '@/lib/storage/provider'
+import { runAbandonedEventPhotoSweep } from '@/lib/eventApplications/abandonedUploads'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
 import { runTrackedCron } from '@work/lib/ops/cron-alert'
@@ -105,10 +106,16 @@ async function runCleanup(request: NextRequest) {
       deleted++
     }
 
+    // 제출되지 않은 행사 신청 사진(2026-11-09). 신청 폼은 작성 중 미리보기를 위해 공개 저장소에
+    // 임시로 올리고, 접수할 때 비공개로 옮긴다 — 폼을 닫아 버린 사진은 아무 신청도 가리키지 않은
+    // 채 공개로 남는다. 48시간 지난 미참조만 지우고, 실패해도 위 정리 결과는 그대로 돌려준다.
+    const eventPhotos = await runAbandonedEventPhotoSweep()
+
     return ApiSuccess.ok({
       scanned: candidates.length,
       deleted,
       failed,
+      event_photos: eventPhotos,
     }).toNextResponse()
   } catch (error) {
     log.error('업로드 정리 실패', error)
