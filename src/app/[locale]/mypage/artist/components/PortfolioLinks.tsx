@@ -1,5 +1,6 @@
 'use client'
 
+import { useRef } from 'react'
 import { FiLink, FiPlus, FiTrash2, FiExternalLink } from 'react-icons/fi'
 import { PortfolioLink } from '@/types'
 import { toSafeHttpUrl } from '@/utils/safeUrl'
@@ -11,11 +12,19 @@ interface PortfolioLinksProps {
 }
 
 const PortfolioLinks: React.FC<PortfolioLinksProps> = ({ links, errors, onChange }) => {
+  const idsRef = useRef<string[]>([])
+  const newId = () => `k${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`
+  // 항목마다 안정적인 key를 유지한다(입력 중 값이 바뀌어도 행이 다시 마운트되지 않도록)
+  while (idsRef.current.length < links.length) idsRef.current.push(newId())
+  if (idsRef.current.length > links.length) idsRef.current.length = links.length
+
   const addLink = () => {
+    idsRef.current.push(newId())
     onChange([...links, { title: '', url: '' }])
   }
 
   const removeLink = (index: number) => {
+    idsRef.current.splice(index, 1)
     onChange(links.filter((_, i) => i !== index))
   }
 
@@ -73,7 +82,7 @@ const PortfolioLinks: React.FC<PortfolioLinksProps> = ({ links, errors, onChange
 
             return (
               <div
-                key={`${link.url || 'new'}-${index}`}
+                key={idsRef.current[index]}
                 className="bg-white border border-gray-200 rounded-lg p-4"
               >
                 <div className="flex items-start justify-between mb-3">
@@ -81,6 +90,7 @@ const PortfolioLinks: React.FC<PortfolioLinksProps> = ({ links, errors, onChange
                   <button
                     type="button"
                     onClick={() => removeLink(index)}
+                    aria-label={`링크 #${index + 1} 삭제`}
                     className="text-gray-400 hover:text-red-500 transition-colors duration-200"
                   >
                     <FiTrash2 className="w-4 h-4" />

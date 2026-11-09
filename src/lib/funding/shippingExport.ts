@@ -53,6 +53,7 @@
  */
 
 import { FULFILLMENT_LABEL, type FulfillmentStatus } from './fulfillment.ts'
+import { kstDateString } from '../time/kst.ts'
 
 /** 내보내기 판본. 무엇에 쓸 파일인가로 갈린다. */
 export const SHIPPING_EXPORT_FORMATS = ['excel', 'courier'] as const
@@ -164,7 +165,7 @@ export function shippingExportDisposition(
   today: Date,
   format: ShippingExportFormat = 'excel'
 ): string {
-  const date = today.toISOString().slice(0, 10)
+  const date = kstDateString(today)
   const safeTitle = String(campaignTitle ?? '')
     // 따옴표·역슬래시·제어문자는 헤더를 깨뜨린다. 경로 구분자도 지운다.
     .replace(/["\\/\r\n\t]/g, ' ')

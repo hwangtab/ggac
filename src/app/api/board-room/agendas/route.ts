@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { apiPost, ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { requireBoardMember } from '@/lib/server/boardRoomAuth'
 import { notifyDirectors } from '@/lib/server/boardRoomNotify'
+import { TEXT_LIMITS, textLengthError } from '@/utils/textLimits'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { validateUUID } from '@/utils/validation'
 import { createAgenda, getLastAgendaSortOrder, getMeetingTitle } from '@/db/queries/board'
@@ -30,6 +31,10 @@ export async function POST(request: NextRequest) {
       const title = typeof body.title === 'string' ? body.title.trim() : ''
       const content = typeof body.content === 'string' ? body.content : null
       if (!meetingId || !title) throw ApiError.badRequest('meeting_id와 제목이 필요합니다.')
+      const tooLong =
+        textLengthError(title, TEXT_LIMITS.BOARD_TITLE, '제목') ||
+        textLengthError(content, TEXT_LIMITS.BOARD_AGENDA_CONTENT, '내용')
+      if (tooLong) throw ApiError.badRequest(tooLong)
       const routeMeetingId = validateMeetingId(meetingId)
       if (routeMeetingId.error) throw routeMeetingId.error
       const sanitizedMeetingId = routeMeetingId.id

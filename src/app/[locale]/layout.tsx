@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { pickMessages, ROOT_NAMESPACES } from '@/i18n/segmentNamespaces'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import ConditionalLayout from '@/components/ConditionalLayout'
 import { ZOD_JITLESS_INLINE_SCRIPT } from '@/lib/zodBrowserConfig'
@@ -125,7 +126,10 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
         <script dangerouslySetInnerHTML={{ __html: ZOD_JITLESS_INLINE_SCRIPT }} />
       </head>
       <body suppressHydrationWarning>
-        <NextIntlClientProvider messages={messages} locale={locale}>
+        <NextIntlClientProvider
+          messages={pickMessages(messages as Record<string, unknown>, ROOT_NAMESPACES)}
+          locale={locale}
+        >
           <ErrorBoundary>
             <div className="skip-links">
               <a href="#main-content" className="skip-link">

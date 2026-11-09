@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { apiPatch, apiDelete, ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { requireBoardMember } from '@/lib/server/boardRoomAuth'
-import { parseJsonObjectBody } from '@/utils/requestBody'
+import { TEXT_LIMITS, textLengthError } from '@/utils/textLimits'
+import { LARGE_JSON_BODY_MAX_BYTES, parseJsonObjectBody } from '@/utils/requestBody'
 import { validateUUID } from '@/utils/validation'
 import { parseContentFormat } from '@/constants/contentFormat'
 import { annotateImageDimensionsSafe } from '@/utils/imageDimensions'
@@ -50,8 +51,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       if (authorErr || author === undefined) throw ApiError.notFound('회의록을 찾을 수 없습니다.')
       if (author !== user.id && !isAdmin) throw ApiError.forbidden('편집 권한이 없습니다.')
 
-      const body = await parseJsonObjectBody(request)
+      const body = await parseJsonObjectBody(request, { maxBytes: LARGE_JSON_BODY_MAX_BYTES })
       if (!body) throw ApiError.badRequest('유효한 JSON body가 필요합니다.')
+
+      const tooLong = textLengthError(body.content, TEXT_LIMITS.BOARD_MINUTES_CONTENT, '회의록')
+      if (tooLong) throw ApiError.badRequest(tooLong)
 
       const update: { content?: string; contentFormat?: string } = {}
 

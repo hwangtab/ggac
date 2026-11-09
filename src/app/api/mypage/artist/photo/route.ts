@@ -562,7 +562,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // 사용자 인증 확인
-    const auth = await requireUser()
+    const auth = await requireActiveMember()
     if (auth instanceof NextResponse) return auth
     const { user } = auth
 

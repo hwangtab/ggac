@@ -128,3 +128,8 @@ e2e/.auth/
 
 # Paseo(에이전트 하네스) 워크스페이스 설정 — 사람마다 다르고 앱과 무관하다.
 /paseo.json
+
+# 2026-11-09: 저장소에서 추적을 끊은 캡처·백업(PII 가능성, 62MB). 로컬에만 둔다.
+.gemini-clipboard/
+backup/
+supabase/migrations_backup/

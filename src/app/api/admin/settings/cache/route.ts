@@ -2,7 +2,6 @@ import { createOptionsResponse } from '@/utils/apiResponse'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
-import { createSettingsAdminAuth } from '@/lib/server/settingsAdminAuth'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { logSecurityEvent } from '@/utils/security'
 import {
@@ -33,9 +32,7 @@ export const POST = defineApiRoute<Record<string, unknown>>({
     keyGenerator: createUserKeyGenerator('admin_settings_cache_invalidate'),
   },
   rateLimitHeaders: true,
-  auth: createSettingsAdminAuth({
-    unauthorizedResponse: () => ApiError.unauthorized('인증이 필요합니다.').toNextResponse(),
-  }),
+  auth: 'admin',
   body: {
     invalidResponse: () => ApiError.badRequest('유효한 JSON body가 필요합니다.').toNextResponse(),
   },
@@ -49,15 +46,7 @@ export const POST = defineApiRoute<Record<string, unknown>>({
       'medium'
     )
 
-    const isPermissionError = error instanceof Error && error.message.includes('권한')
-    return NextResponse.json(
-      {
-        error: isPermissionError
-          ? '관리자 권한이 필요합니다.'
-          : '캐시 무효화 중 오류가 발생했습니다.',
-      },
-      { status: isPermissionError ? 403 : 500 }
-    )
+    return ApiError.internalServerError('캐시 무효화 중 오류가 발생했습니다.').toNextResponse()
   },
   handler: async ({ body, auth }) => {
     const { user } = auth
@@ -107,19 +96,11 @@ export const GET = defineApiRoute({
     keyGenerator: createUserKeyGenerator('admin_settings_cache_status'),
   },
   rateLimitHeaders: true,
-  auth: createSettingsAdminAuth(),
+  auth: 'admin',
   errorResponse: error => {
     log.error('Admin settings cache status error', error)
 
-    const isPermissionError = error instanceof Error && error.message.includes('권한')
-    return NextResponse.json(
-      {
-        error: isPermissionError
-          ? '관리자 권한이 필요합니다.'
-          : '캐시 상태 조회 중 오류가 발생했습니다.',
-      },
-      { status: isPermissionError ? 403 : 500 }
-    )
+    return ApiError.internalServerError('캐시 상태 조회 중 오류가 발생했습니다.').toNextResponse()
   },
   handler: async () => {
     // **이 인스턴스가 실제로 아는 것만 적는다.**

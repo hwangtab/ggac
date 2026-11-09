@@ -33,9 +33,9 @@
     "@next/next/no-sync-scripts": "error",
     // React Hooks 규칙
     "react-hooks/rules-of-hooks": "error",
-    "react-hooks/exhaustive-deps": "off",
+    "react-hooks/exhaustive-deps": "warn",
     // TypeScript 규칙
-    "@typescript-eslint/no-unused-vars": "off",
+    "@typescript-eslint/no-unused-vars": "warn",
     "@typescript-eslint/no-explicit-any": "off",
     "@typescript-eslint/no-non-null-assertion": "off",
     "@typescript-eslint/prefer-const": "off",
@@ -63,7 +63,7 @@
     "no-console": "off",
     "no-debugger": "error",
     "no-alert": "off",
-    "no-unused-vars": "off", // TypeScript가 처리
+    "no-unused-vars": "off", // TypeScript 판(@typescript-eslint/no-unused-vars)이 처리
     "no-var": "error",
     "prefer-const": "off",
     "no-duplicate-imports": "off",

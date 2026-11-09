@@ -1,5 +1,6 @@
 'use client'
 
+import Switch from '@/components/common/Switch'
 import { useState } from 'react'
 import type { SettingWithDefault, SettingCategory } from '@/types/index'
 
@@ -40,25 +41,17 @@ export default function NotificationSettings({ settings, onUpdate }: Notificatio
               <label className="text-sm font-medium text-gray-700">이메일 알림 받기</label>
               <p className="text-sm text-gray-500">중요한 알림을 이메일로 받습니다</p>
             </div>
-            <button
-              type="button"
+            <Switch
+              checked={!!emailNotifications.enabled}
+              label="이메일 알림 받기"
               disabled={updating === 'email_notifications'}
-              onClick={() =>
+              onCheckedChange={() =>
                 updateSettingValue('email_notifications', {
                   ...emailNotifications,
                   enabled: !emailNotifications.enabled,
                 })
               }
-              className={`${
-                emailNotifications.enabled ? 'bg-primary-600' : 'bg-gray-200'
-              } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50`}
-            >
-              <span
-                className={`${
-                  emailNotifications.enabled ? 'translate-x-5' : 'translate-x-0'
-                } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
-              />
-            </button>
+            />
           </div>
 
           {/* 세부 이메일 알림 설정 */}
@@ -133,25 +126,17 @@ export default function NotificationSettings({ settings, onUpdate }: Notificatio
               <label className="text-sm font-medium text-gray-700">브라우저 알림 받기</label>
               <p className="text-sm text-gray-500">브라우저에서 실시간 알림을 받습니다</p>
             </div>
-            <button
-              type="button"
+            <Switch
+              checked={!!webNotifications.enabled}
+              label="브라우저 알림 받기"
               disabled={updating === 'web_notifications'}
-              onClick={() =>
+              onCheckedChange={() =>
                 updateSettingValue('web_notifications', {
                   ...webNotifications,
                   enabled: !webNotifications.enabled,
                 })
               }
-              className={`${
-                webNotifications.enabled ? 'bg-primary-600' : 'bg-gray-200'
-              } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50`}
-            >
-              <span
-                className={`${
-                  webNotifications.enabled ? 'translate-x-5' : 'translate-x-0'
-                } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
-              />
-            </button>
+            />
           </div>
 
           {/* 세부 웹 알림 설정 */}

@@ -35,7 +35,13 @@ import {
   ticketTypes,
 } from '../schema/index.ts'
 
-import { likeContains, toIso, toSnakeCase } from './_helpers.ts'
+import {
+  likeContains,
+  retryOnLockContention,
+  TICKETING_RETRY_BUDGET,
+  toIso,
+  toSnakeCase,
+} from './_helpers.ts'
 
 /** 결제창을 열어 두고 사라진 사람의 자리를 언제까지 잡아 둘지. 토스 인증 유효시간과 맞춘다. */
 export const DEFAULT_HOLD_MINUTES = 10
@@ -268,27 +274,11 @@ export async function holdReservation(
   // 동시 예매가 몰리면 쓰기 락이 부딪혀 일부 요청이 즉시 실패한다. 트랜잭션이
   // 실패하면 아무것도 남기지 않으므로 재시도해도 안전하다 — 여기서 포기하면
   // 좌석이 남아 있는데도 관객이 "예매할 수 없다"는 안내를 받는다.
-  let lastError: unknown
-  for (let attempt = 0; attempt < 4; attempt++) {
-    try {
-      return await holdReservationOnce(input)
-    } catch (error) {
-      // 매진과 상한은 재시도해도 결과가 같다. 락 경합만 다시 시도한다.
-      if (error instanceof SoldOutError || error instanceof TooManyPendingHoldsError) throw error
-      if (!isLockContention(error)) throw error
-      lastError = error
-      await new Promise(resolve => setTimeout(resolve, 25 * (attempt + 1)))
-    }
-  }
-  throw lastError
-}
-
-/** 락 경합인가. 잠시 뒤 다시 하면 되는 실패와 진짜 오류를 가른다. */
-function isLockContention(error: unknown): boolean {
-  const code = (error as { code?: string })?.code
-  if (code === 'SQLITE_BUSY' || code === 'SQLITE_LOCKED') return true
-  const message = error instanceof Error ? error.message : String(error)
-  return /SQLITE_BUSY|database is locked|SQLITE_LOCKED/i.test(message)
+  return retryOnLockContention(() => holdReservationOnce(input), {
+    budget: TICKETING_RETRY_BUDGET,
+    // 매진과 상한은 재시도해도 결과가 같다. 락 경합만 다시 시도한다.
+    isFinal: error => error instanceof SoldOutError || error instanceof TooManyPendingHoldsError,
+  })
 }
 
 async function holdReservationOnce(input: HoldReservationInput): Promise<Record<string, unknown>> {

@@ -1,9 +1,7 @@
 import { createOptionsResponse } from '@/utils/apiResponse'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
-import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
-import { createSettingsAdminAuth } from '@/lib/server/settingsAdminAuth'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { logSecurityEvent } from '@/utils/security'
 import { refreshSettingsCache, SETTINGS_CACHE_TTL_MS } from '@/utils/systemSettings'
@@ -73,7 +71,7 @@ export const GET = defineApiRoute({
     keyGenerator: createUserKeyGenerator('admin_settings_get'),
   },
   rateLimitHeaders: true,
-  auth: createSettingsAdminAuth(),
+  auth: 'admin',
   errorResponse: error => {
     log.error('Admin settings GET error', error)
     logSecurityEvent(
@@ -84,15 +82,7 @@ export const GET = defineApiRoute({
       'medium'
     )
 
-    const isPermissionError = error instanceof Error && error.message.includes('권한')
-    return NextResponse.json(
-      {
-        error: isPermissionError
-          ? '관리자 권한이 필요합니다.'
-          : '설정 조회 중 오류가 발생했습니다.',
-      },
-      { status: isPermissionError ? 403 : 500 }
-    )
+    return ApiError.internalServerError('설정 조회 중 오류가 발생했습니다.').toNextResponse()
   },
   handler: async () => {
     // get_system_settings RPC 대체 — src/db/queries/settings.ts의
@@ -164,7 +154,7 @@ export const PUT = defineApiRoute<Record<string, unknown>>({
     keyGenerator: createUserKeyGenerator('admin_settings_update'),
   },
   rateLimitHeaders: true,
-  auth: createSettingsAdminAuth(),
+  auth: 'admin',
   body: {
     invalidResponse: () => ApiError.badRequest('유효하지 않은 JSON 본문입니다.').toNextResponse(),
   },
@@ -178,15 +168,7 @@ export const PUT = defineApiRoute<Record<string, unknown>>({
       'high'
     )
 
-    const isPermissionError = error instanceof Error && error.message.includes('권한')
-    return NextResponse.json(
-      {
-        error: isPermissionError
-          ? '관리자 권한이 필요합니다.'
-          : '설정 업데이트 중 오류가 발생했습니다.',
-      },
-      { status: isPermissionError ? 403 : 500 }
-    )
+    return ApiError.internalServerError('설정 업데이트 중 오류가 발생했습니다.').toNextResponse()
   },
   handler: async ({ body, auth }) => {
     const { user } = auth

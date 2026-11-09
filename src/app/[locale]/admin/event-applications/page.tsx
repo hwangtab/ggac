@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useId, useRef } from 'react'
+import { useDialogA11y } from '@/hooks/useDialogA11y'
 import { FiClipboard, FiRefreshCw, FiCheck, FiX, FiClock, FiEdit2, FiTrash2 } from 'react-icons/fi'
 import AdminLayout from '../components/AdminLayout'
 import { getEventFormType } from '@/constants/eventApplicationForms'
@@ -220,6 +221,18 @@ export default function EventApplicationsPage() {
     { key: 'approved', label: '선정' },
     { key: 'rejected', label: '미선정' },
   ]
+
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const closeDialogRef = useRef(closeEdit)
+  closeDialogRef.current = closeEdit
+  const handleEscape = useCallback(() => closeDialogRef.current(), [])
+  useDialogA11y({
+    containerRef: dialogRef,
+    onClose: handleEscape,
+    isOpen: Boolean(editTarget && editForm),
+  })
+  const dialogTitleId = useId()
+  const uid = useId()
 
   return (
     <AdminLayout title="행사 신청 내역" description="공연·판매 신청 조회 및 선정 관리">
@@ -540,24 +553,34 @@ export default function EventApplicationsPage() {
             if (e.target === e.currentTarget) closeEdit()
           }}
         >
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+          <div
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={dialogTitleId}
+            className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+          >
             <div className="flex items-center justify-between p-5 border-b border-gray-200">
-              <h2 className="text-base font-semibold text-gray-900">신청 정보 수정</h2>
+              <h2 id={dialogTitleId} className="text-base font-semibold text-gray-900">
+                신청 정보 수정
+              </h2>
               <button
                 onClick={closeEdit}
+                aria-label="닫기"
                 className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
               >
-                <FiX className="w-5 h-5" />
+                <FiX className="w-5 h-5" aria-hidden="true" />
               </button>
             </div>
 
             <div className="p-5 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="block text-xs font-medium text-gray-600">
+                  <label className="block text-xs font-medium text-gray-600" htmlFor={`${uid}-1`}>
                     신청자 / 팀명 <span className="text-red-500">*</span>
                   </label>
                   <input
+                    id={`${uid}-1`}
                     type="text"
                     value={editForm.applicant_name}
                     onChange={e => setEditForm(f => f && { ...f, applicant_name: e.target.value })}
@@ -565,10 +588,11 @@ export default function EventApplicationsPage() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="block text-xs font-medium text-gray-600">
+                  <label className="block text-xs font-medium text-gray-600" htmlFor={`${uid}-2`}>
                     이메일 <span className="text-red-500">*</span>
                   </label>
                   <input
+                    id={`${uid}-2`}
                     type="email"
                     value={editForm.contact_email}
                     onChange={e => setEditForm(f => f && { ...f, contact_email: e.target.value })}
@@ -576,8 +600,11 @@ export default function EventApplicationsPage() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="block text-xs font-medium text-gray-600">연락처</label>
+                  <label className="block text-xs font-medium text-gray-600" htmlFor={`${uid}-3`}>
+                    연락처
+                  </label>
                   <input
+                    id={`${uid}-3`}
                     type="tel"
                     value={editForm.contact_phone}
                     onChange={e => setEditForm(f => f && { ...f, contact_phone: e.target.value })}
@@ -586,8 +613,11 @@ export default function EventApplicationsPage() {
                 </div>
                 {editIsWorkshop ? (
                   <div className="space-y-1">
-                    <label className="block text-xs font-medium text-gray-600">조합원 여부</label>
+                    <label className="block text-xs font-medium text-gray-600" htmlFor={`${uid}-4`}>
+                      조합원 여부
+                    </label>
                     <select
+                      id={`${uid}-4`}
                       value={editForm.participation_type}
                       onChange={e =>
                         setEditForm(f => f && { ...f, participation_type: e.target.value })
@@ -601,8 +631,11 @@ export default function EventApplicationsPage() {
                   </div>
                 ) : (
                   <div className="space-y-1">
-                    <label className="block text-xs font-medium text-gray-600">링크</label>
+                    <label className="block text-xs font-medium text-gray-600" htmlFor={`${uid}-5`}>
+                      링크
+                    </label>
                     <input
+                      id={`${uid}-5`}
                       type="text"
                       value={editForm.links}
                       onChange={e => setEditForm(f => f && { ...f, links: e.target.value })}
@@ -615,10 +648,11 @@ export default function EventApplicationsPage() {
               {!editIsWorkshop && (
                 <>
                   <div className="space-y-1">
-                    <label className="block text-xs font-medium text-gray-600">
+                    <label className="block text-xs font-medium text-gray-600" htmlFor={`${uid}-6`}>
                       판매할 물건 <span className="text-red-500">*</span>
                     </label>
                     <textarea
+                      id={`${uid}-6`}
                       rows={3}
                       value={editForm.items_to_sell}
                       onChange={e => setEditForm(f => f && { ...f, items_to_sell: e.target.value })}
@@ -627,8 +661,11 @@ export default function EventApplicationsPage() {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="block text-xs font-medium text-gray-600">공연 소개</label>
+                    <label className="block text-xs font-medium text-gray-600" htmlFor={`${uid}-7`}>
+                      공연 소개
+                    </label>
                     <textarea
+                      id={`${uid}-7`}
                       rows={3}
                       value={editForm.performance_info}
                       onChange={e =>
@@ -641,10 +678,11 @@ export default function EventApplicationsPage() {
               )}
 
               <div className="space-y-1">
-                <label className="block text-xs font-medium text-gray-600">
+                <label className="block text-xs font-medium text-gray-600" htmlFor={`${uid}-8`}>
                   {editIsWorkshop ? '신청 동기 / 듣고 싶은 내용' : '기타 요청사항'}
                 </label>
                 <textarea
+                  id={`${uid}-8`}
                   rows={2}
                   value={editForm.message}
                   onChange={e => setEditForm(f => f && { ...f, message: e.target.value })}
@@ -654,10 +692,11 @@ export default function EventApplicationsPage() {
 
               {!editIsWorkshop && (
                 <div className="space-y-1">
-                  <label className="block text-xs font-medium text-gray-600">
+                  <label className="block text-xs font-medium text-gray-600" htmlFor={`${uid}-9`}>
                     참여 분야 (쉼표 구분)
                   </label>
                   <input
+                    id={`${uid}-9`}
                     type="text"
                     placeholder="예: booth,performance"
                     value={editForm.participation_type}

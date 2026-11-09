@@ -1,5 +1,6 @@
 'use client'
 
+import { useRef } from 'react'
 import { FiYoutube, FiPlus, FiTrash2, FiPlay, FiExternalLink } from 'react-icons/fi'
 import { YouTubeVideo } from '@/types'
 import { toSafeHttpUrl } from '@/utils/safeUrl'
@@ -11,11 +12,19 @@ interface YoutubeVideosProps {
 }
 
 const YoutubeVideos: React.FC<YoutubeVideosProps> = ({ videos, errors, onChange }) => {
+  const idsRef = useRef<string[]>([])
+  const newId = () => `k${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`
+  // 항목마다 안정적인 key를 유지한다(입력 중 값이 바뀌어도 행이 다시 마운트되지 않도록)
+  while (idsRef.current.length < videos.length) idsRef.current.push(newId())
+  if (idsRef.current.length > videos.length) idsRef.current.length = videos.length
+
   const addVideo = () => {
+    idsRef.current.push(newId())
     onChange([...videos, { title: '', url: '' }])
   }
 
   const removeVideo = (index: number) => {
+    idsRef.current.splice(index, 1)
     onChange(videos.filter((_, i) => i !== index))
   }
 
@@ -80,7 +89,7 @@ const YoutubeVideos: React.FC<YoutubeVideosProps> = ({ videos, errors, onChange 
 
             return (
               <div
-                key={`${video.url || 'new'}-${index}`}
+                key={idsRef.current[index]}
                 className="bg-white border border-gray-200 rounded-lg p-4"
               >
                 <div className="flex items-start justify-between mb-3">
@@ -88,6 +97,7 @@ const YoutubeVideos: React.FC<YoutubeVideosProps> = ({ videos, errors, onChange 
                   <button
                     type="button"
                     onClick={() => removeVideo(index)}
+                    aria-label={`동영상 #${index + 1} 삭제`}
                     className="text-gray-400 hover:text-red-500 transition-colors duration-200"
                   >
                     <FiTrash2 className="w-4 h-4" />

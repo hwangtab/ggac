@@ -11,7 +11,7 @@ import { feeRatesOf, getFundingSettings, isFundingEnabled } from '@/lib/funding/
 import { FUNDING_TERMS_REVISION } from '@/lib/funding/terms'
 import { nextStatus, type CampaignStatus } from '@/lib/funding/transitions'
 import { resolveCampaignFeeRate, type CampaignFeeRate } from '@/lib/server/fundingFeeRate'
-import { parseJsonObjectBody } from '@/utils/requestBody'
+import { LARGE_JSON_BODY_MAX_BYTES, parseJsonObjectBody } from '@/utils/requestBody'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
 
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
   const auth = await requireAdmin()
   if (auth instanceof NextResponse) return auth
 
-  const body = await parseJsonObjectBody(request)
+  const body = await parseJsonObjectBody(request, { maxBytes: LARGE_JSON_BODY_MAX_BYTES })
   if (!body) return ApiError.badRequest('유효한 JSON body가 필요합니다.').toNextResponse()
   if (body.agreedCreatorTermsOnBehalf !== true) {
     return ApiError.badRequest(

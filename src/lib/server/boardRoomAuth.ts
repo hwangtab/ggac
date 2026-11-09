@@ -1,3 +1,4 @@
+import { ApiError } from '@/utils/apiWrapper'
 import { NextResponse } from 'next/server'
 import {
   canAccessBoardRoom,
@@ -33,15 +34,15 @@ export async function requireBoardMember(): Promise<BoardAuthSuccess | NextRespo
   const session = await getSessionContext()
 
   if (!session.authenticated || !session.user) {
-    return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+    return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
   }
 
   if (session.profileError || !session.profile) {
-    return NextResponse.json({ error: '프로필 정보를 조회할 수 없습니다.' }, { status: 500 })
+    return ApiError.internalServerError('프로필 정보를 조회할 수 없습니다.').toNextResponse()
   }
 
   if (!canAccessBoardRoom(session.profile)) {
-    return NextResponse.json({ error: '이사회 접근 권한이 없습니다.' }, { status: 403 })
+    return ApiError.forbidden('이사회 접근 권한이 없습니다.').toNextResponse()
   }
 
   return {
@@ -70,15 +71,15 @@ export async function requireBoardRecordReader(): Promise<BoardReadAuthSuccess |
   const session = await getSessionContext()
 
   if (!session.authenticated || !session.user) {
-    return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+    return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
   }
 
   if (session.profileError || !session.profile) {
-    return NextResponse.json({ error: '프로필 정보를 조회할 수 없습니다.' }, { status: 500 })
+    return ApiError.internalServerError('프로필 정보를 조회할 수 없습니다.').toNextResponse()
   }
 
   if (!canReadBoardRecords(session.profile)) {
-    return NextResponse.json({ error: '이사회 기록 열람 권한이 없습니다.' }, { status: 403 })
+    return ApiError.forbidden('이사회 기록 열람 권한이 없습니다.').toNextResponse()
   }
 
   return {
@@ -92,7 +93,7 @@ export async function requireBoardRecordReader(): Promise<BoardReadAuthSuccess |
 /** 관리자 전용 동작(회의 생성·확정·출석 체크 등) 가드 */
 export function requireBoardAdmin(auth: BoardAuthSuccess): NextResponse | null {
   if (!auth.isAdmin) {
-    return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 })
+    return ApiError.forbidden('관리자 권한이 필요합니다.').toNextResponse()
   }
   return null
 }

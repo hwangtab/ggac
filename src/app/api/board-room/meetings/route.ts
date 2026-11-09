@@ -13,6 +13,7 @@ import {
   parseBoardMeetingTime,
 } from '@/constants/boardRoom'
 import { createLogger } from '@/utils/logger'
+import { TEXT_LIMITS, textLengthError } from '@/utils/textLimits'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { createMeetingWithDateOptions, listMeetings } from '@/db/queries/board'
 
@@ -76,6 +77,10 @@ export async function POST(request: NextRequest) {
           : parseBoardMeetingTime(body.meeting_time)
 
       if (!title) throw ApiError.badRequest('제목을 입력해주세요.')
+      const tooLong =
+        textLengthError(title, TEXT_LIMITS.BOARD_TITLE, '제목') ||
+        textLengthError(location, TEXT_LIMITS.BOARD_LOCATION, '장소')
+      if (tooLong) throw ApiError.badRequest(tooLong)
       if (body.meeting_time !== undefined && body.meeting_time !== null && !meetingTime)
         throw ApiError.badRequest('회의 시각은 HH:MM(24시간) 형식이어야 합니다.')
       if (!candidateDates)

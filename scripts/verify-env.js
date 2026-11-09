@@ -106,9 +106,30 @@ const optionalEnvVars = [
   'KV_REST_API_URL',
   'KV_REST_API_TOKEN',
   'NEXT_STRICT_CSP',
-  'VERCEL_TOKEN',
-  'VERCEL_ORG_ID',
-  'VERCEL_PROJECT_ID',
+  // 보안 이벤트 알림의 보조 웹훅 주소(SECURITY_ALERT_WEBHOOK_URL과 별개로 읽는 자리가 있다). 없으면 해당 알림만 생략된다.
+  'SECURITY_WEBHOOK_URL',
+  // 이사회 업무툴 파일 전용 Blob 토큰. 없으면 업무툴 파일 업로드·다운로드가 실패한다.
+  'BOARD_WORK_BLOB_READ_WRITE_TOKEN',
+  // 지원사업 다이제스트 자동 게시 스위치. 비어 있으면 자동 게시하지 않는다.
+  'GRANT_AUTO_PUBLISH',
+  // 지원사업 다이제스트 게시글의 작성자 이메일. 없으면 기본 작성자 규칙을 따른다.
+  'GRANT_DIGEST_AUTHOR_EMAIL',
+  // 구글 서치 콘솔 소유 확인 메타 태그 값. 없으면 태그를 그리지 않는다.
+  'NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION',
+  // 세션 핑 주기(밀리초). 없으면 기본 주기를 쓴다.
+  'NEXT_PUBLIC_SESSION_PING_MS',
+  // 업무툴 파일 업로드 상한(MB). 없으면 기본값을 쓴다.
+  'NEXT_PUBLIC_WORK_MAX_UPLOAD_MB',
+  // 설정 캐시 유지 시간(밀리초). 없으면 기본값을 쓴다.
+  'SETTINGS_CACHE_TTL_MS',
+  // 게시글 상세 구간별 소요 시간 로그 스위치. 진단용이라 평소엔 비운다.
+  'POST_DETAIL_TIMING',
+  // 사이트 절대 주소 폴백(NEXT_PUBLIC_SITE_URL이 없을 때). 없으면 다른 주소 설정을 따른다.
+  'SITE_URL',
+  // 이미지 허용 품질 목록(쉼표 구분). 없으면 기본 목록을 쓴다.
+  'NEXT_PUBLIC_IMAGE_ALLOWED_QUALITIES',
+  // 오류 추적에 실리는 빌드 버전 표기. 없으면 'unknown'.
+  'NEXT_PUBLIC_BUILD_VERSION',
   // 서로 폴백 관계(src/lib/auth/server.ts의
   // `BETTER_AUTH_URL || NEXT_PUBLIC_SITE_URL`)라 빌드를 깨지 않는다. 둘 다
   // 없으면 baseURL이 undefined가 돼 /api/auth/* 호출이 500이 되지만(2026-08-18
@@ -117,21 +138,6 @@ const optionalEnvVars = [
   // — 그래서 필수가 아니라 권장으로만 둔다.
   'BETTER_AUTH_URL',
   'NEXT_PUBLIC_SITE_URL',
-  // 앱 코드(`src/`)에는 이 둘을 읽는 줄이 **0줄**이다. 남아 있는 소비처는
-  // 인증 이관 기록 도구 `scripts/migrate/identity.mjs`(PostgREST를 fetch로
-  // 직접 읽는다) 하나뿐이다. 2026-09-07 정리로 `scripts/storage`의 Supabase
-  // 클라이언트 스크립트(copy-to-blob·rewrite/restore-db-urls)는 프로젝트
-  // 삭제와 함께 지웠다. 그래서 필수가 아니라 선택으로 둔다 — 필수로 두면
-  // 컷오버에서 이 키들을 지우는 순간 배포 전 점검이 **거짓으로 빨간불**이 되고,
-  // 운영자에게 쓰지도 않는 service-role 키를 계속 꽂아 두라고 압박한다
-  // (최종 리뷰 B-2).
-  'NEXT_PUBLIC_SUPABASE_ANON_KEY',
-  'SUPABASE_SERVICE_ROLE_KEY',
-  // 2026-09-01 Supabase 프로젝트 삭제로 함께 선택으로 내려왔다. 레거시 Storage
-  // 절대 URL을 "우리 것"으로 인정하던 판정 4곳(safeUrl.ts·storageUrlValidation.ts·
-  // imageDimensions.ts·storage/paths.ts)이 사라졌고, 운영 DB에 남은 Supabase
-  // 절대 URL은 실측 0건이다. 앱은 이제 이 값을 한 줄도 읽지 않는다.
-  'NEXT_PUBLIC_SUPABASE_URL',
   // 지원사업 다이제스트가 kosmart 공고 조회 API를 부르는 데 쓴다. 둘 다
   // 없으면 크론이 호출에 실패해 그 주 초안이 만들어지지 않는다 — Vercel
   // production에는 아직 없어 필수로 올리면 배포가 막힌다.

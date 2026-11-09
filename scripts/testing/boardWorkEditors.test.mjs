@@ -339,10 +339,13 @@ test('CSP(next.config.js): 편집기 출처 env 가 있으면 frame-src 에 더�
   assert.doesNotMatch(bad, /evil/)
 })
 
-test('CSP(미들웨어): frame-src 가 같은 env 판정(getOfficeEditorOrigin)을 쓴다', () => {
+test('CSP(미들웨어): frame-src 가 같은 env 판정(getOfficeEditorOrigin)을 공유 모듈로 넘긴다', async () => {
   const src = readFileSync(new URL('../../src/middleware/csp.ts', import.meta.url), 'utf8')
-  const line = src.split('\n').find(l => l.includes('frame-src ') && l.includes("'self'"))
-  assert.ok(line, 'frame-src 지시문을 찾지 못했다')
-  assert.match(line, /\$\{officeEditorFrameSrc\(\)\}/)
-  assert.match(src, /getOfficeEditorOrigin/)
+  assert.match(src, /officeOrigin: getOfficeEditorOrigin\(\)/)
+  const { createRequire } = await import('node:module')
+  const { buildCsp } = createRequire(import.meta.url)('../../src/config/cspPolicy.js')
+  const frame = buildCsp({ officeOrigin: 'https://o.example' })
+    .split('; ')
+    .find(d => d.startsWith('frame-src '))
+  assert.match(frame, / https:\/\/o\.example$/)
 })

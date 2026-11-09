@@ -69,11 +69,18 @@ export interface ApiOperationOptions {
  * API 성공 응답 래퍼
  */
 export class ApiSuccess<T = unknown> {
-  constructor(
-    public data: T,
-    public message?: string,
-    public statusCode: number = 200
-  ) {}
+  // 생성자 매개변수 프로퍼티(`public x`)를 쓰지 않는다 — Node의 type-stripping
+  // (단위 테스트)이 지원하지 않는 문법이라, 인가 헬퍼가 이 모듈을 import하는 순간
+  // 헬퍼를 로드하는 모든 테스트가 죽는다.
+  data: T
+  message?: string
+  statusCode: number
+
+  constructor(data: T, message?: string, statusCode: number = 200) {
+    this.data = data
+    this.message = message
+    this.statusCode = statusCode
+  }
 
   /**
    * NextResponse로 변환
@@ -147,14 +154,16 @@ export class ApiSuccess<T = unknown> {
  * API 에러 응답 래퍼
  */
 export class ApiError extends Error {
-  constructor(
-    public message: string,
-    public statusCode: number = 500,
-    public code?: string,
-    public details?: any
-  ) {
+  statusCode: number
+  code?: string
+  details?: any
+
+  constructor(message: string, statusCode: number = 500, code?: string, details?: any) {
     super(message)
     this.name = 'ApiError'
+    this.statusCode = statusCode
+    this.code = code
+    this.details = details
   }
 
   /**

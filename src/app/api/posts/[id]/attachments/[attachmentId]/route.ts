@@ -16,8 +16,8 @@ import { revalidatePath } from 'next/cache'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { deletePublicObject, logicalPathFromUrl } from '@/lib/storage/provider'
 import { validateUUID } from '@/utils/validation'
-import { requireUser } from '@/lib/server/memberAuth'
-import { getProfileById } from '@/db/queries/profiles'
+import { requireActiveMember, requireUser } from '@/lib/server/memberAuth'
+import { isApprovedActiveAdmin } from '@/lib/server/authz'
 import { getBoardPostRevalidationPaths } from '@/lib/revalidationPaths'
 import {
   getAttachmentById,
@@ -94,9 +94,10 @@ export async function PUT(
 ) {
   const resolvedParams = await context.params
   try {
-    // 첨부파일 수정은 로그인만 확인한다(승인 여부는 보지 않음). 작성자
-    // 소유권 확인은 아래에서 별도로 한다.
-    const auth = await requireUser()
+    // 첨부파일 수정도 업로드(POST)와 같이 승인된 활성 조합원만 가능하다.
+    // 승인 취소·비활성화된 회원이 기존 첨부를 계속 고치던 구멍을 막는다.
+    // 작성자 소유권 확인은 아래에서 별도로 한다.
+    const auth = await requireActiveMember()
     if (auth instanceof NextResponse) return auth
     const { user } = auth
 
@@ -197,11 +198,11 @@ export async function DELETE(
 ) {
   const resolvedParams = await context.params
   try {
-    // 첨부파일 삭제는 로그인만 확인한다(승인 여부는 보지 않음). 작성자
-    // 또는 관리자 권한 확인은 아래에서 별도로 한다.
-    const auth = await requireUser()
+    // 첨부파일 삭제도 업로드(POST)와 같이 승인된 활성 조합원만 가능하다.
+    // 작성자 또는 관리자 권한 확인은 아래에서 별도로 한다.
+    const auth = await requireActiveMember()
     if (auth instanceof NextResponse) return auth
-    const { user } = auth
+    const { user, profile } = auth
 
     const routeParams = validateAttachmentRouteParams(resolvedParams)
     if (!routeParams.ok) return routeParams.response
@@ -217,17 +218,9 @@ export async function DELETE(
       return ApiError.notFound('첨부파일을 찾을 수 없습니다.').toNextResponse()
     }
 
-    // 사용자 권한 확인 (작성자 또는 관리자). 단계 2c(Task 5): member_profiles
-    // 조회를 Supabase `.eq('id', user.id)`에서 Turso 쿼리 계층
-    // getProfileById(user.id)로 옮겼다 — 조건식(is_admin &&
-    // registration_status==='approved' && is_active)은 문자 그대로 보존.
-    const profile = await getProfileById(user.id).catch(() => null)
-
+    // 관리자 판정은 requireActiveMember가 돌려준 프로필(승인·활성 확인 완료)로 한다.
     const isAuthor = attachment.posts.author_id === user.id
-    const isAdmin =
-      profile?.is_admin === true &&
-      profile.registration_status === 'approved' &&
-      profile.is_active === true
+    const isAdmin = isApprovedActiveAdmin(profile)
 
     if (!isAuthor && !isAdmin) {
       return ApiError.forbidden('권한이 없습니다.').toNextResponse()

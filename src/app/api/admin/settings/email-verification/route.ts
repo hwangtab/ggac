@@ -1,8 +1,5 @@
-import { NextResponse } from 'next/server'
-
 import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
-import { createSettingsAdminAuth } from '@/lib/server/settingsAdminAuth'
 import { countUnverifiedApprovedMembers } from '@/db/queries/profiles'
 import { ApiError, ApiSuccess } from '@/utils/apiWrapper'
 import { createOptionsResponse } from '@/utils/apiResponse'
@@ -34,20 +31,10 @@ export const GET = defineApiRoute({
     keyGenerator: createUserKeyGenerator('admin_settings_email_verification'),
   },
   rateLimitHeaders: true,
-  auth: createSettingsAdminAuth({
-    unauthorizedResponse: () => ApiError.unauthorized('인증이 필요합니다.').toNextResponse(),
-  }),
+  auth: 'admin',
   errorResponse: error => {
     log.error('Admin email verification coverage error', error)
-    const isPermissionError = error instanceof Error && error.message.includes('권한')
-    return NextResponse.json(
-      {
-        error: isPermissionError
-          ? '관리자 권한이 필요합니다.'
-          : '이메일 인증 현황을 조회하지 못했습니다.',
-      },
-      { status: isPermissionError ? 403 : 500 }
-    )
+    return ApiError.internalServerError('이메일 인증 현황을 조회하지 못했습니다.').toNextResponse()
   },
   handler: async () => {
     const coverage = await countUnverifiedApprovedMembers()

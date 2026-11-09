@@ -1,0 +1,276 @@
+'use client'
+
+import { useEffect, useRef, useState } from 'react'
+import { FiChevronsLeft, FiChevronsRight } from 'react-icons/fi'
+import { Link, usePathname } from '@/i18n/navigation'
+import { fetchSessionProfile, canAccessBoardRoom } from '@/utils/sessionProfile'
+import {
+  BOARD_MENU_GROUPS,
+  BOARD_MENU_SETTINGS,
+  boardMenuKey,
+  isBoardWorkEditPath,
+  isBoardWorkPath,
+  type BoardMenuItem,
+} from '@/lib/boardWork/paths'
+import {
+  BADGE_COUNT_CLASS,
+  BADGE_DOT_CLASS,
+  formatMenuBadgeCount,
+  type MenuBadge,
+} from '@/lib/boardWork/menuBadges'
+import { BoardWorkBadgesProvider, useBoardWorkBadges } from '@/components/boardWork/BoardWorkBadges'
+
+// 메뉴는 역할에 따라 **모양과 이름이 다르다.** 이사에게 이 공간은 회의를 굴리고 함께 일하는 곳이라 대시보드 아래로
+// 이사회·소통·업무 묶음이 있다(`BOARD_MENU_GROUPS` — docs/board-work/03-통합-재설계.md §10). 조합원에게는 조합을 알아보는
+// 곳이라 정관이 먼저인 평면 목록이다. 이사의 '서류함'(올리는 곳)은 자료실의 '이사회 서류'로 들어갔고, 조합원에게 같은
+// 화면은 '조합 서류'(읽는 곳)다.
+//
+// 서류함·정기총회는 페이지를 열되 자료마다 `visibility`로 다시 갈린다 — 조합원은 'members' 자료만 본다. 미들웨어가
+// 나머지 경로를 실제로 막는다.
+
+// 조합원에게는 대시보드를 두지 않는다 — 그 화면은 이사회 회의 목록이고,
+// 회의 목록은 아래 '이사회 회의록'이 이미 담당한다. `/board-room`으로 들어온
+// 조합원은 대시보드가 조합 서류로 보낸다.
+const MEMBER_NAV_ITEMS = [
+  { href: '/board-room/charter', label: '정관' },
+  { href: '/board-room/documents', label: '조합 서류' },
+  { href: '/board-room/assembly', label: '정기총회' },
+  { href: '/board-room/meetings', label: '이사회 회의록' },
+] as const
+
+export default function BoardRoomShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname()
+
+  // 세 값이다: `null`은 **아직 판정하지 못했다**(로딩 또는 세션 조회 실패),
+  // `true`/`false`는 판정 결과다. 둘을 구분하는 이유: `fetchSessionProfile`은
+  // 실패해도 reject하지 않고 빈 세션을 준다 — 그것을 false로 접으면 순단 한
+  // 번에 이사 메뉴가 조합원 메뉴로 바뀌어 일정 투표·메일함 링크가 사라진다.
+  // 판정 전에는 메뉴를 그리지 않는다. 먼저 한쪽을 그렸다가 바꾸면 이사는 매
+  // 로드마다 항목 수·라벨·순서가 통째로 흔들리는 깜빡임을 본다.
+  const [isBoardMember, setIsBoardMember] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      try {
+        const session = await fetchSessionProfile()
+        // 인증이 확인된 세션만 판정으로 받는다. 그 밖에는 `null`로 남겨
+        // 메뉴를 그리지 않는다 — 틀린 메뉴를 보여주느니 비워 두는 편이 낫다.
+        if (mounted && session.authenticated) {
+          setIsBoardMember(canAccessBoardRoom(session.profile))
+        }
+      } catch {
+        // 판정 실패. `null`을 유지한다.
+      }
+    })()
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const memberNavItems: readonly { href: string; label: string }[] =
+    isBoardMember === false ? MEMBER_NAV_ITEMS : []
+
+  // 업무 화면(docs/board-work/03-통합-재설계.md §3)은 이 레이아웃 안에서 그린다 — 전역 내비·이 메뉴·푸터가 그대로다.
+  // 업무 화면은 콘텐츠 칸 전폭을 쓴다(페이지가 max-w를 두지 않는다). 편집 화면은 폭이 가장 필요해 메뉴를 기본으로 접는다.
+  const inWork = isBoardWorkPath(pathname)
+  const inEdit = isBoardWorkEditPath(pathname)
+  const [editMenuOpen, setEditMenuOpen] = useState(false)
+  // 편집 화면에 새로 들어올 때마다 접힌 상태로 시작한다
+  useEffect(() => {
+    if (inEdit) setEditMenuOpen(false)
+  }, [inEdit])
+  const menuCollapsed = inEdit && !editMenuOpen
+
+  // 모바일 가로 탭 줄에서는 지금 화면의 항목이 보이게 가로 스크롤을 맞춘다. 업무 묶음이 줄 끝에 있어 업무 화면에
+  // 들어와도 탭 줄 첫머리(대시보드·정관…)만 보이던 것(통합 재설계 R1 남은 문제 3). 세로 메뉴(lg)는 넘치지 않아 건너뛴다.
+  // scrollIntoView를 쓰지 않는 이유: 페이지 세로 스크롤까지 움직일 수 있다 — 탭 줄 안의 가로 위치만 바꾼다.
+  const navRef = useRef<HTMLElement>(null)
+  useEffect(() => {
+    const nav = navRef.current
+    if (!nav || nav.scrollWidth <= nav.clientWidth) return
+    const current = nav.querySelector<HTMLElement>('[aria-current="page"]')
+    if (!current) return
+    const offset =
+      current.getBoundingClientRect().left - nav.getBoundingClientRect().left + nav.scrollLeft
+    nav.scrollTo({ left: Math.max(0, offset - (nav.clientWidth - current.offsetWidth) / 2) })
+  }, [pathname, isBoardMember])
+
+  return (
+    <BoardWorkBadgesProvider enabled={isBoardMember === true}>
+      <div
+        className="pt-16 md:pt-20 min-h-screen bg-gray-50/40"
+        data-board-work={inWork ? '' : undefined}
+      >
+        <div className="container mx-auto px-4">
+          <div
+            className={`flex flex-col lg:flex-row py-6 md:py-8 ${
+              menuCollapsed ? 'lg:gap-3' : 'lg:gap-8'
+            }`}
+          >
+            {/* 사이드 메뉴 (데스크톱: 좌측 세로 / 모바일: 상단 가로 스크롤) */}
+            <aside
+              className={`lg:flex-shrink-0 ${
+                menuCollapsed ? 'mb-3 lg:mb-0' : 'mb-5 lg:mb-0 lg:w-52'
+              }`}
+            >
+              {inEdit && (
+                <button
+                  type="button"
+                  onClick={() => setEditMenuOpen(v => !v)}
+                  aria-expanded={!menuCollapsed}
+                  aria-controls="board-room-menu"
+                  title={menuCollapsed ? '메뉴 펼치기' : '넓게 보기'}
+                  className={`flex items-center gap-1.5 whitespace-nowrap rounded-lg text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 lg:sticky lg:top-24 ${
+                    menuCollapsed ? 'px-3 py-2 lg:px-2 lg:py-2.5' : 'mb-2 w-full px-4 py-2'
+                  }`}
+                >
+                  {menuCollapsed ? (
+                    <FiChevronsRight aria-hidden="true" className="h-4 w-4" />
+                  ) : (
+                    <FiChevronsLeft aria-hidden="true" className="h-4 w-4" />
+                  )}
+                  <span className={menuCollapsed ? 'lg:sr-only' : undefined}>
+                    {menuCollapsed ? '메뉴 펼치기' : '넓게 보기'}
+                  </span>
+                </button>
+              )}
+              <nav
+                ref={navRef}
+                id="board-room-menu"
+                aria-label={
+                  isBoardMember === null
+                    ? '메뉴 불러오는 중'
+                    : isBoardMember
+                      ? '이사회 메뉴'
+                      : '조합 자료 메뉴'
+                }
+                aria-busy={isBoardMember === null}
+                hidden={menuCollapsed}
+                // `hidden` 속성만으로는 `flex` 유틸리티가 이겨 보인다 — 클래스로도 숨긴다
+                className={`${menuCollapsed ? 'hidden' : 'flex'} gap-1 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0 ${
+                  isBoardMember ? 'lg:gap-0.5' : ''
+                } ${inEdit ? '' : 'lg:sticky lg:top-24'}`}
+              >
+                {memberNavItems.map(item => {
+                  const active = pathname.startsWith(item.href)
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      aria-current={active ? 'page' : undefined}
+                      className={`${MEMBER_ITEM_CLASS} ${active ? NAV_ITEM_ACTIVE : NAV_ITEM_IDLE}`}
+                    >
+                      {item.label}
+                    </Link>
+                  )
+                })}
+                {isBoardMember === true && <BoardMenu pathname={pathname} />}
+              </nav>
+            </aside>
+
+            {/* 콘텐츠 */}
+            <div className="min-w-0 flex-1">{children}</div>
+          </div>
+        </div>
+      </div>
+    </BoardWorkBadgesProvider>
+  )
+}
+
+// 조합원 메뉴 항목 — 예전 그대로(R4는 이사 메뉴만 바꿨다)
+const MEMBER_ITEM_CLASS =
+  'whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-medium transition-colors'
+// 이사 메뉴 항목은 하나의 크기·굵기다(배지가 있어도 굵기를 바꾸지 않는다 — 안 읽음은 배지가 알린다)
+const NAV_ITEM_CLASS =
+  'flex items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-medium transition-colors lg:py-2'
+const NAV_ITEM_ACTIVE = 'bg-primary-600 text-white shadow-sm'
+const NAV_ITEM_IDLE = 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+
+/**
+ * 묶음 제목 — 회의 목록의 묶음 제목(`meetings/page.tsx`)과 같은 모양(`text-sm font-semibold text-gray-400
+ * tracking-widest`)이라 각주가 아니라 제목으로 읽힌다. 모바일 가로 탭 줄에서는 왼쪽 헤어라인이 붙은 작은 구분 라벨이다.
+ */
+const GROUP_HEADING_CLASS =
+  'flex items-center whitespace-nowrap border-l border-gray-200 pl-3 pr-1 text-xs font-semibold tracking-widest text-gray-400 lg:border-l-0 lg:px-4 lg:pb-1 lg:pt-4 lg:text-sm'
+
+/**
+ * 이사·감사·관리자 메뉴(03 §10) — 대시보드 / 이사회 / 소통 / 업무 / ── / 설정. 모바일에서는 같은 가로 탭 줄에 이어
+ * 붙는다(`contents`). 배지는 업무 화면 밖에서도 갱신된다(BoardWorkBadgesProvider).
+ */
+function BoardMenu({ pathname }: { pathname: string }) {
+  const activeKey = boardMenuKey(pathname)
+  const badges = useBoardWorkBadges()?.badges ?? {}
+  const renderItem = (item: BoardMenuItem) => {
+    const active = activeKey === item.key
+    const badge =
+      item.key === 'chat' || item.key === 'inbox' || item.key === 'tasks'
+        ? badges[item.key]
+        : undefined
+    return (
+      <Link
+        key={item.key}
+        href={item.href}
+        aria-current={active ? 'page' : undefined}
+        data-board-menu={item.key}
+        className={`${NAV_ITEM_CLASS} ${active ? NAV_ITEM_ACTIVE : NAV_ITEM_IDLE}`}
+      >
+        <span>{item.label}</span>
+        {badge && <MenuBadgeMark badge={badge} />}
+      </Link>
+    )
+  }
+  return (
+    <>
+      {BOARD_MENU_GROUPS.map(group =>
+        group.label === null ? (
+          group.items.map(renderItem)
+        ) : (
+          <div
+            key={group.key}
+            role="group"
+            aria-labelledby={`board-menu-${group.key}`}
+            className="contents lg:flex lg:flex-col lg:gap-0.5"
+          >
+            <span id={`board-menu-${group.key}`} className={GROUP_HEADING_CLASS}>
+              {group.label}
+            </span>
+            {group.items.map(renderItem)}
+          </div>
+        )
+      )}
+      <span
+        role="separator"
+        // 헤어라인 — 포스터에서 `border-gray-*`는 흰 15% 선이다(`bg-gray-200` 면은 바탕과 같아 보이지 않는다)
+        className="mx-1 shrink-0 self-stretch border-l border-gray-200 lg:mx-4 lg:my-3 lg:border-l-0 lg:border-t"
+      />
+      {renderItem(BOARD_MENU_SETTINGS)}
+    </>
+  )
+}
+
+/** 배지 모양(03 §8 결정 4): 멘션 = 앰버 바탕·검은 글자 숫자, 일반 안 읽음 = 작은 앰버 점, 할 일 = 강조 없는 숫자 */
+function MenuBadgeMark({ badge }: { badge: MenuBadge }) {
+  if (badge.kind === 'dot') {
+    return (
+      <span data-badge="dot" className="ml-auto flex items-center">
+        <span aria-hidden="true" className={`${BADGE_DOT_CLASS} bg-[#fbd9a5]`} />
+        <span className="sr-only">{badge.srText}</span>
+      </span>
+    )
+  }
+  const mention = badge.kind === 'mention'
+  return (
+    <span
+      data-badge={badge.kind}
+      // 앰버 위 검은 글자 — 포스터가 `.text-black`을 흰 글자로 바꾸지 않게 예외로 둔다
+      data-poster-keep={mention ? '' : undefined}
+      className={`ml-auto ${BADGE_COUNT_CLASS} ${
+        mention ? 'bg-[#fbd9a5] text-black' : 'font-normal text-gray-500'
+      }`}
+    >
+      <span aria-hidden="true">{formatMenuBadgeCount(badge.count)}</span>
+      <span className="sr-only">{badge.srText}</span>
+    </span>
+  )
+}

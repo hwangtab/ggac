@@ -1,5 +1,6 @@
 'use client'
 
+import Switch from '@/components/common/Switch'
 import { useState } from 'react'
 import type { SettingWithDefault, SettingCategory } from '@/types/index'
 import { useRouter, usePathname } from '@/i18n/navigation'
@@ -220,25 +221,17 @@ export default function InterfaceSettings({ settings, onUpdate }: InterfaceSetti
               <label className="text-sm font-medium text-gray-700">이미지 자동 표시</label>
               <p className="text-sm text-gray-500">게시글의 이미지를 자동으로 표시합니다</p>
             </div>
-            <button
-              type="button"
+            <Switch
+              checked={!!postDisplay.show_images}
+              label="이미지 자동 표시"
               disabled={updating === 'post_display'}
-              onClick={() =>
+              onCheckedChange={() =>
                 updateSettingValue('post_display', {
                   ...postDisplay,
                   show_images: !postDisplay.show_images,
                 })
               }
-              className={`${
-                postDisplay.show_images ? 'bg-primary-600' : 'bg-gray-200'
-              } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50`}
-            >
-              <span
-                className={`${
-                  postDisplay.show_images ? 'translate-x-5' : 'translate-x-0'
-                } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
-              />
-            </button>
+            />
           </div>
         </div>
       </div>

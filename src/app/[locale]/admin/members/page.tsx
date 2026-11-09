@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   FiUsers,
   FiBriefcase,
@@ -98,6 +98,12 @@ export default function MembersPage() {
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all')
   const [searchTerm, setSearchTerm] = useState('')
+  // 검색어는 300ms 멈춘 뒤에만 서버에 보낸다(키 입력마다 요청하지 않도록)
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [pagination, setPagination] = useState<MembersResponse['pagination'] | null>(null)
+  // 늦게 도착한 옛 응답이 새 목록을 덮어쓰지 않도록 요청 순번을 센다
+  const requestSeqRef = useRef(0)
   const [selectedMember, setSelectedMember] = useState<Member | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
@@ -128,14 +134,28 @@ export default function MembersPage() {
   const [advancedResult, setAdvancedResult] = useState<FilteredResult | null>(null)
 
   useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(prev => {
+        if (prev !== searchTerm) setPage(1)
+        return searchTerm
+      })
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchTerm])
+
+  // 통계·고아 계정은 처음 한 번만(변경 작업 뒤에는 각 핸들러가 다시 부른다)
+  useEffect(() => {
+    fetchMemberStatsData()
+    fetchOrphans() // 프로필 없는 계정 경고(정상 상태에서는 0건)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
     if (useAdvancedFilter) {
       fetchFieldDefinitions()
     } else {
       fetchMembers()
     }
-    fetchMemberStatsData() // 통계는 항상 별도로 로드
-    fetchOrphans() // 프로필 없는 계정 경고(정상 상태에서는 0건)
-  }, [filter, searchTerm, useAdvancedFilter]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filter, debouncedSearch, page, useAdvancedFilter]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 고급 필터 상태가 변경될 때 쿼리 실행
   useEffect(() => {
@@ -349,14 +369,15 @@ export default function MembersPage() {
 
   const fetchMembers = useCallback(
     async (forceRefresh = false) => {
+      const seq = ++requestSeqRef.current
       try {
         setLoading(true)
         setError(null)
 
         const params = new URLSearchParams({
           filter,
-          search: searchTerm,
-          page: '1',
+          search: debouncedSearch,
+          page: String(page),
           limit: '50',
         })
 
@@ -373,6 +394,7 @@ export default function MembersPage() {
         }
 
         const response = await fetch(`/api/admin/members?${params}`, fetchOptions)
+        if (seq !== requestSeqRef.current) return
 
         if (!response.ok) {
           const errorData = await response.json()
@@ -380,10 +402,13 @@ export default function MembersPage() {
         }
 
         const payload = await response.json()
+        if (seq !== requestSeqRef.current) return
         const data: MembersResponse = payload.data
         setMembers(data.members)
+        setPagination(data.pagination)
       } catch (err) {
         console.error('Members fetch error:', err)
+        if (seq !== requestSeqRef.current) return
         setError(
           err instanceof Error ? err.message : '회원 정보를 불러오는 중 오류가 발생했습니다.'
         )
@@ -391,7 +416,7 @@ export default function MembersPage() {
         setLoading(false)
       }
     },
-    [filter, searchTerm]
+    [filter, debouncedSearch, page]
   )
 
   const handleMemberAction = async (
@@ -766,7 +791,10 @@ export default function MembersPage() {
               <FiFilter className="w-5 h-5 text-gray-400" />
               <select
                 value={filter}
-                onChange={e => setFilter(e.target.value as any)}
+                onChange={e => {
+                  setFilter(e.target.value as any)
+                  setPage(1)
+                }}
                 className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                 disabled={useAdvancedFilter}
               >
@@ -781,6 +809,7 @@ export default function MembersPage() {
               <button
                 onClick={() => {
                   setUseAdvancedFilter(!useAdvancedFilter)
+                  setPage(1)
                   if (useAdvancedFilter) {
                     // 기본 필터로 돌아갈 때 초기화
                     setAdvancedQuery(null)
@@ -814,9 +843,11 @@ export default function MembersPage() {
               {/* 대량 작업 버튼 */}
               <button
                 onClick={() => setShowBulkActions(!showBulkActions)}
+                aria-label="대량 작업"
+                aria-expanded={showBulkActions}
                 className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:opacity-50"
               >
-                <FiPackage className="w-4 h-4" />
+                <FiPackage className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
           </div>
@@ -828,6 +859,7 @@ export default function MembersPage() {
               initialFilters={advancedQuery?.filters}
               initialSorts={advancedQuery?.sorts}
               onChange={query => {
+                setPage(1)
                 setAdvancedQuery(query)
                 executeAdvancedSearch(query)
               }}
@@ -885,9 +917,10 @@ export default function MembersPage() {
               <h3 className="text-lg font-semibold text-gray-900">대량 작업</h3>
               <button
                 onClick={() => setShowBulkActions(false)}
+                aria-label="대량 작업 닫기"
                 className="text-gray-400 hover:text-gray-600"
               >
-                <FiX className="w-5 h-5" />
+                <FiX className="w-5 h-5" aria-hidden="true" />
               </button>
             </div>
 
@@ -964,7 +997,7 @@ export default function MembersPage() {
             <p className="text-sm text-gray-600 mt-1">
               {useAdvancedFilter && advancedResult
                 ? `${advancedResult.filtered}명의 회원이 검색되었습니다. (전체 ${advancedResult.total}명 중)`
-                : `총 ${filteredMembers.length}명의 회원이 있습니다.`}
+                : `전체 ${pagination?.totalCount ?? filteredMembers.length}명의 회원이 있습니다.`}
             </p>
           </div>
 
@@ -1030,6 +1063,51 @@ export default function MembersPage() {
                 ))}
               </div>
             )}
+
+            {!loading &&
+              !error &&
+              (() => {
+                const cur = useAdvancedFilter ? (advancedResult?.pagination.page ?? 1) : page
+                const total = useAdvancedFilter
+                  ? (advancedResult?.pagination.total_pages ?? 1)
+                  : (pagination?.totalPages ?? 1)
+                if (total <= 1) return null
+                const goTo = (p: number) => {
+                  if (useAdvancedFilter) {
+                    if (advancedQuery) {
+                      executeAdvancedSearch({
+                        ...advancedQuery,
+                        pagination: { ...advancedQuery.pagination, page: p, limit: 50 },
+                      })
+                    }
+                  } else {
+                    setPage(p)
+                  }
+                }
+                return (
+                  <div className="mt-6 flex items-center justify-center gap-4">
+                    <button
+                      type="button"
+                      onClick={() => goTo(cur - 1)}
+                      disabled={cur <= 1}
+                      className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      이전
+                    </button>
+                    <span className="text-sm text-gray-600">
+                      {cur} / {total} 페이지
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => goTo(cur + 1)}
+                      disabled={cur >= total}
+                      className="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      다음
+                    </button>
+                  </div>
+                )
+              })()}
           </div>
         </div>
       </div>

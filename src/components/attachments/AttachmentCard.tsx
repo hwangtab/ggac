@@ -140,8 +140,17 @@ export const AttachmentCard: React.FC<AttachmentCardProps> = ({
       <div className="p-3">
         {attachment.file_type === 'image' && safeFileUrl ? (
           <div
+            role="button"
+            tabIndex={0}
+            aria-label={`${attachment.file_name} 보기`}
             className="aspect-square mb-3 bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform"
             onClick={() => onView?.(attachment)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                onView?.(attachment)
+              }
+            }}
           >
             <OptimizedImage
               src={safeFileUrl}

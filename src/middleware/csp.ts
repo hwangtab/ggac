@@ -1,12 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { buildCsp } from '@/config/cspPolicy'
 import { getOfficeEditorOrigin } from '@work/lib/files/office-edit'
-
-/** frame-src 에 더할 편집기 출처(앞 공백 포함). env 가 없거나 올바르지 않으면 빈 문자열 */
-function officeEditorFrameSrc(): string {
-  const origin = getOfficeEditorOrigin()
-  return origin ? ` ${origin}` : ''
-}
 
 /**
  * Configure Content Security Policy (CSP)
@@ -20,9 +15,8 @@ function officeEditorFrameSrc(): string {
  *   서브도메인이 늘어날 수 있어 https://*.tosspayments.com)와 가입 화면의
  *   사람 확인 위젯(Cloudflare Turnstile, https://challenges.cloudflare.com)이다.
  *
- * ⚠️ 외부 스크립트 호스트를 추가할 때는 이 파일의 script-src/script-src-elem과
- *    next.config.js의 같은 두 지시문을 **함께** 고쳐라(scripts/testing/payments-csp.test.mjs가
- *    두 파일을 모두 검사한다). 빠뜨린 호스트는 에러 없이 조용히 차단된다.
+ * 지시문의 정본은 src/config/cspPolicy.js다(next.config.js도 같은 함수를 쓴다).
+ * 호스트를 더할 때는 그 파일만 고친다.
  */
 export function applyCSP(request: NextRequest, response: NextResponse) {
   const isProduction = process.env.NODE_ENV === 'production'
@@ -37,54 +31,11 @@ export function applyCSP(request: NextRequest, response: NextResponse) {
     const shouldUpgradeInsecureRequests =
       process.env.NODE_ENV === 'production' && request.nextUrl.protocol === 'https:'
 
-    const strictCsp = [
-      "default-src 'self'",
-      // dev에서 NEXT_STRICT_CSP=true로 strict CSP를 검증할 때도 Next dev 런타임
-      // (eval 기반 HMR/react-refresh)이 죽지 않도록 'unsafe-eval'을 dev에만 허용.
-      // 이것이 빠지면 dev에서 모든 페이지의 하이드레이션이 통째로 실패한다
-      // (connect-src의 dev 분기와 동일한 패턴, CLAUDE.md 문서와 일치).
-      process.env.NODE_ENV === 'development'
-        ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.tosspayments.com https://challenges.cloudflare.com"
-        : "script-src 'self' 'unsafe-inline' https://*.tosspayments.com https://challenges.cloudflare.com",
-      "script-src-elem 'self' 'unsafe-inline' https://*.tosspayments.com https://challenges.cloudflare.com",
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-      "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com",
-      "font-src 'self' https://fonts.gstatic.com",
-      process.env.NODE_ENV === 'development'
-        ? "img-src 'self' https: http://localhost:* http://127.0.0.1:* blob: data:"
-        : "img-src 'self' https: blob: data:",
-      // 프레스킷의 음원 플레이어가 Blob에서 MP3를 직접 문다. 빠지면 곡은 바뀌고
-      // 가사도 따라오는데 소리만 안 난다 — 콘솔에
-      // "Media load rejected by URL safety check"만 찍힌다.
-      // img-src와 달리 와일드카드를 쓰지 않고 우리 저장소 호스트만 적는다
-      // (*.public.blob.vercel-storage.com은 다른 Vercel 고객 저장소까지 허용한다).
-      process.env.NODE_ENV === 'development'
-        ? "media-src 'self' http://localhost:* http://127.0.0.1:* https://www.youtube.com https://r8qnr9c7mestxusj.public.blob.vercel-storage.com"
-        : "media-src 'self' https://www.youtube.com https://r8qnr9c7mestxusj.public.blob.vercel-storage.com",
-      // 토스 결제창·Turnstile 위젯 둘 다 iframe으로 뜬다. 빠지면 결제 버튼이나
-      // 가입 화면의 사람 확인이 먹통이 된다.
-      // 이사회 업무툴 앱 안 편집기(ONLYOFFICE·rhwp 정적 사이트, 설계 §8-1)도 iframe이다. 출처는 env
-      // `NEXT_PUBLIC_OFFICE_EDITOR_ORIGIN`에서 온다(없으면 아무것도 더하지 않는다). next.config.js와 함께 고친다.
-      `frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://*.tosspayments.com https://challenges.cloudflare.com${officeEditorFrameSrc()}`,
-      // 이사회 업무툴 첨부는 브라우저가 비공개 Blob에 직접 올린다(`@vercel/blob/client` upload — 토큰은 같은 출처,
-      // 본문은 https://vercel.com/api/blob). 빠지면 업로드가 조용히 막힌다(docs/board-work/01-설계.md §7-5).
-      // next.config.js·src/utils/security.ts와 함께 고친다.
-      process.env.NODE_ENV === 'development'
-        ? "connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:* https://*.tosspayments.com https://vercel.com"
-        : "connect-src 'self' https://*.tosspayments.com https://vercel.com",
-      "object-src 'none'",
-      "base-uri 'self'",
-      // 결제창이 카드사 인증 페이지로 폼을 제출한다(next.config.js의 같은 항목 참고).
-      "form-action 'self' https://*.tosspayments.com",
-      // 업무툴 PDF 미리보기는 같은 출처 iframe에 뜬다 — 그 응답(/api/board-room/work/files/<id>/<name>)만 라우트가
-      // SAMEORIGIN·'self'를 직접 붙인다. /api/* 는 이 미들웨어 CSP와 next.config 전역 헤더 둘 다 타지 않는다.
-      "frame-ancestors 'none'",
-      "worker-src 'self' blob:",
-      "manifest-src 'self'",
-      'report-uri /api/security/csp-report',
-      'report-to default',
-      ...(shouldUpgradeInsecureRequests ? ['upgrade-insecure-requests'] : []),
-    ].join('; ')
+    const strictCsp = buildCsp({
+      dev: process.env.NODE_ENV === 'development',
+      officeOrigin: getOfficeEditorOrigin() || '',
+      upgradeInsecure: shouldUpgradeInsecureRequests,
+    })
 
     response.headers.set('Content-Security-Policy', strictCsp)
   } catch (e) {

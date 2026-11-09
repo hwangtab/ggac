@@ -31,9 +31,6 @@ const SCRIPT = path.resolve('scripts/verify-env.js')
 // (스크립트가 cwd를 쓰는 다른 자리는 `vercel env pull` 분기뿐이고 이 파일은
 // 그 경로를 밟지 않는다.)
 const ALL_KEYS = [
-  'NEXT_PUBLIC_SUPABASE_URL',
-  'NEXT_PUBLIC_SUPABASE_ANON_KEY',
-  'SUPABASE_SERVICE_ROLE_KEY',
   'TURSO_DATABASE_URL',
   'TURSO_AUTH_TOKEN',
   'BETTER_AUTH_SECRET',
@@ -140,23 +137,10 @@ test('NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL이 URL이 아니면 실패한다(조용�
   assert.match(stdout, /NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL: Invalid format/)
 })
 
-test('죽은 Supabase 키(url/anon/service-role)가 없어도 통과한다 — 컷오버에서 지울 수 있어야 한다', () => {
+test('은퇴한 Supabase 키는 점검 목록에 더 이상 없다', () => {
   const { code, stdout } = run(COMPLETE_ENV)
   assert.equal(code, 0, stdout)
-  assert.match(stdout, /NEXT_PUBLIC_SUPABASE_URL: Not set \(optional\)/)
-  assert.match(stdout, /NEXT_PUBLIC_SUPABASE_ANON_KEY: Not set \(optional\)/)
-  assert.match(stdout, /SUPABASE_SERVICE_ROLE_KEY: Not set \(optional\)/)
-})
-
-// 2026-09-01 Supabase 프로젝트 삭제로 전제가 사라졌다. 이 값을 읽던 레거시
-// Storage URL 판정 4곳이 없어졌으므로, Vercel에서 지워도 배포 전 점검이
-// 빨간불이 되면 안 된다.
-test('NEXT_PUBLIC_SUPABASE_URL은 더 이상 필수가 아니다', () => {
-  const env = { ...COMPLETE_ENV }
-  delete env.NEXT_PUBLIC_SUPABASE_URL
-  const { code, stdout } = run(env)
-  assert.equal(code, 0, stdout)
-  assert.doesNotMatch(stdout, /NEXT_PUBLIC_SUPABASE_URL: Missing/)
+  assert.doesNotMatch(stdout, /SUPABASE/)
 })
 
 // 결제 키는 킬스위치(NEXT_PUBLIC_PAYMENT_MODE)가 켜져 있을 때만 필수다.

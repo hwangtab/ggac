@@ -874,7 +874,8 @@ export interface PostEngagementReportRow {
  * `/api/admin/reports/generate`의 `generatePostEngagementReport`가 쓰는
  * 조회(Task 8). 기존 Supabase `.gte('created_at',start).lte('created_at',end)
  * .order('created_at', {ascending:false})`와 동일 조건 — `is_deleted` 필터가
- * 원본에 없었으므로(리포트는 삭제된 글도 포함) 이 함수도 걸지 않는다.
+ * 원본에 없었으나, 삭제된 글이 리포트에 섞이면 안 되어 `is_deleted = false`를 건다
+ * (`idx_posts_created_at_not_deleted`도 탄다).
  */
 export async function listPostsInRange(start: Date, end: Date): Promise<PostEngagementReportRow[]> {
   const rows = await db
@@ -889,7 +890,7 @@ export async function listPostsInRange(start: Date, end: Date): Promise<PostEnga
       authorId: posts.authorId,
     })
     .from(posts)
-    .where(and(gte(posts.createdAt, start), lte(posts.createdAt, end)))
+    .where(and(eq(posts.isDeleted, false), gte(posts.createdAt, start), lte(posts.createdAt, end)))
     .orderBy(desc(posts.createdAt))
   return rows.map(row => ({
     id: row.id,
@@ -1020,7 +1021,11 @@ export async function softDeletePost(id: string): Promise<void> {
 export async function incrementViewCount(id: string): Promise<number | null> {
   const rows = await db
     .update(posts)
-    .set({ viewCount: sql`${posts.viewCount} + 1` })
+    .set({
+      viewCount: sql`${posts.viewCount} + 1`,
+      // 카운터는 수정이 아니다 — $onUpdate가 updated_at을 올리지 못하게 자기 값을 대입한다.
+      updatedAt: sql`${posts.updatedAt}`,
+    })
     .where(eq(posts.id, id))
     .returning({ viewCount: posts.viewCount })
   return rows[0] ? rows[0].viewCount : null
