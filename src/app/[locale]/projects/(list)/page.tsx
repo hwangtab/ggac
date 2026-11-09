@@ -1,5 +1,5 @@
 import { Suspense } from 'react'
-import ProjectsContent, { ProjectsView } from './ProjectsContent'
+import ProjectsContent, { ProjectsView } from '../ProjectsContent'
 import { getProjectsSorted, getArtists } from '@/lib/data'
 import {
   generateItemListStructuredData,

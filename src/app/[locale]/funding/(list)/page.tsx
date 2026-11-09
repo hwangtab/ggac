@@ -19,8 +19,8 @@ import {
   structuredDataToScript,
 } from '@/utils/structuredData'
 
-import FundingListContent from './FundingListContent'
-import type { CampaignSummary } from './types'
+import FundingListContent from '../FundingListContent'
+import type { CampaignSummary } from '../types'
 
 const log = createLogger('funding/list')
 

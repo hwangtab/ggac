@@ -314,7 +314,16 @@ export default function MailboxView({ className = '' }: { className?: string }) 
   const [replyAll, setReplyAll] = useState(false)
   const [includeQuote, setIncludeQuote] = useState(true)
 
+  // 목록 요청 경합 방지: 필터·페이지를 빠르게 바꿀 때 늦게 도착한 옛 응답이 새 목록을 덮어쓰지 못하게
+  // 가장 마지막 요청만 상태를 바꾼다(순번 + AbortController).
+  const listReqRef = useRef(0)
+  const listAbortRef = useRef<AbortController | null>(null)
+
   const fetchEmails = useCallback(async () => {
+    const seq = ++listReqRef.current
+    listAbortRef.current?.abort()
+    const controller = new AbortController()
+    listAbortRef.current = controller
     setLoading(true)
     setError(null)
     try {
@@ -331,20 +340,23 @@ export default function MailboxView({ className = '' }: { className?: string }) 
       params.set('limit', String(LIMIT))
       params.set('offset', String(offset))
 
-      const res = await fetch(`/api/admin/mailbox?${params}`)
+      const res = await fetch(`/api/admin/mailbox?${params}`, { signal: controller.signal })
+      if (seq !== listReqRef.current) return
       if (res.status === 400) {
         const json = await res.json().catch(() => null)
         throw new Error(json?.error || '검색 조건이 올바르지 않습니다.')
       }
       if (!res.ok) throw new Error('데이터를 불러오지 못했습니다.')
       const json = await res.json()
+      if (seq !== listReqRef.current) return
       setEmails(json.data?.emails ?? [])
       setTotalCount(json.data?.pagination?.total_count ?? 0)
       setCanManage(json.data?.can_manage === true)
     } catch (err) {
+      if (seq !== listReqRef.current || (err as Error)?.name === 'AbortError') return
       setError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.')
     } finally {
-      setLoading(false)
+      if (seq === listReqRef.current) setLoading(false)
     }
   }, [
     statusFilter,
@@ -446,13 +458,24 @@ export default function MailboxView({ className = '' }: { className?: string }) 
     if (canManage) fetchComposeMeta()
   }, [canManage, fetchComposeMeta])
 
+  // 상세 요청 경합 방지(j/k 연타): 마지막 요청만 상태를 바꾼다. 순번이 어긋난 응답·오류·로딩 해제는
+  // 모두 버리고, 이전 요청은 abort한다. 안 그러면 메일 A의 늦은 응답이 B 헤더 아래 첨부·스레드·메모를 덮는다.
+  const detailReqRef = useRef(0)
+  const detailAbortRef = useRef<AbortController | null>(null)
+
   const fetchDetail = useCallback(async (id: string) => {
+    const seq = ++detailReqRef.current
+    detailAbortRef.current?.abort()
+    const controller = new AbortController()
+    detailAbortRef.current = controller
     setDetailLoading(true)
     setDetailError(null)
     try {
-      const res = await fetch(`/api/admin/mailbox/${id}`)
+      const res = await fetch(`/api/admin/mailbox/${id}`, { signal: controller.signal })
+      if (seq !== detailReqRef.current) return
       if (!res.ok) throw new Error('상세를 불러오지 못했습니다.')
       const json = await res.json()
+      if (seq !== detailReqRef.current) return
       setDetail(json.data?.email ?? null)
       setAttachments(json.data?.attachments ?? [])
       setReplies(json.data?.replies ?? [])
@@ -461,9 +484,10 @@ export default function MailboxView({ className = '' }: { className?: string }) 
       setViewerId(json.data?.viewer_id ?? null)
       setCanManage(json.data?.can_manage === true)
     } catch (err) {
+      if (seq !== detailReqRef.current || (err as Error)?.name === 'AbortError') return
       setDetailError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.')
     } finally {
-      setDetailLoading(false)
+      if (seq === detailReqRef.current) setDetailLoading(false)
     }
   }, [])
 
@@ -491,6 +515,10 @@ export default function MailboxView({ className = '' }: { className?: string }) 
   }
 
   const closeDetail = () => {
+    // 닫은 뒤 늦게 도착한 상세 응답이 상태를 되살리지 못하게 진행 중 요청을 무효화한다.
+    detailReqRef.current++
+    detailAbortRef.current?.abort()
+    setDetailLoading(false)
     setSelectedId(null)
     setDetail(null)
     setAttachments([])

@@ -19,8 +19,8 @@ import {
   structuredDataToScript,
 } from '@/utils/structuredData'
 
-import TicketsListContent from './TicketsListContent'
-import type { PerformanceSummary } from './types'
+import TicketsListContent from '../TicketsListContent'
+import type { PerformanceSummary } from '../types'
 
 const log = createLogger('tickets/list')
 

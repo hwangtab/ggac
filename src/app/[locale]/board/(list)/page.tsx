@@ -1,6 +1,6 @@
 // 하이브리드 렌더링: 서버 컴포넌트(ISR) + 클라이언트 필터·하이드레이션
 import { Suspense } from 'react'
-import BoardServerData from './BoardServerData'
+import BoardServerData from '../BoardServerData'
 import { generateBreadcrumbStructuredData, structuredDataToScript } from '@/utils/structuredData'
 import { setRequestLocale } from 'next-intl/server'
 import { getSiteUrl } from '@/utils/site'
