@@ -126,11 +126,15 @@ const DECISION_COPY = {
   canceled: { type: 'timebank_canceled', title: '타임 기록이 취소됐습니다', verb: '취소' },
 } as const
 
-/** 기록이 확인·거절·취소됐다 → 다른 당사자에게(`pickRecipientsForDecision`). */
+/**
+ * 기록이 확인·거절·취소됐다 → 다른 당사자에게(`pickRecipientsForDecision`).
+ * `reason`(거절·취소 사유, 선택)이 있으면 문구 끝에 `사유: …`로 싣는다.
+ */
 export async function notifyTransferDecided(
   row: TransferRow,
   actorId: string,
-  overrides?: Partial<TimebankNotifyDeps>
+  overrides?: Partial<TimebankNotifyDeps>,
+  reason?: string | null
 ): Promise<void> {
   const d = resolveDeps(overrides)
   try {
@@ -143,7 +147,9 @@ export async function notifyTransferDecided(
         user_ids: pickRecipientsForDecision(row, actorId),
         type: copy.type,
         title: copy.title,
-        message: `${formatMinutes(row.minutes)} 기록이 ${copy.verb}됐습니다.`,
+        message: `${formatMinutes(row.minutes)} 기록이 ${copy.verb}됐습니다.${
+          reason?.trim() ? ` 사유: ${reason.trim()}` : ''
+        }`,
         data: { transfer_id: row.id, kind: row.kind, minutes: row.minutes, status: row.status },
         related_user_id: actorId,
       },

@@ -633,16 +633,32 @@ export async function confirmTransfer(input: {
   })
 }
 
+/** 거절·취소 사유를 memo에 붙일 때의 머리말. 원 memo가 있으면 `' / '`로 잇는다(`adminCancelPending`과 같은 꼴). */
+export const DECISION_NOTE_PREFIX = { rejected: '거절 사유: ', canceled: '취소 사유: ' } as const
+
 async function decideMemberPending(input: {
   id: string
   actorId: string
   status: 'rejected' | 'canceled'
+  memo?: string | null
 }): Promise<TransferRow> {
   const byCounterparty = input.status === 'rejected'
+  const reason = typeof input.memo === 'string' ? input.memo.trim() : ''
+  const note = reason ? `${DECISION_NOTE_PREFIX[input.status]}${reason}` : null
   return write(async tx => {
     const [row] = await tx
       .update(t)
-      .set({ status: input.status, decidedBy: input.actorId, decidedAt: new Date() })
+      .set({
+        status: input.status,
+        decidedBy: input.actorId,
+        decidedAt: new Date(),
+        // 사유가 있을 때만 memo를 건드린다. pending 행이라 트리거에 걸리지 않는다.
+        ...(note
+          ? {
+              memo: sql`case when ${t.memo} is null or ${t.memo} = '' then ${note} else ${t.memo} || ' / ' || ${note} end`,
+            }
+          : {}),
+      })
       .where(
         and(
           eq(t.id, input.id),
@@ -664,13 +680,26 @@ async function decideMemberPending(input: {
   })
 }
 
-/** 상대의 거절. 참여 자격은 보지 않는다 — 정지·구판 동의자도 거절은 할 수 있다(스펙 §9.4). */
-export async function rejectTransfer(input: { id: string; actorId: string }): Promise<TransferRow> {
+/**
+ * 상대의 거절. 참여 자격(스위치·동의 판·탈퇴 신청)은 보지 않는다(스펙 §9.4). 승인·활성
+ * 조합원인지는 라우트의 `requireActiveMember`가 앞서 거르므로 정지 회원은 여기 닿지
+ * 않는다 — 그 사람에게 걸린 pending은 기록자 취소나 관리자 취소로 정리한다.
+ * `memo`(선택)는 거절 사유로 행의 memo 끝에 남고, 기록자 알림에 실린다.
+ */
+export async function rejectTransfer(input: {
+  id: string
+  actorId: string
+  memo?: string | null
+}): Promise<TransferRow> {
   return decideMemberPending({ ...input, status: 'rejected' })
 }
 
-/** 기록자의 취소. */
-export async function cancelTransfer(input: { id: string; actorId: string }): Promise<TransferRow> {
+/** 기록자의 취소. `memo`(선택)는 취소 사유로 남는다. */
+export async function cancelTransfer(input: {
+  id: string
+  actorId: string
+  memo?: string | null
+}): Promise<TransferRow> {
   return decideMemberPending({ ...input, status: 'canceled' })
 }
 

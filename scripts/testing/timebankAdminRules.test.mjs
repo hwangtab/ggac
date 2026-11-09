@@ -28,8 +28,11 @@ const {
   parseAdminCancelInput,
   parseCoopCreditInput,
   parseCoopTaskInput,
-  planTimebankSettingsChange,
+  planTimebankSettingsChange: planWithRealTerms,
+  TERMS_MISSING_MESSAGE,
 } = await import('../../src/lib/timebank/adminRules.ts')
+/** 아래 테스트의 '2027-01'은 가상의 판이다 — 본문 존재 검사는 따로 한 건만 실제 표로 본다. */
+const planTimebankSettingsChange = input => planWithRealTerms({ termsExists: () => true, ...input })
 const { TIMEBANK_DEFAULTS } = await import('../../src/lib/timebank/settings.ts')
 
 // ── 조합 업무 지급 판정 ─────────────────────────────────────────────────────
@@ -265,6 +268,22 @@ test('설정 PUT: 판만 올리는 것은 허용한다(재동의 요청)', () =>
   })
   assert.equal(plan.ok, true)
   assert.deepEqual(plan.changed, ['terms_version'])
+})
+
+test('설정 PUT: 본문이 배포되지 않은 판으로 바꾸면 400(전원 잠금 방지), 있는 판은 허용', () => {
+  const missing = planWithRealTerms({
+    current: TIMEBANK_DEFAULTS,
+    body: { settings: { terms_version: '2027-01' }, resolution_ref: REF },
+  })
+  assert.equal(missing.ok, false)
+  assert.equal(missing.status, 400)
+  assert.equal(missing.message, TERMS_MISSING_MESSAGE)
+
+  const back = planWithRealTerms({
+    current: { ...TIMEBANK_DEFAULTS, terms_version: '2099-01' },
+    body: { settings: { terms_version: '2026-11' }, resolution_ref: REF },
+  })
+  assert.equal(back.ok, true)
 })
 
 // ── 잔액표 ──────────────────────────────────────────────────────────────────

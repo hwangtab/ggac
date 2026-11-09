@@ -9,8 +9,15 @@
  * | `cancel` | `requireTimebankReader` | 허용 | 기록자(`created_by`) |
  *
  * 거절·취소는 pending을 **줄이는** 동작이라 스위치가 꺼져도, 구판 동의·탈퇴 신청
- * 중이어도 막지 않는다. 확인은 잔액을 움직이므로 참여 자격을 요구하고, 원장이
- * 같은 트랜잭션에서 두 당사자의 자격과 하한을 다시 판정한다.
+ * 중이어도 막지 않는다. 다만 세 동작 모두 `requireActiveMember`를 먼저 지나므로
+ * **정지 회원(`is_active = false`)은 거절·취소도 403**이다(이용규칙 제16조 ①) — 그
+ * 사람에게 걸린 pending은 기록자 취소나 관리자 취소로 정리한다. 확인은 잔액을
+ * 움직이므로 참여 자격을 요구하고, 원장이 같은 트랜잭션에서 두 당사자의 자격과
+ * 하한을 다시 판정한다.
+ *
+ * 거절·취소는 본문 `{ memo? }`로 **선택 사유**를 받는다(`parseDecisionInput`). 사유는
+ * 행의 memo 끝에 남고 다른 당사자의 알림에 실린다 — 거절 3회면 30일 차단이 걸리므로
+ * 기록자가 이유를 알 수 있어야 한다(이용규칙 제8조·제12조). 본문이 없어도 된다.
  *
  * 누가 할 수 있는지와 kind 제한(회원 간 `exchange`·`market`·`reversal`만 — 조정
  * pending은 `not_found`)은 원장의 조건부 UPDATE가 정한다. 라우트는 행위자를 세션
@@ -29,7 +36,7 @@ import {
 } from '@/lib/server/timebankAuth'
 import { applyRouteRateLimit } from '@/lib/server/rateLimit'
 import { validateUUID } from '@/utils/validation'
-import { parseTransferAction } from '@/lib/timebank/validate'
+import { parseDecisionInput, parseTransferAction } from '@/lib/timebank/validate'
 import { describeLedgerError, toMyTransferView } from '@/lib/timebank/format'
 import {
   cancelTransfer,
@@ -80,6 +87,15 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
   return apiPost(
     async () => {
+      let memo: string | null = null
+      if (action !== 'confirm') {
+        // 본문은 선택이다 — 없거나 JSON이 아니면 사유 없음으로 본다.
+        const body = await request.json().catch(() => null)
+        const parsed = parseDecisionInput(body)
+        if (parsed.error !== null) throw ApiError.badRequest(parsed.error)
+        memo = parsed.value.memo
+      }
+
       let row: TransferRow
       try {
         if (action === 'confirm') {
@@ -87,9 +103,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
           // 않는다 — 관리자 화면이 잔액표로 따로 본다(§7.3).
           ;({ row } = await confirmTransfer({ id, actorId: user.id, settings }))
         } else if (action === 'reject') {
-          row = await rejectTransfer({ id, actorId: user.id })
+          row = await rejectTransfer({ id, actorId: user.id, memo })
         } else {
-          row = await cancelTransfer({ id, actorId: user.id })
+          row = await cancelTransfer({ id, actorId: user.id, memo })
         }
       } catch (error) {
         const described = describeLedgerError(error, {
@@ -110,12 +126,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
             status: row.status,
             kind: row.kind,
             minutes: row.minutes,
+            has_reason: memo !== null,
           },
         })
       } catch (error) {
         log.error('타임 결정 활동 기록 실패', { error: (error as Error)?.message })
       }
-      await notifyTransferDecided(row, user.id)
+      await notifyTransferDecided(row, user.id, undefined, memo)
 
       return ApiSuccess.ok({ transfer: toMyTransferView(row, user.id) }, DONE_MESSAGE[action])
     },
