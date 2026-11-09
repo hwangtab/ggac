@@ -6,6 +6,7 @@ import { applyCSP } from './middleware/csp'
 import { getSystemSettings } from './middleware/settings'
 import { handleAuth } from './middleware/auth'
 import { getMaintenanceResponse } from './middleware/maintenance'
+import { isStaticAssetPath } from './middleware/static-assets'
 import { routing } from './i18n/routing'
 import { verifySessionFresh } from './middleware/session'
 
@@ -228,8 +229,13 @@ export async function middleware(request: NextRequest) {
   const hostRedirect = canonicalHostRedirect(request)
   if (hostRedirect) return hostRedirect
 
-  // 정적 파일 및 Next.js 내부 경로 패스
-  if (pathname.startsWith('/_next') || pathname.includes('.')) {
+  // 정적 자원 및 Next.js 내부 경로 패스
+  //
+  // **예전에는 `pathname.includes('.')` 였다** — 점이 하나라도 있으면 인증·CSP·intl 을 통째로
+  // 건너뛰는 문이었다(2026-11-09 사각지대 점검). 지금은 동적 관리자 페이지가 없어 실노출이 낮지만,
+  // 경로에 점이 들어가는 화면이 하나 생기면 그 화면이 인증 바깥에 놓인다. "정적 자원"의 뜻을
+  // 확장자 목록으로 좁힌다(`src/middleware/static-assets.ts`).
+  if (isStaticAssetPath(pathname)) {
     return NextResponse.next()
   }
 
