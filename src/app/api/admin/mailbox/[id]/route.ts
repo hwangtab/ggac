@@ -3,7 +3,11 @@ import { RATE_LIMITS, defineApiRoute } from '@/lib/server/apiRoute'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import type { BoardAuthSuccess } from '@/lib/server/boardRoomAuth'
 import { logSecurityEvent } from '@/utils/security'
+import { deleteObject } from '@/lib/storage/blob'
+import { isSafeMailboxAttachmentPath } from '@/lib/storage/mailboxAttachments'
+import { logUserActivity } from '@/db/queries/activities'
 import {
+  deleteInboundEmailReturningPaths,
   getInboundEmail,
   listAttachmentsForEmail,
   listRepliesForEmail,
@@ -118,5 +122,85 @@ export const PATCH = defineApiRoute<{ status?: string; expected_status?: string 
       return ApiError.conflict('다른 곳에서 이미 상태가 바뀌었습니다.').toNextResponse()
     }
     return ApiSuccess.ok({ id, status: next })
+  },
+})
+
+/**
+ * 받은 메일 한 건 삭제 — **관리자만**(2026-11-09).
+ *
+ * 메일함 보관 정책은 "계속 보관"이지만, 정보주체가 자기 메일의 삭제를 요구했을 때 응답할 수단이
+ * 없었다. 이 경로가 그 최소 장치다: 행(첨부·답장·메모·라벨은 cascade)과 **비공개 저장소의 첨부
+ * 파일**을 함께 지우고, 지운 사실을 활동 기록과 보안 로그에 남긴다(누가 언제 무엇을 지웠는지).
+ *
+ * 되돌릴 수 없으므로 관리자로 제한하고, 화면은 확인을 한 번 받는다.
+ */
+export const DELETE = defineApiRoute<undefined, BoardAuthSuccess>({
+  method: 'DELETE',
+  name: 'api/admin/mailbox/[id].delete',
+  rateLimit: {
+    ...RATE_LIMITS.ADMIN_API,
+    keyGenerator: createUserKeyGenerator('admin_mailbox_delete'),
+  },
+  rateLimitHeaders: true,
+  auth: 'admin',
+  errorResponse: () => {
+    logSecurityEvent('ADMIN_MAILBOX_API_ERROR', { error: '서버 오류가 발생했습니다.' }, 'medium')
+    return ApiError.internalServerError('메일을 삭제하는 중 오류가 발생했습니다.').toNextResponse()
+  },
+  handler: async ({ params, auth, request }) => {
+    const idValidation = validateUUID(String(params.id ?? ''), '메일 ID')
+    if (!idValidation.isValid) {
+      throw ApiError.badRequest('유효한 id가 필요합니다.')
+    }
+    const id = idValidation.sanitized
+
+    const email = await getInboundEmail(id)
+    if (!email) {
+      throw ApiError.notFound('메일을 찾을 수 없습니다.')
+    }
+
+    const { deleted, blobPaths } = await deleteInboundEmailReturningPaths(id)
+    if (!deleted) {
+      // 그 사이 다른 관리자가 지웠다. 결과는 같으므로 404로 알린다.
+      throw ApiError.notFound('메일을 찾을 수 없습니다.')
+    }
+
+    // 첨부 파일은 행을 지운 뒤 별도로 지운다. 경로 규약을 벗어난 값은 건드리지 않는다.
+    for (const path of blobPaths) {
+      if (!isSafeMailboxAttachmentPath(path)) continue
+      try {
+        await deleteObject('private', path)
+      } catch (error) {
+        // 메일은 이미 사라졌다. 남은 파일은 로그로 남겨 사람이 정리한다(조용히 넘기지 않는다).
+        logSecurityEvent(
+          'ADMIN_MAILBOX_API_ERROR',
+          { error: '첨부 파일 삭제 실패', path },
+          'medium'
+        )
+        void error
+      }
+    }
+
+    try {
+      await logUserActivity({
+        user_id: auth.user.id,
+        action_type: 'admin_action',
+        target_type: 'inbound_email',
+        target_id: id,
+        metadata: {
+          action: 'mailbox_email_delete',
+          attachments: blobPaths.length,
+          subject_present: Boolean(email.subject),
+        },
+        ip_address:
+          request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || null,
+        user_agent: request.headers.get('user-agent') || null,
+      })
+    } catch {
+      // 이미 지웠다. 기록 실패가 삭제를 되돌리거나 오류로 보이게 하지 않는다.
+      logSecurityEvent('ADMIN_MAILBOX_API_ERROR', { error: '삭제 기록 실패' }, 'medium')
+    }
+
+    return ApiSuccess.ok({ id, deleted: true, attachments: blobPaths.length }, '메일을 지웠습니다.')
   },
 })

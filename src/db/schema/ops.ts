@@ -92,6 +92,8 @@ export const ACTIVITY_TARGET_TYPE = [
   'system',
   // 메일함 첨부 다운로드 기록의 대상 종류 (브리프 C)
   'inbound_email_attachment',
+  // 받은 메일 자체(관리자 삭제 기록, 2026-11-09). 타입 배열일 뿐 DB CHECK는 없다.
+  'inbound_email',
   'outbound_email',
   'outbound_email_attachment',
   'funding_campaign',

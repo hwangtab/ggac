@@ -623,6 +623,34 @@ export async function getInboundEmail(id: string): Promise<Record<string, unknow
   return row ? rowToEmail(row) : null
 }
 
+/**
+ * 받은 메일 한 건을 **완전히** 지우고, 지워야 할 첨부 Blob 경로를 돌려준다.
+ *
+ * 왜 필요한가(2026-11-09): 보관 정책은 "계속 보관"이 맞지만, 정보주체가 자기 메일의 삭제를
+ * 요구했을 때 응답할 수단이 **없었다** — 받은 메일은 상태(읽음·보관·스팸)만 바꿀 수 있었고
+ * 삭제 쿼리 자체가 없었다. 보관은 유지하되 요구가 있을 때 그 한 건을 지울 수 있어야 정책이
+ * 완성된다. 발신 쪽에는 이미 같은 모양(`deleteOutboundEmailsReturningPaths`)이 있다.
+ *
+ * 첨부·답장·메모·라벨 행은 `inbound_emails` 를 참조하는 FK 가 ON DELETE cascade 라 함께 지워진다.
+ * 첨부 행은 삭제 **전에** 경로를 읽어 둔다(행이 사라지면 저장소에서 무엇을 지울지 알 수 없다).
+ * Blob 삭제는 호출부가 한다 — 이 계층은 DB 만 안다(기존 삭제 함수들과 같은 경계).
+ */
+export async function deleteInboundEmailReturningPaths(
+  id: string
+): Promise<{ deleted: boolean; blobPaths: string[] }> {
+  const pathRows = await db
+    .select({ blobPath: inboundEmailAttachments.blobPath })
+    .from(inboundEmailAttachments)
+    .where(eq(inboundEmailAttachments.emailId, id))
+
+  const deleted = await db
+    .delete(inboundEmails)
+    .where(eq(inboundEmails.id, id))
+    .returning({ id: inboundEmails.id })
+
+  return { deleted: deleted.length > 0, blobPaths: pathRows.map(r => r.blobPath) }
+}
+
 export async function listAttachmentsForEmail(emailId: string): Promise<Record<string, unknown>[]> {
   const rows = await db
     .select()
