@@ -308,6 +308,34 @@ test.describe('타임뱅크 — 재능 찾기(동의자 owner)', () => {
   })
 })
 
+test.describe('타임뱅크 — 글에서 바로 기록하기(other)', () => {
+  test.use({ storageState: storageStatePath('other') })
+
+  test('남의 제공 글에서 기록하기를 누르면 상대·분류가 채워지고 시간 방향이 미리 보인다', async ({
+    page,
+  }) => {
+    await page.goto(`/board/timebank/${fixtures.timebankListingId}`)
+    await page.getByTestId('timebank-record-with').click()
+    await expect(page).toHaveURL(/\/mypage\/timebank\?.*with=.*#record$/)
+    const form = page.getByTestId('timebank-record')
+    await expect(form.locator('select[name="counterparty_id"]')).toHaveValue(users.owner)
+    await expect(form.locator('select[name="category"]')).toHaveValue('lesson')
+    await expect(page.getByTestId('timebank-record-preview')).toContainText(
+      '도움을 받았으므로 내 시간'
+    )
+  })
+})
+
+test.describe('타임뱅크 — 글쓴이에게는 기록하기 단추가 없다(owner)', () => {
+  test.use({ storageState: storageStatePath('owner') })
+
+  test('자기 글 상세에는 기록하기 단추가 없다', async ({ page }) => {
+    await page.goto(`/board/timebank/${fixtures.timebankListingId}`)
+    await expect(page.getByRole('heading', { name: LISTING_TITLE })).toBeVisible()
+    await expect(page.getByTestId('timebank-record-with')).toHaveCount(0)
+  })
+})
+
 // ── 구판 동의 ────────────────────────────────────────────────────────────────
 
 test.describe('타임뱅크 — 이용규칙 판이 바뀐 뒤', () => {

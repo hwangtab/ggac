@@ -11,14 +11,20 @@ import {
 
 type Participant = { id: string; display_name: string }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 /**
  * 기록하기(스펙 §5·§8). 일이 끝난 뒤 한 사람이 남기면 상대가 확인한다.
  *
  * - 상대는 `/api/timebank/participants`(현재 판 동의자의 id·표시명만, 자기 자신은
  *   서버가 뺀다)에서 고른다.
  * - 시간은 30분 단위 선택지(30~480)만. 자유 입력은 두지 않는다.
- * - 본문은 `{ counterparty_id, role, minutes, category?, memo? }`뿐이다 — kind·계좌는
- *   서버가 정한다. 거부 사유는 서버 문구 그대로 보인다.
+ * - 본문은 `{ counterparty_id, role, minutes, category?, memo?, listing_id? }`뿐이다 —
+ *   kind·계좌는 서버가 정한다. 거부 사유는 서버 문구 그대로 보인다.
+ * - 게시판 글의 "이 글로 기록하기"는 `?with=<상대>&listing=<글>&category=<분류>&role=`로
+ *   들어온다. 상대가 참여자 명단에 있을 때만 미리 고른다(값은 서버가 다시 판정한다).
+ * - 제출 전에 "저장하면 시간이 어디로 가는지"를 한 줄로 보인다 — "도움을 받았다"와
+ *   "시간을 준다"가 같은 일이라는 것을 기록하는 순간에 보여 준다.
  */
 export default function RecordForm({ onRecorded }: { onRecorded: () => void }) {
   const t = useTranslations('timebank')
@@ -29,8 +35,27 @@ export default function RecordForm({ onRecorded }: { onRecorded: () => void }) {
   const [minutes, setMinutes] = useState(60)
   const [category, setCategory] = useState('')
   const [memo, setMemo] = useState('')
+  const [listingId, setListingId] = useState<string | null>(null)
+  const [prefillWith, setPrefillWith] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
+
+  // 게시판 글에서 넘어온 값. 주소창 값이라 형식만 거르고, 판정은 서버가 한다.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search)
+    const withId = q.get('with')
+    if (withId && UUID_RE.test(withId)) setPrefillWith(withId)
+    const listing = q.get('listing')
+    if (listing && UUID_RE.test(listing)) setListingId(listing)
+    const cat = q.get('category')
+    if (cat && (TIMEBANK_CATEGORIES as readonly string[]).includes(cat)) setCategory(cat)
+    const r = q.get('role')
+    if (r === 'received' || r === 'gave') setRole(r)
+  }, [])
+
+  useEffect(() => {
+    if (prefillWith && participants?.some(p => p.id === prefillWith)) setCounterparty(prefillWith)
+  }, [prefillWith, participants])
 
   useEffect(() => {
     let alive = true
@@ -63,6 +88,7 @@ export default function RecordForm({ onRecorded }: { onRecorded: () => void }) {
           minutes,
           category: category || null,
           memo: memo.trim() || null,
+          ...(listingId && counterparty === prefillWith ? { listing_id: listingId } : {}),
         },
       },
       t('my.record.error')
@@ -77,10 +103,16 @@ export default function RecordForm({ onRecorded }: { onRecorded: () => void }) {
     }
   }
 
+  const counterpartyName = participants?.find(p => p.id === counterparty)?.display_name ?? null
   const field = 'mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm'
 
   return (
-    <section aria-labelledby="tb-record-heading" data-testid="timebank-record">
+    <section
+      id="record"
+      aria-labelledby="tb-record-heading"
+      data-testid="timebank-record"
+      className="scroll-mt-24"
+    >
       <h2 id="tb-record-heading" className="mb-1 text-lg font-semibold text-gray-900">
         {t('my.record.heading')}
       </h2>
@@ -186,6 +218,23 @@ export default function RecordForm({ onRecorded }: { onRecorded: () => void }) {
             {t('my.record.memoHelp')}
           </p>
         </div>
+
+        {counterpartyName && (
+          <p
+            className="md:col-span-2 rounded-lg bg-primary-50 p-3 text-sm text-primary-800"
+            data-testid="timebank-record-preview"
+          >
+            {role === 'received'
+              ? t('my.record.previewReceived', {
+                  name: counterpartyName,
+                  time: formatTimebankMinutes(t, minutes),
+                })
+              : t('my.record.previewGave', {
+                  name: counterpartyName,
+                  time: formatTimebankMinutes(t, minutes),
+                })}
+          </p>
+        )}
 
         <div className="md:col-span-2 flex flex-wrap items-center justify-between gap-3">
           {notice ? (

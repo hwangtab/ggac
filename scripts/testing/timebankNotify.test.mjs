@@ -390,3 +390,29 @@ test('입력이 망가져도(행 없음) 래퍼는 던지지 않는다', async (
   await notify.notifyTransferPending(undefined, deps)
   await notify.notifyTransferDecided(null, 'x', deps)
 })
+
+// ---------------------------------------------------------------- 도움 방향 문구
+
+test('확인 요청 문구: 기록자가 도움을 받았으면 상대에게 "시간이 들어온다"고 적는다', () => {
+  // payer(김지불)가 기록 → 상대 payee(이수령)가 시간을 받는다 = 이수령이 도왔다.
+  const copy = notify.pendingNoticeCopy(row({ created_by: 'payer', counterparty_id: 'payee' }))
+  assert.match(copy.message, /김지불님이 회원님에게 도움을 받았다고/)
+  assert.match(copy.message, /회원님에게 1시간 30분이 들어옵니다/)
+})
+
+test('확인 요청 문구: 기록자가 도왔으면 상대에게 "시간이 나간다"고 적는다', () => {
+  const copy = notify.pendingNoticeCopy(row())
+  assert.match(copy.message, /이수령님이 회원님을 도왔다고/)
+  assert.match(copy.message, /회원님의 1시간 30분이 이수령님에게 갑니다/)
+})
+
+test('확인 요청 문구: 되돌림은 되돌리기 요청으로 적는다', () => {
+  const copy = notify.pendingNoticeCopy(row({ kind: 'reversal' }))
+  assert.match(copy.message, /되돌리자고 요청/)
+})
+
+test('결정 알림은 처리한 당사자의 이름을 적는다', async () => {
+  const { deps, calls } = spy()
+  await notify.notifyTransferDecided(row({ status: 'confirmed' }), 'payer', deps)
+  assert.match(calls.bulk[0].message, /김지불님이 1시간 30분 기록을 확인했습니다/)
+})

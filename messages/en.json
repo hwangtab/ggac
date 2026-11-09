@@ -1312,7 +1312,9 @@
       "deleteError": "Could not delete.",
       "backToList": "← Time bank",
       "coopNotice": "Taking part is entirely voluntary, and there is no disadvantage if you do not.",
-      "coopNoticeDetail": "The cooperative never names or assigns members. Work that was agreed to be paid is never replaced with credits."
+      "coopNoticeDetail": "The cooperative never names or assigns members. Work that was agreed to be paid is never replaced with credits.",
+      "recordWith": "Record with {name}",
+      "recordWithHelp": "Done? Record it from this post. It is final once the other person confirms."
     },
     "volunteer": {
       "count": "{count} members have volunteered.",
@@ -1412,7 +1414,9 @@
         "submit": "Save record",
         "submitting": "Saving…",
         "done": "Record saved. It is confirmed once the other person confirms it.",
-        "error": "Could not save the record."
+        "error": "Could not save the record.",
+        "previewReceived": "If saved: {name} helped you, so {time} of your time goes to {name}. It counts once they confirm.",
+        "previewGave": "If saved: you helped {name}, so {time} of their time comes to you. It counts once they confirm."
       },
       "history": {
         "heading": "History",
@@ -1470,7 +1474,9 @@
         "none": "Not agreed yet.",
         "needsAgreement": "You need to agree to the current version. Read and agree to the terms in the notice above.",
         "unavailable": "You need to agree to the current version, but agreement is not available right now. See the notice above."
-      }
+      },
+      "helpedCounterparty": "Helped {name}",
+      "helpedByCounterparty": "Helped by {name}"
     },
     "directory": {
       "link": "Find talents",

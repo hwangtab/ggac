@@ -14,7 +14,7 @@
  *   `timebank_transfer_recorded`.
  */
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { apiPost, ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { requireTimebankParticipant, timebankRateLimit } from '@/lib/server/timebankAuth'
 import { applyRouteRateLimit } from '@/lib/server/rateLimit'
@@ -25,6 +25,7 @@ import { createMemberTransfer, type TransferRow } from '@/db/queries/timebankLed
 import { getTimebankListingOwner } from '@/db/queries/timebankBoard'
 import { logUserActivity } from '@/db/queries/activities'
 import { notifyTransferPending } from '@/lib/server/timebankNotify'
+import { emailTransferPending } from '@/lib/server/timebankEmail'
 import { createLogger } from '@/utils/logger'
 
 export const runtime = 'nodejs'
@@ -98,6 +99,8 @@ export async function POST(request: NextRequest) {
         log.error('타임 기록 활동 기록 실패', { error: (error as Error)?.message })
       }
       await notifyTransferPending(row)
+      // 메일은 응답 뒤에 보낸다 — Resend가 느려도(최대 10초) 기록 화면을 붙잡지 않는다.
+      after(() => emailTransferPending(row))
 
       return ApiSuccess.created(
         { transfer: toMyTransferView(row, user.id) },

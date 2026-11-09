@@ -1312,7 +1312,9 @@
       "deleteError": "삭제하지 못했습니다.",
       "backToList": "← 타임뱅크 목록",
       "coopNotice": "참여는 자유이며 참여하지 않아도 불이익이 없습니다.",
-      "coopNoticeDetail": "조합은 특정 조합원을 지명하거나 배정하지 않습니다. 사례비·인건비를 받기로 한 일은 크레딧으로 대신하지 않습니다."
+      "coopNoticeDetail": "조합은 특정 조합원을 지명하거나 배정하지 않습니다. 사례비·인건비를 받기로 한 일은 크레딧으로 대신하지 않습니다.",
+      "recordWith": "{name}님과 기록하기",
+      "recordWithHelp": "일이 끝났다면 이 글로 바로 기록하세요. 상대가 확인하면 확정됩니다."
     },
     "volunteer": {
       "count": "{count}명이 참여 의사를 밝혔습니다.",
@@ -1412,7 +1414,9 @@
         "submit": "기록 남기기",
         "submitting": "기록하는 중…",
         "done": "기록을 남겼습니다. 상대가 확인하면 확정됩니다.",
-        "error": "기록하지 못했습니다."
+        "error": "기록하지 못했습니다.",
+        "previewReceived": "저장하면: {name}님에게 도움을 받았으므로 내 시간 {time}이 {name}님에게 갑니다. 상대가 확인해야 반영됩니다.",
+        "previewGave": "저장하면: {name}님을 도왔으므로 {name}님의 시간 {time}이 나에게 들어옵니다. 상대가 확인해야 반영됩니다."
       },
       "history": {
         "heading": "내역",
@@ -1470,7 +1474,9 @@
         "none": "아직 동의하지 않았습니다.",
         "needsAgreement": "현재 판에 동의해야 합니다. 위 안내에서 이용규칙을 읽고 동의해 주세요.",
         "unavailable": "현재 판에 동의해야 하지만 지금은 동의를 받을 수 없습니다. 위 안내를 확인해 주세요."
-      }
+      },
+      "helpedCounterparty": "{name}님을 도움",
+      "helpedByCounterparty": "{name}님에게 도움 받음"
     },
     "directory": {
       "link": "재능 찾기",
