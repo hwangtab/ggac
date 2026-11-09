@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { apiPatch, apiDelete, ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { requireBoardMember } from '@/lib/server/boardRoomAuth'
 import { BOARD_AGENDA_STATUS, parseBoardAgendaSortOrder } from '@/constants/boardRoom'
+import { TEXT_LIMITS, textLengthError } from '@/utils/textLimits'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { validateUUID } from '@/utils/validation'
 import { deleteAgenda, getAgendaOwner, updateAgenda } from '@/db/queries/board'
@@ -43,7 +44,15 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         status?: string
         sortOrder?: number
       } = {}
-      if (typeof body.title === 'string') update.title = body.title.trim()
+      if (typeof body.title === 'string') {
+        const title = body.title.trim()
+        if (!title) throw ApiError.badRequest('제목을 입력해주세요.')
+        update.title = title
+      }
+      const tooLong =
+        textLengthError(update.title, TEXT_LIMITS.BOARD_TITLE, '제목') ||
+        textLengthError(body.content, TEXT_LIMITS.BOARD_AGENDA_CONTENT, '내용')
+      if (tooLong) throw ApiError.badRequest(tooLong)
       if (body.content === null || typeof body.content === 'string')
         update.content = body.content as string | null
       if (typeof body.status === 'string') {

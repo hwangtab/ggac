@@ -296,7 +296,10 @@ export async function listCommentsInRange(
   const rows = await db
     .select({ id: comments.id, postId: comments.postId, createdAt: comments.createdAt })
     .from(comments)
-    .where(and(gte(comments.createdAt, start), lte(comments.createdAt, end)))
+    .innerJoin(posts, eq(posts.id, comments.postId))
+    .where(
+      and(eq(posts.isDeleted, false), gte(comments.createdAt, start), lte(comments.createdAt, end))
+    )
   return rows.map(row => ({
     id: row.id,
     post_id: row.postId,

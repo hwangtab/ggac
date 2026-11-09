@@ -40,8 +40,8 @@ interface ActivityResponse {
 // 쿼리 파라미터 검증 스키마
 const ActivityQuerySchema = z.object({
   filter: z.enum(['all', 'posts', 'comments', 'profile']).default('all'),
-  page: z.coerce.number().min(1).default(1),
-  limit: z.coerce.number().min(1).max(100).default(20),
+  page: z.coerce.number().int().min(1).max(10000).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
 })
 
 // GET: 현재 사용자의 활동 내역 조회
@@ -54,9 +54,9 @@ export async function GET(request: NextRequest) {
     // 쿼리 파라미터 검증
     const { searchParams } = new URL(request.url)
     const queryResult = ActivityQuerySchema.safeParse({
-      filter: searchParams.get('filter'),
-      page: searchParams.get('page'),
-      limit: searchParams.get('limit'),
+      filter: searchParams.get('filter') ?? undefined,
+      page: searchParams.get('page') ?? undefined,
+      limit: searchParams.get('limit') ?? undefined,
     })
 
     if (!queryResult.success) {

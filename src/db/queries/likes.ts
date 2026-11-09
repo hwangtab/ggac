@@ -33,7 +33,7 @@
  * 거부된다(직접 재현: `scripts/testing/queriesLikes.test.mjs`).
  */
 
-import { and, count, desc, eq, inArray } from 'drizzle-orm'
+import { and, count, desc, eq, inArray, sql } from 'drizzle-orm'
 
 import { db } from '../client.ts'
 import { comments, commentLikes, memberProfiles, postLikes, posts } from '../schema/index.ts'
@@ -75,7 +75,7 @@ export async function togglePostLike(postId: string, userId: string): Promise<To
 
     const [updated] = await tx
       .update(posts)
-      .set({ likeCount: actualCount })
+      .set({ likeCount: actualCount, updatedAt: sql`${posts.updatedAt}` })
       .where(eq(posts.id, postId))
       .returning({ likeCount: posts.likeCount })
 
@@ -116,7 +116,7 @@ export async function toggleCommentLike(
 
     const [updated] = await tx
       .update(comments)
-      .set({ likeCount: actualCount })
+      .set({ likeCount: actualCount, updatedAt: sql`${comments.updatedAt}` })
       .where(eq(comments.id, commentId))
       .returning({ likeCount: comments.likeCount })
 

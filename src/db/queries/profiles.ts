@@ -349,6 +349,22 @@ export async function getProfilesByIds(ids: string[]): Promise<Map<string, Profi
 }
 
 /**
+ * 공개 표시명 조회용 — `{ id, display_name }` 두 칸만 읽는다. 비로그인
+ * `/api/profiles`가 쓰므로 33칸 전체를 끌어오지 않는다. 승인 상태는 거르지
+ * 않는다(getProfilesByIds와 동일).
+ */
+export async function getDisplayNamesByIds(
+  ids: string[]
+): Promise<{ id: string; display_name: string }[]> {
+  if (ids.length === 0) return []
+  const rows = await db
+    .select({ id: memberProfiles.id, displayName: memberProfiles.displayName })
+    .from(memberProfiles)
+    .where(inArray(memberProfiles.id, ids))
+  return rows.map(row => ({ id: row.id, display_name: row.displayName }))
+}
+
+/**
  * 관리자 회원 목록 등 페이지네이션 목록 조회.
  * `status` 생략 시 전체, `search`는 display_name/email/real_name에 대한
  * 부분일치(OR)다. 정렬은 `created_at` 내림차순(최신 가입순)으로 고정 —

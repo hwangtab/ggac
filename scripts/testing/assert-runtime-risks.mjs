@@ -1618,8 +1618,10 @@ const requiredAuthHelperCallCounts = [
     // PUT은 requireActiveMember(), DELETE·GET 둘 다 requireUser().
     file: 'src/app/api/mypage/artist/photo/route.ts',
     calls: [
-      { pattern: /requireActiveMember\(\)/g, min: 1 },
-      { pattern: /requireUser\(\)/g, min: 2 },
+      // 2026-11-09: 쓰기(PUT·DELETE)는 승인된 활성 조합원만 — DELETE가
+      // requireUser에서 requireActiveMember로 올라갔다.
+      { pattern: /requireActiveMember\(\)/g, min: 2 },
+      { pattern: /requireUser\(\)/g, min: 1 },
     ],
   },
   {
@@ -1661,7 +1663,11 @@ const requiredAuthHelperCallCounts = [
   {
     // GET·PUT·DELETE 전부 requireUser().
     file: 'src/app/api/posts/[id]/attachments/[attachmentId]/route.ts',
-    calls: [{ pattern: /requireUser\(\)/g, min: 3 }],
+    // 2026-11-09: GET만 requireUser, PUT·DELETE는 업로드와 같은 requireActiveMember.
+    calls: [
+      { pattern: /requireUser\(\)/g, min: 1 },
+      { pattern: /requireActiveMember\(\)/g, min: 2 },
+    ],
   },
   {
     // 첨부 업로드도 승인된 활성 멤버만 가능하도록 requireActiveMember()로
@@ -2379,11 +2385,12 @@ const validatesAttachmentMetadataUpdate =
 // 에서 Turso 쿼리 계층 getProfileById(user.id)로 옮겼다. 조건식
 // (profile?.is_admin === true && ... === 'approved' && ... === true)
 // 리터럴은 그대로다.
+// 2026-11-09: 수작업 세 칸 대조 대신 공용 isApprovedActiveAdmin(profile)로 판정한다
+// (requireActiveMember가 돌려준 profile을 그대로 쓴다).
 const validatesAttachmentDeleteAdminStatus =
-  /getProfileById\(user\.id\)/.test(postAttachmentDetailSource) &&
-  /profile\?\.is_admin === true[\s\S]*?profile\.registration_status === ['"]approved['"][\s\S]*?profile\.is_active === true/.test(
+  /import \{[^}]*isApprovedActiveAdmin[^}]*\} from '@\/lib\/server\/authz'/.test(
     postAttachmentDetailSource
-  )
+  ) && /const isAdmin = isApprovedActiveAdmin\(profile\)/.test(postAttachmentDetailSource)
 // 첨부 삭제도 같은 이관을 거쳤다(getProjectStorageObjectPath → logicalPathFromUrl,
 // supabase .remove() → deletePublicObject). 봉쇄 대상은 그대로 `attachments`
 // 버킷의 `posts/<postId>` 하위다.

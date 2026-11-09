@@ -16,7 +16,7 @@ import { parseIntegerParam } from '@/utils/queryParams'
 import { revalidatePath } from 'next/cache'
 import { CATEGORIES, parseBoardCategory } from '@/constants/categories'
 import { TEXT_LIMITS, textLengthError } from '@/utils/textLimits'
-import { parseJsonObjectBody } from '@/utils/requestBody'
+import { LARGE_JSON_BODY_MAX_BYTES, parseJsonObjectBody } from '@/utils/requestBody'
 import { annotateImageDimensionsSafe } from '@/utils/imageDimensions'
 import { getBoardPostRevalidationPaths } from '@/lib/revalidationPaths'
 import { requireActiveMember, getOptionalUser } from '@/lib/server/memberAuth'
@@ -262,7 +262,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
     const isAdmin = profile?.is_admin === true
 
-    const body = await parseJsonObjectBody(request)
+    const body = await parseJsonObjectBody(request, { maxBytes: LARGE_JSON_BODY_MAX_BYTES })
     if (!body) {
       return ApiError.badRequest('유효한 JSON body가 필요합니다.').toNextResponse()
     }

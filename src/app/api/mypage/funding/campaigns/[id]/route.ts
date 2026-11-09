@@ -17,7 +17,7 @@ import { isApprovedActiveAdmin } from '@/lib/server/authz'
 import { editScope, type CampaignStatus } from '@/lib/funding/transitions'
 import { parseCampaignPatch } from '@/lib/funding/campaignInput'
 import { isFundingEnabled } from '@/lib/funding/settings'
-import { parseJsonObjectBody } from '@/utils/requestBody'
+import { LARGE_JSON_BODY_MAX_BYTES, parseJsonObjectBody } from '@/utils/requestBody'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 
 export const runtime = 'nodejs'
@@ -177,7 +177,7 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
   // 본문을 **먼저** 끝까지 읽는다. 상태를 읽고 편집 범위를 정한 뒤에 읽으면,
   // 본문이 도착하는 시점을 요청자가 쥐고 있으므로 그 사이에 제출·승인이 끼어들
   // 수 있다 — 그러면 낡은 범위로 검증하게 된다(전이 라우트와 같은 순서다).
-  const body = await parseJsonObjectBody(request)
+  const body = await parseJsonObjectBody(request, { maxBytes: LARGE_JSON_BODY_MAX_BYTES })
   if (!body) return ApiError.badRequest('유효한 JSON body가 필요합니다.').toNextResponse()
 
   const campaign = await getCampaignById(id)

@@ -318,6 +318,7 @@ export async function recomputeLiveAuctions(executor: Executor | typeof db, list
       currentPrice: sql`(SELECT max(amount) FROM market_bids WHERE ${live})`,
       currentBidderId: sql`(SELECT bidder_id FROM market_bids WHERE ${live} ORDER BY amount DESC, created_at ASC LIMIT 1)`,
       bidCount: sql`(SELECT count(*) FROM market_bids WHERE ${live})`,
+      updatedAt: sql`${marketAuctions.updatedAt}`,
     })
     .where(and(inArray(marketAuctions.listingId, listingIds), eq(marketAuctions.state, 'live')))
 }
