@@ -101,7 +101,7 @@
     "autoprefixer": "^10.0.1",
     "critters": "^0.0.23",
     "drizzle-kit": "^0.31.10",
-    "eslint": "^8",
+    "eslint": "^10",
     "eslint-config-next": "^15.5.28",
     "eslint-plugin-import": "^2.31.0",
     "eslint-plugin-jsx-a11y": "^6.10.2",
