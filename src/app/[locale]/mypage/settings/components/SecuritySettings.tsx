@@ -1,5 +1,6 @@
 'use client'
 
+import Switch from '@/components/common/Switch'
 import { useState } from 'react'
 import type { SettingWithDefault, SettingCategory } from '@/types/index'
 import { parseIntegerParam } from '@/utils/queryParams'
@@ -71,25 +72,17 @@ export default function SecuritySettings({ settings, onUpdate }: SecuritySetting
               <label className="text-sm font-medium text-gray-700">새 기기 로그인 알림</label>
               <p className="text-sm text-gray-500">새로운 기기에서 로그인할 때 알림을 받습니다</p>
             </div>
-            <button
-              type="button"
+            <Switch
+              checked={!!loginNotifications.notify_new_device}
+              label="새 기기 로그인 알림"
               disabled={updating === 'login_notifications'}
-              onClick={() =>
+              onCheckedChange={() =>
                 updateSettingValue('login_notifications', {
                   ...loginNotifications,
                   notify_new_device: !loginNotifications.notify_new_device,
                 })
               }
-              className={`${
-                loginNotifications.notify_new_device ? 'bg-primary-600' : 'bg-gray-200'
-              } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50`}
-            >
-              <span
-                className={`${
-                  loginNotifications.notify_new_device ? 'translate-x-5' : 'translate-x-0'
-                } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
-              />
-            </button>
+            />
           </div>
 
           <div className="flex items-center justify-between">
@@ -99,25 +92,17 @@ export default function SecuritySettings({ settings, onUpdate }: SecuritySetting
                 비정상적인 로그인 시도가 감지되면 알림을 받습니다
               </p>
             </div>
-            <button
-              type="button"
+            <Switch
+              checked={!!loginNotifications.notify_suspicious}
+              label="의심스러운 활동 알림"
               disabled={updating === 'login_notifications'}
-              onClick={() =>
+              onCheckedChange={() =>
                 updateSettingValue('login_notifications', {
                   ...loginNotifications,
                   notify_suspicious: !loginNotifications.notify_suspicious,
                 })
               }
-              className={`${
-                loginNotifications.notify_suspicious ? 'bg-primary-600' : 'bg-gray-200'
-              } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50`}
-            >
-              <span
-                className={`${
-                  loginNotifications.notify_suspicious ? 'translate-x-5' : 'translate-x-0'
-                } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
-              />
-            </button>
+            />
           </div>
         </div>
       </div>
@@ -133,25 +118,17 @@ export default function SecuritySettings({ settings, onUpdate }: SecuritySetting
                 계정 보안을 강화하기 위해 2단계 인증을 사용합니다
               </p>
             </div>
-            <button
-              type="button"
+            <Switch
+              checked={!!twoFactor.enabled}
+              label="2단계 인증 사용"
               disabled={updating === 'two_factor'}
-              onClick={() =>
+              onCheckedChange={() =>
                 updateSettingValue('two_factor', {
                   ...twoFactor,
                   enabled: !twoFactor.enabled,
                 })
               }
-              className={`${
-                twoFactor.enabled ? 'bg-primary-600' : 'bg-gray-200'
-              } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50`}
-            >
-              <span
-                className={`${
-                  twoFactor.enabled ? 'translate-x-5' : 'translate-x-0'
-                } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
-              />
-            </button>
+            />
           </div>
 
           {twoFactor.enabled && (

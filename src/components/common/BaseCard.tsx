@@ -178,7 +178,18 @@ const BaseCard = memo(function BaseCard({
 
   if (onClick) {
     return (
-      <div onClick={onClick} className="block">
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => onClick()}
+        onKeyDown={e => {
+          if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault()
+            onClick()
+          }
+        }}
+        className="block cursor-pointer"
+      >
         {cardContent}
       </div>
     )

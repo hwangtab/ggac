@@ -291,11 +291,11 @@ export interface HoldPledgeInput {
 
 /** 락 경합만 재시도한다. 매진과 상한은 다시 해도 같다. */
 export async function holdPledge(input: HoldPledgeInput): Promise<Row> {
-  return retryOnLockContention(
-    () => holdPledgeOnce(input),
-    error => error instanceof RewardSoldOutError || error instanceof TooManyPendingHoldsError,
-    MONEY_PATH_RETRY_BUDGET
-  )
+  return retryOnLockContention(() => holdPledgeOnce(input), {
+    budget: MONEY_PATH_RETRY_BUDGET,
+    isFinal: error =>
+      error instanceof RewardSoldOutError || error instanceof TooManyPendingHoldsError,
+  })
 }
 
 async function holdPledgeOnce(input: HoldPledgeInput): Promise<Row> {
@@ -458,11 +458,10 @@ export const JUST_PAID_KEY = 'just_paid'
  * (`PledgeStockUnavailableError`)은 다시 해도 같으므로 그대로 올린다.
  */
 export async function finalizePledgePayment(input: FinalizePledgeInput): Promise<Row | null> {
-  return retryOnLockContention(
-    () => finalizePledgePaymentOnce(input),
-    error => error instanceof PledgeStockUnavailableError,
-    MONEY_PATH_RETRY_BUDGET
-  )
+  return retryOnLockContention(() => finalizePledgePaymentOnce(input), {
+    budget: MONEY_PATH_RETRY_BUDGET,
+    isFinal: error => error instanceof PledgeStockUnavailableError,
+  })
 }
 
 async function finalizePledgePaymentOnce(input: FinalizePledgeInput): Promise<Row | null> {
@@ -576,11 +575,9 @@ export async function claimPledgeForCancel(
   pledgeId: string,
   options: { requireFulfillmentNone?: boolean }
 ): Promise<Row | null> {
-  return retryOnLockContention(
-    () => claimPledgeForCancelOnce(pledgeId, options),
-    () => false,
-    MONEY_PATH_RETRY_BUDGET
-  )
+  return retryOnLockContention(() => claimPledgeForCancelOnce(pledgeId, options), {
+    budget: MONEY_PATH_RETRY_BUDGET,
+  })
 }
 
 async function claimPledgeForCancelOnce(
@@ -608,11 +605,9 @@ async function claimPledgeForCancelOnce(
 export async function revertPledgeCancel(pledgeId: string): Promise<void> {
   // 토스가 환불을 거절한 뒤 되돌리는 자리다 — 여기서 경합에 지면 결제는
   // 살아 있는데 후원만 `canceled`로 남는다. 돈이 걸린 예산으로 버틴다.
-  await retryOnLockContention(
-    () => revertPledgeCancelOnce(pledgeId),
-    () => false,
-    MONEY_PATH_RETRY_BUDGET
-  )
+  await retryOnLockContention(() => revertPledgeCancelOnce(pledgeId), {
+    budget: MONEY_PATH_RETRY_BUDGET,
+  })
 }
 
 async function revertPledgeCancelOnce(pledgeId: string): Promise<void> {
@@ -650,11 +645,10 @@ export async function finalizePledgeRefund(input: {
   canceledAmount: number
   raw: unknown
 }): Promise<Row | null> {
-  return retryOnLockContention(
-    () => finalizePledgeRefundOnce(input),
-    error => error instanceof PartialRefundUnsupportedError,
-    MONEY_PATH_RETRY_BUDGET
-  )
+  return retryOnLockContention(() => finalizePledgeRefundOnce(input), {
+    budget: MONEY_PATH_RETRY_BUDGET,
+    isFinal: error => error instanceof PartialRefundUnsupportedError,
+  })
 }
 
 async function finalizePledgeRefundOnce(input: {
@@ -724,11 +718,9 @@ export async function cancelPendingPledge(
   pledgeId: string,
   expectedOrderId: string
 ): Promise<Row | null> {
-  return retryOnLockContention(
-    () => cancelPendingPledgeOnce(pledgeId, expectedOrderId),
-    () => false,
-    MONEY_PATH_RETRY_BUDGET
-  )
+  return retryOnLockContention(() => cancelPendingPledgeOnce(pledgeId, expectedOrderId), {
+    budget: MONEY_PATH_RETRY_BUDGET,
+  })
 }
 
 async function cancelPendingPledgeOnce(
@@ -769,11 +761,9 @@ export async function cancelPendingPledgeForRelease(
   pledgeId: string,
   expectedOrderId: string
 ): Promise<{ ok: true; pledge: Row } | { ok: false; reason: 'gone' | 'in_flight' }> {
-  return retryOnLockContention(
-    () => cancelPendingPledgeForReleaseOnce(pledgeId, expectedOrderId),
-    () => false,
-    MONEY_PATH_RETRY_BUDGET
-  )
+  return retryOnLockContention(() => cancelPendingPledgeForReleaseOnce(pledgeId, expectedOrderId), {
+    budget: MONEY_PATH_RETRY_BUDGET,
+  })
 }
 
 async function cancelPendingPledgeForReleaseOnce(

@@ -1,3 +1,4 @@
+import { ApiError } from '@/utils/apiWrapper'
 import { NextResponse } from 'next/server'
 import { getSessionContext, isApprovedActiveAdmin } from '@/lib/server/authz'
 import { getProfileById } from '@/db/queries/profiles'
@@ -27,15 +28,15 @@ export async function requireAdmin(): Promise<AdminAuthSuccess | NextResponse> {
   const session = await getSessionContext()
 
   if (!session.authenticated || !session.user) {
-    return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+    return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
   }
 
   if (session.profileError || !session.profile) {
-    return NextResponse.json({ error: '프로필 정보를 조회할 수 없습니다.' }, { status: 500 })
+    return ApiError.internalServerError('프로필 정보를 조회할 수 없습니다.').toNextResponse()
   }
 
   if (!isApprovedActiveAdmin(session.profile)) {
-    return NextResponse.json({ error: '관리자 권한이 필요합니다.' }, { status: 403 })
+    return ApiError.forbidden('관리자 권한이 필요합니다.').toNextResponse()
   }
 
   return { user: { id: session.user.id } }

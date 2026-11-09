@@ -454,30 +454,6 @@ function formatOpsAlertMessage(
   ].join('\n')
 }
 
-/**
- * Content Security Policy 정책 생성
- * 동적 CSP 헤더 생성을 위한 헬퍼
- */
-export const generateCSPPolicy = (): string => {
-  const policies = [
-    "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://vercel.live https://va.vercel-scripts.com",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "img-src 'self' data: https: blob:",
-    "font-src 'self' https://fonts.gstatic.com",
-    // https://vercel.com — 이사회 업무툴 첨부의 브라우저 직접 업로드(@vercel/blob/client). 미들웨어·next.config와 같이 둔다
-    "connect-src 'self' https://vercel.live https://vercel.com",
-    "media-src 'self' https:",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    "frame-ancestors 'none'",
-    'upgrade-insecure-requests',
-  ]
-
-  return policies.join('; ')
-}
-
 // 보안 상수
 export const SECURITY_CONSTANTS = {
   MAX_INPUT_LENGTH: 10000,

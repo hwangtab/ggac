@@ -267,14 +267,14 @@ test('업로드 토큰: 본인 행·같은 키·지금 멤버일 때만, 그 형
   )
 })
 
-test('CSP: 브라우저 직접 업로드 호스트(https://vercel.com)가 connect-src 세 곳에 모두 있다', () => {
-  for (const file of ['next.config.js', 'src/middleware/csp.ts', 'src/utils/security.ts']) {
-    const lines = readFileSync(file, 'utf8')
-      .split('\n')
-      .filter(l => /["']connect-src /.test(l))
-    assert.ok(lines.length > 0, `${file}: connect-src 를 찾지 못했다`)
-    for (const line of lines)
-      assert.match(line, /https:\/\/vercel\.com["'\s]/, `${file}: ${line.trim()}`)
+test('CSP: 브라우저 직접 업로드 호스트(https://vercel.com)가 prod·dev connect-src 에 있다', async () => {
+  const { createRequire } = await import('node:module')
+  const { buildCsp } = createRequire(import.meta.url)('../../src/config/cspPolicy.js')
+  for (const dev of [false, true]) {
+    const line = buildCsp({ dev })
+      .split('; ')
+      .find(d => d.startsWith('connect-src '))
+    assert.match(line, /https:\/\/vercel\.com(\s|$)/)
   }
 })
 

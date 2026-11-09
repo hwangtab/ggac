@@ -11,6 +11,8 @@
 import { sql, type SQL } from 'drizzle-orm'
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
 
+import { rawClient } from '../client.ts'
+
 /** Drizzle의 camelCase 행 → API 응답용 snake_case 객체. 얕은 변환이다. */
 export function toSnakeCase<T extends Record<string, unknown>>(row: T): Record<string, unknown> {
   const out: Record<string, unknown> = {}
@@ -104,6 +106,11 @@ export interface RetryBudget {
   baseDelayMs: number
   /** 한 번의 대기 상한(ms). */
   maxDelayMs: number
+  /**
+   * 대기 곡선. 기본 `'exponential'`(두 배씩, 뒤 절반 지터). `'linear'`는
+   * `baseDelayMs * (n+1)`에 `baseDelayMs`까지의 지터를 더한다(`maxDelayMs`로 자른다).
+   */
+  backoff?: 'exponential' | 'linear'
 }
 
 /**
@@ -135,6 +142,62 @@ export const MONEY_PATH_RETRY_BUDGET: RetryBudget = {
 }
 
 /**
+ * 호출자별 예산 대응표(옛 구현의 시도 횟수·대기를 그대로 옮겼다).
+ *
+ * - `DEFAULT_RETRY_BUDGET`: 4회, 25/50/75ms 지수(기존 `retryOnLockContention` 기본값).
+ * - `MONEY_PATH_RETRY_BUDGET`: 8회, 최악 2.7초(fundingPledges·payments).
+ * - `TICKETING_RETRY_BUDGET`: 4회, 선형 25ms 단위(기존 `holdReservation`).
+ * - `AUCTION_RETRY_BUDGET`: 5회, 선형 25ms 단위(기존 `withContentionRetry`).
+ * - `WRITE_RETRY_BUDGET`: 6회, 선형 25ms 단위 + 지터(기존 `withWriteRetry`, 타임뱅크).
+ */
+export const TICKETING_RETRY_BUDGET: RetryBudget = {
+  attempts: 4,
+  baseDelayMs: 25,
+  maxDelayMs: 100,
+  backoff: 'linear',
+}
+export const AUCTION_RETRY_BUDGET: RetryBudget = {
+  attempts: 5,
+  baseDelayMs: 25,
+  maxDelayMs: 125,
+  backoff: 'linear',
+}
+export const WRITE_RETRY_BUDGET: RetryBudget = {
+  attempts: 6,
+  baseDelayMs: 25,
+  maxDelayMs: 150,
+  backoff: 'linear',
+}
+
+/**
+ * 로컬 `file:` DB의 함정(실측 2026-11-02, @libsql/client 0.17). `BEGIN
+ * IMMEDIATE`가 `SQLITE_BUSY`로 실패하면 드라이버가 그 문장을 리셋하지 않은 채
+ * 그 연결을 클라이언트의 기본 연결로 계속 쓴다. 그 연결로 연 다음 트랜잭션은
+ * `cannot commit transaction - SQL statements in progress`로 끝나고, 그 뒤로는
+ * 잠금이 풀리지 않아 **모든 쓰기가 영영 `SQLITE_BUSY`**가 된다. 그래서 경합을
+ * 만나면 다시 하기 전에 기본 연결을 새로 연다(`reconnect`). 트랜잭션은 자기
+ * 연결을 따로 쥐고 있으므로 진행 중인 다른 트랜잭션에는 영향이 없다. 원격
+ * Turso(`libsql://`)는 이 문제가 없어 건드리지 않는다. 새로 열지 못해도 삼킨다 —
+ * 다음 시도가 제 이유로 실패한다.
+ */
+export async function healLocalConnection(): Promise<void> {
+  try {
+    if (rawClient.protocol === 'file') await rawClient.reconnect()
+  } catch {
+    // 삼킨다.
+  }
+}
+
+export interface RetryOptions {
+  /** 기본 `DEFAULT_RETRY_BUDGET`. */
+  budget?: RetryBudget
+  /** 참이면 경합처럼 보여도 곧바로 던진다(다시 해도 같은 답인 판정). */
+  isFinal?: (error: unknown) => boolean
+  /** 경합 뒤 재시도 전에 부르는 복구 훅. 기본 `healLocalConnection`(시험용 주입). */
+  heal?: () => Promise<void>
+}
+
+/**
  * 락 경합만 다시 해 본다. 대기는 시도마다 두 배로 늘리고 절반은 흔든다.
  *
  * **흔드는 이유**: 같은 잠금에서 진 둘이 같은 간격으로 물러나면 다음 시도도
@@ -148,9 +211,13 @@ export const MONEY_PATH_RETRY_BUDGET: RetryBudget = {
  */
 export async function retryOnLockContention<T>(
   run: () => Promise<T>,
-  isFinal: (error: unknown) => boolean = () => false,
-  budget: RetryBudget = DEFAULT_RETRY_BUDGET
+  options: RetryOptions = {}
 ): Promise<T> {
+  const {
+    budget = DEFAULT_RETRY_BUDGET,
+    isFinal = () => false,
+    heal = healLocalConnection,
+  } = options
   let lastError: unknown
   const attempts = Math.max(1, budget.attempts)
   for (let attempt = 0; attempt < attempts; attempt++) {
@@ -160,8 +227,19 @@ export async function retryOnLockContention<T>(
       if (isFinal(error)) throw error
       if (!isLockContention(error)) throw error
       lastError = error
-      const cap = Math.min(budget.maxDelayMs, budget.baseDelayMs * 2 ** attempt)
-      const delay = cap / 2 + Math.random() * (cap / 2)
+      // 로컬 file: DB는 기본 연결을 새로 열지 않으면 이후 쓰기가 영영 BUSY다(위 함수).
+      await heal()
+      if (attempt === attempts - 1) break
+      let delay: number
+      if (budget.backoff === 'linear') {
+        delay = Math.min(
+          budget.maxDelayMs,
+          budget.baseDelayMs * (attempt + 1) + Math.random() * budget.baseDelayMs
+        )
+      } else {
+        const cap = Math.min(budget.maxDelayMs, budget.baseDelayMs * 2 ** attempt)
+        delay = cap / 2 + Math.random() * (cap / 2)
+      }
       await new Promise(resolve => setTimeout(resolve, delay))
     }
   }

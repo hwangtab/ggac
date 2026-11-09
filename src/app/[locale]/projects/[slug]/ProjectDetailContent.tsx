@@ -355,7 +355,23 @@ export default function ProjectDetailContent({
                     <div
                       key={index}
                       className="aspect-square rounded-2xl overflow-hidden shadow-lg cursor-pointer group relative bg-gray-100"
+                      role="button"
+                      tabIndex={0}
+                      aria-label={t('detail.galleryImageAlt', {
+                        title: project.title,
+                        index: index + 1,
+                      })}
+                      aria-disabled={galleryLoadingStates[index] !== false}
                       onClick={() => galleryLoadingStates[index] === false && openLightbox(index)}
+                      onKeyDown={e => {
+                        if (
+                          (e.key === 'Enter' || e.key === ' ') &&
+                          galleryLoadingStates[index] === false
+                        ) {
+                          e.preventDefault()
+                          openLightbox(index)
+                        }
+                      }}
                       style={{ minHeight: '300px' }} // 레이아웃 안정성을 위한 최소 높이
                     >
                       {/* 개별 이미지 스켈레톤 - 한 번만 표시 */}

@@ -21,7 +21,7 @@ import {
 } from '../../constants/market.ts'
 import type { MarketListingFields } from './market.ts'
 
-import { isLockContention, toIso } from './_helpers.ts'
+import { AUCTION_RETRY_BUDGET, retryOnLockContention, toIso } from './_helpers.ts'
 
 type Executor = Parameters<Parameters<typeof db.transaction>[0]>[0]
 
@@ -32,18 +32,8 @@ const DAY_MS = 24 * 60 * 60 * 1000
  * 않으므로 재시도가 안전하다(`ticketing.ts`의 `holdReservation`과 같은 방식).
  * 입찰과 "보는 순간 닫기"·크론 닫기가 같은 행에 몰릴 수 있어 쓰기 전부에 건다.
  */
-async function withContentionRetry<T>(run: () => Promise<T>): Promise<T> {
-  let lastError: unknown
-  for (let attempt = 0; attempt < 5; attempt++) {
-    try {
-      return await run()
-    } catch (error) {
-      if (!isLockContention(error)) throw error
-      lastError = error
-      await new Promise(resolve => setTimeout(resolve, 25 * (attempt + 1)))
-    }
-  }
-  throw lastError
+function withContentionRetry<T>(run: () => Promise<T>): Promise<T> {
+  return retryOnLockContention(run, { budget: AUCTION_RETRY_BUDGET })
 }
 
 export interface AuctionRow {

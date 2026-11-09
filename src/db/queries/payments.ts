@@ -26,7 +26,7 @@ import { MONEY_PATH_RETRY_BUDGET, retryOnLockContention, toIso, toSnakeCase } fr
  * (같은 조건이 두 번째에는 0행이 될 뿐이다).
  */
 function onLedger<T>(run: () => Promise<T>): Promise<T> {
-  return retryOnLockContention(run, () => false, MONEY_PATH_RETRY_BUDGET)
+  return retryOnLockContention(run, { budget: MONEY_PATH_RETRY_BUDGET })
 }
 
 export type PaymentKind = 'dues' | 'ticket' | 'funding'

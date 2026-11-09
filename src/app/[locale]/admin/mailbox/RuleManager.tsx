@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useDialogA11y } from '@/hooks/useDialogA11y'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { FiX } from 'react-icons/fi'
 
 import {
@@ -142,6 +143,17 @@ export default function RuleManager({
 
   const needsPublicConfirm = preview?.public_domain === true
 
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const busyRef = useRef(busy)
+  busyRef.current = busy
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+  const handleEscape = useCallback(() => {
+    if (!busyRef.current) onCloseRef.current()
+  }, [])
+  useDialogA11y({ containerRef: dialogRef, onClose: handleEscape })
+  const titleId = useId()
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
@@ -150,12 +162,16 @@ export default function RuleManager({
       }}
     >
       <div
+        ref={dialogRef}
         role="dialog"
-        aria-label="발신자 규칙"
+        aria-modal="true"
+        aria-labelledby={titleId}
         className="bg-white rounded-xl shadow-xl w-full max-w-xl max-h-[90vh] overflow-y-auto"
       >
         <div className="flex items-center justify-between p-5 border-b border-gray-200">
-          <h2 className="text-base font-semibold text-gray-900">발신자 규칙</h2>
+          <h2 id={titleId} className="text-base font-semibold text-gray-900">
+            발신자 규칙
+          </h2>
           <button
             onClick={onClose}
             disabled={busy}

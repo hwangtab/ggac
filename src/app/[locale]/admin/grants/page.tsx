@@ -1,6 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useDialogA11y } from '@/hooks/useDialogA11y'
 import AdminLayout from '../components/AdminLayout'
 import { CAP } from '@/lib/server/grantDigest'
 import { countGenreUnclassified, filterByDefaultInterests } from '@/lib/server/interestMatch'
@@ -260,6 +261,13 @@ export default function AdminGrantsPage() {
     }
   }
 
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const closeDialogRef = useRef(closeModal)
+  closeDialogRef.current = closeModal
+  const handleEscape = useCallback(() => closeDialogRef.current(), [])
+  useDialogA11y({ containerRef: dialogRef, onClose: handleEscape, isOpen: Boolean(selected) })
+  const dialogTitleId = useId()
+
   return (
     <AdminLayout
       title="지원사업"
@@ -315,9 +323,15 @@ export default function AdminGrantsPage() {
 
       {selected && (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-6">
-          <div className="w-full max-w-3xl rounded-lg bg-white p-6">
+          <div
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={dialogTitleId}
+            className="w-full max-w-3xl rounded-lg bg-white p-6"
+          >
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold">
+              <h2 id={dialogTitleId} className="text-lg font-bold">
                 {selected.week_key} · 공고 {selected.items.filter(i => !i.excluded).length}건
                 <span className="ml-2 text-sm font-normal text-gray-500">
                   (신규 {newnessCounts(selected.items).fresh} · 계속 접수 중{' '}

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 
 /**
  * 결제창이 열리려면 CSP가 토스 도메인을 허용해야 한다.
@@ -9,13 +9,17 @@ import { readFileSync } from 'node:fs'
  * 테스트도 깨지지 않는다. 그리고 그 사고는 **결제창이 안 뜬다**는 형태로만
  * 드러나서 원인을 찾는 데 오래 걸린다.
  *
- * CSP는 두 곳에 있다 — 정적 헤더(`next.config.js`)와 미들웨어(`src/middleware/csp.ts`).
- * 한쪽만 고치면 경로에 따라 결제창이 뜨다 말다 한다. 그래서 둘 다 검사한다.
+ * CSP 정본은 `src/config/cspPolicy.js`다.
  */
 
+// 정본은 src/config/cspPolicy.js 하나다 — next.config.js·미들웨어가 둘 다 이 함수를 쓴다
+// (같은 문자열인지는 cspPolicy.test.mjs가 검사한다). dev/prod 두 문자열을 모두 본다.
+const require = createRequire(import.meta.url)
+const { buildCsp } = require('../../src/config/cspPolicy.js')
+const toLines = csp => csp.split('; ').join('\n')
 const SOURCES = [
-  ['next.config.js', readFileSync('next.config.js', 'utf8')],
-  ['src/middleware/csp.ts', readFileSync('src/middleware/csp.ts', 'utf8')],
+  ['buildCsp(prod)', toLines(buildCsp({ dev: false }))],
+  ['buildCsp(dev)', toLines(buildCsp({ dev: true }))],
 ]
 
 /** 지시문 한 줄을 찾아 돌려준다. dev/prod 분기가 있으면 여러 줄이 잡힌다. */

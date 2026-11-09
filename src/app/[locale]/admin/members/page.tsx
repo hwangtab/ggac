@@ -843,9 +843,11 @@ export default function MembersPage() {
               {/* 대량 작업 버튼 */}
               <button
                 onClick={() => setShowBulkActions(!showBulkActions)}
+                aria-label="대량 작업"
+                aria-expanded={showBulkActions}
                 className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:opacity-50"
               >
-                <FiPackage className="w-4 h-4" />
+                <FiPackage className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
           </div>
@@ -915,9 +917,10 @@ export default function MembersPage() {
               <h3 className="text-lg font-semibold text-gray-900">대량 작업</h3>
               <button
                 onClick={() => setShowBulkActions(false)}
+                aria-label="대량 작업 닫기"
                 className="text-gray-400 hover:text-gray-600"
               >
-                <FiX className="w-5 h-5" />
+                <FiX className="w-5 h-5" aria-hidden="true" />
               </button>
             </div>
 
