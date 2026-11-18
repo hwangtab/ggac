@@ -119,7 +119,9 @@ jobs:
           NEXT_PUBLIC_BLOB_PUBLIC_BASE_URL: https://ci-placeholder.public.blob.vercel-storage.com
 
   smoke-test:
-    runs-on: ubuntu-latest
+    # ubuntu-latest가 ubuntu-26.04로 올라가며 Playwright 1.59가 chromium을 설치하지 못한다
+    # (`Playwright does not support chromium on ubuntu26.04-x64`). 지원되는 LTS로 고정한다.
+    runs-on: ubuntu-24.04
     name: Playwright Smoke Test
     needs: build
 
@@ -153,7 +155,8 @@ jobs:
           retention-days: 14
 
   authz-e2e:
-    runs-on: ubuntu-latest
+    # 위와 같은 이유로 러너를 LTS로 고정한다.
+    runs-on: ubuntu-24.04
     name: Authorization E2E
     needs: quality
     # 권한 경계는 이 앱에서 가장 중요한 계약이다(조합원 문서·회비·이사회 서류·메일함). 그런데

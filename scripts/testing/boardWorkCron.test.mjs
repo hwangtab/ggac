@@ -19,6 +19,7 @@ const {
   OPS_CRON_PATHS,
   BOARD_WORK_CRON_PREFIX,
   WATCHDOG_JOB,
+  WATCHDOG_SELF_CHECK_MINUTES,
   findCronProblems,
   intervalMinutesOf,
 } = await import('../../src/work/lib/ops/cron-schedule.ts')
@@ -148,7 +149,7 @@ test('크론 감시: 멈춤(running 방치)·지연(주기 2배)·마지막 실�
         last_succeeded_at: ago(1560),
         last_status: 'failed',
       },
-      // 감시자 자신도 표에 있다(자기가 오래 못 돌았으면 다시 살아난 첫 실행에서 자기를 알린다)
+      // 감시자 자신도 기본 표에는 있다 — 자기 정지는 외부 cron-health 가 이 표로 판정한다(감시자 자체 점검은 아래 테스트)
       {
         job: WATCHDOG_JOB,
         last_started_at: ago(1),
@@ -167,6 +168,35 @@ test('크론 감시: 멈춤(running 방치)·지연(주기 2배)·마지막 실�
       [WATCHDOG_JOB, 'stale'],
     ]
   )
+})
+
+test('크론 감시: 감시자 자체 점검 표에서는 자기 자신이 빠진다(한 사이클 놓침 오탐 방지)', () => {
+  const now = new Date('2026-11-04T03:00:00Z')
+  const ago = m => new Date(now.getTime() - m * 60_000).toISOString()
+  const rows = [
+    // 정상 크론 하나 — 문제 없음
+    {
+      job: 'mention-digest',
+      last_started_at: ago(5),
+      last_succeeded_at: ago(5),
+      last_status: 'ok',
+    },
+    // 감시자 자신이 120분 넘게 못 돌았다 — 자체 점검에서는 무시해야 한다
+    { job: WATCHDOG_JOB, last_started_at: ago(1), last_succeeded_at: ago(9999), last_status: 'ok' },
+  ]
+  // 자체 점검 표에는 감시자가 아예 없다
+  assert.equal(WATCHDOG_SELF_CHECK_MINUTES[WATCHDOG_JOB], undefined)
+  assert.deepEqual(findCronProblems(rows, now, WATCHDOG_SELF_CHECK_MINUTES), [])
+  // 기본 표(cron-health)로는 감시자 자신도 'stale'로 잡힌다 — 감시자 정지의 마지막 그물
+  assert.deepEqual(
+    findCronProblems(rows, now).map(p => [p.job, p.kind]),
+    [[WATCHDOG_JOB, 'stale']]
+  )
+})
+
+test('크론 감시: 감시자 라우트가 자체 점검 표로 실행한다(자기 자신 제외)', () => {
+  const src = readFileSync('src/work/lib/ops/cron-alert.ts', 'utf8')
+  assert.match(src, /findCronProblems\([\s\S]*?WATCHDOG_SELF_CHECK_MINUTES\)/)
 })
 
 test('크론 감시: 업무툴 밖 크론(문서함 보존·지원사업 발행·회비)도 같은 표로 본다', () => {

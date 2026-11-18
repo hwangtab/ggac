@@ -4,7 +4,7 @@ import { alertOpsAdmins, type OpsAlertInput } from '@/lib/server/opsAlert'
 import { createLogger } from '@/utils/logger'
 import { logSecurityEvent } from '@/utils/security'
 import { isCronAuthorized, isCronSecretConfigured } from './cron-auth'
-import { findCronProblems, type CronProblem } from './cron-schedule'
+import { findCronProblems, WATCHDOG_SELF_CHECK_MINUTES, type CronProblem } from './cron-schedule'
 
 const log = createLogger('board-work/cron')
 
@@ -98,14 +98,13 @@ function alertFailure(job: string, status: number): void {
 /**
  * 다른 크론이 안 돌거나·끊겼거나·마지막 실행이 실패했는지 본다. 알린 건수.
  *
- * 자기를 포함한 **전체 표**로 판정한다 — 시작 기록(`markCronStarted`)은 `last_succeeded_at`을 건드리지 않으므로,
- * 감시자가 오래 못 돌았다면 자기 행이 그대로 '지연'으로 잡힌다. 즉 감시자가 죽었다가 다시 살아나면 첫 실행에서
- * "내가 2시간 넘게 안 돌았다"를 스스로 알린다. 아예 다시 살아나지 않는 경우는 외부 점검
- * (`/api/internal/ops/cron-health`)이 맡는다.
+ * **감시자 자신은 제외한다**(`WATCHDOG_SELF_CHECK_MINUTES`). 자기 행까지 보면 한 사이클(60분)만 놓쳐도 "내가
+ * 120분째 성공하지 않았다"는 오탐이 나고, 그 경보를 보낸 주체가 자기 자신이라 문구도 어긋난다. 감시자가 멈춘
+ * 경우는 자기가 알 수 없으므로, 외부 점검(`/api/internal/ops/cron-health`)이 감시자 행까지 포함해 잡는다.
  */
 export async function runCronWatchdog(now: Date = new Date()): Promise<number> {
   try {
-    const problems = findCronProblems(await listCronRuns(), now)
+    const problems = findCronProblems(await listCronRuns(), now, WATCHDOG_SELF_CHECK_MINUTES)
     for (const p of problems) {
       log.error(
         p.kind === 'stuck'
