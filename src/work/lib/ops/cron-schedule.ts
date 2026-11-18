@@ -72,6 +72,16 @@ export const OPS_CRON_PATHS: Readonly<Record<string, string>> = {
  * 자기 행까지 포함해 판정하는 것으로 메운다.
  */
 export const WATCHDOG_JOB = 'cron-watchdog'
+/**
+ * 감시자가 **자기 자체 점검**에 쓰는 표 — 자기 자신(`WATCHDOG_JOB`)은 빠진다.
+ *
+ * 감시자가 자기 행까지 보면, 한 사이클(60분)만 놓쳐도 "내가 120분째 성공하지 않았다"는 오탐이 나고 — 정작 그
+ * 경보를 보낸 주체가 자기 자신이라 문구도 어긋난다. 감시자 자신이 멈춘 경우는 자기가 알 수 없으므로, 그 구멍은
+ * `/api/internal/ops/cron-health`(외부 스케줄이 부른다)가 기본 표(`ALL_CRON_EXPECTED_MINUTES`, 감시자 포함)로 잡는다.
+ */
+export const WATCHDOG_SELF_CHECK_MINUTES: Readonly<Record<string, number>> = Object.fromEntries(
+  Object.entries(ALL_CRON_EXPECTED_MINUTES).filter(([job]) => job !== WATCHDOG_JOB)
+)
 /** 마지막 성공이 기대 주기의 이 배수를 넘으면 "안 돈다" */
 export const STALE_FACTOR = 2
 /** 'running' 으로 남은 채 이 시간(분)이 지나면 시간 초과로 강제 종료된 것으로 본다(크론 maxDuration 최대 300초 + 여유) */
