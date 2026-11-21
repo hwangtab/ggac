@@ -62,6 +62,8 @@
     "companyName": "Company",
     "representative": "Representative",
     "businessNumber": "Business Reg. No.",
+    "mailOrder": "Mail-order sales registration",
+    "marketNotice": "Funding and the marketplace are brokered — the cooperative is not a party to the transaction.",
     "rights": "All rights reserved."
   },
   "locale": {
