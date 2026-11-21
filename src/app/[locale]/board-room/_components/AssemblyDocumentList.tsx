@@ -30,6 +30,8 @@ interface Props {
 export function inferDocType(title: string): AssemblyDocType {
   const keywords: Array<[AssemblyDocType, RegExp]> = [
     ['자료집', /자료집|안건집|총회\s*자료/],
+    ['신구조문 대비표', /대비표|신구조문|개정\s*전후|조문\s*대비/],
+    ['위임장', /위임장|위임\s*동의|대리\s*출석/],
     ['회의록', /회의록|의사록/],
     ['감사보고서', /감사/],
     ['결산서', /결산|재무제표|손익/],
@@ -99,6 +101,8 @@ const EXT_STYLE: Record<string, string> = {
 
 const TYPE_STYLE: Record<AssemblyDocType, string> = {
   자료집: 'bg-indigo-50 text-indigo-700',
+  '신구조문 대비표': 'bg-sky-50 text-sky-700',
+  위임장: 'bg-rose-50 text-rose-700',
   회의록: 'bg-violet-50 text-violet-700',
   감사보고서: 'bg-amber-50 text-amber-800',
   결산서: 'bg-emerald-50 text-emerald-700',
@@ -174,7 +178,7 @@ export default function AssemblyDocumentList({
             >
               <div className="flex items-baseline gap-3">
                 <h2 id={headingId} className="text-lg font-bold text-gray-900">
-                  {g.year}년 정기총회
+                  {g.year}년 총회
                 </h2>
                 <span className="text-sm text-gray-500">
                   {g.ordinal != null && `제${g.ordinal}차 · `}자료 {g.docs.length}건

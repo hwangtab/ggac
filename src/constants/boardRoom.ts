@@ -60,6 +60,8 @@ export function canSetDocumentVisibility(
 // 제목 키워드로 되짚어 배지를 단다. 순서가 목록 안 정렬 순서다.
 export const ASSEMBLY_DOC_TYPES = [
   '자료집',
+  '신구조문 대비표',
+  '위임장',
   '회의록',
   '감사보고서',
   '결산서',

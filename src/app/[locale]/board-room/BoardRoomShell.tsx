@@ -34,7 +34,7 @@ import { BoardWorkBadgesProvider, useBoardWorkBadges } from '@/components/boardW
 const MEMBER_NAV_ITEMS = [
   { href: '/board-room/charter', label: '정관' },
   { href: '/board-room/documents', label: '조합 서류' },
-  { href: '/board-room/assembly', label: '정기총회' },
+  { href: '/board-room/assembly', label: '총회' },
   { href: '/board-room/meetings', label: '이사회 회의록' },
 ] as const
 

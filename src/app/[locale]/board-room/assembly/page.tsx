@@ -77,9 +77,9 @@ export default function AssemblyPage() {
     <div className="mx-auto max-w-4xl pb-16">
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="mb-2 text-2xl font-bold text-gray-900 md:text-3xl">정기총회</h1>
+          <h1 className="mb-2 text-2xl font-bold text-gray-900 md:text-3xl">총회</h1>
           <p className="text-sm text-gray-500">
-            연도별 총회 자료집·회의록·감사보고서·결산서를 한곳에 모아 둡니다.
+            정기·임시 총회의 자료집·회의록·감사보고서·결산서를 한곳에 모아 둡니다.
           </p>
         </div>
         {isAdmin && (
