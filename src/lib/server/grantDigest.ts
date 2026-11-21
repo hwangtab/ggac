@@ -95,6 +95,24 @@ export function weekKey(now: Date = new Date()): string {
 }
 
 /**
+ * `'2026-W45'` → `'11/2~11/8'`. 회차 키는 운영자 용어라 조합원에게는 날짜 범위로 보여 준다.
+ * 월요일~일요일이다. 형식이 맞지 않으면 키를 그대로 돌려준다.
+ */
+export function weekRangeLabel(key: string): string {
+  const m = /^(\d{4})-W(\d{2})$/.exec(key)
+  if (!m) return key
+  const year = Number(m[1])
+  const week = Number(m[2])
+  // ISO: 1월 4일이 속한 주가 1주차다.
+  const jan4 = new Date(Date.UTC(year, 0, 4))
+  const jan4Day = jan4.getUTCDay() === 0 ? 7 : jan4.getUTCDay()
+  const monday = new Date(jan4.getTime() + ((week - 1) * 7 - (jan4Day - 1)) * 86_400_000)
+  const sunday = new Date(monday.getTime() + 6 * 86_400_000)
+  const fmt = (d: Date) => `${d.getUTCMonth() + 1}/${d.getUTCDate()}`
+  return `${fmt(monday)}~${fmt(sunday)}`
+}
+
+/**
  * 장르별 블록을 한 건씩 번갈아 뽑아 하나의 배열로 섞는다. **순수 함수** — `grantFetch.ts`가
  * 만든 `GenreBlock[]`을 `buildDraftItems`에 넘기기 전에 쓴다.
  *
