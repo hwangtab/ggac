@@ -1019,3 +1019,10 @@ test('autoPublishBlockers: 제외만 남은 빈 회차와 마감 지난 공고�
     []
   )
 })
+
+test('weekRangeLabel은 회차 키를 월~일 날짜 범위로 바꾼다', async () => {
+  const { weekRangeLabel } = await import('../../src/lib/server/grantDigest.ts')
+  assert.equal(weekRangeLabel('2026-W45'), '11/2~11/8')
+  assert.equal(weekRangeLabel('2026-W01'), '12/29~1/4')
+  assert.equal(weekRangeLabel('bad'), 'bad')
+})

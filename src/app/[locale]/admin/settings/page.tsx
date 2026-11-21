@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useId, useRef } from 'react'
 import {
   FiSave,
   FiSettings,
@@ -108,6 +108,7 @@ function diffSettings(
 }
 
 export default function AdminSettingsPage() {
+  const uid = useId()
   const [settings, setSettings] = useState<AdminSettings | null>(null)
   // 서버가 마지막으로 내려준(=저장된) 값. 저장 시 이것과의 차이만 보낸다.
   const savedSettingsRef = useRef<AdminSettings | null>(null)
@@ -679,10 +680,14 @@ export default function AdminSettingsPage() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label
+                        className="block text-sm font-medium text-gray-700 mb-1"
+                        htmlFor={`${uid}-1`}
+                      >
                         사이트 제목
                       </label>
                       <input
+                        id={`${uid}-1`}
                         type="text"
                         value={settings.site.site_title}
                         onChange={e => updateSettings('site', 'site_title', e.target.value)}
@@ -700,10 +705,14 @@ export default function AdminSettingsPage() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label
+                        className="block text-sm font-medium text-gray-700 mb-1"
+                        htmlFor={`${uid}-2`}
+                      >
                         사이트 설명
                       </label>
                       <textarea
+                        id={`${uid}-2`}
                         value={settings.site.site_description}
                         onChange={e => updateSettings('site', 'site_description', e.target.value)}
                         rows={3}
@@ -712,10 +721,14 @@ export default function AdminSettingsPage() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label
+                        className="block text-sm font-medium text-gray-700 mb-1"
+                        htmlFor={`${uid}-3`}
+                      >
                         최대 회원 수
                       </label>
                       <input
+                        id={`${uid}-3`}
                         type="number"
                         value={settings.site.max_members}
                         onChange={e =>

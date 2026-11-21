@@ -9,7 +9,6 @@
  */
 
 import { NextRequest } from 'next/server'
-import { timingSafeEqual } from 'node:crypto'
 
 import { listActiveBillingTargets } from '@/db/queries/billingKeys'
 import {
@@ -36,6 +35,7 @@ import {
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger, maskId } from '@/utils/logger'
 import { logSecurityEvent } from '@/utils/security'
+import { isCronAuthorized } from '@work/lib/ops/cron-auth'
 
 const log = createLogger('api/internal/dues/charge')
 
@@ -49,14 +49,7 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 800
 
 function isAuthorized(request: NextRequest): boolean {
-  const expected = process.env.PAYMENTS_CRON_TOKEN
-  if (!expected) return false
-
-  const header = request.headers.get('authorization') ?? ''
-  const provided = header.startsWith('Bearer ') ? header.slice(7) : ''
-  if (provided.length !== expected.length) return false
-
-  return timingSafeEqual(Buffer.from(provided), Buffer.from(expected))
+  return isCronAuthorized(request.headers.get('authorization'), process.env.PAYMENTS_CRON_TOKEN)
 }
 
 export async function POST(request: NextRequest) {

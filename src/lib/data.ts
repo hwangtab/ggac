@@ -71,6 +71,8 @@ const DEFAULT_GLOBAL_DATA: GlobalData = {
     establishedDate: '2025-05-01',
     registrationDate: '2025-05-14',
     registrationNumber: '',
+    mailOrderNumber: '',
+    mailOrderAuthority: '',
   },
 }
 

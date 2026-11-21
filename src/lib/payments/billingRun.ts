@@ -12,7 +12,10 @@
  *  2. **판단할 수 없는 실패는 실패로 확정하지 않는다.** 청구가 나갔는지 모르는
  *     상태에서 실패로 적어 두면 다음 실행이 다시 청구해 이중 결제가 된다.
  *  3. **한 사람의 실패가 나머지를 막지 않는다.** 한 명 때문에 전체 청구가
- *     멈추면 그 달 회비를 못 걷는다.
+ *     멈추면 그 달 회비를 못 걷는다. 토스 호출뿐 아니라 **DB 호출이 던져도**
+ *     회원 단위로 잡아 다음 사람으로 넘어간다. 승인 전에 던지면 실패, 승인
+ *     **후**에 던지면(카드는 긁혔는데 DB 상태를 모름) 판단 불가로 센다.
+ *     판단 불가 보고(`reportUndecided`)는 예상 밖 오류가 나도 `finally`에서 돈다.
  */
 
 import { assertDuesAmount } from './toss/config.ts'
@@ -119,137 +122,163 @@ export async function runBillingCharges(deps: BillingRunDeps): Promise<BillingRu
   const undecidedOrders: string[] = []
   const targets = await deps.listTargets()
 
-  for (const target of targets) {
-    const userId = String(target.user_id)
-    const billingKey = String(target.billing_key)
-    const customerKey = String(target.customer_key)
-    const amount = target.monthly_fee
+  try {
+    for (const target of targets) {
+      const userId = String(target.user_id)
+      const billingKey = String(target.billing_key)
+      const customerKey = String(target.customer_key)
+      const amount = target.monthly_fee
+      let orderId: string | null = null
+      let charged = false
+      try {
+        // 금액이 없거나 범위를 벗어나면 청구하지 않는다. 임의로 정해서 걸면
+        // 회원이 동의한 적 없는 금액이 빠져나간다.
+        try {
+          assertDuesAmount(amount)
+        } catch {
+          deps.log?.warn?.('자동결제 건너뜀(회비 금액 이상)', { userId })
+          result.skipped++
+          continue
+        }
+        const dueAmount = amount as number
 
-    // 금액이 없거나 범위를 벗어나면 청구하지 않는다. 임의로 정해서 걸면
-    // 회원이 동의한 적 없는 금액이 빠져나간다.
-    try {
-      assertDuesAmount(amount)
-    } catch {
-      deps.log?.warn?.('자동결제 건너뜀(회비 금액 이상)', { userId })
-      result.skipped++
-      continue
-    }
-    const dueAmount = amount as number
+        const existing = await deps.getDues(userId, deps.billingMonth)
+        if (existing?.status === 'paid') {
+          result.skipped++
+          continue
+        }
 
-    const existing = await deps.getDues(userId, deps.billingMonth)
-    if (existing?.status === 'paid') {
-      result.skipped++
-      continue
-    }
+        await deps.ensureDues({ userId, billingMonth: deps.billingMonth, amount: dueAmount })
 
-    await deps.ensureDues({ userId, billingMonth: deps.billingMonth, amount: dueAmount })
+        orderId = generateOrderId('dues')
+        const orderName = `경기아트콜렉티브 ${monthLabel(deps.billingMonth)} 조합비`
 
-    const orderId = generateOrderId('dues')
-    const orderName = `경기아트콜렉티브 ${monthLabel(deps.billingMonth)} 조합비`
+        const pending = await deps.createPendingPayment({
+          orderId,
+          userId,
+          kind: 'dues',
+          orderName,
+          amount: dueAmount,
+          payerName: (target.display_name as string) ?? null,
+          payerEmail: (target.email as string) ?? null,
+        })
+        const pendingId = String(pending?.id ?? '')
 
-    const pending = await deps.createPendingPayment({
-      orderId,
-      userId,
-      kind: 'dues',
-      orderName,
-      amount: dueAmount,
-      payerName: (target.display_name as string) ?? null,
-      payerEmail: (target.email as string) ?? null,
-    })
-    const pendingId = String(pending?.id ?? '')
+        // **청구를 나가기 전에 그 달을 선점한다.**
+        //
+        // 위의 `status === 'paid'` 검사만으로는 부족하다. 청구가 성공한 뒤
+        // `markDuesPaid` 직전에 죽으면 회비는 `unpaid`로 남고, 다음 실행이 그 검사를
+        // 통과해 **같은 달을 다시 청구한다**. 주문번호가 randomUUID라
+        // `payments_order_id_unique`도 그것을 못 잡는다(2026-09-01 감사).
+        //
+        // 선점은 단일 UPDATE의 원자성에 기대므로 동시 실행에서도 한쪽만 이긴다.
+        const claimed = await deps.claimDuesForCharge({
+          userId,
+          billingMonth: deps.billingMonth,
+          paymentId: pendingId,
+        })
+        if (!claimed) {
+          // 다른 실행이 이미 이 달을 잡았다. 여기서 청구하면 그게 이중 청구다.
+          await deps.markPaymentFailed(orderId, {
+            code: 'DUES_ALREADY_CLAIMED',
+            message: '같은 청구월이 이미 선점되어 있어 청구하지 않았습니다.',
+          })
+          deps.log?.warn?.('자동결제 건너뜀(이미 선점됨)', { userId, orderId })
+          result.skipped++
+          continue
+        }
 
-    // **청구를 나가기 전에 그 달을 선점한다.**
-    //
-    // 위의 `status === 'paid'` 검사만으로는 부족하다. 청구가 성공한 뒤
-    // `markDuesPaid` 직전에 죽으면 회비는 `unpaid`로 남고, 다음 실행이 그 검사를
-    // 통과해 **같은 달을 다시 청구한다**. 주문번호가 randomUUID라
-    // `payments_order_id_unique`도 그것을 못 잡는다(2026-09-01 감사).
-    //
-    // 선점은 단일 UPDATE의 원자성에 기대므로 동시 실행에서도 한쪽만 이긴다.
-    const claimed = await deps.claimDuesForCharge({
-      userId,
-      billingMonth: deps.billingMonth,
-      paymentId: pendingId,
-    })
-    if (!claimed) {
-      // 다른 실행이 이미 이 달을 잡았다. 여기서 청구하면 그게 이중 청구다.
-      await deps.markPaymentFailed(orderId, {
-        code: 'DUES_ALREADY_CLAIMED',
-        message: '같은 청구월이 이미 선점되어 있어 청구하지 않았습니다.',
-      })
-      deps.log?.warn?.('자동결제 건너뜀(이미 선점됨)', { userId, orderId })
-      result.skipped++
-      continue
-    }
+        let approved: Record<string, unknown>
+        try {
+          approved = await deps.charge(billingKey, {
+            customerKey,
+            amount: dueAmount,
+            orderId,
+            orderName,
+            customerEmail: (target.email as string) ?? null,
+            customerName: (target.display_name as string) ?? null,
+          })
+        } catch (error) {
+          if (isUndecidable(error)) {
+            // 청구가 나갔는지 모른다. 선점을 **일부러 남긴 채** 대기 상태로 둔다 —
+            // 덜 걷는 것이 두 번 걷는 것보다 낫다. 다만 그대로 두면 아무도 그 달을
+            // 다시 보지 않으므로, 아래에서 주문번호를 모아 사람에게 넘긴다.
+            deps.log?.error?.('자동결제 판단 불가(대사 대기)', { userId, orderId })
+            undecidedOrders.push(orderId)
+            result.undecided++
+            continue
+          }
 
-    let approved: Record<string, unknown>
-    try {
-      approved = await deps.charge(billingKey, {
-        customerKey,
-        amount: dueAmount,
-        orderId,
-        orderName,
-        customerEmail: (target.email as string) ?? null,
-        customerName: (target.display_name as string) ?? null,
-      })
-    } catch (error) {
-      if (isUndecidable(error)) {
-        // 청구가 나갔는지 모른다. 선점을 **일부러 남긴 채** 대기 상태로 둔다 —
-        // 덜 걷는 것이 두 번 걷는 것보다 낫다. 다만 그대로 두면 아무도 그 달을
-        // 다시 보지 않으므로, 아래에서 주문번호를 모아 사람에게 넘긴다.
-        deps.log?.error?.('자동결제 판단 불가(대사 대기)', { userId, orderId })
-        undecidedOrders.push(orderId)
-        result.undecided++
-        continue
+          const code = (error as { code?: string }).code ?? 'BILLING_FAILED'
+          const message = error instanceof Error ? error.message : '자동결제에 실패했습니다.'
+          await deps.markPaymentFailed(orderId, { code, message })
+          // 확정된 실패다 — 카드를 바꿔 다시 낼 수 있게 선점을 푼다.
+          // (판단 불가는 위에서 이미 continue했다. 그쪽은 **일부러 선점을 남긴다** —
+          //  덜 걷는 것이 두 번 걷는 것보다 낫다.)
+          await deps.releaseDuesClaim({
+            userId,
+            billingMonth: deps.billingMonth,
+            paymentId: pendingId,
+          })
+          await deps.notifyFailure({
+            userId,
+            email: (target.email as string) ?? null,
+            displayName: (target.display_name as string) ?? null,
+            reason: message,
+          })
+          deps.log?.warn?.('자동결제 실패', { userId, orderId, code })
+          result.failed++
+          continue
+        }
+
+        // 토스 승인 직후부터는 카드가 이미 긁힌 상태다. 아래 DB 단계가 죽으면
+        // 실패가 아니라 판단 불가로 센다.
+        charged = true
+        const approvedAt =
+          typeof approved.approvedAt === 'string' ? approved.approvedAt : new Date().toISOString()
+        await deps.markPaymentDone(orderId, {
+          paymentKey: typeof approved.paymentKey === 'string' ? approved.paymentKey : orderId,
+          method: typeof approved.method === 'string' ? approved.method : '카드',
+          approvedAt,
+          raw: approved,
+        })
+
+        await deps.markDuesPaid({
+          userId,
+          billingMonth: deps.billingMonth,
+          paymentId: pendingId,
+        })
+        result.charged++
+      } catch (error) {
+        // 한 사람의 예상 밖 오류(DB 등)가 나머지 청구를 막지 않는다.
+        if (charged && orderId) {
+          // 카드는 긁혔는데 DB 상태를 모른다 — 판단 불가. 선점은 남긴다.
+          deps.log?.error?.('자동결제 승인 후 처리 실패(판단 불가)', {
+            userId,
+            orderId,
+            reason: error instanceof Error ? error.message : String(error),
+          })
+          undecidedOrders.push(orderId)
+          result.undecided++
+        } else {
+          deps.log?.error?.('자동결제 처리 중 오류', {
+            userId,
+            orderId,
+            reason: error instanceof Error ? error.message : String(error),
+          })
+          result.failed++
+        }
       }
-
-      const code = (error as { code?: string }).code ?? 'BILLING_FAILED'
-      const message = error instanceof Error ? error.message : '자동결제에 실패했습니다.'
-      await deps.markPaymentFailed(orderId, { code, message })
-      // 확정된 실패다 — 카드를 바꿔 다시 낼 수 있게 선점을 푼다.
-      // (판단 불가는 위에서 이미 continue했다. 그쪽은 **일부러 선점을 남긴다** —
-      //  덜 걷는 것이 두 번 걷는 것보다 낫다.)
-      await deps.releaseDuesClaim({
-        userId,
-        billingMonth: deps.billingMonth,
-        paymentId: pendingId,
-      })
-      await deps.notifyFailure({
-        userId,
-        email: (target.email as string) ?? null,
-        displayName: (target.display_name as string) ?? null,
-        reason: message,
-      })
-      deps.log?.warn?.('자동결제 실패', { userId, orderId, code })
-      result.failed++
-      continue
     }
-
-    const approvedAt =
-      typeof approved.approvedAt === 'string' ? approved.approvedAt : new Date().toISOString()
-    await deps.markPaymentDone(orderId, {
-      paymentKey: typeof approved.paymentKey === 'string' ? approved.paymentKey : orderId,
-      method: typeof approved.method === 'string' ? approved.method : '카드',
-      approvedAt,
-      raw: approved,
-    })
-
-    const payment = await deps.getPaymentByOrderId(orderId)
-    await deps.markDuesPaid({
-      userId,
-      billingMonth: deps.billingMonth,
-      paymentId: String(payment?.id ?? ''),
-    })
-    result.charged++
-  }
-
-  if (undecidedOrders.length > 0 && deps.reportUndecided) {
-    // 알림이 실패해도 청구 결과는 그대로 답한다 — 여기서 던지면 이미 끝난
-    // 청구의 결과를 크론이 못 돌려준다.
-    try {
-      await deps.reportUndecided({ count: undecidedOrders.length, orderIds: undecidedOrders })
-    } catch (error) {
-      deps.log?.error?.('판단 불가 청구 보고 실패', { error })
+  } finally {
+    if (undecidedOrders.length > 0 && deps.reportUndecided) {
+      // 알림이 실패해도 청구 결과는 그대로 답한다 — 여기서 던지면 이미 끝난
+      // 청구의 결과를 크론이 못 돌려준다.
+      try {
+        await deps.reportUndecided({ count: undecidedOrders.length, orderIds: undecidedOrders })
+      } catch (error) {
+        deps.log?.error?.('판단 불가 청구 보고 실패', { error })
+      }
     }
   }
 

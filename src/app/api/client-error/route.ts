@@ -1,6 +1,15 @@
 import { NextRequest } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
+import distLimiter from '@/lib/server/rateLimit'
+import {
+  BodyTooLargeError,
+  boundedString,
+  maskIp,
+  readBoundedText,
+} from '@/lib/server/telemetryIntake'
+
+const MAX_BODY_BYTES = 32 * 1024
 
 const log = createLogger('api/client-error')
 
@@ -20,16 +29,26 @@ function sanitizeClientErrorUrl(value: unknown): string {
 
 async function parseJsonBody(request: NextRequest): Promise<Record<string, unknown> | null> {
   try {
-    const body = await request.json()
+    const body = JSON.parse(await readBoundedText(request, MAX_BODY_BYTES))
     return body && typeof body === 'object' && !Array.isArray(body)
       ? (body as Record<string, unknown>)
       : null
-  } catch {
+  } catch (error) {
+    if (error instanceof BodyTooLargeError) throw error
     return null
   }
 }
 
 export async function POST(request: NextRequest) {
+  const limiter = await distLimiter.applyRateLimit({
+    ...distLimiter.CONFIGS.GENERAL_API,
+    name: 'client_error',
+    maxRequests: 30,
+    keyGenerator: distLimiter.createIPKeyGenerator('client_error'),
+  })
+  const limited = await limiter(request)
+  if (!limited.success && limited.response) return limited.response
+
   try {
     const body = await parseJsonBody(request)
 
@@ -37,22 +56,22 @@ export async function POST(request: NextRequest) {
       return ApiError.badRequest('Missing required fields: message, timestamp').toNextResponse()
     }
 
-    const message = String(body.message || '').slice(0, MAX_MESSAGE_LENGTH)
-    const stack = body.stack ? String(body.stack).slice(0, MAX_FIELD_LENGTH) : undefined
+    const message = boundedString(body.message, MAX_MESSAGE_LENGTH)
+    const stack = body.stack ? boundedString(body.stack, MAX_FIELD_LENGTH) : undefined
     const componentStack = body.componentStack
-      ? String(body.componentStack).slice(0, MAX_FIELD_LENGTH)
+      ? boundedString(body.componentStack, MAX_FIELD_LENGTH)
       : undefined
     const url = sanitizeClientErrorUrl(body.url)
 
     const errorLog = {
-      timestamp: body.timestamp,
+      timestamp: boundedString(body.timestamp, 64),
       url,
       message,
       stack,
       componentStack,
-      userAgent: request.headers.get('user-agent'),
-      ip: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown',
-      errorId: body.errorId ? String(body.errorId).slice(0, 64) : `client_error_${Date.now()}`,
+      userAgent: boundedString(request.headers.get('user-agent'), 200),
+      ip: maskIp(request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip')),
+      errorId: body.errorId ? boundedString(body.errorId, 64) : `client_error_${Date.now()}`,
       level: 'error',
       source: 'client',
     }
@@ -73,6 +92,9 @@ export async function POST(request: NextRequest) {
       errorId: errorLog.errorId,
     }).toNextResponse()
   } catch (error) {
+    if (error instanceof BodyTooLargeError) {
+      return new ApiError('Report too large', 413, 'PAYLOAD_TOO_LARGE').toNextResponse()
+    }
     log.error('Failed to log client error', error)
     return ApiError.internalServerError('Failed to log client error').toNextResponse()
   }

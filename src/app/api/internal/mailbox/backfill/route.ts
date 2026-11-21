@@ -23,7 +23,6 @@
  */
 
 import { NextRequest } from 'next/server'
-import { timingSafeEqual } from 'node:crypto'
 
 import {
   listPendingInboundEmails,
@@ -51,6 +50,7 @@ import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
 import { logSecurityEvent } from '@/utils/security'
 import { runTrackedCron } from '@work/lib/ops/cron-alert'
+import { isCronAuthorized } from '@work/lib/ops/cron-auth'
 
 const log = createLogger('api/internal/mailbox/backfill')
 
@@ -79,18 +79,11 @@ function isAuthorized(request: NextRequest): boolean {
   //
   // 어느 쪽도 설정돼 있지 않으면 **닫는다**(fail-closed) — 토큰 없는 배포에서
   // 이 라우트가 공개 엔드포인트가 되면 안 된다.
-  const expected = [process.env.MAILBOX_BACKFILL_CRON_TOKEN, process.env.CRON_SECRET].filter(
-    (value): value is string => typeof value === 'string' && value.length > 0
-  )
-  if (expected.length === 0) return false
-
-  const header = request.headers.get('authorization') ?? ''
-  const provided = header.startsWith('Bearer ') ? header.slice(7) : ''
-
   // 길이 선검사 — timingSafeEqual은 길이가 다르면 던진다.
-  return expected.some(
-    token =>
-      provided.length === token.length && timingSafeEqual(Buffer.from(provided), Buffer.from(token))
+  return isCronAuthorized(
+    request.headers.get('authorization'),
+    process.env.MAILBOX_BACKFILL_CRON_TOKEN,
+    process.env.CRON_SECRET
   )
 }
 

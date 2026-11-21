@@ -8,7 +8,6 @@ import {
 } from '@/lib/server/rateLimit'
 import { requireAdmin, type AdminAuthSuccess } from '@/lib/server/adminAuth'
 import { requireBoardMember, type BoardAuthSuccess } from '@/lib/server/boardRoomAuth'
-import { createErrorResponse } from '@/utils/apiResponse'
 import { ApiError, ApiSuccess } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
 import { parseJsonObjectBody } from '@/utils/requestBody'
@@ -167,9 +166,8 @@ function normalizeRouteResult<TResult>(
     return new NextResponse(null, { status: 204 })
   }
 
-  return successStatus
-    ? NextResponse.json(result, { status: successStatus })
-    : NextResponse.json(result)
+  // 맨 객체도 `withApiWrapper`와 같은 봉투(`{ success, data, meta }`)로 보낸다.
+  return ApiSuccess.ok(result as TResult).toNextResponse({ successStatus })
 }
 
 export function defineApiRoute<TBody = undefined, TAuth = ApiRouteAuthResult, TResult = unknown>(
@@ -236,10 +234,9 @@ export function defineApiRoute<TBody = undefined, TAuth = ApiRouteAuthResult, TR
         return config.errorResponse(error)
       }
 
-      return createErrorResponse(
-        { success: false, error: config.errorMessage ?? '서버 오류가 발생했습니다.' },
-        500
-      )
+      return ApiError.internalServerError(
+        config.errorMessage ?? '서버 오류가 발생했습니다.'
+      ).toNextResponse()
     }
   }
 }

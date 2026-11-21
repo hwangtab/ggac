@@ -196,9 +196,10 @@ export default function AssignArtistModal({
           </h2>
           <button
             onClick={handleClose}
+            aria-label="닫기"
             className="p-2 hover:bg-gray-100 rounded-md transition-colors"
           >
-            <FiX className="w-5 h-5" />
+            <FiX className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 

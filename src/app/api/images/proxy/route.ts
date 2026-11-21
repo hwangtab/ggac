@@ -23,9 +23,20 @@ const ALLOWED_IMAGE_TYPES = new Set([
 ])
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024
 
+/*
+ * 호출처(`createImageProxy` in utils/imageValidation.ts → 게시글 본문·기사 카드·
+ * 티켓팅 카드)는 허용 목록에 없는 **임의의 외부 호스트** 이미지를 넘긴다.
+ * 그래서 호스트 허용 목록으로 좁힐 수 없고, 기사·티켓 카드는 **비로그인 공개
+ * 페이지**에 그려지므로 로그인을 요구할 수도 없다(2026-11-09 검토: 요구하면 공개
+ * 페이지의 링크 미리보기 이미지가 전부 깨진다). 대신 레이트리밋 장애 시에는
+ * 열지 않고(failClosedOnOutage — GET 기본은 fail-open이라 명시한다), CDN이
+ * 같은 URL의 반복 요청을 흡수하도록 성공 응답을 s-maxage로 캐시한다.
+ * SSRF 방어(isUnsafeHost·fetchPinned)는 그대로다.
+ */
 export async function GET(req: NextRequest) {
   const rateLimiter = await distLimiter.applyRateLimit({
     ...distLimiter.CONFIGS.GENERAL_API,
+    failClosedOnOutage: true,
     keyGenerator: distLimiter.createIPKeyGenerator('img_proxy'),
   })
   const rateLimitResult = await rateLimiter(req)
@@ -120,7 +131,7 @@ export async function GET(req: NextRequest) {
 
     // Cache for 1 day at the CDN/browser level
     return createImageResponse(buff, contentType, {
-      'Cache-Control': 'public, max-age=86400',
+      'Cache-Control': 'public, max-age=86400, s-maxage=86400',
     })
   } catch (err: unknown) {
     if (err instanceof SsrfBlockedError) {

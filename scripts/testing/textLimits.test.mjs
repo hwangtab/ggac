@@ -44,6 +44,10 @@ test('상한 값은 라우트가 실제로 쓰는 것과 같은 상수 하나에
     BOOKER_NAME: 100,
     BOOKER_PHONE: 20,
     BOOKER_EMAIL: 254,
+    BOARD_TITLE: 200,
+    BOARD_LOCATION: 200,
+    BOARD_AGENDA_CONTENT: 20_000,
+    BOARD_MINUTES_CONTENT: 200_000,
   })
 })
 

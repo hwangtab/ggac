@@ -13,27 +13,29 @@ import { createLogger, maskId } from '@/utils/logger'
 
 const log = createLogger('errorHandler')
 
-// 에러 카테고리 정의
-export enum ErrorCategory {
-  AUTHENTICATION = 'authentication',
-  AUTHORIZATION = 'authorization',
-  VALIDATION = 'validation',
-  NOT_FOUND = 'not_found',
-  DATABASE = 'database',
-  EXTERNAL_SERVICE = 'external_service',
-  FILE_UPLOAD = 'file_upload',
-  RATE_LIMIT = 'rate_limit',
-  SYSTEM = 'system',
-  UNKNOWN = 'unknown',
-}
+// 에러 카테고리 정의 (enum 대신 const 객체 — Node type-stripping 단위 테스트가 enum을 못 읽는다)
+export const ErrorCategory = {
+  AUTHENTICATION: 'authentication',
+  AUTHORIZATION: 'authorization',
+  VALIDATION: 'validation',
+  NOT_FOUND: 'not_found',
+  DATABASE: 'database',
+  EXTERNAL_SERVICE: 'external_service',
+  FILE_UPLOAD: 'file_upload',
+  RATE_LIMIT: 'rate_limit',
+  SYSTEM: 'system',
+  UNKNOWN: 'unknown',
+} as const
+export type ErrorCategory = (typeof ErrorCategory)[keyof typeof ErrorCategory]
 
 // 에러 심각도 레벨
-export enum ErrorSeverity {
-  LOW = 'low',
-  MEDIUM = 'medium',
-  HIGH = 'high',
-  CRITICAL = 'critical',
-}
+export const ErrorSeverity = {
+  LOW: 'low',
+  MEDIUM: 'medium',
+  HIGH: 'high',
+  CRITICAL: 'critical',
+} as const
+export type ErrorSeverity = (typeof ErrorSeverity)[keyof typeof ErrorSeverity]
 
 // 구조화된 에러 정보
 export interface ErrorInfo {
@@ -290,53 +292,6 @@ function logError(entry: ErrorLogEntry): void {
 }
 
 /**
- * Supabase 에러를 분석하여 적절한 ErrorInfo로 변환
- */
-export function analyzeSupabaseError(error: any): ErrorInfo {
-  if (!error) return PREDEFINED_ERRORS.UNKNOWN
-
-  const message = error.message?.toLowerCase() || ''
-  const code = error.code || error.status
-
-  // 인증 관련 에러
-  if (message.includes('unauthorized') || message.includes('jwt') || code === 'UNAUTHORIZED') {
-    return PREDEFINED_ERRORS.UNAUTHORIZED
-  }
-
-  // 권한 관련 에러
-  if (message.includes('forbidden') || message.includes('access denied') || code === 'FORBIDDEN') {
-    return PREDEFINED_ERRORS.FORBIDDEN
-  }
-
-  // 데이터베이스 연결 에러
-  if (
-    message.includes('connection') ||
-    message.includes('timeout') ||
-    code === 'CONNECTION_ERROR'
-  ) {
-    return PREDEFINED_ERRORS.DATABASE_CONNECTION_ERROR
-  }
-
-  // 리소스 없음 에러
-  if (message.includes('not found') || code === 'NOT_FOUND' || code === '404') {
-    return PREDEFINED_ERRORS.RESOURCE_NOT_FOUND
-  }
-
-  // Storage 관련 에러
-  if (message.includes('storage') || message.includes('bucket')) {
-    return PREDEFINED_ERRORS.SUPABASE_STORAGE_ERROR
-  }
-
-  // 일반적인 데이터베이스 에러
-  if (message.includes('database') || message.includes('sql') || message.includes('query')) {
-    return { ...PREDEFINED_ERRORS.DATABASE_QUERY_ERROR, details: { originalError: error.message } }
-  }
-
-  // 기본값
-  return { ...PREDEFINED_ERRORS.INTERNAL_SERVER_ERROR, details: { originalError: error.message } }
-}
-
-/**
  * 고유한 에러 ID 생성
  */
 function generateErrorId(): string {
@@ -385,11 +340,10 @@ export class ApiErrorHandler {
       // 미리 정의된 에러인 경우
       finalErrorInfo = Object.values(PREDEFINED_ERRORS).find(e => e.message === error.message)!
     } else {
-      // Supabase 에러 분석 또는 일반 에러
-      finalErrorInfo =
-        error?.code || error?.status
-          ? analyzeSupabaseError(error)
-          : PREDEFINED_ERRORS.INTERNAL_SERVER_ERROR
+      // 분류되지 않은 예외는 메시지를 읽어 401/403/404/503으로 바꾸지 않는다 —
+      // Turso 토큰·Blob 실패가 401로 둔갑해 사용자를 로그아웃시킨 적이 있다.
+      // 전부 500이고 원문은 로그에만 남는다.
+      finalErrorInfo = PREDEFINED_ERRORS.INTERNAL_SERVER_ERROR
     }
 
     // 에러 로깅 수행
@@ -414,13 +368,17 @@ export class ApiErrorHandler {
     }
 
     // NextResponse 반환
+    // `ApiError.toNextResponse()`와 같은 본문·헤더 모양(순환 import를 피해 인라인).
     return NextResponse.json(
       {
+        success: false,
         error: finalErrorInfo.userMessage,
-        category: finalErrorInfo.category,
-        code: finalErrorInfo.statusCode,
+        meta: { timestamp: new Date().toISOString() },
       },
-      { status: finalErrorInfo.statusCode }
+      {
+        status: finalErrorInfo.statusCode,
+        headers: { 'Cache-Control': 'private, no-store', Vary: 'Cookie, Authorization' },
+      }
     )
   }
 

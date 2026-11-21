@@ -93,6 +93,9 @@ export async function PUT(request: NextRequest) {
       if (routeMeetingId.error) throw routeMeetingId.error
       const sanitizedMeetingId = routeMeetingId.id
 
+      if (records.length > 200)
+        throw ApiError.badRequest('attendees는 최대 200명까지 보낼 수 있습니다.')
+
       const rows = records.map(r => {
         if (!r || typeof r.member_id !== 'string') {
           throw ApiError.badRequest('attendees 배열에 유효한 member_id가 필요합니다.')

@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { apiPost, ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { requireBoardMember } from '@/lib/server/boardRoomAuth'
 import { notifyDirectors } from '@/lib/server/boardRoomNotify'
-import { parseJsonObjectBody } from '@/utils/requestBody'
+import { TEXT_LIMITS, textLengthError } from '@/utils/textLimits'
+import { LARGE_JSON_BODY_MAX_BYTES, parseJsonObjectBody } from '@/utils/requestBody'
 import { validateUUID } from '@/utils/validation'
 import { parseContentFormat } from '@/constants/contentFormat'
 import { annotateImageDimensionsSafe } from '@/utils/imageDimensions'
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest) {
 
   return apiPost(
     async () => {
-      const body = await parseJsonObjectBody(request)
+      const body = await parseJsonObjectBody(request, { maxBytes: LARGE_JSON_BODY_MAX_BYTES })
       if (!body) throw ApiError.badRequest('유효한 JSON body가 필요합니다.')
 
       const meetingId = typeof body.meeting_id === 'string' ? body.meeting_id : ''
@@ -43,6 +44,8 @@ export async function POST(request: NextRequest) {
         throw ApiError.badRequest('content_format은 plain, html, markdown 중 하나여야 합니다.')
       }
       if (!meetingId) throw ApiError.badRequest('meeting_id가 필요합니다.')
+      const tooLong = textLengthError(content, TEXT_LIMITS.BOARD_MINUTES_CONTENT, '회의록')
+      if (tooLong) throw ApiError.badRequest(tooLong)
       const routeMeetingId = validateMeetingId(meetingId)
       if (routeMeetingId.error) throw routeMeetingId.error
       const sanitizedMeetingId = routeMeetingId.id

@@ -1,5 +1,6 @@
 'use client'
 
+import { useId } from 'react'
 import { FiUser } from 'react-icons/fi'
 import ProfilePhotoUploader from '@/components/ProfilePhotoUploader'
 import type { ProfilePhotoUploadResponse, ProfilePhotoMetadata } from '@/types'
@@ -18,6 +19,7 @@ interface BasicInfoProps {
 }
 
 const BasicInfo: React.FC<BasicInfoProps> = ({ data, errors, onChange }) => {
+  const uid = useId()
   const categoryOptions = [
     '창작자',
     '기획자',
@@ -93,8 +95,11 @@ const BasicInfo: React.FC<BasicInfoProps> = ({ data, errors, onChange }) => {
 
         {/* 아티스트 이름 */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">아티스트 이름 *</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor={`${uid}-1`}>
+            아티스트 이름 *
+          </label>
           <input
+            id={`${uid}-1`}
             type="text"
             value={data.name}
             onChange={e => onChange('name', e.target.value)}
@@ -134,8 +139,11 @@ const BasicInfo: React.FC<BasicInfoProps> = ({ data, errors, onChange }) => {
 
         {/* 한 줄 소개 */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">한 줄 소개 *</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor={`${uid}-2`}>
+            한 줄 소개 *
+          </label>
           <input
+            id={`${uid}-2`}
             type="text"
             value={data.one_liner}
             onChange={e => onChange('one_liner', e.target.value)}

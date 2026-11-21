@@ -26,7 +26,7 @@ import { fetchBoardPosts } from '@/lib/server/board'
 import { parseIntegerParam } from '@/utils/queryParams'
 import { CATEGORIES, parseBoardCategory } from '@/constants/categories'
 import { TEXT_LIMITS, textLengthError } from '@/utils/textLimits'
-import { parseJsonObjectBody } from '@/utils/requestBody'
+import { LARGE_JSON_BODY_MAX_BYTES, parseJsonObjectBody } from '@/utils/requestBody'
 import { annotateImageDimensionsSafe } from '@/utils/imageDimensions'
 import { getBoardListRevalidationPaths } from '@/lib/revalidationPaths'
 import { createPost } from '@/db/queries/posts'
@@ -218,7 +218,7 @@ export async function POST(request: NextRequest) {
 
   return apiPost(
     async () => {
-      const body = await parseJsonObjectBody(request)
+      const body = await parseJsonObjectBody(request, { maxBytes: LARGE_JSON_BODY_MAX_BYTES })
       if (!body) {
         throw ApiError.badRequest('유효한 JSON body가 필요합니다.')
       }

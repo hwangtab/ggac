@@ -22,12 +22,25 @@ import { NextRequest } from 'next/server'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { logSecurityEvent } from '@/utils/security'
 import { createLogger } from '@/utils/logger'
+import distLimiter from '@/lib/server/rateLimit'
+import {
+  BodyTooLargeError,
+  capReports,
+  capSeverityAtMedium,
+  maskIp,
+  readBoundedText,
+} from '@/lib/server/telemetryIntake'
+
+const MAX_BODY_BYTES = 64 * 1024
 
 const log = createLogger('api/security/csp-report')
 
 async function parseJsonBody(request: NextRequest): Promise<unknown> {
+  // content-type은 application/csp-report·application/reports+json이라
+  // request.json()이 아니라 본문을 상한 안에서 읽어 직접 파싱한다.
+  const text = await readBoundedText(request, MAX_BODY_BYTES)
   try {
-    return await request.json()
+    return JSON.parse(text)
   } catch {
     return null
   }
@@ -103,8 +116,18 @@ function extractCspReports(payload: unknown): Record<string, unknown>[] {
  * CSP 위반 리포트 수집
  */
 export async function POST(request: NextRequest) {
+  // 비로그인 수집 경로 — IP당 분당 30회. 읽기가 아니라 POST라 장애 시 503(fail-closed)이다.
+  const limiter = await distLimiter.applyRateLimit({
+    ...distLimiter.CONFIGS.GENERAL_API,
+    name: 'csp_report',
+    maxRequests: 30,
+    keyGenerator: distLimiter.createIPKeyGenerator('csp_report'),
+  })
+  const limited = await limiter(request)
+  if (!limited.success && limited.response) return limited.response
+
   try {
-    const reports = extractCspReports(await parseJsonBody(request))
+    const reports = capReports(extractCspReports(await parseJsonBody(request)))
     if (reports.length === 0) {
       return ApiError.badRequest('Invalid CSP report format').toNextResponse()
     }
@@ -154,7 +177,7 @@ export async function POST(request: NextRequest) {
         continue
       }
 
-      // 심각도 판단
+      // 심각도 판단 (아래에서 medium으로 상한을 건다)
       let severity: 'low' | 'medium' | 'high' = 'medium'
 
       if (sanitizedReport.violatedDirective?.includes('script-src')) {
@@ -165,14 +188,18 @@ export async function POST(request: NextRequest) {
         severity = 'low'
       }
 
-      // 보안 이벤트 로깅
+      // 비로그인 입력이 외부 경보(high)를 울리지 못하게 상한을 건다.
+      severity = capSeverityAtMedium(severity)
+
+      // 보안 이벤트 로깅 (외부 웹훅 전송은 logSecurityEvent가 한 번 한다)
       logSecurityEvent(
         'CSP_VIOLATION',
         {
           ...sanitizedReport,
           userAgent: request.headers.get('user-agent')?.substring(0, 200),
-          clientIP:
-            request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown',
+          clientIP: maskIp(
+            request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip')
+          ),
           timestamp: new Date().toISOString(),
         },
         severity
@@ -186,24 +213,6 @@ export async function POST(request: NextRequest) {
       })
 
       received += 1
-
-      // 프로덕션에서는 외부 보안 모니터링 서비스로 전송 가능
-      if (process.env.NODE_ENV === 'production' && process.env.SECURITY_WEBHOOK_URL) {
-        try {
-          await fetch(process.env.SECURITY_WEBHOOK_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              type: 'csp_violation',
-              severity,
-              report: sanitizedReport,
-              timestamp: new Date().toISOString(),
-            }),
-          })
-        } catch (webhookError) {
-          console.error('[CSP] 보안 웹훅 전송 실패:', webhookError)
-        }
-      }
     }
 
     // 봉투 하나에 여러 건이 올 수 있으므로 건수를 함께 돌려준다.
@@ -213,6 +222,9 @@ export async function POST(request: NextRequest) {
       ignored,
     }).toNextResponse()
   } catch (error) {
+    if (error instanceof BodyTooLargeError) {
+      return new ApiError('Report too large', 413, 'PAYLOAD_TOO_LARGE').toNextResponse()
+    }
     console.error('[CSP] 리포트 처리 중 오류:', error)
     return ApiError.internalServerError('Internal server error').toNextResponse()
   }

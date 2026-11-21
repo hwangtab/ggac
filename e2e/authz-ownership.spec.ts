@@ -129,6 +129,30 @@ test.describe('미승인 조합원', () => {
     expect(res.status()).toBe(403)
     expect((await res.json()).error).toContain('승인된 조합원')
   })
+
+  // 첨부 수정·삭제와 아티스트 사진 삭제도 업로드(POST/PUT)와 같은 등급이어야 한다.
+  // 인증이 소유권 조회보다 먼저라 존재하지 않는 id로도 403이 먼저 나온다.
+  const ghostId = '00000000-0000-4000-8000-000000000000'
+
+  test('첨부 수정은 403 + 승인된 조합원 안내다', async ({ request }) => {
+    const res = await request.put(`/api/posts/${fixtures.postId}/attachments/${ghostId}`, {
+      data: { alt_text: 'x' },
+    })
+    expect(res.status()).toBe(403)
+    expect((await res.json()).error).toContain('승인된 조합원')
+  })
+
+  test('첨부 삭제는 403 + 승인된 조합원 안내다', async ({ request }) => {
+    const res = await request.delete(`/api/posts/${fixtures.postId}/attachments/${ghostId}`)
+    expect(res.status()).toBe(403)
+    expect((await res.json()).error).toContain('승인된 조합원')
+  })
+
+  test('아티스트 사진 삭제는 403 + 승인된 조합원 안내다', async ({ request }) => {
+    const res = await request.delete('/api/mypage/artist/photo', { data: {} })
+    expect(res.status()).toBe(403)
+    expect((await res.json()).error).toContain('승인된 조합원')
+  })
 })
 
 /**

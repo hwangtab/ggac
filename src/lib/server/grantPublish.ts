@@ -16,6 +16,7 @@ import {
   renderDigestMarkdown,
   renderDigestNotification,
   sortByDeadline,
+  weekRangeLabel,
   CAP,
 } from './grantDigest.ts'
 import { effectiveInterests, filterByDefaultInterests, matchesInterests } from './interestMatch.ts'
@@ -178,7 +179,7 @@ export async function runGrantPublish(input: RunGrantPublishInput): Promise<Gran
   // ① 게시글. 실패하면 던진다 — 게시글이 없으면 알림이 가리킬 곳이 없다.
   const content = renderDigestMarkdown(postItems, digest.week_key, todayIso)
   const post = await input.createPost({
-    title: `[지원사업] ${digest.week_key} ${postItems.length}건`,
+    title: `지금 신청할 수 있는 공고 ${postItems.length}건 (${weekRangeLabel(digest.week_key)})`,
     content,
     content_format: 'markdown',
     category: '지원사업',

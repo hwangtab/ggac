@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { FiDownload, FiCalendar, FiBarChart, FiUsers, FiFileText, FiFilter } from 'react-icons/fi'
 import { parseIntegerParam } from '@/utils/queryParams'
 
@@ -9,6 +9,7 @@ interface ReportGeneratorProps {
 }
 
 export default function ReportGenerator({ onReportGenerated }: ReportGeneratorProps) {
+  const uid = useId()
   const [isGenerating, setIsGenerating] = useState(false)
   const [reportType, setReportType] = useState('comprehensive')
   const [dateRange, setDateRange] = useState({
@@ -182,8 +183,11 @@ export default function ReportGenerator({ onReportGenerated }: ReportGeneratorPr
           </label>
           <div className="flex flex-col sm:flex-row gap-4">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">시작일</label>
+              <label className="block text-xs text-gray-500 mb-1" htmlFor={`${uid}-1`}>
+                시작일
+              </label>
               <input
+                id={`${uid}-1`}
                 type="date"
                 value={dateRange.start}
                 onChange={e => setDateRange({ ...dateRange, start: e.target.value })}
@@ -191,8 +195,11 @@ export default function ReportGenerator({ onReportGenerated }: ReportGeneratorPr
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">종료일</label>
+              <label className="block text-xs text-gray-500 mb-1" htmlFor={`${uid}-2`}>
+                종료일
+              </label>
               <input
+                id={`${uid}-2`}
                 type="date"
                 value={dateRange.end}
                 onChange={e => setDateRange({ ...dateRange, end: e.target.value })}
@@ -219,8 +226,11 @@ export default function ReportGenerator({ onReportGenerated }: ReportGeneratorPr
               <span className="ml-2 text-sm text-gray-600">비활성 사용자 포함</span>
             </label>
             <div>
-              <label className="block text-sm text-gray-600 mb-1">최소 활동 수 (필터링 기준)</label>
+              <label className="block text-sm text-gray-600 mb-1" htmlFor={`${uid}-3`}>
+                최소 활동 수 (필터링 기준)
+              </label>
               <input
+                id={`${uid}-3`}
                 type="number"
                 min="0"
                 value={filters.minimumActivity}

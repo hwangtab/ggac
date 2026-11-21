@@ -349,6 +349,32 @@ export async function getProfilesByIds(ids: string[]): Promise<Map<string, Profi
 }
 
 /**
+ * 공개 표시명 조회용 — `{ id, display_name }` 두 칸만 읽는다. 비로그인
+ * `/api/profiles`가 쓰므로 33칸 전체를 끌어오지 않는다.
+ *
+ * 승인(`approved`)·탈퇴(`withdrawn`) 회원만 돌려준다(2026-11-09 결정). 호출처는
+ * 댓글 작성자 이름뿐이고, 댓글은 승인된 조합원만 쓸 수 있으므로 대기·거절
+ * 회원의 이름이 필요한 화면이 없다. 거르지 않으면 UUID만 알면 가입 신청자의
+ * 이름을 비로그인으로 열람할 수 있다. 탈퇴 회원은 display_name이 이미
+ * 자리표시자(`탈퇴한 조합원`)라 그대로 내보낸다.
+ */
+export async function getDisplayNamesByIds(
+  ids: string[]
+): Promise<{ id: string; display_name: string }[]> {
+  if (ids.length === 0) return []
+  const rows = await db
+    .select({ id: memberProfiles.id, displayName: memberProfiles.displayName })
+    .from(memberProfiles)
+    .where(
+      and(
+        inArray(memberProfiles.id, ids),
+        inArray(memberProfiles.registrationStatus, ['approved', 'withdrawn'])
+      )
+    )
+  return rows.map(row => ({ id: row.id, display_name: row.displayName }))
+}
+
+/**
  * 관리자 회원 목록 등 페이지네이션 목록 조회.
  * `status` 생략 시 전체, `search`는 display_name/email/real_name에 대한
  * 부분일치(OR)다. 정렬은 `created_at` 내림차순(최신 가입순)으로 고정 —

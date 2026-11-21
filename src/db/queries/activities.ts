@@ -59,13 +59,14 @@ import {
 } from '../schema/index.ts'
 
 import { toIso } from './_helpers.ts'
+import { kstDateString } from '../../lib/time/kst.ts'
 
 export type ActivityActionTypeValue = (typeof ACTIVITY_ACTION_TYPE)[number]
 export type ActivityTargetTypeValue = (typeof ACTIVITY_TARGET_TYPE)[number]
 
-/** 오늘 날짜를 `daily_activity_stats.activity_date`(text, 'YYYY-MM-DD') 형식으로. UTC 기준. */
+/** 오늘 날짜를 `daily_activity_stats.activity_date`(text, 'YYYY-MM-DD') 형식으로. KST 기준. 기존 UTC 행은 2026-11-09에 `scripts/ops/rebuild-daily-activity-stats.mjs`로 재계산했다. */
 function todayDateString(): string {
-  return new Date().toISOString().slice(0, 10)
+  return kstDateString()
 }
 
 /** 오늘 00:00:00.000 UTC. `active_users_view`의 `CURRENT_DATE` 대응(sessions.ts에서도 쓴다). */
@@ -782,8 +783,8 @@ export async function listDailyActivityStats(
   startDate: Date,
   endDate: Date
 ): Promise<DailyActivityStatRow[]> {
-  const startStr = startDate.toISOString().slice(0, 10)
-  const endStr = endDate.toISOString().slice(0, 10)
+  const startStr = kstDateString(startDate)
+  const endStr = kstDateString(endDate)
 
   const rows = await db
     .select()

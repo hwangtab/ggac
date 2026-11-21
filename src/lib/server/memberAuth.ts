@@ -1,3 +1,4 @@
+import { ApiError } from '@/utils/apiWrapper'
 import { NextResponse } from 'next/server'
 
 import { getSessionContext, isApprovedActive } from '@/lib/server/authz'
@@ -68,10 +69,10 @@ export async function requireCampaignActor(): Promise<MemberAuthSuccess | NextRe
   const verdict = classifySessionForCampaignActor(session)
 
   if (verdict === 'unauthenticated') {
-    return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+    return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
   }
   if (verdict === 'profile-error') {
-    return NextResponse.json({ error: '프로필 정보를 조회할 수 없습니다.' }, { status: 500 })
+    return ApiError.internalServerError('프로필 정보를 조회할 수 없습니다.').toNextResponse()
   }
 
   return {
@@ -98,7 +99,7 @@ export async function requireUser(): Promise<UserAuthSuccess | NextResponse> {
   const session = await getSessionContext()
 
   if (classifySessionForUser(session) === 'unauthenticated') {
-    return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+    return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
   }
 
   return {
@@ -124,13 +125,13 @@ export async function requireActiveMember(): Promise<MemberAuthSuccess | NextRes
   const verdict = classifySessionForMember(session)
 
   if (verdict === 'unauthenticated') {
-    return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+    return ApiError.unauthorized('인증이 필요합니다.').toNextResponse()
   }
   if (verdict === 'profile-error') {
-    return NextResponse.json({ error: '프로필 정보를 조회할 수 없습니다.' }, { status: 500 })
+    return ApiError.internalServerError('프로필 정보를 조회할 수 없습니다.').toNextResponse()
   }
   if (verdict === 'not-approved') {
-    return NextResponse.json({ error: '승인된 조합원만 이용할 수 있습니다.' }, { status: 403 })
+    return ApiError.forbidden('승인된 조합원만 이용할 수 있습니다.').toNextResponse()
   }
 
   return {

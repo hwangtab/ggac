@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Camera, Link, AlertCircle, Check } from 'lucide-react'
+import { Camera, Link, AlertCircle, Check } from 'lucide-work'
 
 interface ImagePreviewProps {
   currentImage?: string

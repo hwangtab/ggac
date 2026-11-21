@@ -350,10 +350,9 @@ const NotificationsPage = () => {
                 {notifications.map(notification => (
                   <li
                     key={notification.id}
-                    className={`p-4 hover:bg-gray-50 transition-colors cursor-pointer ${
+                    className={`p-4 hover:bg-gray-50 transition-colors ${
                       !notification.read_at ? 'bg-blue-50' : ''
                     }`}
-                    onClick={() => handleNotificationClick(notification)}
                   >
                     <div className="flex items-start">
                       <input
@@ -364,7 +363,18 @@ const NotificationsPage = () => {
                         className="mt-1 mr-3 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                       />
 
-                      <div className="flex-1 min-w-0">
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        className="flex-1 min-w-0 cursor-pointer rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                        onClick={() => handleNotificationClick(notification)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            handleNotificationClick(notification)
+                          }
+                        }}
+                      >
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center">
                             <span

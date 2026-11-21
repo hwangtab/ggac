@@ -300,9 +300,10 @@ const AdvancedFilterBuilder: React.FC<AdvancedFilterBuilderProps> = ({
               </h4>
               <button
                 onClick={() => setShowSaveDialog(false)}
+                aria-label="닫기"
                 className="text-gray-400 hover:text-gray-600"
               >
-                <FiX className="w-5 h-5" />
+                <FiX className="w-5 h-5" aria-hidden="true" />
               </button>
             </div>
 

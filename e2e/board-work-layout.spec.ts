@@ -62,7 +62,7 @@ test.describe('업무 화면 — 이사회실 레이아웃 안', () => {
       await expect(page.getByRole('contentinfo')).toBeAttached()
 
       const groups = {
-        이사회: ['이사회 회의', '일정 투표', '정기총회', '정관'],
+        이사회: ['이사회 회의', '일정 투표', '총회', '정관'],
         소통: ['대화', '활동', '메일함'],
         업무: ['할 일', '자료실', '타임뱅크 보고'],
       } as const

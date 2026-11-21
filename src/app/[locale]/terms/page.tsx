@@ -172,6 +172,27 @@ function TermsContentEn() {
         </p>
       </section>
 
+      <section className="mb-8">
+        <h2 className="text-2xl font-semibold text-gray-900 mb-4">
+          Article 9 (Mail-order Brokerage)
+        </h2>
+        <p className="text-gray-700 leading-relaxed mb-4">
+          1. The Cooperative may broker transactions of goods or services between members/creators
+          and buyers/supporters online. In such cases, the Cooperative acts as a mail-order
+          intermediary and is not a party to the transaction.
+        </p>
+        <p className="text-gray-700 leading-relaxed mb-4">
+          2. The parties to a brokered transaction are the seller (creator) and the buyer.
+          Responsibility for product information, price, delivery and refunds lies with the seller.
+          The Cooperative provides the seller's identity information and other information required
+          by law.
+        </p>
+        <p className="text-gray-700 leading-relaxed">
+          3. The Cooperative endeavors to help resolve disputes arising from brokered transactions,
+          but bears no liability for their outcome as it is not a party to the transaction.
+        </p>
+      </section>
+
       <div className="mt-12 pt-8 border-t border-gray-200">
         <p className="text-sm text-gray-500">
           Effective Date: May 1, 2025
@@ -308,6 +329,25 @@ export default async function TermsPage({ params }: TermsPageProps) {
                   <p className="text-gray-700 leading-relaxed">
                     조합은 천재지변 또는 이에 준하는 불가항력으로 인하여 서비스를 제공할 수 없는
                     경우에는 서비스 제공에 관한 책임이 면제됩니다.
+                  </p>
+                </section>
+
+                <section className="mb-8">
+                  <h2 className="text-2xl font-semibold text-gray-900 mb-4">
+                    제9조 (통신판매중개)
+                  </h2>
+                  <p className="text-gray-700 leading-relaxed mb-4">
+                    1. 조합은 온라인상에서 조합원·창작자와 구매자·후원자 간의 재화 또는 용역 거래를
+                    중개할 수 있으며, 이 경우 조합은 통신판매중개자로서 거래 당사자가 아닙니다.
+                  </p>
+                  <p className="text-gray-700 leading-relaxed mb-4">
+                    2. 중개 거래의 계약 당사자는 판매자(창작자)와 구매자이며, 상품
+                    정보·가격·배송·환불에 관한 책임은 판매자에게 있습니다. 조합은 판매자의 신원 정보
+                    등 법령이 정한 정보를 제공합니다.
+                  </p>
+                  <p className="text-gray-700 leading-relaxed">
+                    3. 조합은 중개 거래에서 발생한 분쟁의 원활한 해결을 위해 노력하되, 거래 당사자가
+                    아닌 이상 그 결과에 대한 책임을 지지 않습니다.
                   </p>
                 </section>
 

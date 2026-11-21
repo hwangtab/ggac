@@ -1,5 +1,6 @@
 'use client'
 
+import Switch from '@/components/common/Switch'
 import { useState } from 'react'
 import type { SettingWithDefault, SettingCategory } from '@/types/index'
 
@@ -68,25 +69,17 @@ export default function PrivacySettings({ settings, onUpdate }: PrivacySettingsP
               <label className="text-sm font-medium text-gray-700">활동 내역 표시</label>
               <p className="text-sm text-gray-500">다른 사용자에게 내 활동 내역을 표시합니다</p>
             </div>
-            <button
-              type="button"
+            <Switch
+              checked={!!activityVisibility.show_activity}
+              label="활동 내역 표시"
               disabled={updating === 'activity_visibility'}
-              onClick={() =>
+              onCheckedChange={() =>
                 updateSettingValue('activity_visibility', {
                   ...activityVisibility,
                   show_activity: !activityVisibility.show_activity,
                 })
               }
-              className={`${
-                activityVisibility.show_activity ? 'bg-primary-600' : 'bg-gray-200'
-              } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50`}
-            >
-              <span
-                className={`${
-                  activityVisibility.show_activity ? 'translate-x-5' : 'translate-x-0'
-                } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
-              />
-            </button>
+            />
           </div>
 
           <div className="flex items-center justify-between">
@@ -96,25 +89,17 @@ export default function PrivacySettings({ settings, onUpdate }: PrivacySettingsP
                 마지막으로 접속한 시간을 다른 사용자에게 표시합니다
               </p>
             </div>
-            <button
-              type="button"
+            <Switch
+              checked={!!activityVisibility.show_last_seen}
+              label="마지막 접속 시간 표시"
               disabled={updating === 'activity_visibility'}
-              onClick={() =>
+              onCheckedChange={() =>
                 updateSettingValue('activity_visibility', {
                   ...activityVisibility,
                   show_last_seen: !activityVisibility.show_last_seen,
                 })
               }
-              className={`${
-                activityVisibility.show_last_seen ? 'bg-primary-600' : 'bg-gray-200'
-              } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50`}
-            >
-              <span
-                className={`${
-                  activityVisibility.show_last_seen ? 'translate-x-5' : 'translate-x-0'
-                } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
-              />
-            </button>
+            />
           </div>
         </div>
       </div>
@@ -128,25 +113,17 @@ export default function PrivacySettings({ settings, onUpdate }: PrivacySettingsP
               <label className="text-sm font-medium text-gray-700">이메일 주소 공개</label>
               <p className="text-sm text-gray-500">프로필에서 이메일 주소를 표시합니다</p>
             </div>
-            <button
-              type="button"
+            <Switch
+              checked={!!contactVisibility.show_email}
+              label="이메일 주소 공개"
               disabled={updating === 'contact_visibility'}
-              onClick={() =>
+              onCheckedChange={() =>
                 updateSettingValue('contact_visibility', {
                   ...contactVisibility,
                   show_email: !contactVisibility.show_email,
                 })
               }
-              className={`${
-                contactVisibility.show_email ? 'bg-primary-600' : 'bg-gray-200'
-              } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50`}
-            >
-              <span
-                className={`${
-                  contactVisibility.show_email ? 'translate-x-5' : 'translate-x-0'
-                } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
-              />
-            </button>
+            />
           </div>
 
           <div className="flex items-center justify-between">
@@ -154,25 +131,17 @@ export default function PrivacySettings({ settings, onUpdate }: PrivacySettingsP
               <label className="text-sm font-medium text-gray-700">전화번호 공개</label>
               <p className="text-sm text-gray-500">프로필에서 전화번호를 표시합니다</p>
             </div>
-            <button
-              type="button"
+            <Switch
+              checked={!!contactVisibility.show_phone}
+              label="전화번호 공개"
               disabled={updating === 'contact_visibility'}
-              onClick={() =>
+              onCheckedChange={() =>
                 updateSettingValue('contact_visibility', {
                   ...contactVisibility,
                   show_phone: !contactVisibility.show_phone,
                 })
               }
-              className={`${
-                contactVisibility.show_phone ? 'bg-primary-600' : 'bg-gray-200'
-              } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50`}
-            >
-              <span
-                className={`${
-                  contactVisibility.show_phone ? 'translate-x-5' : 'translate-x-0'
-                } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
-              />
-            </button>
+            />
           </div>
         </div>
       </div>

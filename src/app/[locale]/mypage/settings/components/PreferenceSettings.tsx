@@ -1,5 +1,6 @@
 'use client'
 
+import Switch from '@/components/common/Switch'
 import { useState } from 'react'
 import type { SettingWithDefault, SettingCategory } from '@/types/index'
 import { parseIntegerParam } from '@/utils/queryParams'
@@ -40,25 +41,17 @@ export default function PreferenceSettings({ settings, onUpdate }: PreferenceSet
               <label className="text-sm font-medium text-gray-700">성인 콘텐츠 차단</label>
               <p className="text-sm text-gray-500">성인 콘텐츠로 분류된 게시글을 숨깁니다</p>
             </div>
-            <button
-              type="button"
+            <Switch
+              checked={!!contentFilter.adult_content}
+              label="성인 콘텐츠 차단"
               disabled={updating === 'content_filter'}
-              onClick={() =>
+              onCheckedChange={() =>
                 updateSettingValue('content_filter', {
                   ...contentFilter,
                   adult_content: !contentFilter.adult_content,
                 })
               }
-              className={`${
-                contentFilter.adult_content ? 'bg-primary-600' : 'bg-gray-200'
-              } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50`}
-            >
-              <span
-                className={`${
-                  contentFilter.adult_content ? 'translate-x-5' : 'translate-x-0'
-                } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
-              />
-            </button>
+            />
           </div>
 
           <div className="flex items-center justify-between">
@@ -66,25 +59,17 @@ export default function PreferenceSettings({ settings, onUpdate }: PreferenceSet
               <label className="text-sm font-medium text-gray-700">폭력적 콘텐츠 차단</label>
               <p className="text-sm text-gray-500">폭력적이거나 충격적인 콘텐츠를 숨깁니다</p>
             </div>
-            <button
-              type="button"
+            <Switch
+              checked={!!contentFilter.violence_content}
+              label="폭력적 콘텐츠 차단"
               disabled={updating === 'content_filter'}
-              onClick={() =>
+              onCheckedChange={() =>
                 updateSettingValue('content_filter', {
                   ...contentFilter,
                   violence_content: !contentFilter.violence_content,
                 })
               }
-              className={`${
-                contentFilter.violence_content ? 'bg-primary-600' : 'bg-gray-200'
-              } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50`}
-            >
-              <span
-                className={`${
-                  contentFilter.violence_content ? 'translate-x-5' : 'translate-x-0'
-                } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
-              />
-            </button>
+            />
           </div>
         </div>
       </div>
@@ -100,25 +85,17 @@ export default function PreferenceSettings({ settings, onUpdate }: PreferenceSet
                 텍스트와 배경의 대비를 높여 가독성을 향상시킵니다
               </p>
             </div>
-            <button
-              type="button"
+            <Switch
+              checked={!!accessibility.high_contrast}
+              label="고대비 모드"
               disabled={updating === 'accessibility'}
-              onClick={() =>
+              onCheckedChange={() =>
                 updateSettingValue('accessibility', {
                   ...accessibility,
                   high_contrast: !accessibility.high_contrast,
                 })
               }
-              className={`${
-                accessibility.high_contrast ? 'bg-primary-600' : 'bg-gray-200'
-              } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50`}
-            >
-              <span
-                className={`${
-                  accessibility.high_contrast ? 'translate-x-5' : 'translate-x-0'
-                } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
-              />
-            </button>
+            />
           </div>
 
           <div className="flex items-center justify-between">
@@ -126,25 +103,17 @@ export default function PreferenceSettings({ settings, onUpdate }: PreferenceSet
               <label className="text-sm font-medium text-gray-700">큰 텍스트</label>
               <p className="text-sm text-gray-500">텍스트 크기를 크게 하여 가독성을 향상시킵니다</p>
             </div>
-            <button
-              type="button"
+            <Switch
+              checked={!!accessibility.large_text}
+              label="큰 텍스트"
               disabled={updating === 'accessibility'}
-              onClick={() =>
+              onCheckedChange={() =>
                 updateSettingValue('accessibility', {
                   ...accessibility,
                   large_text: !accessibility.large_text,
                 })
               }
-              className={`${
-                accessibility.large_text ? 'bg-primary-600' : 'bg-gray-200'
-              } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50`}
-            >
-              <span
-                className={`${
-                  accessibility.large_text ? 'translate-x-5' : 'translate-x-0'
-                } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
-              />
-            </button>
+            />
           </div>
 
           <div className="flex items-center justify-between">
@@ -152,25 +121,17 @@ export default function PreferenceSettings({ settings, onUpdate }: PreferenceSet
               <label className="text-sm font-medium text-gray-700">애니메이션 줄이기</label>
               <p className="text-sm text-gray-500">화면 전환 애니메이션을 최소화합니다</p>
             </div>
-            <button
-              type="button"
+            <Switch
+              checked={!!accessibility.reduced_motion}
+              label="애니메이션 줄이기"
               disabled={updating === 'accessibility'}
-              onClick={() =>
+              onCheckedChange={() =>
                 updateSettingValue('accessibility', {
                   ...accessibility,
                   reduced_motion: !accessibility.reduced_motion,
                 })
               }
-              className={`${
-                accessibility.reduced_motion ? 'bg-primary-600' : 'bg-gray-200'
-              } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50`}
-            >
-              <span
-                className={`${
-                  accessibility.reduced_motion ? 'translate-x-5' : 'translate-x-0'
-                } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
-              />
-            </button>
+            />
           </div>
         </div>
 
@@ -194,25 +155,17 @@ export default function PreferenceSettings({ settings, onUpdate }: PreferenceSet
               <label className="text-sm font-medium text-gray-700">자동 저장 사용</label>
               <p className="text-sm text-gray-500">작성 중인 글을 자동으로 임시 저장합니다</p>
             </div>
-            <button
-              type="button"
+            <Switch
+              checked={!!autoSave.enabled}
+              label="자동 저장 사용"
               disabled={updating === 'auto_save'}
-              onClick={() =>
+              onCheckedChange={() =>
                 updateSettingValue('auto_save', {
                   ...autoSave,
                   enabled: !autoSave.enabled,
                 })
               }
-              className={`${
-                autoSave.enabled ? 'bg-primary-600' : 'bg-gray-200'
-              } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50`}
-            >
-              <span
-                className={`${
-                  autoSave.enabled ? 'translate-x-5' : 'translate-x-0'
-                } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
-              />
-            </button>
+            />
           </div>
 
           {autoSave.enabled && (

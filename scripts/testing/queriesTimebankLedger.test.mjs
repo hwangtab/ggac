@@ -208,6 +208,38 @@ test('withWriteRetry: 락 경합은 다시 하고, 그 밖의 실패와 fatal은
   assert.equal(calls, 2, '시도 횟수를 넘으면 마지막 경합 오류를 던진다')
 })
 
+test('retryOnLockContention: 경합마다 heal 훅을 부르고, 경합이 아니면 부르지 않는다', async () => {
+  const shared = await import('../../src/db/queries/_helpers.ts')
+  const busy = Object.assign(new Error('SQLITE_BUSY'), { code: 'SQLITE_BUSY' })
+  let heals = 0
+  let calls = 0
+  const heal = async () => {
+    heals += 1
+  }
+  const value = await shared.retryOnLockContention(
+    async () => {
+      calls += 1
+      if (calls < 3) throw busy
+      return 'ok'
+    },
+    { budget: shared.TICKETING_RETRY_BUDGET, heal }
+  )
+  assert.equal(value, 'ok')
+  assert.equal(heals, 2)
+
+  heals = 0
+  await assert.rejects(
+    shared.retryOnLockContention(
+      async () => {
+        throw new Error('boom')
+      },
+      { heal }
+    ),
+    /boom/
+  )
+  assert.equal(heals, 0)
+})
+
 // ── 잔액 ─────────────────────────────────────────────────────────────────────
 
 test('잔액: 빈 계좌는 0, confirmed만 합산한다', async () => {

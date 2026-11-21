@@ -62,6 +62,8 @@
     "companyName": "상호",
     "representative": "대표자",
     "businessNumber": "사업자등록번호",
+    "mailOrder": "통신판매업 신고",
+    "marketNotice": "펀딩·장터는 조합이 거래 당사자가 아닌 통신판매중개입니다.",
     "rights": "All rights reserved."
   },
   "locale": {

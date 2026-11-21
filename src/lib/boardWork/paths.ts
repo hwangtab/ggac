@@ -94,7 +94,7 @@ export const BOARD_MENU_GROUPS: readonly BoardMenuGroup[] = [
     items: [
       { key: 'meetings', href: '/board-room/meetings', label: '이사회 회의' },
       { key: 'schedule', href: '/board-room/schedule', label: '일정 투표' },
-      { key: 'assembly', href: '/board-room/assembly', label: '정기총회' },
+      { key: 'assembly', href: '/board-room/assembly', label: '총회' },
       { key: 'charter', href: '/board-room/charter', label: '정관' },
     ],
   },

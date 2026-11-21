@@ -51,7 +51,7 @@ export default function AssemblyDocumentPage() {
         href="/board-room/assembly"
         className="mb-6 inline-block text-sm text-gray-500 hover:text-gray-900"
       >
-        ← 정기총회로
+        ← 총회로
       </Link>
 
       {loading ? (

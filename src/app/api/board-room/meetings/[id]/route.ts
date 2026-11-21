@@ -16,6 +16,7 @@ import {
   parseBoardMeetingDeadline,
 } from '@/constants/boardRoom'
 import { requiredQuorum, isQuorumMet } from '@/lib/boardRoom/quorum'
+import { TEXT_LIMITS, textLengthError } from '@/utils/textLimits'
 import { parseJsonObjectBody } from '@/utils/requestBody'
 import { validateUUID } from '@/utils/validation'
 import {
@@ -214,6 +215,14 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     async () => {
       const body = await parseJsonObjectBody(request)
       if (!body) throw ApiError.badRequest('유효한 JSON body가 필요합니다.')
+
+      const tooLong =
+        textLengthError(
+          typeof body.title === 'string' ? body.title.trim() : null,
+          TEXT_LIMITS.BOARD_TITLE,
+          '제목'
+        ) || textLengthError(body.location, TEXT_LIMITS.BOARD_LOCATION, '장소')
+      if (tooLong) throw ApiError.badRequest(tooLong)
 
       const update: MeetingUpdatePatch = {}
 

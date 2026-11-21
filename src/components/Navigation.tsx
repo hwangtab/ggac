@@ -35,7 +35,8 @@ const Navigation = () => {
   // /en 홈에서도 pathname === '/' 로 평가되어 투명 헤더가 올바르게 동작한다.
   const pathname = usePathname() || ''
   const router = useRouter()
-  const t = useTranslations()
+  const t = useTranslations('nav')
+  const tCommon = useTranslations('common')
 
   // 홈페이지인지 확인
   const isHomePage = pathname === '/'
@@ -198,7 +199,7 @@ const Navigation = () => {
       ref={navRef}
       id="navigation"
       role="navigation"
-      aria-label={t('nav.mainNav')}
+      aria-label={t('mainNav')}
       data-at-top={isAtTop ? 'true' : 'false'}
       className={`fixed top-0 left-0 right-0 z-50 ${
         hasScrollSync ? 'transition-all duration-300' : 'transition-none'
@@ -219,7 +220,7 @@ const Navigation = () => {
             >
               <Image
                 src="/images/logo/gac_logo.webp"
-                alt={t('common.brandShort')}
+                alt={tCommon('brandShort')}
                 fill
                 sizes="40px"
                 className="object-contain"
@@ -227,7 +228,7 @@ const Navigation = () => {
               />
             </div>
             <span className={`font-serif font-bold text-xl hidden sm:inline ${textColor}`}>
-              {t('common.brandShort')}
+              {tCommon('brandShort')}
             </span>
           </Link>
 
@@ -264,13 +265,13 @@ const Navigation = () => {
                       pathname.startsWith('/mypage') ? activeColor : `${textColor} ${hoverColor}`
                     }`}
                   >
-                    {t('nav.mypage')}
+                    {t('mypage')}
                   </Link>
                   <button
                     onClick={handleLogout}
                     className={`font-medium transition-colors duration-300 text-xs lg:text-sm ${textColor} ${hoverColor}`}
                   >
-                    {t('nav.logout')}
+                    {t('logout')}
                   </button>
                 </>
               ) : (
@@ -281,7 +282,7 @@ const Navigation = () => {
                       pathname === '/login' ? activeColor : `${textColor} ${hoverColor}`
                     }`}
                   >
-                    {t('nav.login')}
+                    {t('login')}
                   </Link>
                   <Link
                     href="/signup"
@@ -293,7 +294,7 @@ const Navigation = () => {
                         : 'bg-accent-300 !text-black hover:bg-accent-400'
                     }`}
                   >
-                    {t('nav.join')}
+                    {t('join')}
                   </Link>
                 </>
               )}
@@ -374,13 +375,13 @@ const Navigation = () => {
                       pathname.startsWith('/mypage') ? activeColor : `${textColor} ${hoverColor}`
                     }`}
                   >
-                    {t('nav.mypage')}
+                    {t('mypage')}
                   </Link>
                   <button
                     onClick={handleLogout}
                     className={`font-medium transition-colors duration-300 text-xs ${textColor} ${hoverColor}`}
                   >
-                    {t('nav.logout')}
+                    {t('logout')}
                   </button>
                 </>
               ) : (
@@ -391,7 +392,7 @@ const Navigation = () => {
                       pathname === '/login' ? activeColor : `${textColor} ${hoverColor}`
                     }`}
                   >
-                    {t('nav.login')}
+                    {t('login')}
                   </Link>
                   <Link
                     href="/signup"
@@ -403,7 +404,7 @@ const Navigation = () => {
                         : 'bg-accent-300 !text-black hover:bg-accent-400'
                     }`}
                   >
-                    {t('nav.joinShort')}
+                    {t('joinShort')}
                   </Link>
                 </>
               )}
@@ -424,9 +425,9 @@ const Navigation = () => {
             className={`md:hidden flex min-h-11 min-w-11 items-center justify-center p-2 rounded-md transition-colors duration-300 ${textColor} ${hoverColor} focus:outline-none focus:ring-2 focus:ring-primary-500`}
             aria-expanded={isMenuOpen}
             aria-controls="mobile-menu"
-            aria-label={isMenuOpen ? t('nav.closeMenu') : t('nav.openMenu')}
+            aria-label={isMenuOpen ? t('closeMenu') : t('openMenu')}
           >
-            <span className="sr-only">{isMenuOpen ? t('nav.closeMenu') : t('nav.openMenu')}</span>
+            <span className="sr-only">{isMenuOpen ? t('closeMenu') : t('openMenu')}</span>
             <div className="w-6 h-6 flex flex-col justify-center items-center">
               <span
                 className={`bg-current h-0.5 w-6 transition-all duration-300 ${
@@ -497,7 +498,7 @@ const Navigation = () => {
                           : `${textColor} ${hoverColor} ${'hover:bg-white/10'}`
                       }`}
                     >
-                      {t('nav.mypage')}
+                      {t('mypage')}
                     </Link>
                     <button
                       onClick={() => {
@@ -506,7 +507,7 @@ const Navigation = () => {
                       }}
                       className={`block w-full text-left py-3 px-4 rounded-md transition-colors duration-200 ${textColor} ${hoverColor} ${'hover:bg-white/10'}`}
                     >
-                      {t('nav.logout')}
+                      {t('logout')}
                     </button>
                   </>
                 ) : (
@@ -520,14 +521,14 @@ const Navigation = () => {
                           : `${textColor} ${hoverColor} ${'hover:bg-white/10'}`
                       }`}
                     >
-                      {t('nav.login')}
+                      {t('login')}
                     </Link>
                     <Link
                       href="/signup"
                       onClick={() => setIsMenuOpen(false)}
                       className={`block py-3 px-4 rounded-md transition-colors duration-200 font-medium text-white bg-primary-600 ${isHomePage ? 'hover:bg-primary-700' : 'hover:bg-primary-700'}`}
                     >
-                      {t('nav.join')}
+                      {t('join')}
                     </Link>
                   </>
                 )}

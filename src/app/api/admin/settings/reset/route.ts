@@ -1,9 +1,7 @@
 import { createOptionsResponse } from '@/utils/apiResponse'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
-import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { defineApiRoute } from '@/lib/server/apiRoute'
-import { createSettingsAdminAuth } from '@/lib/server/settingsAdminAuth'
 import { createUserKeyGenerator } from '@/lib/server/rateLimit'
 import { logSecurityEvent } from '@/utils/security'
 import { refreshSettingsCache } from '@/utils/systemSettings'
@@ -268,7 +266,7 @@ export const POST = defineApiRoute<Record<string, unknown>>({
     keyGenerator: createUserKeyGenerator('admin_settings_reset'),
   },
   rateLimitHeaders: true,
-  auth: createSettingsAdminAuth(),
+  auth: 'admin',
   body: {
     invalidResponse: () => ApiError.badRequest('유효하지 않은 JSON 본문입니다.').toNextResponse(),
   },
@@ -282,15 +280,7 @@ export const POST = defineApiRoute<Record<string, unknown>>({
       'high'
     )
 
-    const isPermissionError = error instanceof Error && error.message.includes('권한')
-    return NextResponse.json(
-      {
-        error: isPermissionError
-          ? '관리자 권한이 필요합니다.'
-          : '설정 초기화 중 오류가 발생했습니다.',
-      },
-      { status: isPermissionError ? 403 : 500 }
-    )
+    return ApiError.internalServerError('설정 초기화 중 오류가 발생했습니다.').toNextResponse()
   },
   handler: async ({ body, auth }) => {
     const { user } = auth

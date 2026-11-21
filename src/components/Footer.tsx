@@ -31,6 +31,10 @@ interface FooterProps {
       /** 전자상거래법 제13조가 요구하는 상호·대표자. 없으면 기본값으로 표시한다. */
       companyName?: string
       representative?: string
+      /** 통신판매업 신고번호. 비어 있으면 그 줄을 그리지 않는다. */
+      mailOrderNumber?: string
+      /** 신고기관 이름(예: 고양시). */
+      mailOrderAuthority?: string
     }
   }
 }
@@ -75,6 +79,8 @@ const Footer = ({ globalData }: FooterProps) => {
       registrationNumber: '513-86-03832',
       companyName: '경기아트콜렉티브 협동조합',
       representative: '최희철',
+      mailOrderNumber: '',
+      mailOrderAuthority: '고양시',
     },
   }
 
@@ -252,10 +258,19 @@ const Footer = ({ globalData }: FooterProps) => {
             <p>
               {t('businessNumber')}: {data.businessInfo.registrationNumber}
             </p>
+            {data.businessInfo.mailOrderNumber && (
+              <p>
+                {t('mailOrder')}: {data.businessInfo.mailOrderNumber}
+                {data.businessInfo.mailOrderAuthority
+                  ? ` (${data.businessInfo.mailOrderAuthority})`
+                  : ''}
+              </p>
+            )}
             <p>
               {t('established')}: {formatIsoDate(data.businessInfo.establishedDate, locale)} |
               {t('incorporated')}: {formatIsoDate(data.businessInfo.registrationDate, locale)}
             </p>
+            <p className="text-xs text-gray-500">{t('marketNotice')}</p>
           </div>
           <div className="flex flex-col items-center md:items-end gap-2">
             <div className="flex space-x-4 text-gray-500 text-xs">

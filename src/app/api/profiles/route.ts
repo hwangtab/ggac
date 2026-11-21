@@ -1,9 +1,19 @@
 import { NextRequest } from 'next/server'
 import { isValidUUID } from '@/utils/validation'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
-import { getProfilesByIds } from '@/db/queries/profiles'
+import distLimiter from '@/lib/server/rateLimit'
+import { getDisplayNamesByIds } from '@/db/queries/profiles'
 
 export async function GET(req: NextRequest) {
+  const limiter = await distLimiter.applyRateLimit({
+    ...distLimiter.CONFIGS.GENERAL_API,
+    name: 'profiles_public',
+    maxRequests: 60,
+    keyGenerator: distLimiter.createIPKeyGenerator('profiles_public'),
+  })
+  const limited = await limiter(req)
+  if (!limited.success && limited.response) return limited.response
+
   try {
     const { searchParams } = new URL(req.url)
     const idsParam = searchParams.get('ids') || ''
@@ -28,20 +38,15 @@ export async function GET(req: NextRequest) {
     // 공개 표시명 조회. 프로필 권위는 Turso다 — getProfilesByIds는 쿼리
     // 한 번(inArray)으로 배치 조회하고, 존재하지 않는 id는 그냥 빠진다
     // (에러 아님, 이전 Supabase `.in()`과 동일한 동작).
-    let profiles: Map<string, { id: string; display_name: string }>
+    let data: { id: string; display_name: string }[]
     try {
-      profiles = await getProfilesByIds(ids)
+      data = await getDisplayNamesByIds(ids)
     } catch (error) {
       console.error('[API] 프로필 조회 실패:', error)
       return ApiError.internalServerError(
         '프로필 정보를 불러오는 데 실패했습니다.'
       ).toNextResponse()
     }
-
-    const data = Array.from(profiles.values()).map(profile => ({
-      id: profile.id,
-      display_name: profile.display_name,
-    }))
 
     return ApiSuccess.ok(data).toNextResponse()
   } catch (e: any) {

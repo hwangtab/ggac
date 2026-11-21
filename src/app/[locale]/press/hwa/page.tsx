@@ -41,7 +41,7 @@ export default async function HwaPressPage({ params }: { params: Promise<{ local
   const isEn = locale === 'en'
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-12 sm:py-16">
+    <div className="mx-auto max-w-3xl px-4 py-12 sm:py-16">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={ASSETS.artwork}
@@ -130,6 +130,6 @@ export default async function HwaPressPage({ params }: { params: Promise<{ local
           </div>
         ))}
       </dl>
-    </main>
+    </div>
   )
 }

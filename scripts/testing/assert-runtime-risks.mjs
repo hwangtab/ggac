@@ -817,7 +817,7 @@ const existingAuthHelpersUseSharedOperationalBoundaries =
 // 헬퍼 본문은 아무도 안 봤다. 리뷰어 실증:
 //
 // - `checkAdminPermission`의 `isApprovedActiveAdmin` 검사를 지우면
-//   `auth: 'admin'`·`createSettingsAdminAuth()` 라우트 전부가 아무 로그인
+//   `auth: 'admin'` 라우트 전부가 아무 로그인
 //   사용자에게 열리는데 가드는 초록불이었다.
 // - `requireActiveMember`를 `requireUser`로 퇴화시키면 매니페스트의 27개
 //   파일 전부가 미승인·정지 계정을 받는데 역시 초록불이었다.
@@ -950,17 +950,17 @@ const AUTHORIZATION_HELPER_CONTRACTS = [
       {
         what: '미인증이면 401로 막는다',
         pattern:
-          /if \(!session\.authenticated \|\| !session\.user\) \{[\s\S]*?status: 401[\s\S]*?\}/,
+          /if \(!session\.authenticated \|\| !session\.user\) \{[\s\S]*?ApiError\.unauthorized\([\s\S]*?\}/,
       },
       {
         what: '프로필 조회 실패면 500으로 막는다',
         pattern:
-          /if \(session\.profileError \|\| !session\.profile\) \{[\s\S]*?status: 500[\s\S]*?\}/,
+          /if \(session\.profileError \|\| !session\.profile\) \{[\s\S]*?ApiError\.internalServerError\([\s\S]*?\}/,
       },
       {
         what: '승인·활성 관리자가 아니면 403으로 막는다',
         pattern:
-          /if \(!isApprovedActiveAdmin\(session\.profile\)\) \{[\s\S]*?status: 403[\s\S]*?\}/,
+          /if \(!isApprovedActiveAdmin\(session\.profile\)\) \{[\s\S]*?ApiError\.forbidden\([\s\S]*?\}/,
       },
     ],
   },
@@ -1007,15 +1007,18 @@ const AUTHORIZATION_HELPER_CONTRACTS = [
       },
       {
         what: '미인증이면 401로 막는다',
-        pattern: /if \(verdict === ['"]unauthenticated['"]\) \{[\s\S]*?status: 401[\s\S]*?\}/,
+        pattern:
+          /if \(verdict === ['"]unauthenticated['"]\) \{[\s\S]*?ApiError\.unauthorized\([\s\S]*?\}/,
       },
       {
         what: '프로필 조회 실패면 500으로 막는다',
-        pattern: /if \(verdict === ['"]profile-error['"]\) \{[\s\S]*?status: 500[\s\S]*?\}/,
+        pattern:
+          /if \(verdict === ['"]profile-error['"]\) \{[\s\S]*?ApiError\.internalServerError\([\s\S]*?\}/,
       },
       {
         what: '미승인·비활성이면 403으로 막는다(requireUser로 퇴화하지 않는다)',
-        pattern: /if \(verdict === ['"]not-approved['"]\) \{[\s\S]*?status: 403[\s\S]*?\}/,
+        pattern:
+          /if \(verdict === ['"]not-approved['"]\) \{[\s\S]*?ApiError\.forbidden\([\s\S]*?\}/,
       },
     ],
   },
@@ -1027,16 +1030,17 @@ const AUTHORIZATION_HELPER_CONTRACTS = [
       {
         what: '미인증이면 401로 막는다',
         pattern:
-          /if \(!session\.authenticated \|\| !session\.user\) \{[\s\S]*?status: 401[\s\S]*?\}/,
+          /if \(!session\.authenticated \|\| !session\.user\) \{[\s\S]*?ApiError\.unauthorized\([\s\S]*?\}/,
       },
       {
         what: '프로필 조회 실패면 500으로 막는다',
         pattern:
-          /if \(session\.profileError \|\| !session\.profile\) \{[\s\S]*?status: 500[\s\S]*?\}/,
+          /if \(session\.profileError \|\| !session\.profile\) \{[\s\S]*?ApiError\.internalServerError\([\s\S]*?\}/,
       },
       {
         what: '이사회 접근 권한이 없으면 403으로 막는다',
-        pattern: /if \(!canAccessBoardRoom\(session\.profile\)\) \{[\s\S]*?status: 403[\s\S]*?\}/,
+        pattern:
+          /if \(!canAccessBoardRoom\(session\.profile\)\) \{[\s\S]*?ApiError\.forbidden\([\s\S]*?\}/,
       },
     ],
   },
@@ -1048,16 +1052,17 @@ const AUTHORIZATION_HELPER_CONTRACTS = [
       {
         what: '미인증이면 401로 막는다',
         pattern:
-          /if \(!session\.authenticated \|\| !session\.user\) \{[\s\S]*?status: 401[\s\S]*?\}/,
+          /if \(!session\.authenticated \|\| !session\.user\) \{[\s\S]*?ApiError\.unauthorized\([\s\S]*?\}/,
       },
       {
         what: '프로필 조회 실패면 500으로 막는다',
         pattern:
-          /if \(session\.profileError \|\| !session\.profile\) \{[\s\S]*?status: 500[\s\S]*?\}/,
+          /if \(session\.profileError \|\| !session\.profile\) \{[\s\S]*?ApiError\.internalServerError\([\s\S]*?\}/,
       },
       {
         what: '승인·활성 조합원이 아니면 403으로 막는다',
-        pattern: /if \(!canReadBoardRecords\(session\.profile\)\) \{[\s\S]*?status: 403[\s\S]*?\}/,
+        pattern:
+          /if \(!canReadBoardRecords\(session\.profile\)\) \{[\s\S]*?ApiError\.forbidden\([\s\S]*?\}/,
       },
       {
         what: '이사 여부를 isBoardMember로 알려 호출부가 이사회 전용 정보를 가릴 수 있게 한다',
@@ -1072,7 +1077,7 @@ const AUTHORIZATION_HELPER_CONTRACTS = [
     requirements: [
       {
         what: '관리자가 아니면 403으로 막는다',
-        pattern: /if \(!auth\.isAdmin\) \{[\s\S]*?status: 403[\s\S]*?\}/,
+        pattern: /if \(!auth\.isAdmin\) \{[\s\S]*?ApiError\.forbidden\([\s\S]*?\}/,
       },
     ],
   },
@@ -1305,11 +1310,7 @@ const privilegedRouteFilesMissed = missingFrom(privilegedRouteFiles, privilegedR
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD']
 // `defineApiRoute`/`defineStreamRoute`의 `auth`로 인정하는 값. 특권 트리에서
 // `'public'`은 **의도적으로 빠져 있다** — 그게 이 가드가 잡으려는 값이다.
-const PRIVILEGED_AUTH_VALUES = [
-  /^['"]admin['"]/,
-  /^['"]board-member['"]/,
-  /^createSettingsAdminAuth\(/,
-]
+const PRIVILEGED_AUTH_VALUES = [/^['"]admin['"]/, /^['"]board-member['"]/]
 // 맨몸 핸들러가 불러야 하는 게이트.
 //
 // `requireBoardRecordReader()`는 이사회 **기록 읽기**(회의 목록·안건·토론·
@@ -1428,7 +1429,7 @@ for (const file of privilegedRouteFiles) {
       const value = block.slice(authKeyMatch.index + authKeyMatch[0].length).replace(/^[\s]*/, '')
       if (!PRIVILEGED_AUTH_VALUES.some(pattern => pattern.test(value))) {
         ungatedPrivilegedHandlers.push(
-          `${file}: export const ${method} — auth 값이 'admin'·'board-member'·createSettingsAdminAuth() 중 하나가 아닙니다`
+          `${file}: export const ${method} — auth 값이 'admin'·'board-member' 중 하나가 아닙니다`
         )
       }
       continue
@@ -1618,8 +1619,10 @@ const requiredAuthHelperCallCounts = [
     // PUT은 requireActiveMember(), DELETE·GET 둘 다 requireUser().
     file: 'src/app/api/mypage/artist/photo/route.ts',
     calls: [
-      { pattern: /requireActiveMember\(\)/g, min: 1 },
-      { pattern: /requireUser\(\)/g, min: 2 },
+      // 2026-11-09: 쓰기(PUT·DELETE)는 승인된 활성 조합원만 — DELETE가
+      // requireUser에서 requireActiveMember로 올라갔다.
+      { pattern: /requireActiveMember\(\)/g, min: 2 },
+      { pattern: /requireUser\(\)/g, min: 1 },
     ],
   },
   {
@@ -1661,7 +1664,11 @@ const requiredAuthHelperCallCounts = [
   {
     // GET·PUT·DELETE 전부 requireUser().
     file: 'src/app/api/posts/[id]/attachments/[attachmentId]/route.ts',
-    calls: [{ pattern: /requireUser\(\)/g, min: 3 }],
+    // 2026-11-09: GET만 requireUser, PUT·DELETE는 업로드와 같은 requireActiveMember.
+    calls: [
+      { pattern: /requireUser\(\)/g, min: 1 },
+      { pattern: /requireActiveMember\(\)/g, min: 2 },
+    ],
   },
   {
     // 첨부 업로드도 승인된 활성 멤버만 가능하도록 requireActiveMember()로
@@ -2379,11 +2386,12 @@ const validatesAttachmentMetadataUpdate =
 // 에서 Turso 쿼리 계층 getProfileById(user.id)로 옮겼다. 조건식
 // (profile?.is_admin === true && ... === 'approved' && ... === true)
 // 리터럴은 그대로다.
+// 2026-11-09: 수작업 세 칸 대조 대신 공용 isApprovedActiveAdmin(profile)로 판정한다
+// (requireActiveMember가 돌려준 profile을 그대로 쓴다).
 const validatesAttachmentDeleteAdminStatus =
-  /getProfileById\(user\.id\)/.test(postAttachmentDetailSource) &&
-  /profile\?\.is_admin === true[\s\S]*?profile\.registration_status === ['"]approved['"][\s\S]*?profile\.is_active === true/.test(
+  /import \{[^}]*isApprovedActiveAdmin[^}]*\} from '@\/lib\/server\/authz'/.test(
     postAttachmentDetailSource
-  )
+  ) && /const isAdmin = isApprovedActiveAdmin\(profile\)/.test(postAttachmentDetailSource)
 // 첨부 삭제도 같은 이관을 거쳤다(getProjectStorageObjectPath → logicalPathFromUrl,
 // supabase .remove() → deletePublicObject). 봉쇄 대상은 그대로 `attachments`
 // 버킷의 `posts/<postId>` 하위다.
@@ -2757,7 +2765,7 @@ const serverBoardPath = join(root, 'src/lib/server/board.ts')
 const serverBoardSource = readSourceAt(serverBoardPath)
 const boardCategoriesPath = join(root, 'src/constants/categories.ts')
 const boardCategoriesSource = readSourceAt(boardCategoriesPath)
-const boardCategoryPagePath = join(root, 'src/app/[locale]/board/page.tsx')
+const boardCategoryPagePath = join(root, 'src/app/[locale]/board/(list)/page.tsx')
 const boardCategoryPageSource = readSourceAt(boardCategoryPagePath)
 const boardServerDataPath = join(root, 'src/app/[locale]/board/BoardServerData.tsx')
 const boardServerDataSource = readSourceAt(boardServerDataPath)
@@ -3336,11 +3344,6 @@ const SCRIPTS_SUPABASE_ALLOWLIST = [
       'Supabase가 살아 있는 동안 옛 스키마 계약을 다시 뜰 수 있어야 한다.',
   },
   {
-    path: 'scripts/verify-env.js',
-    reason:
-      '환경변수 검사기. NEXT_PUBLIC_SUPABASE_URL 등 이름만 다루고 Supabase에 접속하지 않는다.',
-  },
-  {
     path: 'scripts/testing/auth-config.test.mjs',
     reason: '단위 테스트. Supabase 시절 인증 설정 문자열을 픽스처로 담는다(접속 없음).',
   },
@@ -3356,10 +3359,6 @@ const SCRIPTS_SUPABASE_ALLOWLIST = [
   {
     path: 'scripts/testing/strip-comments.test.mjs',
     reason: '단위 테스트. 옛 정규식 구현이 지웠던 Supabase import 줄을 회귀 표본으로 담는다.',
-  },
-  {
-    path: 'scripts/testing/verifyEnv.test.mjs',
-    reason: '단위 테스트. verify-env.js가 죽은 Supabase 키 없이도 통과하는지 본다(접속 없음).',
   },
 ]
 const scriptsSupabaseAllowedPaths = new Set(SCRIPTS_SUPABASE_ALLOWLIST.map(entry => entry.path))
@@ -3691,9 +3690,9 @@ const advancedFilteringPath = join(root, 'src/utils/advancedFiltering.ts')
 const advancedFilteringSource = readSourceAt(advancedFilteringPath)
 const activityLoggerPath = join(root, 'src/utils/activityLogger.ts')
 const activityLoggerSource = readSourceAt(activityLoggerPath)
-const boardPagePath = join(root, 'src/app/[locale]/board/page.tsx')
+const boardPagePath = join(root, 'src/app/[locale]/board/(list)/page.tsx')
 const boardPageSource = readSourceAt(boardPagePath)
-const projectsPagePath = join(root, 'src/app/[locale]/projects/page.tsx')
+const projectsPagePath = join(root, 'src/app/[locale]/projects/(list)/page.tsx')
 const projectsPageSource = readSourceAt(projectsPagePath)
 const cooperativeInfoPath = join(
   root,
@@ -4031,10 +4030,6 @@ const adminMembersAdvancedSearchPath = join(
   'src/app/api/admin/members/advanced-search/route.ts'
 )
 const adminMembersAdvancedSearchSource = readSourceAt(adminMembersAdvancedSearchPath)
-const settingsAdminAuthPath = join(root, 'src/lib/server/settingsAdminAuth.ts')
-const settingsAdminAuthSource = existsSync(settingsAdminAuthPath)
-  ? readSourceAt(settingsAdminAuthPath)
-  : ''
 const adminSettingsApiPath = join(root, 'src/app/api/admin/settings/route.ts')
 const adminSettingsApiSource = readSourceAt(adminSettingsApiPath)
 const adminSettingsBackupApiPath = join(root, 'src/app/api/admin/settings/backup/route.ts')
@@ -4290,16 +4285,6 @@ const adminMembersBulkUsesSharedApiRoute =
   !/applyRateLimit\(/.test(adminMembersBulkApiSource) &&
   !/addRateLimitHeaders/.test(adminMembersBulkApiSource) &&
   !/requireAdmin\(\)/.test(adminMembersBulkApiSource)
-const hasSettingsAdminAuthResolver =
-  /export type SettingsAdminAuth/.test(settingsAdminAuthSource) &&
-  /export function createSettingsAdminAuth/.test(settingsAdminAuthSource) &&
-  // 단계 4 Task 5: `createSupabaseServer()`로 만들던 `db`가 사라졌다. 신원은
-  // readSessionUser(), 관리자 판정은 checkAdminPermission(Turso 프로필)이다.
-  /readSessionUser\(\)/.test(settingsAdminAuthSource) &&
-  /checkAdminPermission\(user\.id\)/.test(settingsAdminAuthSource) &&
-  /createErrorResponse\(\{\s*success:\s*false,\s*error:\s*['"]인증이 필요합니다\./.test(
-    settingsAdminAuthSource
-  )
 const adminSettingsRouteSources = [
   {
     path: adminSettingsApiPath,
@@ -4326,12 +4311,13 @@ const adminSettingsRouteSources = [
     keys: ['admin_settings_reset'],
   },
 ]
-const adminSettingsRoutesUseSharedBoundary =
-  hasSettingsAdminAuthResolver &&
-  adminSettingsRouteSources.every(({ source, methods, keys }) => {
+// settingsAdminAuth.ts(자체 인증 해석기)는 삭제됐다 — 표준 `auth: 'admin'`(requireAdmin)을 쓰고,
+// 되살아난 옛 해석기 import는 거부한다.
+const adminSettingsRoutesUseSharedBoundary = adminSettingsRouteSources.every(
+  ({ source, methods, keys }) => {
     if (
       !/from\s+['"]@\/lib\/server\/apiRoute['"]/.test(source) ||
-      !/from\s+['"]@\/lib\/server\/settingsAdminAuth['"]/.test(source) ||
+      /settingsAdminAuth/.test(source) ||
       !keys.every(key => new RegExp(`createUserKeyGenerator\\(['"]${key}['"]\\)`).test(source)) ||
       /parseJsonObjectBody/.test(source) ||
       /applyRateLimit\(/.test(source) ||
@@ -4348,11 +4334,12 @@ const adminSettingsRoutesUseSharedBoundary =
       const block = extractDefineApiRouteBlock(source, method)
       return (
         block !== null &&
-        /auth:\s*createSettingsAdminAuth\(/.test(block) &&
+        /auth:\s*['"]admin['"]/.test(block) &&
         /rateLimitHeaders:\s*true/.test(block)
       )
     })
-  })
+  }
+)
 // `system_settings_history`는 "누가 설정을 바꿨는가"의 **유일한** 기록이다
 // (단계 4에서 Postgres 트리거 log_system_settings_change를
 // src/db/queries/settings.ts의 updateSystemSetting이 코드로 재현한다).
@@ -5469,9 +5456,9 @@ if (!adminMembersBulkUsesSharedApiRoute) {
 
 if (!adminSettingsRoutesUseSharedBoundary) {
   failures.push(
-    `Admin settings routes should share a settings-specific Supabase auth resolver and the JSON API route assembly boundary instead of hand-wiring auth, rate limits, and JSON parsing:\n${adminSettingsRouteSources
+    `Admin settings routes should use auth: 'admin' and the JSON API route assembly boundary instead of hand-wiring auth, rate limits, and JSON parsing:\n${adminSettingsRouteSources
       .map(({ path }) => `- ${relative(root, path)}`)
-      .join('\n')}\n- ${relative(root, settingsAdminAuthPath)}`
+      .join('\n')}`
   )
 }
 
@@ -6820,7 +6807,7 @@ if (privilegedRouteFilesMissed.length > 0) {
 
 if (ungatedPrivilegedHandlers.length > 0) {
   failures.push(
-    `Every HTTP handler under src/app/api/admin and src/app/api/board-room must declare an authorization gate: defineApiRoute/defineStreamRoute with auth: 'admin' | 'board-member' | createSettingsAdminAuth(), or a bare handler that calls requireAdmin()/requireBoardMember() and returns its denial response. Postgres RLS is gone, so this declaration is the only thing standing between a logged-in member and the admin surface — and defineApiRoute's own required-auth type cannot cover bare handlers or reject auth: 'public' here. Offending handler(s):\n${ungatedPrivilegedHandlers
+    `Every HTTP handler under src/app/api/admin and src/app/api/board-room must declare an authorization gate: defineApiRoute/defineStreamRoute with auth: 'admin' | 'board-member', or a bare handler that calls requireAdmin()/requireBoardMember() and returns its denial response. Postgres RLS is gone, so this declaration is the only thing standing between a logged-in member and the admin surface — and defineApiRoute's own required-auth type cannot cover bare handlers or reject auth: 'public' here. Offending handler(s):\n${ungatedPrivilegedHandlers
       .map(entry => `- ${entry}`)
       .join('\n')}`
   )
@@ -7658,7 +7645,7 @@ if (trackedFiles === null) {
 
 // 조합원 타임뱅크 관리자·이사회 API(계획 Task 9, 스펙 §6·§7.3·§7.4·§9.2).
 //
-// 특권 트리 가드(위)는 `auth`가 'admin'·'board-member'·createSettingsAdminAuth() 중
+// 특권 트리 가드(위)는 `auth`가 'admin'·'board-member' 중
 // 하나인지만 본다. 타임뱅크 관리자 쓰기(조합 업무 지급·조정·승인·취소·설정)는
 // **관리자만**이어야 한다 — 'board-member'로 퇴화하면 이사·감사가 크레딧을 발행할
 // 수 있는데 그 가드는 초록이다. 그래서 이 트리는 'admin' 하나만 받는다. 이사회

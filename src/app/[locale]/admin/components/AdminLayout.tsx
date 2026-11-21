@@ -190,7 +190,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ title, description, children 
         </header>
 
         {/* 콘텐츠 */}
-        <main className="flex-1 px-6 py-6">{children}</main>
+        <div className="flex-1 px-6 py-6">{children}</div>
 
         {/* 간단한 푸터 */}
         <footer className="bg-white border-t border-gray-200 px-6 py-4 mt-auto">

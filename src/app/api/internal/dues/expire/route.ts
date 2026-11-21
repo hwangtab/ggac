@@ -18,7 +18,6 @@
  * 인증은 다른 내부 크론과 같다: `CRON_SECRET` Bearer, 없으면 닫는다.
  */
 import { NextRequest, after } from 'next/server'
-import { timingSafeEqual } from 'node:crypto'
 
 import {
   getPaymentByOrderId,
@@ -40,6 +39,7 @@ import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger, maskId } from '@/utils/logger'
 import { logSecurityEvent } from '@/utils/security'
 import { runTrackedCron } from '@work/lib/ops/cron-alert'
+import { isCronAuthorized } from '@work/lib/ops/cron-auth'
 
 const log = createLogger('api/internal/dues/expire')
 
@@ -54,15 +54,7 @@ export const maxDuration = 300
 const SETTLE_GRACE_MS = 15 * 60_000
 
 function isAuthorized(request: NextRequest): boolean {
-  const expected = [process.env.CRON_SECRET].filter(
-    (v): v is string => typeof v === 'string' && v.length > 0
-  )
-  if (expected.length === 0) return false
-  const header = request.headers.get('authorization') ?? ''
-  const provided = header.startsWith('Bearer ') ? header.slice(7) : ''
-  return expected.some(
-    t => provided.length === t.length && timingSafeEqual(Buffer.from(provided), Buffer.from(t))
-  )
+  return isCronAuthorized(request.headers.get('authorization'), process.env.CRON_SECRET)
 }
 
 async function run(request: NextRequest) {

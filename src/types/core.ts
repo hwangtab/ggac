@@ -22,6 +22,13 @@ export interface BusinessInfo {
   establishedDate: string
   registrationDate: string
   registrationNumber: string
+  /** 전자상거래법 제13조가 요구하는 상호·대표자. 없으면 화면이 기본값으로 채운다. */
+  companyName?: string
+  representative?: string
+  /** 통신판매업 신고번호. 신고 전에는 비어 있고, 화면은 이때 그 줄을 그리지 않는다. */
+  mailOrderNumber?: string
+  /** 신고기관 이름(예: 고양시). 신고번호와 함께 표시한다. */
+  mailOrderAuthority?: string
 }
 
 export interface ApiResponse<T = unknown> {

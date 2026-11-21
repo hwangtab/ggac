@@ -4,6 +4,8 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
 const createNextIntlPlugin = require('next-intl/plugin')
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts')
 
+const { buildCsp, reportingEndpointsValue } = require('./src/config/cspPolicy')
+
 const IMAGE_ALLOWED_QUALITIES = [50, 65, 75, 80, 85, 90, 100]
 
 /** kordoc이 createRequire로 런타임에 불러오는 모듈(+ 그 의존성) — kosmart-work next.config.ts와 같다 */
@@ -76,12 +78,6 @@ function officeEditorFrameOrigin(raw) {
   }
   return ''
 }
-const OFFICE_EDITOR_FRAME_SRC = officeEditorFrameOrigin(
-  process.env.NEXT_PUBLIC_OFFICE_EDITOR_ORIGIN
-)
-  ? ` ${officeEditorFrameOrigin(process.env.NEXT_PUBLIC_OFFICE_EDITOR_ORIGIN)}`
-  : ''
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -131,7 +127,7 @@ const nextConfig = {
   transpilePackages: [],
 
   // 번들 최적화 설정
-  webpack: (config, { buildId, dev, isServer, defaultLoaders, webpack }) => {
+  webpack: (config, { dev, isServer }) => {
     // 개발 환경 최적화
     if (dev) {
       // 개발 모드에서 빌드 속도 향상
@@ -143,6 +139,8 @@ const nextConfig = {
       }
 
       // HMR 성능 향상
+      // poll: 이 저장소는 외부 드라이브(/Volumes/Crucial X8)에 있어 파일 이벤트(FSEvents)가
+      // 누락된다. 폴링을 끄면 저장해도 HMR이 안 돈다.
       config.watchOptions = {
         poll: 1000,
         aggregateTimeout: 300,
@@ -230,41 +228,7 @@ const nextConfig = {
       // 외부 패키지를 의도치 않게 트리쉐이킹할 수 있어 런타임 오류를 유발할 수 있음
       config.optimization.usedExports = true
       config.optimization.providedExports = true
-
-      // 더 공격적인 압축 설정
-      if (config.optimization.minimizer) {
-        config.optimization.minimizer.forEach(minimizer => {
-          if (minimizer.constructor.name === 'TerserPlugin') {
-            minimizer.options = {
-              ...minimizer.options,
-              terserOptions: {
-                ...minimizer.options.terserOptions,
-                compress: {
-                  ...minimizer.options.terserOptions?.compress,
-                  drop_debugger: true,
-                  // production 번들에서 console.log/debug/info 제거.
-                  // console.error/warn은 운영 진단 가치가 있어 유지.
-                  // 개발 환경(NODE_ENV=development)에서는 dev 빌드라 적용되지 않음.
-                  pure_funcs: ['console.log', 'console.debug', 'console.info'],
-                },
-                mangle: {
-                  safari10: true,
-                },
-              },
-            }
-          }
-        })
-      }
     }
-
-    // 모든 환경에서 적용할 플러그인
-    config.plugins.push(
-      new webpack.DefinePlugin({
-        'process.env.NEXT_IS_SERVER': JSON.stringify(isServer.toString()),
-        'process.env.NEXT_IS_DEV': JSON.stringify(dev.toString()),
-        'process.env.BUILD_ID': JSON.stringify(buildId),
-      })
-    )
 
     // 프로덕션에서 번들 크기 경고 제거
     if (!dev) {
@@ -273,11 +237,6 @@ const nextConfig = {
         maxEntrypointSize: 512000,
         maxAssetSize: 512000,
       }
-    }
-
-    // 해상도 별칭 추가로 번들 크기 최적화
-    config.resolve.alias = {
-      ...config.resolve.alias,
     }
 
     // 불필요한 모듈 제외
@@ -291,12 +250,9 @@ const nextConfig = {
     return config
   },
 
-  // External packages configuration for Next.js 14+ (deprecated serverExternalPackages removed)
-
   // 실험적 기능 활성화
   experimental: {
     optimizeCss: false, // CSS 최적화 비활성화 - CSS를 스크립트로 잘못 로드하는 문제 방지
-    optimizePackageImports: ['react-icons', 'date-fns', 'lodash-es'],
     // 개발 환경 최적화
     ...(process.env.NODE_ENV === 'development' && {
       forceSwcTransforms: true,
@@ -306,18 +262,6 @@ const nextConfig = {
       optimizeServerReact: true,
     }),
   },
-
-  // Turbopack 설정 (개발 모드)
-  ...(process.env.NODE_ENV === 'development' && {
-    turbopack: {
-      rules: {
-        '*.svg': {
-          loaders: ['@svgr/webpack'],
-          as: '*.js',
-        },
-      },
-    },
-  }),
 
   // Vercel에서 동적 라우트 인식 개선
   trailingSlash: false,
@@ -508,8 +452,9 @@ const nextConfig = {
             value: 'DENY',
           },
           {
+            // 최신 지침은 0 — 구형 XSS 필터 자체가 취약점의 원인이 된다. 방어는 CSP가 한다.
             key: 'X-XSS-Protection',
-            value: '1; mode=block',
+            value: '0',
           },
           {
             key: 'Referrer-Policy',
@@ -527,75 +472,18 @@ const nextConfig = {
           // Content-Security-Policy: 정상 HTML 응답은 src/middleware/csp.ts가
           // 요청별로 주입하며 이 정적 헤더를 덮어쓴다. 이 정적 CSP는 미들웨어를
           // 거치지 않는 경로(점(.) 포함 경로의 HTML 404 등)를 위한 백스톱이다.
-          // (미들웨어가 직접 생성하는 유지보수/가입중단 HTML은 middleware.ts의
-          // copyResponseCookies가 CSP를 전파해 커버한다.)
-          // ⚠️ 내용을 바꿀 때는 src/middleware/csp.ts의 프로덕션 CSP와 함께 동기화할 것.
+          // 지시문의 정본은 src/config/cspPolicy.js — 두 곳이 같은 함수를 쓴다.
           {
             key: 'Content-Security-Policy',
-            value: [
-              "default-src 'self'",
-              // dev에서는 Next dev 런타임(eval 기반 HMR)이 죽지 않도록 'unsafe-eval'
-              // 허용 — 이 정적 헤더는 미들웨어가 CSP를 붙이지 않는 경로에도 적용되므로,
-              // 여기서 프로덕션 CSP만 두면 정상 dev(NEXT_STRICT_CSP 미설정)의 하이드레이션이
-              // 통째로 죽는다. src/middleware/csp.ts의 dev 분기와 동일 패턴.
-              // 외부 스크립트는 https: 와일드카드가 아니라 호스트 허용목록으로 받는다.
-              // 외부 스크립트는 토스 결제 SDK(js.tosspayments.com/v2/standard)와
-              // 가입 화면의 사람 확인 위젯(challenges.cloudflare.com)이다.
-              // 호스트를 추가할 때는 src/middleware/csp.ts의 script-src/script-src-elem도
-              // 같이 고쳐라 — 빠진 호스트는 에러 없이 조용히 차단된다.
-              process.env.NODE_ENV === 'development'
-                ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.tosspayments.com https://challenges.cloudflare.com"
-                : "script-src 'self' 'unsafe-inline' https://*.tosspayments.com https://challenges.cloudflare.com",
-              "script-src-elem 'self' 'unsafe-inline' https://*.tosspayments.com https://challenges.cloudflare.com",
-              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-              "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com",
-              "font-src 'self' https://fonts.gstatic.com",
-              process.env.NODE_ENV === 'development'
-                ? "img-src 'self' https: http://localhost:* http://127.0.0.1:* blob: data:"
-                : "img-src 'self' https: blob: data:",
-              // 프레스킷의 음원 플레이어가 Blob에서 MP3를 직접 문다. 이 항목이 없으면
-              // 곡은 바뀌고 가사도 따라오는데 소리만 안 난다 — 콘솔에
-              // "Media load rejected by URL safety check"만 찍힌다.
-              // img-src와 같은 기준으로 와일드카드가 아니라 우리 저장소 호스트만 적는다
-              // (*.public.blob.vercel-storage.com은 다른 Vercel 고객 저장소까지 허용한다).
-              process.env.NODE_ENV === 'development'
-                ? "media-src 'self' http://localhost:* http://127.0.0.1:* https://www.youtube.com https://r8qnr9c7mestxusj.public.blob.vercel-storage.com"
-                : "media-src 'self' https://www.youtube.com https://r8qnr9c7mestxusj.public.blob.vercel-storage.com",
-              // 토스 결제창·Turnstile 위젯은 iframe으로 뜬다. 이 항목이 없으면 결제
-              // 버튼이나 가입 화면의 사람 확인이 먹통이 된다(콘솔에만 CSP 위반이 찍힌다).
-              // 이사회 업무툴 편집기(ONLYOFFICE·rhwp 정적 사이트)도 iframe이다 — 출처는 env에서 온다(OFFICE_EDITOR_FRAME_SRC).
-              // src/middleware/csp.ts와 함께 고친다.
-              `frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://*.tosspayments.com https://challenges.cloudflare.com${OFFICE_EDITOR_FRAME_SRC}`,
-              // dev 분기의 로컬 호스트 허용은 로컬 API/HMR용이다.
-              // https://vercel.com: 이사회 업무툴 첨부의 브라우저 직접 업로드(@vercel/blob/client — 본문은
-              // vercel.com/api/blob). src/middleware/csp.ts·src/utils/security.ts와 함께 고친다(설계 §7-5).
-              process.env.NODE_ENV === 'development'
-                ? "connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:* https://*.tosspayments.com https://vercel.com"
-                : "connect-src 'self' https://*.tosspayments.com https://vercel.com",
-              "object-src 'none'",
-              "base-uri 'self'",
-              // 결제창은 카드사 인증 페이지로 폼을 제출한다. 'self'만 두면 카드를
-              // 넣은 뒤 인증 단계에서 조용히 막힌다. 카드사 도메인은 카드사마다
-              // 달라 미리 다 알 수 없으므로, 실제 결제를 끝까지 통과시켜 보며
-              // 필요한 도메인을 확인해 추가한다.
-              "form-action 'self' https://*.tosspayments.com",
-              // 업무툴 PDF 미리보기 응답(/api/board-room/work/files/<id>/<name>)은 이 규칙(api 제외) 밖이고,
-              // 라우트가 SAMEORIGIN·frame-ancestors 'self'를 직접 붙인다.
-              "frame-ancestors 'none'",
-              "worker-src 'self' blob:",
-              "manifest-src 'self'",
-              'report-uri /api/security/csp-report',
-              'report-to default',
-            ].join('; '),
-          },
-          {
-            key: 'Report-To',
-            value: JSON.stringify({
-              group: 'default',
-              max_age: 86400,
-              endpoints: [{ url: '/api/security/csp-report' }],
-              include_subdomains: true,
+            value: buildCsp({
+              dev: process.env.NODE_ENV === 'development',
+              officeOrigin: officeEditorFrameOrigin(process.env.NEXT_PUBLIC_OFFICE_EDITOR_ORIGIN),
             }),
+          },
+          // Report-To 는 폐기됐다. report-to 지시문은 이 헤더의 엔드포인트 이름을 가리킨다.
+          {
+            key: 'Reporting-Endpoints',
+            value: reportingEndpointsValue(process.env.NEXT_PUBLIC_SITE_URL),
           },
         ],
       },

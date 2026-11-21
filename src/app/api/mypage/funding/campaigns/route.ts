@@ -6,7 +6,7 @@ import { logUserActivity } from '@/db/queries/activities'
 import { parseCampaignPatch } from '@/lib/funding/campaignInput'
 import { isFundingEnabled } from '@/lib/funding/settings'
 import { FUNDING_TERMS_REVISION } from '@/lib/funding/terms'
-import { parseJsonObjectBody } from '@/utils/requestBody'
+import { LARGE_JSON_BODY_MAX_BYTES, parseJsonObjectBody } from '@/utils/requestBody'
 import { ApiSuccess, ApiError } from '@/utils/apiWrapper'
 import { createLogger } from '@/utils/logger'
 
@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
   const auth = await requireActiveMember()
   if (auth instanceof NextResponse) return auth
 
-  const body = await parseJsonObjectBody(request)
+  const body = await parseJsonObjectBody(request, { maxBytes: LARGE_JSON_BODY_MAX_BYTES })
   if (!body) return ApiError.badRequest('유효한 JSON body가 필요합니다.').toNextResponse()
   if (body.agreedCreatorTerms !== true)
     return ApiError.badRequest('개설자 약관에 동의해 주세요.').toNextResponse()

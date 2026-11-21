@@ -9,7 +9,7 @@ import {
   type WorkViewer,
 } from '@/lib/server/boardWorkChannelAuth'
 import { consumeWorkSync } from '@/lib/server/boardWorkRateLimit'
-import { parseJsonObjectBody } from '@/utils/requestBody'
+import { LARGE_JSON_BODY_MAX_BYTES, parseJsonObjectBody } from '@/utils/requestBody'
 import { listChangedMessageIds } from '@/db/queries/work/messages'
 import { countMyOpenTaskRecords } from '@/db/queries/work/tasks'
 import { getDisplayNames } from '@/db/queries/work/directory'
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
       const limited = await consumeWorkSync(user.id, request)
       if (!limited.ok) throw ApiError.tooManyRequests(limited.message)
 
-      const body = await parseJsonObjectBody(request)
+      const body = await parseJsonObjectBody(request, { maxBytes: LARGE_JSON_BODY_MAX_BYTES })
       if (!body) throw ApiError.badRequest('유효한 JSON body가 필요합니다.')
       const parsed = syncRequestSchema.safeParse(body)
       if (!parsed.success) {

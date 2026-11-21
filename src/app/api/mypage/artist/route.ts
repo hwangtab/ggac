@@ -11,7 +11,7 @@ import {
   getProjectListRevalidationPaths,
   getProjectDetailRevalidationPaths,
 } from '@/lib/revalidationPaths'
-import { parseJsonObjectBody } from '@/utils/requestBody'
+import { LARGE_JSON_BODY_MAX_BYTES, parseJsonObjectBody } from '@/utils/requestBody'
 import { isProjectStorageObjectPath } from '@/utils/storageUrlValidation'
 import { logicalPathFromUrl } from '@/lib/storage/paths'
 import { createLogger } from '@/utils/logger'
@@ -188,7 +188,7 @@ export async function PATCH(request: NextRequest) {
     const { user } = auth
 
     // 요청 데이터 파싱 및 검증
-    const body = await parseJsonObjectBody(request)
+    const body = await parseJsonObjectBody(request, { maxBytes: LARGE_JSON_BODY_MAX_BYTES })
     if (!body) {
       return ApiError.badRequest('유효한 JSON body가 필요합니다.').toNextResponse()
     }

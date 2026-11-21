@@ -265,9 +265,10 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
                 )}
                 <button
                   onClick={() => setIsOpen(false)}
+                  aria-label="알림 닫기"
                   className="text-gray-400 hover:text-gray-600"
                 >
-                  <FiX className="w-5 h-5" />
+                  <FiX className="w-5 h-5" aria-hidden="true" />
                 </button>
               </div>
             </div>
@@ -289,13 +290,23 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
                   {notifications.map(notification => (
                     <li
                       key={notification.id}
-                      className={`p-4 hover:bg-gray-50 cursor-pointer transition-colors ${
+                      className={`p-4 hover:bg-gray-50 transition-colors ${
                         !notification.read_at ? 'bg-blue-50' : ''
                       }`}
-                      onClick={() => handleNotificationClick(notification)}
                     >
                       <div className="flex items-start justify-between">
-                        <div className="flex-1 min-w-0">
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          className="flex-1 min-w-0 cursor-pointer rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                          onClick={() => handleNotificationClick(notification)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              handleNotificationClick(notification)
+                            }
+                          }}
+                        >
                           <div className="flex items-center mb-1">
                             <div
                               className={`w-2 h-2 rounded-full mr-2 ${
@@ -324,8 +335,9 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
                               }}
                               className="p-1 text-gray-400 hover:text-green-600 rounded"
                               title="읽음 처리"
+                              aria-label="읽음 처리"
                             >
-                              <FiCheck className="w-4 h-4" />
+                              <FiCheck className="w-4 h-4" aria-hidden="true" />
                             </button>
                           )}
                           <button
@@ -335,8 +347,9 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
                             }}
                             className="p-1 text-gray-400 hover:text-red-600 rounded"
                             title="삭제"
+                            aria-label="알림 삭제"
                           >
-                            <FiTrash2 className="w-4 h-4" />
+                            <FiTrash2 className="w-4 h-4" aria-hidden="true" />
                           </button>
                         </div>
                       </div>
