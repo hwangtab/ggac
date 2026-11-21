@@ -97,7 +97,7 @@
     "audit-ci": "^7.0.1",
     "autoprefixer": "^10.0.1",
     "drizzle-kit": "^0.31.10",
-    "eslint": "^8",
+    "eslint": "^10",
     "eslint-config-next": "^15.5.28",
     "eslint-plugin-import": "^2.31.0",
     "eslint-plugin-jsx-a11y": "^6.10.2",
